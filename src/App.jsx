@@ -4,6 +4,7 @@ import DepotLayout from './pages/depot/layout/DepotLayout';
 import Dashboard from './pages/depot/dashboard/Dashboard';
 import ProductsList from './pages/depot/products/ProductsList';
 
+
 function App() {
   return (
     <Router>
