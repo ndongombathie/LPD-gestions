@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -8,10 +9,10 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
   const menuItems = [
     { icon: '📊', label: 'Tableau de bord', path: '/depot' },
     { icon: '📦', label: 'Produits', path: '/depot/products' },
-    { icon: '📋', label: 'Stock', path: '/depot/stock' },
-    { icon: '🚚', label: 'Transferts', path: '/depot/transfers' },
-    { icon: '🏢', label: 'Fournisseurs', path: '/depot/suppliers' },
-    { icon: '📈', label: 'Rapports', path: '/depot/reports' },
+    { icon: '📋', label: 'Mouvements de Stock', path: '/depot/mouvementStock' },
+    { icon: '🏢', label: 'Fournisseurs', path: '/depot/fournisseurs' },
+    { icon: '📈', label: 'Rapport Stock', path: '/depot/reports' },
+    { icon: '📊', label: 'Inventaire', path: '/depot/inventaire' },
   ];
 
   return (
@@ -37,8 +38,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
       <nav className="mt-8">
         {menuItems.map((item) => (
           <div key={item.path}>
-            <a
-              href={item.path}
+            <Link
+              to={item.path}
               className="flex items-center px-4 py-3 text-white hover:bg-[#5A3BC0] transition-colors group relative"
             >
               <span className="text-lg">{item.icon}</span>
@@ -46,7 +47,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen }) => {
               
               {/* Effet d'accent orange au survol */}
               <div className="absolute right-0 w-1 h-8 bg-transparent group-hover:bg-[#F58020] transition-colors rounded-l"></div>
-            </a>
+            </Link>
           </div>
         ))}
       </nav>

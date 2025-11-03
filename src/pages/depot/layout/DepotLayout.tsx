@@ -1,11 +1,8 @@
 import React, { useState } from 'react';
 import Sidebar from './Sidebar';
+import { Outlet } from 'react-router-dom'; // ← AJOUT IMPORT
 
-interface DepotLayoutProps {
-  children: React.ReactNode;
-}
-
-const DepotLayout: React.FC<DepotLayoutProps> = ({ children }) => {
+const DepotLayout: React.FC = () => { // ← SUPPRIMEZ l'interface
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
@@ -78,9 +75,9 @@ const DepotLayout: React.FC<DepotLayoutProps> = ({ children }) => {
           </div>
         </header>
 
-        {/* Page content */}
+        {/* Page content - REMPLACEZ children par Outlet */}
         <main className="flex-1 overflow-auto">
-          {children}
+          <Outlet /> {/* ← REMPLACÉ */}
         </main>
       </div>
 
