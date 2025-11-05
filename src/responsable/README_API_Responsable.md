@@ -37,10 +37,10 @@ src/responsable/
 
 | Méthode | Endpoint | Description |
 |----------|-----------|-------------|
-| **POST** | `/login` | Authentifie un utilisateur et renvoie un token |
+| **POST** | `api/auth/login` | Authentifie un utilisateur et renvoie un token |
 | **GET** | `/auth/check` | Vérifie la validité du token et le rôle |
-| **GET** | `/user/profile` | Récupère le profil complet du user connecté |
-| **PUT** | `/user/profile` | Met à jour prénom, nom et photo |
+| **GET** | `api/mon-profil` | Récupère le profil complet du user connecté |
+| **PUT** | `api/mon-profil` | Met à jour prénom, nom et photo |
 | **POST** | `/user/change-password` | Change le mot de passe de l’utilisateur |
 
 ---
@@ -49,8 +49,8 @@ src/responsable/
 
 | Méthode | Endpoint | Description |
 |----------|-----------|-------------|
-| **GET** | `/user/profile` | Récupère les infos du profil connecté |
-| **PUT** | `/user/profile` | Met à jour prénom, nom et photo |
+| **GET** | `api/mon-profil` | Récupère les infos du profil connecté |
+| **PUT** | `api/mon-profil` | Met à jour prénom, nom et photo |
 | **POST** | `/user/change-password` | Change le mot de passe |
 | **GET** | `/user/notifications` | Liste des notifications récentes |
 | **PUT** | `/user/notifications/read-all` | Marque toutes les notifs comme lues |
@@ -85,11 +85,11 @@ src/responsable/
 
 | Méthode | Endpoint | Description |
 |----------|-----------|-------------|
-| **GET** | `/utilisateurs` | Liste tous les utilisateurs |
-| **POST** | `/utilisateurs` | Crée un nouvel utilisateur |
-| **GET** | `/utilisateurs/{id}` | Récupère un utilisateur |
-| **PUT** | `/utilisateurs/{id}` | Met à jour un utilisateur |
-| **DELETE** | `/utilisateurs/{id}` | Supprime un utilisateur |
+| **GET** | `api/uilisateurs` | Liste tous les utilisateurs |
+| **POST** | `api/uilisateurs` | Crée un nouvel utilisateur |
+| **GET** | `api/uilisateurs/{uilisateur}` | Récupère un utilisateur |
+| **PUT** | `api/uilisateurs/{uilisateur}` | Met à jour un utilisateur |
+| **DELETE** | `api/uilisateurs/{uilisateur}` | Supprime un utilisateur |
 
 ---
 
@@ -97,11 +97,11 @@ src/responsable/
 
 | Méthode | Endpoint | Description |
 |----------|-----------|-------------|
-| **GET** | `/fournisseurs` | Liste des fournisseurs |
-| **POST** | `/fournisseurs` | Ajoute un nouveau fournisseur |
-| **GET** | `/fournisseurs/{id}` | Détails d’un fournisseur |
-| **PUT** | `/fournisseurs/{id}` | Met à jour un fournisseur |
-| **DELETE** | `/fournisseurs/{id}` | Supprime un fournisseur |
+| **GET** | `api/fournisseurs` | Liste des fournisseurs |
+| **POST** | `api/fournisseurs` | Ajoute un nouveau fournisseur |
+| **GET** | `api/fournisseurs/{fournisseur}` | Détails d’un fournisseur |
+| **PUT** | `api/fournisseurs/{fournisseur}` | Met à jour un fournisseur |
+| **DELETE** | `api/fournisseurs/{fournisseur}` | Supprime un fournisseur |
 
 ---
 
