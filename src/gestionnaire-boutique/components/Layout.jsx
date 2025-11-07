@@ -1,10 +1,8 @@
-import React, { useState } from "react";
-import Sidebar from "./gestionnaire-boutique/components/Sidebar";
-import { RenderRoute } from "./gestionnaire-boutique/routeGestionnaireBoutique";
+// gestionnaire-boutique/components/Layout.jsx
+import React from "react";
+import Sidebar from "./Sidebar";
 
-const App = () => {
-  const [currentPage, setCurrentPage] = useState("dashboard");
-
+const Layout = ({ currentPage, setCurrentPage, children }) => {
   return (
     <div className="flex min-h-screen overflow-y-auto">
       {/* Sidebar fixe */}
@@ -14,10 +12,10 @@ const App = () => {
 
       {/* Contenu principal */}
       <div className="flex-1 ml-64 bg-[#F3F4F6]">
-        <RenderRoute currentPage={currentPage} />
+        {children}
       </div>
     </div>
   );
 };
 
-export default App;
+export default Layout;
