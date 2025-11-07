@@ -7,6 +7,7 @@ import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import { formatCurrency, formatDateTime, calculateTVA } from '../../utils/formatters';
 import { printInvoice } from '../components/InvoicePrint';
+import { commandesAPI, paiementsAPI } from '../../utils/api';
 
 const CaissePage = () => {
   const [tickets, setTickets] = useState([]);
@@ -19,53 +20,22 @@ const CaissePage = () => {
     tauxTVA: 18,
   });
 
-  // Simuler des tickets en temps réel (à remplacer par une vraie connexion WebSocket/API)
+  // Récupérer les tickets en temps réel
   useEffect(() => {
-    // Simuler le polling ou WebSocket pour les tickets en temps réel
     const fetchTickets = async () => {
-      setLoading(true);
-      // TODO: Remplacer par un vrai appel API
-      // const response = await api.get('/tickets/pending');
-      
-      // Données simulées
-      setTimeout(() => {
-        setTickets([
-          {
-            id: 1,
-            commande_id: 101,
-            numero: 'TKT-2024-001',
-            date_ticket: new Date().toISOString(),
-            vendeur_nom: 'Amadou Diop',
-            total_ht: 50000,
-            tva: 9000,
-            total_ttc: 59000,
-            moyen_paiement: null,
-            statut: 'en_attente',
-            client_special: false,
-            lignes: [
-              { produit: 'Produit A', quantite: 2, prix: 25000 },
-            ],
-          },
-          {
-            id: 2,
-            commande_id: 102,
-            numero: 'TKT-2024-002',
-            date_ticket: new Date().toISOString(),
-            vendeur_nom: 'Fatou Sarr',
-            total_ht: 75000,
-            tva: 13500,
-            total_ttc: 88500,
-            moyen_paiement: null,
-            statut: 'en_attente',
-            client_special: true,
-            client_nom: 'Client VIP',
-            lignes: [
-              { produit: 'Produit B', quantite: 3, prix: 25000 },
-            ],
-          },
-        ]);
+      try {
+        setLoading(true);
+        const data = await commandesAPI.getPending();
+        setTickets(data);
+      } catch (error) {
+        console.error('Erreur lors de la récupération des tickets:', error);
+        // Ne pas afficher d'alerte pour les erreurs 401 (authentification) - géré par le système d'auth
+        if (error.response?.status !== 401) {
+          console.warn('Erreur lors du chargement des tickets:', error.message);
+        }
+      } finally {
         setLoading(false);
-      }, 500);
+      }
     };
 
     fetchTickets();
@@ -89,37 +59,75 @@ const CaissePage = () => {
     if (!selectedTicket) return;
 
     const montant = parseFloat(paymentData.montantPaye);
-    if (montant < selectedTicket.total_ttc) {
+    
+    // Validation pour clients non spéciaux
+    if (!selectedTicket.client_special && montant < selectedTicket.total_ttc) {
       alert('Le montant payé ne peut pas être inférieur au total TTC');
       return;
     }
 
-    try {
-      // TODO: Appel API pour enregistrer le paiement
-      // await api.post('/tickets/encaisser', {
-      //   ticket_id: selectedTicket.id,
-      //   moyen_paiement: paymentData.moyenPaiement,
-      //   montant_paye: montant,
-      // });
+    // Validation pour clients spéciaux
+    if (selectedTicket.client_special) {
+      const resteDu = selectedTicket.reste_du || selectedTicket.total_ttc;
+      if (montant > resteDu) {
+        alert(`Le montant payé ne peut pas dépasser le reste dû: ${formatCurrency(resteDu)}`);
+        return;
+      }
+    }
 
-      // Mettre à jour le ticket localement
-      setTickets(tickets.map(t => 
-        t.id === selectedTicket.id 
-          ? { ...t, statut: 'encaissé', moyen_paiement: paymentData.moyenPaiement }
-          : t
-      ));
+    try {
+      setLoading(true);
+      
+      // Enregistrer le paiement via l'API
+      const response = await paiementsAPI.create(selectedTicket.commande_id || selectedTicket.id, {
+        montantPaye: montant,
+        moyenPaiement: paymentData.moyenPaiement,
+      });
+
+      // Récupérer la commande mise à jour
+      const updatedCommande = response.commande || response;
+      
+      // Mettre à jour la liste des tickets
+      setTickets(prevTickets => 
+        prevTickets.map(t => 
+          t.id === selectedTicket.id 
+            ? {
+                ...t,
+                statut: response.est_paiement_complet ? 'encaissé' : 'partiellement_paye',
+                moyen_paiement: paymentData.moyenPaiement,
+                montant_deja_paye: response.reste_du !== undefined ? (updatedCommande.total_ttc - response.reste_du) : montant,
+                reste_du: response.reste_du || 0,
+              }
+            : t
+        ).filter(t => t.statut === 'en_attente' || t.statut === 'partiellement_paye')
+      );
 
       setIsPaymentModalOpen(false);
-      const ticketEncaisse = { ...selectedTicket, moyen_paiement: paymentData.moyenPaiement, montant_paye: montant };
+      
+      // Formater le ticket pour l'impression
+      const ticketEncaisse = {
+        ...selectedTicket,
+        moyen_paiement: paymentData.moyenPaiement,
+        montant_paye: montant,
+        statut: response.est_paiement_complet ? 'encaissé' : 'partiellement_paye',
+      };
       
       // Proposer l'impression de la facture
-      if (window.confirm('Paiement enregistré avec succès. Voulez-vous imprimer la facture ?')) {
-        printInvoice(ticketEncaisse);
+      if (response.est_paiement_complet) {
+        if (window.confirm('Paiement enregistré avec succès. Voulez-vous imprimer la facture ?')) {
+          printInvoice(ticketEncaisse);
+        }
+      } else {
+        alert(`Acompte de ${formatCurrency(montant)} enregistré. Reste dû: ${formatCurrency(response.reste_du)}`);
       }
       
       setSelectedTicket(null);
     } catch (error) {
-      alert('Erreur lors de l\'encaissement: ' + error.message);
+      console.error('Erreur lors de l\'encaissement:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Une erreur est survenue lors de l\'encaissement';
+      alert('Erreur lors de l\'encaissement: ' + errorMessage);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -154,28 +162,49 @@ const CaissePage = () => {
 
       {/* Statistiques */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card>
-          <div className="text-center">
-            <p className="text-sm text-gray-600 dark:text-gray-400">Tickets en attente</p>
-            <p className="text-3xl font-bold text-accent-500 dark:text-accent-400 mt-2">
-              {pendingTickets.length}
-            </p>
+        <Card className="border-l-4 border-l-accent-500 hover:shadow-xl transition-all duration-300 hover:scale-105">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Tickets en attente</p>
+              <p className="text-3xl font-bold text-accent-500 dark:text-accent-400 mt-1">
+                {pendingTickets.length}
+              </p>
+            </div>
+            <div className="w-12 h-12 bg-gradient-to-br from-accent-400 to-accent-600 rounded-full flex items-center justify-center shadow-lg ring-2 ring-accent-200">
+              <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
           </div>
         </Card>
-        <Card>
-          <div className="text-center">
-            <p className="text-sm text-gray-600 dark:text-gray-400">Total en attente</p>
-            <p className="text-2xl font-bold text-primary-600 dark:text-primary-400 mt-2">
-              {formatCurrency(pendingTickets.reduce((sum, t) => sum + t.total_ttc, 0))}
-            </p>
+        <Card className="border-l-4 border-l-primary-600 hover:shadow-xl transition-all duration-300 hover:scale-105">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Total en attente</p>
+              <p className="text-2xl font-bold text-primary-600 dark:text-primary-400 mt-1">
+                {formatCurrency(pendingTickets.reduce((sum, t) => sum + t.total_ttc, 0))}
+              </p>
+            </div>
+            <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-primary-700 rounded-full flex items-center justify-center shadow-lg ring-2 ring-primary-200">
+              <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
           </div>
         </Card>
-        <Card>
-          <div className="text-center">
-            <p className="text-sm text-gray-600 dark:text-gray-400">Tickets traités</p>
-            <p className="text-3xl font-bold text-green-600 dark:text-green-400 mt-2">
-              {processedTickets.length}
-            </p>
+        <Card className="border-l-4 border-l-green-500 hover:shadow-xl transition-all duration-300 hover:scale-105">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Tickets traités</p>
+              <p className="text-3xl font-bold text-green-600 dark:text-green-400 mt-1">
+                {processedTickets.length}
+              </p>
+            </div>
+            <div className="w-12 h-12 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center shadow-lg ring-2 ring-green-200">
+              <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
           </div>
         </Card>
       </div>
@@ -200,7 +229,7 @@ const CaissePage = () => {
             {pendingTickets.map((ticket) => (
               <div
                 key={ticket.id}
-                className="border-l-4 border-l-primary-600 border border-gray-200 dark:border-gray-700 rounded-lg p-3 hover:shadow-lg hover:border-primary-300 transition-all bg-white dark:bg-gray-800"
+                className="border-l-4 border-l-primary-600 border border-gray-200 dark:border-gray-700 rounded-lg p-3 hover:shadow-xl hover:border-primary-400 transition-all duration-300 bg-white dark:bg-gray-800 hover:scale-[1.02]"
               >
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex-1 min-w-0">
@@ -257,7 +286,7 @@ const CaissePage = () => {
                     <Button
                       variant="primary"
                       onClick={() => handleEncaisse(ticket)}
-                      className="shadow-md hover:shadow-lg transition-shadow text-sm px-3 py-1.5"
+                      className="shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 text-sm px-3 py-1.5"
                       size="sm"
                     >
                       <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -270,7 +299,7 @@ const CaissePage = () => {
                         variant="outline"
                         size="sm"
                         onClick={() => printInvoice(ticket)}
-                        className="text-xs px-3 py-1.5"
+                        className="text-xs px-3 py-1.5 shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105"
                       >
                         <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />

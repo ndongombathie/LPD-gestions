@@ -6,6 +6,7 @@ import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import { formatCurrency, formatDateTime } from '../../utils/formatters';
 import { printInvoice } from '../components/InvoicePrint';
+import { historiqueAPI } from '../../utils/api';
 
 const HistoriquePage = () => {
   const [historique, setHistorique] = useState([]);
@@ -20,77 +21,31 @@ const HistoriquePage = () => {
   useEffect(() => {
     fetchHistorique();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Chargement initial uniquement, filtrage côté client
+  }, [filters.type, filters.dateDebut, filters.dateFin]); // Recharger quand les filtres changent
 
   const fetchHistorique = async () => {
     setLoading(true);
     try {
-      // TODO: Appel API pour récupérer l'historique
-      // const response = await api.get('/caissier/historique', { params: filters });
-      
-      // Données simulées
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
-      setHistorique([
-          {
-            id: 1,
-            type: 'encaissement',
-            ticket: {
-              id: 1,
-              numero: 'TKT-2024-001',
-              date_ticket: new Date().toISOString(),
-              vendeur_nom: 'Amadou Diop',
-              total_ht: 50000,
-              tva: 9000,
-              total_ttc: 59000,
-              moyen_paiement: 'especes',
-              lignes: [
-                { produit: 'Produit A', quantite: 2, prix: 25000 },
-              ],
-            },
-            created_at: new Date().toISOString(),
-          },
-          {
-            id: 2,
-            type: 'decaissement',
-            montant: 10000,
-            motif: 'Achat fournitures',
-            created_at: new Date(Date.now() - 3600000).toISOString(),
-          },
-          {
-            id: 3,
-            type: 'encaissement',
-            ticket: {
-              id: 2,
-              numero: 'TKT-2024-002',
-              date_ticket: new Date(Date.now() - 7200000).toISOString(),
-              vendeur_nom: 'Fatou Sarr',
-              total_ht: 75000,
-              tva: 13500,
-              total_ttc: 88500,
-              moyen_paiement: 'wave',
-              lignes: [
-                { produit: 'Produit B', quantite: 3, prix: 25000 },
-              ],
-            },
-            created_at: new Date(Date.now() - 7200000).toISOString(),
-          },
-        ]);
-      setLoading(false);
+      const data = await historiqueAPI.get(filters);
+      setHistorique(data);
     } catch (error) {
       console.error('Erreur lors de la récupération de l\'historique:', error);
+      // Ne pas afficher d'alerte pour les erreurs d'authentification
+      if (error.response?.status !== 401) {
+        alert('Erreur lors du chargement de l\'historique. Veuillez réessayer.');
+      }
+    } finally {
       setLoading(false);
     }
   };
 
-  // Filtrage côté client (recherche ne déclenche pas de rechargement)
+  // Filtrage côté client pour la recherche uniquement (les autres filtres sont gérés côté serveur)
   const filteredHistorique = historique.filter((item) => {
-    if (filters.type !== 'tous' && item.type !== filters.type) return false;
     if (filters.recherche) {
       const searchLower = filters.recherche.toLowerCase();
       if (item.type === 'encaissement' && item.ticket) {
-        if (!item.ticket.numero.toLowerCase().includes(searchLower) &&
-            !item.ticket.vendeur_nom.toLowerCase().includes(searchLower)) {
+        if (!item.ticket.numero?.toLowerCase().includes(searchLower) &&
+            !item.ticket.vendeur_nom?.toLowerCase().includes(searchLower)) {
           return false;
         }
       }
@@ -99,12 +54,6 @@ const HistoriquePage = () => {
           return false;
         }
       }
-    }
-    // Le filtrage par date se fait aussi côté client maintenant
-    if (filters.dateDebut || filters.dateFin) {
-      const itemDate = new Date(item.created_at).toISOString().split('T')[0];
-      if (filters.dateDebut && itemDate < filters.dateDebut) return false;
-      if (filters.dateFin && itemDate > filters.dateFin) return false;
     }
     return true;
   });
@@ -258,10 +207,10 @@ const HistoriquePage = () => {
             {filteredHistorique.map((item) => (
               <div
                 key={item.id}
-                className={`border-l-4 rounded-lg p-3 hover:shadow-md transition-all ${
+                className={`border-l-4 rounded-lg p-3 hover:shadow-xl transition-all duration-300 hover:scale-[1.01] ${
                   item.type === 'encaissement'
-                    ? 'border-l-green-500 bg-gradient-to-r from-green-50 to-white dark:from-green-900/20 dark:to-gray-800'
-                    : 'border-l-red-500 bg-gradient-to-r from-red-50 to-white dark:from-red-900/20 dark:to-gray-800'
+                    ? 'border-l-primary-600 bg-gradient-to-r from-primary-50 via-green-50 to-white dark:from-primary-900/20 dark:via-green-900/20 dark:to-gray-800 shadow-md hover:border-primary-500'
+                    : 'border-l-red-500 bg-gradient-to-r from-red-50 via-red-50 to-white dark:from-red-900/20 dark:via-red-900/20 dark:to-gray-800 shadow-md hover:border-red-400'
                 }`}
               >
                 <div className="flex items-center justify-between gap-4">
@@ -334,7 +283,7 @@ const HistoriquePage = () => {
                       variant="outline"
                       size="sm"
                       onClick={() => printInvoice(item.ticket)}
-                      className="flex-shrink-0"
+                      className="flex-shrink-0 shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105"
                     >
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />

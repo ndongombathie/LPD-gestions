@@ -5,13 +5,14 @@ import Modal from '../../components/ui/Modal';
 import Badge from '../../components/ui/Badge';
 import { formatCurrency, formatDateTime } from '../../utils/formatters';
 import { printDecaissement } from '../components/DecaissementPrint';
+import { decaissementsAPI, authAPI } from '../../utils/api';
 
 const DecaissementsPage = () => {
   const [decaissements, setDecaissements] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedDecaissement, setSelectedDecaissement] = useState(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
-  const currentCaissier = 'Caissier 1'; // TODO: Récupérer depuis la session
+  const currentUser = authAPI.getCurrentUser();
 
   useEffect(() => {
     fetchDecaissements();
@@ -23,43 +24,15 @@ const DecaissementsPage = () => {
   const fetchDecaissements = async () => {
     setLoading(true);
     try {
-      // TODO: Appel API pour récupérer les décaissements
-      // const response = await api.get('/decaissements');
-      
-      // Données simulées
-      setTimeout(() => {
-        setDecaissements([
-          {
-            id: 1,
-            montant: 10000,
-            motif: 'Achat fournitures de bureau',
-            created_at: new Date().toISOString(),
-            statut: 'en_attente',
-            cree_par: 'Responsable Boutique',
-          },
-          {
-            id: 2,
-            montant: 5000,
-            motif: 'Frais de transport',
-            created_at: new Date(Date.now() - 3600000).toISOString(),
-            statut: 'fait',
-            cree_par: 'Responsable Boutique',
-            fait_par: 'Caissier 1',
-            fait_le: new Date(Date.now() - 1800000).toISOString(),
-          },
-          {
-            id: 3,
-            montant: 15000,
-            motif: 'Achat équipement',
-            created_at: new Date(Date.now() - 7200000).toISOString(),
-            statut: 'en_attente',
-            cree_par: 'Responsable Boutique',
-          },
-        ]);
-        setLoading(false);
-      }, 500);
+      const data = await decaissementsAPI.getAll();
+      setDecaissements(data);
     } catch (error) {
       console.error('Erreur lors de la récupération des décaissements:', error);
+      // Ne pas afficher d'alerte pour les erreurs d'authentification
+      if (error.response?.status !== 401) {
+        alert('Erreur lors du chargement des décaissements. Veuillez réessayer.');
+      }
+    } finally {
       setLoading(false);
     }
   };
@@ -70,26 +43,23 @@ const DecaissementsPage = () => {
     }
 
     try {
-      // TODO: Appel API pour valider le décaissement
-      // await api.put(`/decaissements/${decaissement.id}/valider`, {
-      //   caissier_id: currentCaissierId,
-      // });
+      setLoading(true);
+      const updated = await decaissementsAPI.valider(decaissement.id);
 
-      // Mise à jour locale
-      setDecaissements(decaissements.map(d => 
-        d.id === decaissement.id 
-          ? { 
-              ...d, 
-              statut: 'fait',
-              fait_par: currentCaissier,
-              fait_le: new Date().toISOString(),
-            }
-          : d
-      ));
+      // Mise à jour de la liste
+      setDecaissements(prevDecaissements => 
+        prevDecaissements.map(d => 
+          d.id === decaissement.id ? updated : d
+        )
+      );
 
       alert('Décaissement effectué avec succès');
     } catch (error) {
-      alert('Erreur lors de la validation: ' + error.message);
+      console.error('Erreur lors de la validation:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Une erreur est survenue';
+      alert('Erreur lors de la validation: ' + errorMessage);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -117,28 +87,49 @@ const DecaissementsPage = () => {
 
       {/* Statistiques */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card>
-          <div className="text-center">
-            <p className="text-sm text-gray-600 dark:text-gray-400">Total décaissements</p>
-            <p className="text-2xl font-bold text-red-600 dark:text-red-400 mt-2">
-              {formatCurrency(totalDecaissements)}
-            </p>
+        <Card className="border-l-4 border-l-red-500 hover:shadow-lg transition-shadow">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Total décaissements</p>
+              <p className="text-2xl font-bold text-red-600 dark:text-red-400 mt-1">
+                {formatCurrency(totalDecaissements)}
+              </p>
+            </div>
+            <div className="w-12 h-12 bg-red-100 dark:bg-red-900 rounded-full flex items-center justify-center">
+              <svg className="w-6 h-6 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
+              </svg>
+            </div>
           </div>
         </Card>
-        <Card>
-          <div className="text-center">
-            <p className="text-sm text-gray-600 dark:text-gray-400">En attente</p>
-            <p className="text-2xl font-bold text-orange-600 dark:text-orange-400 mt-2">
-              {decaissementsEnAttente.length}
-            </p>
+        <Card className="border-l-4 border-l-accent-500 hover:shadow-lg transition-shadow">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600 dark:text-gray-400">En attente</p>
+              <p className="text-2xl font-bold text-accent-600 dark:text-accent-400 mt-1">
+                {decaissementsEnAttente.length}
+              </p>
+            </div>
+            <div className="w-12 h-12 bg-accent-100 dark:bg-accent-900 rounded-full flex items-center justify-center">
+              <svg className="w-6 h-6 text-accent-600 dark:text-accent-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
           </div>
         </Card>
-        <Card>
-          <div className="text-center">
-            <p className="text-sm text-gray-600 dark:text-gray-400">Effectués</p>
-            <p className="text-2xl font-bold text-green-600 dark:text-green-400 mt-2">
-              {decaissements.filter(d => d.statut === 'fait').length}
-            </p>
+        <Card className="border-l-4 border-l-green-500 hover:shadow-lg transition-shadow">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Effectués</p>
+              <p className="text-2xl font-bold text-green-600 dark:text-green-400 mt-1">
+                {decaissements.filter(d => d.statut === 'fait').length}
+              </p>
+            </div>
+            <div className="w-12 h-12 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center">
+              <svg className="w-6 h-6 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
           </div>
         </Card>
       </div>

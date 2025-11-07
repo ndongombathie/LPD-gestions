@@ -3,6 +3,7 @@ import Card, { CardHeader } from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import { formatCurrency, formatDate, formatDateTime } from '../../utils/formatters';
+import { caissesJournalAPI } from '../../utils/api';
 
 const RapportCaissePage = () => {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -19,70 +20,23 @@ const RapportCaissePage = () => {
   const fetchRapport = useCallback(async () => {
     setLoading(true);
     try {
-      // TODO: Appel API pour récupérer le rapport
-      // const response = await api.get(`/caisses-journal/${selectedDate}`);
+      const data = await caissesJournalAPI.getByDate(selectedDate);
+      setRapport(data);
       
-      // Données simulées
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
-      setRapport({
-        date: selectedDate,
-        fond_ouverture: 50000,
-        total_encaissements: 250000,
-        total_decaissements: 15000,
-        solde_cloture: 235000,
-        tickets_encaisses: [
-          {
-            id: 1,
-            numero: 'TKT-2024-001',
-            heure: '10:30',
-            vendeur: 'Amadou Diop',
-            total_ttc: 59000,
-            moyen_paiement: 'especes',
-          },
-          {
-            id: 2,
-            numero: 'TKT-2024-002',
-            heure: '11:15',
-            vendeur: 'Fatou Sarr',
-            total_ttc: 88500,
-            moyen_paiement: 'wave',
-          },
-          {
-            id: 3,
-            numero: 'TKT-2024-003',
-            heure: '14:20',
-            vendeur: 'Ibrahima Ba',
-            total_ttc: 102500,
-            moyen_paiement: 'carte',
-          },
-        ],
-        decaissements: [
-          {
-            id: 1,
-            heure: '12:00',
-            montant: 10000,
-            motif: 'Achat fournitures',
-          },
-          {
-            id: 2,
-            heure: '15:30',
-            montant: 5000,
-            motif: 'Transport',
-          },
-        ],
-        ventes_par_moyen: {
-          especes: 59000,
-          carte: 102500,
-          wave: 88500,
-          om: 0,
-          cheque: 0,
-          autre: 0,
-        },
+      // Pré-remplir le formulaire avec les données
+      setFormData({
+        fondOuverture: data.fond_ouverture?.toString() || '',
+        totalEncaissements: data.total_encaissements?.toString() || '',
+        totalDecaissements: data.total_decaissements?.toString() || '',
+        soldeCloture: data.solde_cloture?.toString() || '',
       });
-      setLoading(false);
     } catch (error) {
       console.error('Erreur lors de la récupération du rapport:', error);
+      // Ne pas afficher d'alerte pour les erreurs d'authentification
+      if (error.response?.status !== 401) {
+        alert('Erreur lors du chargement du rapport. Veuillez réessayer.');
+      }
+    } finally {
       setLoading(false);
     }
   }, [selectedDate]);
@@ -98,15 +52,37 @@ const RapportCaissePage = () => {
     }
 
     try {
-      // TODO: Appel API pour clôturer la caisse
-      // await api.put(`/caisses-journal/${selectedDate}/cloture`, {
-      //   solde_cloture: rapport.solde_cloture,
-      // });
-
+      setLoading(true);
+      await caissesJournalAPI.cloture(selectedDate);
       alert('Caisse clôturée avec succès');
       fetchRapport();
     } catch (error) {
-      alert('Erreur lors de la clôture: ' + error.message);
+      console.error('Erreur lors de la clôture:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Une erreur est survenue';
+      alert('Erreur lors de la clôture: ' + errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveRapport = async () => {
+    try {
+      setLoading(true);
+      await caissesJournalAPI.update(selectedDate, {
+        fond_ouverture: parseInt(formData.fondOuverture) || 0,
+        total_encaissements: parseInt(formData.totalEncaissements) || 0,
+        total_decaissements: parseInt(formData.totalDecaissements) || 0,
+        solde_cloture: parseInt(formData.soldeCloture) || 0,
+      });
+      setIsEditing(false);
+      alert('Rapport mis à jour avec succès');
+      fetchRapport();
+    } catch (error) {
+      console.error('Erreur lors de la sauvegarde:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Une erreur est survenue';
+      alert('Erreur lors de la sauvegarde: ' + errorMessage);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -192,23 +168,7 @@ const RapportCaissePage = () => {
                     <Button variant="secondary" size="sm" onClick={() => setIsEditing(false)}>
                       Annuler
                     </Button>
-                    <Button variant="primary" size="sm" onClick={async () => {
-                      try {
-                        // TODO: Appel API pour sauvegarder
-                        // await api.put(`/caisses-journal/${selectedDate}`, formData);
-                        setRapport({
-                          ...rapport,
-                          fond_ouverture: parseFloat(formData.fondOuverture) || 0,
-                          total_encaissements: parseFloat(formData.totalEncaissements) || 0,
-                          total_decaissements: parseFloat(formData.totalDecaissements) || 0,
-                          solde_cloture: parseFloat(formData.soldeCloture) || 0,
-                        });
-                        setIsEditing(false);
-                        alert('Rapport enregistré avec succès');
-                      } catch (error) {
-                        alert('Erreur lors de l\'enregistrement: ' + error.message);
-                      }
-                    }}>
+                    <Button variant="primary" size="sm" onClick={handleSaveRapport}>
                       Enregistrer
                     </Button>
                   </div>
@@ -250,33 +210,69 @@ const RapportCaissePage = () => {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div className="text-center p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Fond d'ouverture</p>
-                  <p className="text-2xl font-bold text-primary-600 dark:text-primary-400 mt-2">
-                    {formatCurrency(rapport.fond_ouverture || 0)}
-                  </p>
-                </div>
-                <div className="text-center p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Total encaissements</p>
-                  <p className="text-2xl font-bold text-green-600 dark:text-green-400 mt-2">
-                    {formatCurrency(rapport.total_encaissements || 0)}
-                  </p>
-                </div>
-                <div className="text-center p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Total décaissements</p>
-                  <p className="text-2xl font-bold text-red-600 dark:text-red-400 mt-2">
-                    {formatCurrency(rapport.total_decaissements || 0)}
-                  </p>
-                </div>
-                <div className="text-center p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Solde de clôture</p>
-                  <p className="text-2xl font-bold text-accent-500 dark:text-accent-400 mt-2">
-                    {formatCurrency(rapport.solde_cloture || 0)}
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Calculé: {formatCurrency((rapport.fond_ouverture || 0) + (rapport.total_encaissements || 0) - (rapport.total_decaissements || 0))}
-                  </p>
-                </div>
+                <Card className="border-l-4 border-l-primary-600">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Fond d'ouverture</p>
+                      <p className="text-2xl font-bold text-primary-600 dark:text-primary-400 mt-1">
+                        {formatCurrency(rapport.fond_ouverture || 0)}
+                      </p>
+                    </div>
+                    <div className="w-12 h-12 bg-primary-100 dark:bg-primary-900 rounded-full flex items-center justify-center">
+                      <svg className="w-6 h-6 text-primary-600 dark:text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                  </div>
+                </Card>
+                <Card className="border-l-4 border-l-green-500">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Total encaissements</p>
+                      <p className="text-2xl font-bold text-green-600 dark:text-green-400 mt-1">
+                        {formatCurrency(rapport.total_encaissements || 0)}
+                      </p>
+                    </div>
+                    <div className="w-12 h-12 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center">
+                      <svg className="w-6 h-6 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                      </svg>
+                    </div>
+                  </div>
+                </Card>
+                <Card className="border-l-4 border-l-red-500">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Total décaissements</p>
+                      <p className="text-2xl font-bold text-red-600 dark:text-red-400 mt-1">
+                        {formatCurrency(rapport.total_decaissements || 0)}
+                      </p>
+                    </div>
+                    <div className="w-12 h-12 bg-red-100 dark:bg-red-900 rounded-full flex items-center justify-center">
+                      <svg className="w-6 h-6 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
+                      </svg>
+                    </div>
+                  </div>
+                </Card>
+                <Card className="border-l-4 border-l-accent-500">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Solde de clôture</p>
+                      <p className="text-2xl font-bold text-accent-500 dark:text-accent-400 mt-1">
+                        {formatCurrency(rapport.solde_cloture || 0)}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Calculé: {formatCurrency((rapport.fond_ouverture || 0) + (rapport.total_encaissements || 0) - (rapport.total_decaissements || 0))}
+                      </p>
+                    </div>
+                    <div className="w-12 h-12 bg-accent-100 dark:bg-accent-900 rounded-full flex items-center justify-center">
+                      <svg className="w-6 h-6 text-accent-500 dark:text-accent-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                    </div>
+                  </div>
+                </Card>
               </div>
             )}
           </Card>
@@ -285,10 +281,23 @@ const RapportCaissePage = () => {
           <Card>
             <CardHeader title="Ventes par moyen de paiement" />
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-              {Object.entries(rapport.ventes_par_moyen || {}).map(([moyen, montant]) => (
-                <div key={moyen} className="text-center p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  <p className="text-sm text-gray-600 dark:text-gray-400">{moyensPaiementLabels[moyen]}</p>
-                  <p className="text-lg font-bold text-gray-900 dark:text-white mt-1">
+              {Object.entries(rapport.ventes_par_moyen || {}).map(([moyen, montant], index) => (
+                <div 
+                  key={moyen} 
+                  className={`text-center p-4 rounded-lg border-l-4 ${
+                    index === 0 ? 'border-l-primary-600 bg-primary-50 dark:bg-primary-900/20' :
+                    index === 1 ? 'border-l-accent-500 bg-accent-50 dark:bg-accent-900/20' :
+                    index === 2 ? 'border-l-green-500 bg-green-50 dark:bg-green-900/20' :
+                    'border-l-gray-400 bg-gray-50 dark:bg-gray-700'
+                  }`}
+                >
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{moyensPaiementLabels[moyen]}</p>
+                  <p className={`text-lg font-bold mt-1 ${
+                    index === 0 ? 'text-primary-600 dark:text-primary-400' :
+                    index === 1 ? 'text-accent-600 dark:text-accent-400' :
+                    index === 2 ? 'text-green-600 dark:text-green-400' :
+                    'text-gray-900 dark:text-white'
+                  }`}>
                     {formatCurrency(montant)}
                   </p>
                 </div>
