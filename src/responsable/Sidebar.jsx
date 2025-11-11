@@ -17,6 +17,7 @@ import {
   ClipboardList,
   FileText,
   Clock,
+  Banknote, // 💵 ajout pour Décaissements
 } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -31,6 +32,7 @@ export default function Sidebar() {
     { name: "Commandes", icon: ShoppingCart, path: "/responsable/commandes" },
     { name: "Inventaire", icon: BarChart2, path: "/responsable/inventaire" },
     { name: "Rapports", icon: FileText, path: "/responsable/rapports" },
+    { name: "Décaissements", icon: Banknote, path: "/responsable/decaissements" }, // 💵 nouvelle entrée
     { name: "Journal d’activités", icon: Clock, path: "/responsable/journal-activites" },
   ];
 

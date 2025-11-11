@@ -8,7 +8,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 // ✅ Layout
 import LayoutResponsable from "./responsable/LayoutResponsable.jsx";
 
-// ✅ Pages
+// ✅ Pages principales
 import Dashboard from "./responsable/pages/Dashboard.jsx";
 import Utilisateurs from "./responsable/pages/Utilisateurs.jsx";
 import Fournisseurs from "./responsable/pages/Fournisseurs.jsx";
@@ -17,6 +17,7 @@ import Inventaire from "./responsable/pages/Inventaire.jsx";
 import Rapports from "./responsable/pages/Rapports.jsx";
 import JournalActivites from "./responsable/pages/JournalActivites.jsx";
 import ClientsSpeciaux from "./responsable/pages/ClientsSpeciaux.jsx";
+import Decaissements from "./responsable/pages/Decaissements.jsx"; // 💵 Ajout import
 
 export default function App() {
   return (
@@ -35,6 +36,7 @@ export default function App() {
           <Route path="commandes" element={<Commandes />} />
           <Route path="inventaire" element={<Inventaire />} />
           <Route path="rapports" element={<Rapports />} />
+          <Route path="decaissements" element={<Decaissements />} /> {/* 💵 Nouvelle route */}
           <Route path="journal-activites" element={<JournalActivites />} />
 
           {/* Fallback interne */}

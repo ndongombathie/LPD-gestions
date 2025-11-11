@@ -1,6 +1,6 @@
 // ==========================================================
-// 📊 Dashboard.jsx — Interface Responsable (LPD Manager)
-// Version Premium LPD : analytique, animée, élégante et complète
+// 📊 Dashboard.jsx — Interface Responsable PREMIUM (LPD Manager)
+// Edition 2025 : design glassmorphique, fluide, élégant et animé
 // ==========================================================
 
 import React from "react";
@@ -13,48 +13,61 @@ import {
   AlertCircle,
   FileDown,
 } from "lucide-react";
-import {
-  BarChart,
-  Bar,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  AreaChart,
-  Area,
-} from "recharts";
 import { motion } from "framer-motion";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 
+// === Components réutilisables ===
+import Card from "../components/Card";
+import ChartBox from "../components/ChartBox";
+import TableWidget from "../components/TableWidget";
+
 // === Données simulées ===
 const salesData = [
-  { jour: "Lun", ventes: 320, revenus: 65000 },
-  { jour: "Mar", ventes: 410, revenus: 82000 },
-  { jour: "Mer", ventes: 380, revenus: 76000 },
-  { jour: "Jeu", ventes: 470, revenus: 92000 },
-  { jour: "Ven", ventes: 520, revenus: 98000 },
-  { jour: "Sam", ventes: 390, revenus: 71000 },
-  { jour: "Dim", ventes: 260, revenus: 52000 },
+  { name: "Lun", ventes: 320, revenus: 65000 },
+  { name: "Mar", ventes: 410, revenus: 82000 },
+  { name: "Mer", ventes: 380, revenus: 76000 },
+  { name: "Jeu", ventes: 470, revenus: 92000 },
+  { name: "Ven", ventes: 520, revenus: 98000 },
+  { name: "Sam", ventes: 390, revenus: 71000 },
+  { name: "Dim", ventes: 260, revenus: 52000 },
 ];
 
 const stockData = [
-  { name: "Produits disponibles", value: 847, color: "#472EAD" },
-  { name: "Produits vendus", value: 320, color: "#F58020" },
-  { name: "Ruptures", value: 14, color: "#EF4444" },
+  { name: "Produits disponibles", value: 847 },
+  { name: "Produits vendus", value: 320 },
+  { name: "Ruptures", value: 14 },
 ];
 
 const stats = [
-  { label: "Ventes totales", value: "1 245 000 FCFA", icon: <ShoppingBag />, trend: "+12 %", color: "from-[#472EAD] to-[#7A5BF5]" },
-  { label: "Bénéfices nets", value: "425 000 FCFA", icon: <DollarSign />, trend: "+8 %", color: "from-[#F58020] to-[#FF995A]" },
-  { label: "Produits en stock", value: "847", icon: <Package />, trend: "Stable", color: "from-[#34D399] to-[#10B981]" },
-  { label: "Alertes stock bas", value: "14", icon: <AlertCircle />, trend: "−2 %", color: "from-[#EF4444] to-[#FB7185]" },
+  {
+    label: "Ventes totales",
+    value: "1 245 000 FCFA",
+    icon: <ShoppingBag size={22} />,
+    trend: "+12 %",
+    gradient: "from-[#472EAD] to-[#7A5BF5]",
+  },
+  {
+    label: "Bénéfices nets",
+    value: "425 000 FCFA",
+    icon: <DollarSign size={22} />,
+    trend: "+8 %",
+    gradient: "from-[#F58020] to-[#FF995A]",
+  },
+  {
+    label: "Produits en stock",
+    value: "847",
+    icon: <Package size={22} />,
+    trend: "Stable",
+    gradient: "from-[#34D399] to-[#10B981]",
+  },
+  {
+    label: "Alertes stock bas",
+    value: "14",
+    icon: <AlertCircle size={22} />,
+    trend: "−2 %",
+    gradient: "from-[#EF4444] to-[#FB7185]",
+  },
 ];
 
 const activities = [
@@ -68,182 +81,133 @@ export default function Dashboard() {
   const handleExportPDF = () => {
     const doc = new jsPDF();
     doc.text("Rapport d’Activité — LPD Manager", 14, 20);
-    const tableData = activities.map((a) => [a.action, a.user, a.time]);
     doc.autoTable({
       head: [["Action", "Utilisateur", "Horodatage"]],
-      body: tableData,
+      body: activities.map((a) => [a.action, a.user, a.time]),
       startY: 30,
+      headStyles: { fillColor: [71, 46, 173] },
     });
     doc.save("Rapport_LPD_Manager.pdf");
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#F9F9FB] px-6 py-8 overflow-y-auto">
-      {/* === Header global === */}
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.8 }}
+      className="min-h-screen w-full px-6 py-8 bg-gradient-to-br from-[#F9F9FB] via-[#F5F3FF] to-[#FFF9F6] overflow-y-auto"
+    >
+      {/* === HEADER === */}
       <motion.header
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
-        className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+        className="mb-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
       >
         <div>
-          <h1 className="text-3xl font-bold text-[#472EAD]">Tableau de bord du Responsable</h1>
-          <p className="text-sm text-gray-500">Vue consolidée des activités locales et performances globales.</p>
+          <h1 className="text-3xl font-extrabold text-[#472EAD] drop-shadow-sm">
+            Tableau de bord du Responsable
+          </h1>
+          <p className="text-sm text-gray-500">
+            Vue consolidée des performances et activités récentes.
+          </p>
         </div>
-        <button
+
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.97 }}
           onClick={handleExportPDF}
-          className="flex items-center gap-2 bg-[#472EAD] hover:bg-[#5A3CF5] text-white px-4 py-2 rounded-lg shadow-md transition-all duration-200"
+          className="flex items-center gap-2 bg-[#472EAD] hover:bg-[#5A3CF5] text-white px-5 py-2.5 rounded-lg shadow-md hover:shadow-lg transition-all duration-300"
         >
           <FileDown size={18} />
-          Exporter en PDF
-        </button>
+          Exporter le rapport PDF
+        </motion.button>
       </motion.header>
 
-      {/* === Statistiques principales === */}
-      <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-10">
-        {stats.map((stat, index) => (
-          <motion.div
-            key={index}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 * index }}
-            className={`relative overflow-hidden bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-xl p-5 transition-all`}
-          >
-            <div className={`absolute inset-0 opacity-0 hover:opacity-10 bg-gradient-to-br ${stat.color} transition-all duration-500`} />
-            <div className="relative z-10 flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500 font-medium">{stat.label}</p>
-                <h3 className="text-2xl font-semibold text-gray-800 mt-1">{stat.value}</h3>
-                <p
-                  className={`text-xs font-semibold mt-1 ${
-                    stat.trend.startsWith("+") ? "text-emerald-600" : stat.trend.startsWith("−") ? "text-red-500" : "text-gray-400"
-                  }`}
-                >
-                  {stat.trend} ce mois
-                </p>
-              </div>
-              <div className="p-3 rounded-xl bg-gradient-to-br from-white to-gray-50 text-[#472EAD] shadow-inner">
-                {stat.icon}
-              </div>
-            </div>
-          </motion.div>
-        ))}
-      </section>
-
-      {/* === Visualisations === */}
-      <section className="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-10">
-        {/* Ventes hebdomadaires */}
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7 }}
-          className="bg-white rounded-2xl shadow-md border border-gray-200 p-6"
-        >
-          <h2 className="text-lg font-semibold text-[#472EAD] mb-4 flex items-center gap-2">
-            <TrendingUp size={18} /> Évolution des ventes & revenus
-          </h2>
-          <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={salesData}>
-                <XAxis dataKey="jour" stroke="#888" />
-                <YAxis stroke="#888" />
-                <Tooltip />
-                <Legend />
-                <Line type="monotone" dataKey="ventes" stroke="#472EAD" strokeWidth={3} dot={{ r: 4 }} />
-                <Line type="monotone" dataKey="revenus" stroke="#F58020" strokeWidth={3} dot={{ r: 4 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </motion.div>
-
-        {/* Répartition du stock */}
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.2 }}
-          className="bg-white rounded-2xl shadow-md border border-gray-200 p-6"
-        >
-          <h2 className="text-lg font-semibold text-[#472EAD] mb-4 flex items-center gap-2">
-            <Package size={18} /> Répartition du stock
-          </h2>
-          <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={stockData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90}>
-                  {stockData.map((d, i) => (
-                    <Cell key={i} fill={d.color} />
-                  ))}
-                </Pie>
-                <Legend verticalAlign="middle" align="right" layout="vertical" />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </motion.div>
-      </section>
-
-      {/* === Courbe des bénéfices === */}
+      {/* === CARTES STATISTIQUES === */}
       <motion.section
-        initial={{ opacity: 0, y: 30 }}
+        initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.8 }}
-        className="bg-white rounded-2xl shadow-md border border-gray-200 p-6 mb-10"
+        transition={{ duration: 0.7 }}
+        className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-12"
       >
-        <h2 className="text-lg font-semibold text-[#472EAD] mb-4 flex items-center gap-2">
-          <DollarSign size={18} /> Progression des bénéfices mensuels
-        </h2>
-        <div className="h-72 w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={salesData}>
-              <defs>
-                <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#472EAD" stopOpacity={0.8} />
-                  <stop offset="95%" stopColor="#472EAD" stopOpacity={0.1} />
-                </linearGradient>
-              </defs>
-              <XAxis dataKey="jour" stroke="#888" />
-              <YAxis stroke="#888" />
-              <Tooltip />
-              <Area type="monotone" dataKey="revenus" stroke="#472EAD" fillOpacity={1} fill="url(#colorProfit)" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
+        {stats.map((s, i) => (
+          <Card
+            key={i}
+            label={s.label}
+            value={s.value}
+            icon={s.icon}
+            trend={s.trend}
+            gradient={s.gradient}
+          />
+        ))}
       </motion.section>
 
-      {/* === Journal d’activités === */}
+      {/* === GRAPHIQUES PRINCIPAUX === */}
       <motion.section
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.9 }}
-        className="bg-white rounded-2xl shadow-md border border-gray-200 p-6"
+        className="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-12"
       >
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-[#472EAD] flex items-center gap-2">
-            <Users size={18} /> Activités récentes
-          </h2>
-        </div>
-        <ul className="divide-y divide-gray-100">
-          {activities.map((a, i) => (
-            <motion.li
-              key={i}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.1 * i }}
-              className="flex items-center justify-between py-3 px-1 hover:bg-[#F9F9FF] rounded-md transition"
-            >
-              <div>
-                <p className="text-sm text-gray-700 font-medium">{a.action}</p>
-                <p className="text-xs text-gray-500">{a.user}</p>
-              </div>
-              <span className="text-xs font-semibold text-[#F58020]">{a.time}</span>
-            </motion.li>
-          ))}
-        </ul>
+        <ChartBox
+          title="Évolution des ventes et revenus"
+          icon={<TrendingUp size={18} />}
+          data={salesData}
+          dataKey1="ventes"
+          dataKey2="revenus"
+          type="line"
+        />
+
+        <ChartBox
+          title="Répartition du stock global"
+          icon={<Package size={18} />}
+          data={stockData}
+          dataKey1="value"
+          type="pie"
+        />
       </motion.section>
 
-      {/* === Footer === */}
-      <div className="text-center text-xs text-gray-500 mt-8 pb-4">
-        © 2025 <span className="text-[#472EAD] font-semibold">LPD Consulting</span> — Interface Responsable v2.0
-      </div>
-    </div>
+      {/* === COURBE BÉNÉFICES === */}
+      <motion.div
+        initial={{ opacity: 0, y: 40 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 1 }}
+        className="mb-12"
+      >
+        <ChartBox
+          title="Progression mensuelle des bénéfices"
+          icon={<DollarSign size={18} />}
+          data={salesData}
+          dataKey1="revenus"
+          type="area"
+        />
+      </motion.div>
+
+      {/* === ACTIVITÉS RÉCENTES === */}
+      <motion.div
+        initial={{ opacity: 0, y: 40 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 1.1 }}
+        className="mb-10"
+      >
+        <TableWidget
+          title="Activités récentes"
+          color="#472EAD"
+          columns={[
+            { label: "Action", key: "action" },
+            { label: "Utilisateur", key: "user" },
+            { label: "Horodatage", key: "time" },
+          ]}
+          data={activities}
+        />
+      </motion.div>
+
+      {/* === FOOTER === */}
+      <footer className="text-center text-xs text-gray-500 mt-10 pb-6">
+        © 2025{" "}
+        <span className="text-[#472EAD] font-semibold">LPD Consulting</span> — Interface Responsable v3.0
+      </footer>
+    </motion.div>
   );
 }
