@@ -17,17 +17,33 @@ import Inventaire from "./responsable/pages/Inventaire.jsx";
 import Rapports from "./responsable/pages/Rapports.jsx";
 import JournalActivites from "./responsable/pages/JournalActivites.jsx";
 import ClientsSpeciaux from "./responsable/pages/ClientsSpeciaux.jsx";
-import Decaissements from "./responsable/pages/Decaissements.jsx"; // 💵 Ajout import
+import Decaissements from "./responsable/pages/Decaissements.jsx";
+
+// ✅ Page Authentification
+import Connexion from "./authentification/login/Connexion.jsx";
+
+// ✅ Middleware — protection de route
+const PrivateRoute = ({ children }) => {
+  const token = localStorage.getItem("token");
+  return token ? children : <Navigate to="/login" replace />;
+};
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Redirection par défaut vers le Dashboard */}
-        <Route path="/" element={<Navigate to="/responsable/dashboard" replace />} />
+        {/* Route de connexion */}
+        <Route path="/login" element={<Connexion />} />
 
-        {/* Layout principal du Responsable */}
-        <Route path="/responsable" element={<LayoutResponsable />}>
+        {/* Routes protégées du Responsable */}
+        <Route
+          path="/responsable"
+          element={
+            <PrivateRoute>
+              <LayoutResponsable />
+            </PrivateRoute>
+          }
+        >
           <Route index element={<Dashboard />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="utilisateurs" element={<Utilisateurs />} />
@@ -36,12 +52,15 @@ export default function App() {
           <Route path="commandes" element={<Commandes />} />
           <Route path="inventaire" element={<Inventaire />} />
           <Route path="rapports" element={<Rapports />} />
-          <Route path="decaissements" element={<Decaissements />} /> {/* 💵 Nouvelle route */}
+          <Route path="decaissements" element={<Decaissements />} />
           <Route path="journal-activites" element={<JournalActivites />} />
 
           {/* Fallback interne */}
           <Route path="*" element={<Navigate to="/responsable/dashboard" replace />} />
         </Route>
+
+        {/* Redirection par défaut */}
+        <Route path="/" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>
   );

@@ -1,17 +1,19 @@
 // ==========================================================
 // 📊 Dashboard.jsx — Interface Responsable PREMIUM (LPD Manager)
-// Edition 2025 : design glassmorphique, fluide, élégant et animé
+// Édition 2025 : design glassmorphique, fluide, élégant et animé
 // ==========================================================
 
 import React from "react";
 import {
-  Users,
   ShoppingBag,
   TrendingUp,
   Package,
   DollarSign,
   AlertCircle,
   FileDown,
+  Activity,
+  CheckCircle,
+  XCircle,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import jsPDF from "jspdf";
@@ -21,8 +23,9 @@ import "jspdf-autotable";
 import Card from "../components/Card";
 import ChartBox from "../components/ChartBox";
 import TableWidget from "../components/TableWidget";
+import TopProductsWidget from "../components/TopProductsWidget";
 
-// === Données simulées ===
+// === Données simulées (à remplacer plus tard par API) ===
 const salesData = [
   { name: "Lun", ventes: 320, revenus: 65000 },
   { name: "Mar", ventes: 410, revenus: 82000 },
@@ -34,9 +37,9 @@ const salesData = [
 ];
 
 const stockData = [
-  { name: "Produits disponibles", value: 847 },
-  { name: "Produits vendus", value: 320 },
-  { name: "Ruptures", value: 14 },
+  { name: "Rupture", value: 14 },
+  { name: "Sous le seuil", value: 36 },
+  { name: "Stock normal", value: 847 },
 ];
 
 const stats = [
@@ -70,14 +73,23 @@ const stats = [
   },
 ];
 
+const topProducts = [
+  { rank: 1, name: "Cahier 200 p", sales: 120, revenue: 250000 },
+  { rank: 2, name: "Stylo Bleu", sales: 95, revenue: 80000 },
+  { rank: 3, name: "Crayon HB", sales: 78, revenue: 56000 },
+  { rank: 4, name: "Classeur A4", sales: 60, revenue: 90000 },
+  { rank: 5, name: "Feutres Couleur", sales: 55, revenue: 75000 },
+];
+
 const activities = [
   { action: "Nouvelle commande validée", user: "Vendeur #23", time: "Il y a 3 min" },
   { action: "Stock réapprovisionné", user: "Gestionnaire #7", time: "Il y a 27 min" },
   { action: "Rapport PDF exporté", user: "Admin Responsable", time: "Il y a 2 h" },
-  { action: "Ajout d’un nouveau fournisseur", user: "Admin Responsable", time: "Hier" },
+  { action: "Ajout d’un fournisseur", user: "Admin Responsable", time: "Hier" },
 ];
 
 export default function Dashboard() {
+  // === Export PDF des activités ===
   const handleExportPDF = () => {
     const doc = new jsPDF();
     doc.text("Rapport d’Activité — LPD Manager", 14, 20);
@@ -109,7 +121,7 @@ export default function Dashboard() {
             Tableau de bord du Responsable
           </h1>
           <p className="text-sm text-gray-500">
-            Vue consolidée des performances et activités récentes.
+            Vue consolidée des performances, stocks et activités récentes.
           </p>
         </div>
 
@@ -124,12 +136,12 @@ export default function Dashboard() {
         </motion.button>
       </motion.header>
 
-      {/* === CARTES STATISTIQUES === */}
+      {/* === KPI CARDS === */}
       <motion.section
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.7 }}
-        className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-12"
+        className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-8"
       >
         {stats.map((s, i) => (
           <Card
@@ -142,6 +154,24 @@ export default function Dashboard() {
           />
         ))}
       </motion.section>
+
+      {/* === ALERTES CRITIQUES === */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6 }}
+        className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-12"
+      >
+        <div className="flex items-center gap-2 bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl">
+          <XCircle size={18} /> <span>3 produits en rupture</span>
+        </div>
+        <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 px-4 py-3 rounded-xl">
+          <AlertCircle size={18} /> <span>5 produits sous le seuil</span>
+        </div>
+        <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-xl">
+          <CheckCircle size={18} /> <span>Stock global stable</span>
+        </div>
+      </motion.div>
 
       {/* === GRAPHIQUES PRINCIPAUX === */}
       <motion.section
@@ -168,7 +198,7 @@ export default function Dashboard() {
         />
       </motion.section>
 
-      {/* === COURBE BÉNÉFICES === */}
+      {/* === COURBE DES BÉNÉFICES === */}
       <motion.div
         initial={{ opacity: 0, y: 40 }}
         animate={{ opacity: 1, y: 0 }}
@@ -182,6 +212,16 @@ export default function Dashboard() {
           dataKey1="revenus"
           type="area"
         />
+      </motion.div>
+
+      {/* === TOP 5 PRODUITS BEST-SELLERS === */}
+      <motion.div
+        initial={{ opacity: 0, y: 40 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 1 }}
+        className="mb-12"
+      >
+        <TopProductsWidget data={topProducts} />
       </motion.div>
 
       {/* === ACTIVITÉS RÉCENTES === */}
