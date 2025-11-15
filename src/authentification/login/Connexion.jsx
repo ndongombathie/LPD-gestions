@@ -1,17 +1,19 @@
 // ==========================================================
 // 🔐 Connexion.jsx — Authentification Sanctum (Frontend LPD)
-// S'adapte automatiquement au rôle retourné par l'API
+// Ajout : Affichage / Masquage mot de passe (œil)
 // ==========================================================
 
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Eye, EyeOff } from "lucide-react"; // 👈 Ajout des icônes
 import { instance } from "../../utils/axios";
- // axios configuré avec Bearer token
 
 export default function Connexion() {
   const navigate = useNavigate();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPwd, setShowPwd] = useState(false); // 👈 Ajout
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -42,7 +44,7 @@ export default function Connexion() {
     setLoading(true);
 
     try {
-      // 1️⃣ Login → récupération token
+      // 1️⃣ Login
       const { data } = await instance.post("/auth/login", {
         email,
         password,
@@ -51,18 +53,15 @@ export default function Connexion() {
       if (!data?.token || !data?.user)
         return setMessage("❌ Réponse inattendue du serveur.");
 
-      // 2️⃣ Stockage du token
+      // 2️⃣ Sauvegarde token
       localStorage.setItem("token", data.token);
-
-      // Mise à jour des headers axios pour les futures requêtes
       instance.defaults.headers.common["Authorization"] = `Bearer ${data.token}`;
 
-      // 3️⃣ Récupération du vrai user 🔥 via Sanctum
+      // 3️⃣ Profil réel (via Sanctum)
       const me = await instance.get("/mon-profil");
-
       localStorage.setItem("user", JSON.stringify(me.data));
 
-      // 4️⃣ Redirection selon rôle
+      // 4️⃣ Redirection
       setMessage("✅ Connexion réussie !");
       setTimeout(() => {
         navigate(redirectByRole(me.data.role), { replace: true });
@@ -73,6 +72,7 @@ export default function Connexion() {
         error?.response?.data?.message ||
         error?.response?.data?.error ||
         "❌ Identifiants incorrects.";
+
       setMessage(msg);
       console.error("Erreur login :", error);
     } finally {
@@ -84,15 +84,25 @@ export default function Connexion() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#472EAD] via-[#6B4DF5] to-[#F58020] p-4">
 
       <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-2xl p-8 w-full max-w-md text-center border border-white/20">
-        
+
         {/* === Logo === */}
         <div className="flex flex-col items-center justify-center mb-4">
           <svg xmlns="http://www.w3.org/2000/svg" width="80" height="50" viewBox="0 0 200 120">
             <ellipse cx="100" cy="60" rx="90" ry="45" fill="#472EAD" />
-            <text x="50%" y="66%" textAnchor="middle" fill="#F58020" fontFamily="Arial Black" fontSize="60" fontWeight="900" dy=".1em">
+            <text
+              x="50%"
+              y="66%"
+              textAnchor="middle"
+              fill="#F58020"
+              fontFamily="Arial Black"
+              fontSize="60"
+              fontWeight="900"
+              dy=".1em"
+            >
               LPD
             </text>
           </svg>
+
           <p className="text-[12px] uppercase tracking-wider text-white/80 font-medium">
             Librairie Papeterie Daradji
           </p>
@@ -104,22 +114,48 @@ export default function Connexion() {
 
         {/* === Formulaire === */}
         <form onSubmit={handleSubmit} className="space-y-5">
-          <input type="email" placeholder="Adresse e-mail"
-            value={email} onChange={(e) => setEmail(e.target.value)}
-            className="w-full px-4 py-3 rounded-lg bg-white/20 text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-white"
-            required />
 
-          <input type="password" placeholder="Mot de passe"
-            value={password} onChange={(e) => setPassword(e.target.value)}
+          {/* Champ Email */}
+          <input
+            type="email"
+            placeholder="Adresse e-mail"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
             className="w-full px-4 py-3 rounded-lg bg-white/20 text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-white"
-            required />
+            required
+          />
 
-          <button type="submit" disabled={loading}
+          {/* Champ Mot de passe + œil */}
+          <div className="relative">
+            <input
+              type={showPwd ? "text" : "password"}   // 👈 affichage dynamique
+              placeholder="Mot de passe"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-4 py-3 rounded-lg bg-white/20 text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-white"
+              required
+            />
+
+            {/* Icône œil */}
+            <button
+              type="button"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-blue"
+              onClick={() => setShowPwd(!showPwd)}
+            >
+              {showPwd ? <EyeOff size={20} /> : <Eye size={20} />}
+            </button>
+          </div>
+
+          {/* Bouton connexion */}
+          <button
+            type="submit"
+            disabled={loading}
             className={`w-full py-3 rounded-lg font-bold text-white transition-all duration-500 shadow-lg ${
               loading
                 ? "opacity-80 cursor-not-allowed bg-gray-400"
                 : "bg-gradient-to-r from-blue-600 via-blue-500 to-orange-500 hover:from-orange-500 hover:to-blue-600 hover:shadow-2xl"
-            }`}>
+            }`}
+          >
             {loading ? "Connexion..." : "Se connecter"}
           </button>
         </form>
