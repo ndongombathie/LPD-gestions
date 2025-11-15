@@ -1,10 +1,10 @@
 // ==========================================================
 // 🧠 Header.jsx — Version 100% Fonctionnelle (LPD Manager)
-// Connecté Laravel + Sanctum : profil, logout, update, password
+// Connecté Laravel + Sanctum : profil, logout, update, password + Raccourcis
 // ==========================================================
 
 import React, { useState, useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   Bell,
   ChevronDown,
@@ -18,10 +18,19 @@ import {
   Eye,
   EyeOff,
   Camera,
+  // Icônes identiques à la Sidebar pour les pages
+  LayoutDashboard,
+  Users,
+  Truck,
+  ShoppingCart,
+  BarChart2,
+  ClipboardList,
+  FileText,
+  Clock,
+  Banknote,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { instance } from "../utils/axios";
-
 
 // ==========================================================
 // 🧩 Utils
@@ -42,6 +51,19 @@ const loadJSON = (k, def) => {
 const saveJSON = (k, v) => localStorage.setItem(k, JSON.stringify(v));
 
 const RECENTS_KEY = "lpd_recent_paths";
+
+// 🔗 Pages éligibles aux raccourcis (mêmes infos que la Sidebar)
+const SHORTCUT_ITEMS = [
+  { name: "Tableau de bord", path: "/responsable/dashboard", icon: LayoutDashboard },
+  { name: "Utilisateurs", path: "/responsable/utilisateurs", icon: Users },
+  { name: "Fournisseurs", path: "/responsable/fournisseurs", icon: Truck },
+  { name: "Clients spéciaux", path: "/responsable/clients-speciaux", icon: ClipboardList },
+  { name: "Commandes", path: "/responsable/commandes", icon: ShoppingCart },
+  { name: "Inventaire", path: "/responsable/inventaire", icon: BarChart2 },
+  { name: "Rapports", path: "/responsable/rapports", icon: FileText },
+  { name: "Décaissements", path: "/responsable/decaissements", icon: Banknote },
+  { name: "Journal d’activités", path: "/responsable/journal-activites", icon: Clock },
+];
 
 // ==========================================================
 // 🔔 Toast system
@@ -146,7 +168,7 @@ function PasswordModal({ open, onClose, onSuccess, addToast }) {
             <Key className="w-5 h-5" /> Changer le mot de passe
           </h2>
 
-          <button onClick={onClose}>
+        <button onClick={onClose}>
             <X size={18} className="text-gray-500" />
           </button>
         </div>
@@ -379,6 +401,7 @@ function ProfileModal({ open, onClose, user, onUpdate, addToast }) {
 
 export default function Header() {
   const navigate = useNavigate();
+  const location = useLocation();
   const menuRef = useRef();
 
   // UI
@@ -398,6 +421,18 @@ export default function Header() {
     ])
   );
 
+  // 🆕 Dernières pages visitées (raccourcis)
+  const [recentPaths, setRecentPaths] = useState(() => {
+    const saved = loadJSON(RECENTS_KEY, null);
+    if (saved && Array.isArray(saved) && saved.length) return saved;
+    return [
+      "/responsable/dashboard",
+      "/responsable/utilisateurs",
+      "/responsable/inventaire",
+      "/responsable/rapports",
+    ];
+  });
+
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   const addToast = (type, title, message) => {
@@ -408,6 +443,31 @@ export default function Header() {
 
   const removeToast = (id) =>
     setToasts((prev) => prev.filter((t) => t.id !== id));
+
+  // ➕ Ajout dans l'historique des raccourcis
+  const pushRecentPath = (path) => {
+    const allowed = SHORTCUT_ITEMS.map((i) => i.path);
+    if (!allowed.includes(path)) return;
+
+    setRecentPaths((prev) => {
+      const without = prev.filter((p) => p !== path);
+      const updated = [path, ...without].slice(0, 4); // 4 derniers seulement
+      saveJSON(RECENTS_KEY, updated);
+      return updated;
+    });
+  };
+
+  // Quand l'URL change → mettre à jour les raccourcis
+  useEffect(() => {
+    pushRecentPath(location.pathname);
+  }, [location.pathname]);
+
+  // Navigation via un raccourci
+  const handleGoShortcut = (path) => {
+    navigate(path);
+    pushRecentPath(path);
+    setShowQuick(false);
+  };
 
   // ==========================================================
   // 🔥 Charger le VRAI utilisateur
@@ -509,6 +569,51 @@ export default function Header() {
 
             {/* ACTIONS */}
             <div className="flex items-center gap-4">
+
+              {/* 🆕 RACCOURCIS */}
+              <div className="relative hidden sm:block">
+                <button
+                  onClick={() => {
+                    setShowQuick((v) => !v);
+                    setShowNotif(false);
+                    setShowMenu(false);
+                  }}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-[#F7F5FF] hover:text-[#472EAD] transition"
+                >
+                  <LayoutGrid size={18} className="text-[#472EAD]" />
+                  <span>Raccourcis</span>
+                </button>
+
+                {showQuick && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.18 }}
+                    className="absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-lg shadow-lg p-2 z-30"
+                  >
+                    <p className="text-xs font-semibold text-gray-500 px-2 py-1">
+                      Accès rapide (4 dernières pages)
+                    </p>
+                    <ul className="text-sm text-gray-700">
+                      {recentPaths.map((path) => {
+                        const item = SHORTCUT_ITEMS.find((i) => i.path === path);
+                        if (!item) return null;
+                        const Icon = item.icon;
+                        return (
+                          <li
+                            key={path}
+                            onClick={() => handleGoShortcut(path)}
+                            className="flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer hover:bg-[#F7F5FF]"
+                          >
+                            <Icon size={16} className="text-[#472EAD]" />
+                            <span>{item.name}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </motion.div>
+                )}
+              </div>
 
               {/* NOTIFS */}
               <div className="relative">
