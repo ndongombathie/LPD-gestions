@@ -37,7 +37,7 @@ const Dashboard = () => {
             </ul>
           </div>
 
-          <div className="bg-white p-5 rounded-lg shadow-sm">
+          {/* <div className="bg-white p-5 rounded-lg shadow-sm">
             <h3 className="text-lg font-semibold text-[#111827] mb-4">Alertes & Notifications</h3>
             <div className="space-y-3">
               {alerts.map((alert, idx) => (
@@ -47,7 +47,40 @@ const Dashboard = () => {
                 </div>
               ))}
             </div>
-          </div>
+          </div> */}
+          <div className="bg-white p-5 rounded-lg shadow-sm">
+  <div className="flex items-center justify-between mb-4">
+    <h3 className="text-lg font-semibold text-[#111827]">
+      Alertes & Notifications
+    </h3>
+
+    {/* Mini bouton */}
+    <button
+      onClick={() => window.location.href = "/alerts"}
+      className="text-sm px-3 py-1 bg-[#472EAD] text-white rounded hover:bg-[#331f7a] transition"
+    >
+      Voir alertes
+    </button>
+  </div>
+
+  {/* Texte : 7 produits sont en alerte */}
+  <p className="text-sm text-red-600 font-medium mb-3">
+    7 produits sont en alerte
+  </p>
+
+  <div className="space-y-3">
+    {alerts.map((alert, idx) => (
+      <div
+        key={idx}
+        className="p-3 border-l-4 border-[#472EAD] bg-[#F3F4F6] rounded"
+      >
+        <div className="text-[#111827] font-medium">{alert.text}</div>
+        <div className="text-sm text-gray-500">{alert.subtext}</div>
+      </div>
+    ))}
+  </div>
+</div>
+
         </div>
       </div>
     </div>

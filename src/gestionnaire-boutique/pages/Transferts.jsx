@@ -14,7 +14,7 @@ const Transferts = () => {
   ]);
 
   const [recherche, setRecherche] = useState("");
-  const [filtreStatut, setFiltreStatut] = useState("");
+  // const [filtreStatut, setFiltreStatut] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [nouveau, setNouveau] = useState({ produit: "", source: "", destination: "", quantite: "" });
   const [detailTransfert, setDetailTransfert] = useState(null);
@@ -24,8 +24,9 @@ const Transferts = () => {
     t =>
       (t.produit.toLowerCase().includes(recherche.toLowerCase()) ||
        t.source.toLowerCase().includes(recherche.toLowerCase()) ||
-       t.destination.toLowerCase().includes(recherche.toLowerCase())) &&
-      (filtreStatut ? t.statut === filtreStatut : true)
+       t.destination.toLowerCase().includes(recherche.toLowerCase()))
+      //   &&
+      // (filtreStatut ? t.statut === filtreStatut : true)
   );
 
   const stats = {
@@ -77,7 +78,7 @@ const Transferts = () => {
               onChange={(e) => setRecherche(e.target.value)}
             />
           </div>
-
+{/* 
           <div className="relative w-48">
             <select
               className="border rounded-lg py-2 px-3 w-full"
@@ -89,7 +90,7 @@ const Transferts = () => {
               <option value="validé">Validé</option>
               <option value="rejeté">Rejeté</option>
             </select>
-          </div>
+          </div> */}
 
           <button
             onClick={() => setShowModal(true)}

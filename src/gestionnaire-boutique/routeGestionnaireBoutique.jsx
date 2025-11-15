@@ -3,12 +3,14 @@ import Produits from "./pages/Produits";
 import Stock from "./pages/Stock";
 import Transferts from "./pages/Transferts";
 import Rapports from "./pages/Rapports";
+import Alertes from "./pages/Alertes";
 
 const routes = {
   dashboard: Dashboard,
   produits: Produits,
   stock: Stock,
   transferts: Transferts,
+  alertes: Alertes,
   rapports: Rapports,
 };
 

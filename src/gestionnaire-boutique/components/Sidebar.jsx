@@ -6,7 +6,8 @@ import {
   ClipboardList, 
   RefreshCw, 
   Users, 
-  FileText 
+  FileText,
+  AlertTriangle 
 } from "lucide-react";
 
 const Sidebar = ({ currentPage, setCurrentPage }) => {
@@ -15,6 +16,7 @@ const Sidebar = ({ currentPage, setCurrentPage }) => {
     { id: "produits", name: "Produits", icon: Package },
     { id: "stock", name: "Stock", icon: ClipboardList },
     { id: "transferts", name: "Transferts", icon: RefreshCw },
+    { id: "alertes", name: "Alertes", icon: AlertTriangle },
     { id: "rapports", name: "Rapports", icon: FileText },
   ];
 
