@@ -5,7 +5,7 @@
 
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Eye, EyeOff } from "lucide-react"; // 👈 Ajout des icônes
+import { Eye, EyeOff } from "lucide-react"; 
 import { instance } from "../../utils/axios";
 
 export default function Connexion() {
@@ -13,11 +13,10 @@ export default function Connexion() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPwd, setShowPwd] = useState(false); // 👈 Ajout
+  const [showPwd, setShowPwd] = useState(false);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // 🎯 Redirection selon le rôle
   const redirectByRole = (role = "") => {
     switch (role.toLowerCase()) {
       case "responsable":
@@ -33,7 +32,6 @@ export default function Connexion() {
     }
   };
 
-  // 🎯 Soumission du formulaire
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage("");
@@ -44,7 +42,6 @@ export default function Connexion() {
     setLoading(true);
 
     try {
-      // 1️⃣ Login
       const { data } = await instance.post("/auth/login", {
         email,
         password,
@@ -53,15 +50,12 @@ export default function Connexion() {
       if (!data?.token || !data?.user)
         return setMessage("❌ Réponse inattendue du serveur.");
 
-      // 2️⃣ Sauvegarde token
       localStorage.setItem("token", data.token);
       instance.defaults.headers.common["Authorization"] = `Bearer ${data.token}`;
 
-      // 3️⃣ Profil réel (via Sanctum)
       const me = await instance.get("/mon-profil");
       localStorage.setItem("user", JSON.stringify(me.data));
 
-      // 4️⃣ Redirection
       setMessage("✅ Connexion réussie !");
       setTimeout(() => {
         navigate(redirectByRole(me.data.role), { replace: true });
@@ -74,14 +68,13 @@ export default function Connexion() {
         "❌ Identifiants incorrects.";
 
       setMessage(msg);
-      console.error("Erreur login :", error);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#472EAD] via-[#6B4DF5] to-[#F58020] p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-500 to-orange-500 p-4">
 
       <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-2xl p-8 w-full max-w-md text-center border border-white/20">
 
@@ -115,7 +108,7 @@ export default function Connexion() {
         {/* === Formulaire === */}
         <form onSubmit={handleSubmit} className="space-y-5">
 
-          {/* Champ Email */}
+          {/* Email */}
           <input
             type="email"
             placeholder="Adresse e-mail"
@@ -125,10 +118,10 @@ export default function Connexion() {
             required
           />
 
-          {/* Champ Mot de passe + œil */}
+          {/* Mot de passe + œil */}
           <div className="relative">
             <input
-              type={showPwd ? "text" : "password"}   // 👈 affichage dynamique
+              type={showPwd ? "text" : "password"}
               placeholder="Mot de passe"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -136,7 +129,6 @@ export default function Connexion() {
               required
             />
 
-            {/* Icône œil */}
             <button
               type="button"
               className="absolute right-3 top-1/2 -translate-y-1/2 text-blue"
@@ -146,7 +138,7 @@ export default function Connexion() {
             </button>
           </div>
 
-          {/* Bouton connexion */}
+          {/* Bouton */}
           <button
             type="submit"
             disabled={loading}
