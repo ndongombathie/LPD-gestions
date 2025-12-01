@@ -1,51 +1,18 @@
-import React, { useState } from "react";
-import { Search, Eye, AlertTriangle, Filter, Trash2 } from "lucide-react";
-import Navbar from "../components/Navbar";
+import React, { useEffect, useState } from "react";
+import { Search, Eye, AlertTriangle, Filter, Trash2, Edit } from "lucide-react";
 import CardStat from "../components/CardStat";
+import DataTable from "../components/DataTable";
+import LoadingSpinner from "../components/LoadingSpinner";
+import EmptyState from "../components/EmptyState";
+import * as api from "../services/apiMock";
 
 
 const Stock = () => {
   const [recherche, setRecherche] = useState("");
   const [categorieFiltre, setCategorieFiltre] = useState("Toutes");
   const [produitDetail, setProduitDetail] = useState(null);
-  const [stocks, setStocks] = useState([
-    {
-      id: 1,
-      nom: "Savon OMO",
-      code: "PR001",
-      categorie: "Hygiène",
-      quantite: 10,
-      nbr_pieces: 5,
-      prix_gros: 900,
-      prix_detail: 1000,
-      seuil: 15,
-      fournisseur: "Distribution Dakar",
-    },
-    {
-      id: 2,
-      nom: "Riz Royal 50kg",
-      code: "PR002",
-      categorie: "Alimentation",
-      quantite: 4,
-      nbr_pieces: 1,
-      prix_gros: 30000,
-      prix_detail: 32000,
-      seuil: 3,
-      fournisseur: "SunuRiz",
-    },
-    {
-      id: 3,
-      nom: "Huile Awa 5L",
-      code: "PR003",
-      categorie: "Alimentation",
-      quantite: 2,
-      nbr_pieces: 6,
-      prix_gros: 6500,
-      prix_detail: 7000,
-      seuil: 10,
-      fournisseur: "Senhuile SA",
-    },
-  ]);
+  const [stocks, setStocks] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   // Stats
   const stats = {
@@ -57,27 +24,37 @@ const Stock = () => {
 
   const categories = ["Toutes", ...new Set(stocks.map(s => s.categorie))];
 
+  useEffect(() => {
+    let mounted = true;
+    setLoading(true);
+    api.fetchStocks().then((res) => {
+      if (!mounted) return;
+      setStocks(res);
+      setLoading(false);
+    });
+    return () => (mounted = false);
+  }, []);
+
   const stocksFiltres = stocks.filter(s => {
-    const matchRecherche =
-      s.nom.toLowerCase().includes(recherche.toLowerCase()) ||
-      s.code.toLowerCase().includes(recherche.toLowerCase());
+    const q = recherche.trim().toLowerCase();
+    const matchRecherche = !q || s.nom.toLowerCase().includes(q) || s.code.toLowerCase().includes(q);
     const matchCategorie = categorieFiltre === "Toutes" || s.categorie === categorieFiltre;
     return matchRecherche && matchCategorie;
   });
 
-  // Supprimer un produit avec confirmation
-  const supprimerProduit = (id) => {
+  // Supprimer un produit (mock)
+  const supprimerProduit = async (id) => {
     if (!window.confirm("Voulez-vous vraiment supprimer ce produit ?")) return;
-    setStocks(stocks.filter(s => s.id !== id));
+    const res = await api.deleteStock(id);
+    if (res && res.ok) setStocks((prev) => prev.filter(s => s.id !== id));
   };
+
+  const handleView = (row) => setProduitDetail(row);
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="fixed top-0 left-64 right-0 h-16 bg-white z-50 shadow">
-        <Navbar />
-      </div>
 
-      <div className="pt-[100px] px-6 space-y-6">
+      <div className="px-6 space-y-6">
         {/* En-tête et recherche */}
         <div className="flex justify-between items-center flex-wrap gap-4">
           <h2 className="text-2xl font-bold text-[#111827]">Gestion du Stock</h2>
@@ -115,74 +92,45 @@ const Stock = () => {
           <CardStat title="Épuisés" value={stats.epuisse} color="bg-red-600" />
         </div>
 
-        {/* Tableau des stocks */}
+        {/* DataTable centralisée */}
         <div className="bg-white rounded-lg shadow p-4 overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-white border-b z-10">
-              <tr className="text-left text-[#111827]">
-                <th className="py-2">Nom</th>
-                <th>Code</th>
-                <th>Catégorie</th>
-                <th>Quantité totale</th>
-                <th>Seuil</th>
-                <th>Valeur stock</th>
-                <th>Statut</th>
-                <th className="text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stocksFiltres.length > 0 ? (
-                stocksFiltres.map(s => {
-                  const quantiteTotale = s.quantite * s.nbr_pieces;
-                  return (
-                    <tr key={s.id} className="border-b hover:bg-[#F3F4F6]">
-                      <td className="py-2">{s.nom}</td>
-                      <td>{s.code}</td>
-                      <td>{s.categorie}</td>
-                      <td>{quantiteTotale}</td>
-                      <td>{s.seuil}</td>
-                      <td>{quantiteTotale * s.prix_gros} FCFA</td>
-                      <td>
-                        {quantiteTotale <= s.seuil ? (
-                          <span className="flex items-center gap-2 text-[#F58020] font-medium">
-                            <AlertTriangle size={16} /> Faible
-                          </span>
-                        ) : (
-                          <span className="text-green-600 font-medium">OK</span>
-                        )}
-                      </td>
-                      <td className="text-right flex justify-end gap-2">
-                        <button
-                          onClick={() => setProduitDetail(s)}
-                          className="text-[#472EAD] hover:text-[#3b2594]"
-                        >
-                          <Eye size={18} />
-                        </button>
-                        <button
-                          onClick={() => supprimerProduit(s.id)}
-                          className="text-red-600 hover:text-red-800"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td colSpan="8" className="text-center py-4 text-gray-500 italic">
-                    Aucun produit trouvé
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+          {loading ? (
+            <LoadingSpinner />
+          ) : stocksFiltres.length === 0 ? (
+            <EmptyState message="Aucun produit trouvé" />
+          ) : (
+            <DataTable
+              columns={[
+                { label: "Nom", key: "nom" },
+                { label: "Code", key: "code" },
+                { label: "Catégorie", key: "categorie" },
+                { label: "Quantité", key: "quantite", render: (v, row) => `${v} (x${row.nbr_pieces})` },
+                { label: "Seuil", key: "seuil" },
+                { label: "Valeur stock", key: "valeur", render: (_, row) => `${row.quantite * row.nbr_pieces * row.prix_gros} FCFA` },
+                { label: "Statut", key: "statut", render: (_, row) => {
+                    const quantiteTotale = row.quantite * row.nbr_pieces;
+                    return quantiteTotale <= row.seuil ? (
+                      <span className="flex items-center gap-2 text-[#F58020] font-medium"><AlertTriangle size={16} /> Faible</span>
+                    ) : (
+                      <span className="text-green-600 font-medium">OK</span>
+                    );
+                  }
+                },
+              ]}
+              data={stocksFiltres}
+              actions={[
+                { title: 'Voir', icon: <Eye size={16} />, color: "text-blue-600", hoverBg: "bg-gray-100", onClick: handleView },
+                { title: 'Supprimer', icon: <Trash2 size={16} />, hoverBg: "bg-gray-100", color: "text-red-600", onClick: (row) => supprimerProduit(row.id) },
+              ]}
+              onRowClick={(row) => setProduitDetail(row)}
+            />
+          )}
         </div>
 
         {/* Modal Détails */}
         {produitDetail && (
-          <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center z-50">
-            <div className="bg-white w-[600px] rounded-lg shadow-lg p-6 space-y-4">
+          <div className="fixed inset-0 z-200 bg-black/40 bg-opacity-10 flex justify-center items-center">
+            <div className="relative z-50 bg-white w-[600px] rounded-lg shadow-lg p-6 space-y-4">
               <h3 className="text-xl font-bold text-[#111827]">Détails du produit</h3>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <p><span className="font-medium">Nom :</span> {produitDetail.nom}</p>

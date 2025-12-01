@@ -1,298 +1,21 @@
-import React, { useState } from "react";
-import { Plus, Edit, Trash2, AlertTriangle, Search } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Plus, Edit, Trash2, AlertTriangle, Search, CheckCircle2, AlertCircle } from "lucide-react";
 import Navbar from "../components/Navbar";
+import DataTable from "../components/DataTable";
+import LoadingSpinner from "../components/LoadingSpinner";
+import * as api from "../services/apiMock";
 
 const Produits = () => {
-  const [produits, setProduits] = useState([
-    {
-      id: 1,
-      nom: "Savon OMO",
-      code: "PR001",
-      code_barre: "123456789",
-      categorie: "Hygiène",
-      prix_vente: 1000,
-      prix_basique: 950,
-      prix_seuil: 10,
-      prix_gros: 900,
-      prix_gros_basique: 850,
-      prix_gros_seuil: 800,
-      quantite: 5,
-      nbr_paquets: 1,
-      unite_par_paquet: 5,
-    },
-    {
-      id: 2,
-      nom: "Savon OMO",
-      code: "PR001",
-      code_barre: "123456789",
-      categorie: "Hygiène",
-      prix_vente: 1000,
-      prix_basique: 950,
-      prix_seuil: 10,
-      prix_gros: 900,
-      prix_gros_basique: 850,
-      prix_gros_seuil: 800,
-      quantite: 5,
-      nbr_paquets: 1,
-      unite_par_paquet: 5,
-    },
-    {
-      id: 3,
-      nom: "Savon OMO",
-      code: "PR001",
-      code_barre: "123456789",
-      categorie: "Hygiène",
-      prix_vente: 1000,
-      prix_basique: 950,
-      prix_seuil: 10,
-      prix_gros: 900,
-      prix_gros_basique: 850,
-      prix_gros_seuil: 800,
-      quantite: 5,
-      nbr_paquets: 1,
-      unite_par_paquet: 5,
-    },
-    {
-      id: 4,
-      nom: "Savon OMO",
-      code: "PR001",
-      code_barre: "123456789",
-      categorie: "Hygiène",
-      prix_vente: 1000,
-      prix_basique: 950,
-      prix_seuil: 10,
-      prix_gros: 900,
-      prix_gros_basique: 850,
-      prix_gros_seuil: 800,
-      quantite: 5,
-      nbr_paquets: 1,
-      unite_par_paquet: 5,
-    },
-    {
-      id: 5,
-      nom: "Savon OMO",
-      code: "PR001",
-      code_barre: "123456789",
-      categorie: "Hygiène",
-      prix_vente: 1000,
-      prix_basique: 950,
-      prix_seuil: 10,
-      prix_gros: 900,
-      prix_gros_basique: 850,
-      prix_gros_seuil: 800,
-      quantite: 5,
-      nbr_paquets: 1,
-      unite_par_paquet: 5,
-    },
-    {
-      id: 6,
-      nom: "Savon OMO",
-      code: "PR001",
-      code_barre: "123456789",
-      categorie: "Hygiène",
-      prix_vente: 1000,
-      prix_basique: 950,
-      prix_seuil: 10,
-      prix_gros: 900,
-      prix_gros_basique: 850,
-      prix_gros_seuil: 800,
-      quantite: 5,
-      nbr_paquets: 1,
-      unite_par_paquet: 5,
-    },
-    {
-      id: 7,
-      nom: "Savon OMO",
-      code: "PR001",
-      code_barre: "123456789",
-      categorie: "Hygiène",
-      prix_vente: 1000,
-      prix_basique: 950,
-      prix_seuil: 10,
-      prix_gros: 900,
-      prix_gros_basique: 850,
-      prix_gros_seuil: 800,
-      quantite: 5,
-      nbr_paquets: 1,
-      unite_par_paquet: 5,
-    },
-    {
-      id: 8,
-      nom: "Savon OMO",
-      code: "PR001",
-      code_barre: "123456789",
-      categorie: "Hygiène",
-      prix_vente: 1000,
-      prix_basique: 950,
-      prix_seuil: 10,
-      prix_gros: 900,
-      prix_gros_basique: 850,
-      prix_gros_seuil: 800,
-      quantite: 5,
-      nbr_paquets: 1,
-      unite_par_paquet: 5,
-    },
-    {
-      id: 9,
-      nom: "Savon OMO",
-      code: "PR001",
-      code_barre: "123456789",
-      categorie: "Hygiène",
-      prix_vente: 1000,
-      prix_basique: 950,
-      prix_seuil: 10,
-      prix_gros: 900,
-      prix_gros_basique: 850,
-      prix_gros_seuil: 800,
-      quantite: 5,
-      nbr_paquets: 1,
-      unite_par_paquet: 5,
-    },
-    {
-      id: 10,
-      nom: "Savon OMO",
-      code: "PR001",
-      code_barre: "123456789",
-      categorie: "Hygiène",
-      prix_vente: 1000,
-      prix_basique: 950,
-      prix_seuil: 10,
-      prix_gros: 900,
-      prix_gros_basique: 850,
-      prix_gros_seuil: 800,
-      quantite: 5,
-      nbr_paquets: 1,
-      unite_par_paquet: 5,
-    },
-    {
-      id: 10,
-      nom: "Savon OMO",
-      code: "PR001",
-      code_barre: "123456789",
-      categorie: "Hygiène",
-      prix_vente: 1000,
-      prix_basique: 950,
-      prix_seuil: 10,
-      prix_gros: 900,
-      prix_gros_basique: 850,
-      prix_gros_seuil: 800,
-      quantite: 5,
-      nbr_paquets: 1,
-      unite_par_paquet: 5,
-    },
-    {
-      id: 10,
-      nom: "Savon OMO",
-      code: "PR001",
-      code_barre: "123456789",
-      categorie: "Hygiène",
-      prix_vente: 1000,
-      prix_basique: 950,
-      prix_seuil: 10,
-      prix_gros: 900,
-      prix_gros_basique: 850,
-      prix_gros_seuil: 800,
-      quantite: 5,
-      nbr_paquets: 1,
-      unite_par_paquet: 5,
-    },
-    {
-      id: 10,
-      nom: "Savon OMO",
-      code: "PR001",
-      code_barre: "123456789",
-      categorie: "Hygiène",
-      prix_vente: 1000,
-      prix_basique: 950,
-      prix_seuil: 10,
-      prix_gros: 900,
-      prix_gros_basique: 850,
-      prix_gros_seuil: 800,
-      quantite: 5,
-      nbr_paquets: 1,
-      unite_par_paquet: 5,
-    },
-    {
-      id: 10,
-      nom: "Savon OMO",
-      code: "PR001",
-      code_barre: "123456789",
-      categorie: "Hygiène",
-      prix_vente: 1000,
-      prix_basique: 950,
-      prix_seuil: 10,
-      prix_gros: 900,
-      prix_gros_basique: 850,
-      prix_gros_seuil: 800,
-      quantite: 5,
-      nbr_paquets: 1,
-      unite_par_paquet: 5,
-    },
-    {
-      id: 10,
-      nom: "Savon OMO",
-      code: "PR001",
-      code_barre: "123456789",
-      categorie: "Hygiène",
-      prix_vente: 1000,
-      prix_basique: 950,
-      prix_seuil: 10,
-      prix_gros: 900,
-      prix_gros_basique: 850,
-      prix_gros_seuil: 800,
-      quantite: 5,
-      nbr_paquets: 1,
-      unite_par_paquet: 5,
-    },
-    {
-      id: 10,
-      nom: "Savon OMO",
-      code: "PR001",
-      code_barre: "123456789",
-      categorie: "Hygiène",
-      prix_vente: 1000,
-      prix_basique: 950,
-      prix_seuil: 10,
-      prix_gros: 900,
-      prix_gros_basique: 850,
-      prix_gros_seuil: 800,
-      quantite: 5,
-      nbr_paquets: 1,
-      unite_par_paquet: 5,
-    },
-    {
-      id: 10,
-      nom: "Savon OMO",
-      code: "PR001",
-      code_barre: "123456789",
-      categorie: "Hygiène",
-      prix_vente: 1000,
-      prix_basique: 950,
-      prix_seuil: 10,
-      prix_gros: 900,
-      prix_gros_basique: 850,
-      prix_gros_seuil: 800,
-      quantite: 5,
-      nbr_paquets: 1,
-      unite_par_paquet: 5,
-    },
-    {
-      id: 10,
-      nom: "Savon OMO",
-      code: "PR001",
-      code_barre: "123456789",
-      categorie: "Hygiène",
-      prix_vente: 1000,
-      prix_basique: 950,
-      prix_seuil: 10,
-      prix_gros: 900,
-      prix_gros_basique: 850,
-      prix_gros_seuil: 800,
-      quantite: 5,
-      nbr_paquets: 1,
-      unite_par_paquet: 5,
-    },
-  ]);
+  const [produits, setProduits] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Local toasts pour notifications (succès/erreur)
+  const [toasts, setToasts] = useState([]);
+  const addToast = (type, title, message) => {
+    const id = Date.now() + Math.random();
+    setToasts((t) => [...t, { id, type, title, message }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3500);
+  };
 
   const [recherche, setRecherche] = useState("");
   const [editId, setEditId] = useState(null);
@@ -339,6 +62,25 @@ const Produits = () => {
     setShowModal(true);
   };
 
+  useEffect(() => {
+    let mounted = true;
+    setLoading(true);
+    api.fetchProducts()
+      .then((res) => {
+        if (!mounted) return;
+        setProduits(res || []);
+      })
+      .catch((err) => {
+        console.error(err);
+        addToast("error", "Erreur", "Impossible de charger les produits.");
+      })
+      .finally(() => mounted && setLoading(false));
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const modifierProduit = (id) => {
     const prod = produits.find((p) => p.id === id);
     setFormData(prod);
@@ -347,43 +89,77 @@ const Produits = () => {
   };
 
   const enregistrerProduit = () => {
-    if (!formData.nom || !formData.code) return;
-
-    const produitFinal = {
-      ...formData,
-      prix_vente: parseInt(formData.prix_vente || 0),
-      prix_basique: parseInt(formData.prix_basique || 0),
-      prix_seuil: parseInt(formData.prix_seuil || 0),
-      prix_gros: parseInt(formData.prix_gros || 0),
-      prix_gros_basique: parseInt(formData.prix_gros_basique || 0),
-      prix_gros_seuil: parseInt(formData.prix_gros_seuil || 0),
-      quantite: parseInt(formData.quantite || 0),
-      nbr_paquets: parseInt(formData.nbr_paquets || 0),
-    };
-
-    if (editId) {
-      setProduits(produits.map((p) => (p.id === editId ? produitFinal : p)));
-    } else {
-      setProduits([...produits, { id: Date.now(), ...produitFinal }]);
+    // validations simples
+    if (!formData.nom || !formData.code) {
+      addToast("error", "Champs manquants", "Le nom et le code sont requis.");
+      return;
     }
 
-    setShowModal(false);
+    const quantiteNum = parseInt(formData.quantite || 0, 10);
+    if (Number.isNaN(quantiteNum) || quantiteNum < 0) {
+      addToast("error", "Quantité invalide", "Entrez un nombre valide pour la quantité.");
+      return;
+    }
+
+    const payload = {
+      nom: formData.nom,
+      code: formData.code,
+      code_barre: formData.code_barre || "",
+      categorie: formData.categorie || "",
+      prix_vente: parseInt(formData.prix_vente || 0, 10),
+      quantite: quantiteNum,
+      prix_seuil: parseInt(formData.prix_seuil || 0, 10),
+    };
+
+    setLoading(true);
+
+    if (editId) {
+      api.updateProduct(editId, payload)
+        .then((updated) => {
+          setProduits((prev) => prev.map((p) => (p.id === editId ? updated || p : p)));
+          addToast("success", "Produit mis à jour", "Le produit a été modifié.");
+          setShowModal(false);
+        })
+        .catch((err) => {
+          console.error(err);
+          addToast("error", "Erreur", "Impossible de mettre à jour le produit.");
+        })
+        .finally(() => setLoading(false));
+    } else {
+      api.addProduct(payload)
+        .then((newProd) => {
+          setProduits((prev) => [newProd, ...prev]);
+          addToast("success", "Produit ajouté", "Nouveau produit ajouté à la liste.");
+          setShowModal(false);
+        })
+        .catch((err) => {
+          console.error(err);
+          addToast("error", "Erreur", "Impossible d'ajouter le produit.");
+        })
+        .finally(() => setLoading(false));
+    }
   };
 
   const supprimerProduit = () => {
-    setProduits(produits.filter((p) => p.id !== confirmDelete));
-    setConfirmDelete(null);
+    setLoading(true);
+    api.deleteProduct(confirmDelete)
+      .then(() => {
+        setProduits((prev) => prev.filter((p) => p.id !== confirmDelete));
+        addToast("success", "Supprimé", "Produit supprimé.");
+        setConfirmDelete(null);
+      })
+      .catch((err) => {
+        console.error(err);
+        addToast("error", "Erreur", "Impossible de supprimer le produit.");
+      })
+      .finally(() => setLoading(false));
   };
 
   return (
   <div className="min-h-screen bg-gray-50 overflow-y-auto scrollbar-hide">
-    {/* Navbar fixe */}
-    <div className="fixed top-0 left-64 right-0 h-16 bg-white z-50 shadow">
-      <Navbar />
-    </div>
 
     {/* Contenu principal défilable */}
-    <div className="pt-[100px] px-6 space-y-6">
+    <div className="px-6 space-y-6">
       <div className="flex justify-between items-center flex-wrap gap-4">
   <h2 className="text-2xl font-bold text-[#111827]">
     Gestion des Produits
@@ -439,60 +215,76 @@ const Produits = () => {
 </div>
 
 
-      {/* Tableau produits */}
+      {/* Tableau produits (DataTable réutilisable) */}
       <div className="bg-white rounded-lg shadow p-4 overflow-x-auto scrollbar-hide">
-        <table className="w-full text-sm border-collapse">
-          <thead className="sticky top-0 bg-white z-10 border-b">
-            <tr className="text-left text-[#111827]">
-              <th className="py-2">Nom</th>
-              <th>Code</th>
-              <th>Catégorie</th>
-              <th>Prix vente</th>
-              <th>Quantité</th>
-              <th className="text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {produitsFiltres.map((p) => (
-              <tr key={p.id} className="border-b hover:bg-[#F3F4F6]">
-                <td className="py-2">{p.nom}</td>
-                <td>{p.code}</td>
-                <td>{p.categorie}</td>
-                <td>{p.prix_vente} FCFA</td>
-                <td>
+        {loading ? (
+          <LoadingSpinner />
+        ) : (
+          <DataTable
+            data={produitsFiltres}
+            columns={[
+              { label: "Nom", key: "nom" },
+              { label: "Code", key: "code" },
+              { label: "Catégorie", key: "categorie" },
+              {
+                label: "Prix vente",
+                key: "prix_vente",
+                render: (val) => `${val} FCFA`,
+              },
+              {
+                label: "Quantité",
+                key: "quantite",
+                render: (val, row) => (
                   <div className="flex items-center gap-2">
-                    {p.quantite}
-                    {p.quantite <= p.prix_seuil && (
+                    <span>{val}</span>
+                    {val <= row.prix_seuil && (
                       <AlertTriangle className="text-[#F58020]" size={16} />
                     )}
                   </div>
-                </td>
-                <td className="text-right">
-                  <div className="flex justify-end gap-3">
-                    <button
-                      onClick={() => modifierProduit(p.id)}
-                      className="text-blue-600 hover:text-blue-800"
-                    >
-                      <Edit size={18} />
-                    </button>
-                    <button
-                      onClick={() => setConfirmDelete(p.id)}
-                      className="text-red-600 hover:text-red-800"
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                ),
+              },
+            ]}
+            actions={[
+              {
+                title: "Modifier",
+                icon: <Edit size={16} />,
+                onClick: (row) => modifierProduit(row.id),
+                hoverBg: "bg-gray-100",
+                color: "text-blue-600",
+              },
+              {
+                title: "Supprimer",
+                icon: <Trash2 size={16} />,
+                onClick: (row) => setConfirmDelete(row.id),
+                hoverBg: "bg-gray-100",
+                color: "text-red-600",
+              },
+            ]}
+          />
+        )}
+      </div>
+
+      {/* Toasts locaux */}
+      <div className="fixed top-4 right-4 z-9999 space-y-3">
+        {toasts.map((t) => {
+          const border = t.type === "success" ? "border-l-4 border-emerald-500" : "border-l-4 border-rose-500";
+          const Icon = t.type === "success" ? CheckCircle2 : AlertCircle;
+          return (
+            <div key={t.id} className={`${border} bg-white text-gray-900 px-4 py-3 rounded-lg shadow-md w-80 flex gap-3 items-start`}>
+              <div className="mt-0.5"><Icon size={18} className={t.type === 'success' ? 'text-emerald-500' : 'text-rose-500'} /></div>
+              <div className="flex-1">
+                <div className="font-semibold text-sm">{t.title}</div>
+                {t.message && <div className="text-xs opacity-90 mt-0.5">{t.message}</div>}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Modals (inchangés) */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg w-[700px] shadow-xl space-y-6">
+        <div className="fixed inset-0 z-200 bg-black/40 bg-opacity-10 flex items-center justify-center">
+          <div className="relative z-50 bg-white p-6 rounded-lg w-[700px] shadow-xl space-y-6">
             <h3 className="text-xl font-bold text-[#111827]">
               {editId ? "Modifier le produit" : "Ajouter un produit"}
             </h3>
@@ -542,8 +334,8 @@ const Produits = () => {
       )}
 
       {confirmDelete && (
-        <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg text-center space-y-4">
+        <div className="fixed inset-0 z-200 bg-black/40 bg-opacity-10 flex items-center justify-center">
+          <div className="relative z-50 bg-white p-6 rounded-lg shadow-lg text-center space-y-4">
             <AlertTriangle className="text-[#F58020] mx-auto" size={40} />
             <p>Voulez-vous vraiment supprimer ce produit ?</p>
             <div className="flex justify-center gap-4">

@@ -4,6 +4,7 @@ import Stock from "./pages/Stock";
 import Transferts from "./pages/Transferts";
 import Rapports from "./pages/Rapports";
 import Alertes from "./pages/Alertes";
+import LayoutGestionnaire from "./components/LayoutGestionnaire";
 
 const routes = {
   dashboard: Dashboard,
@@ -16,5 +17,9 @@ const routes = {
 
 export const RenderRoute = ({ currentPage }) => {
   const Component = routes[currentPage] || Dashboard;
-  return <Component />;
+  return (
+    <LayoutGestionnaire>
+      <Component />
+    </LayoutGestionnaire>
+  );
 };

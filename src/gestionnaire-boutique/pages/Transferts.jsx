@@ -1,32 +1,41 @@
-import React, { useState } from "react";
-import { Plus, Search, FileText, Trash2, X , Eye} from "lucide-react";
-import Navbar from "../components/Navbar";
+import React, { useEffect, useState } from "react";
+import { Plus, Search, FileText, Trash2, X, Eye } from "lucide-react";
 import CardStat from "../components/CardStat";
+import DataTable from "../components/DataTable";
+import LoadingSpinner from "../components/LoadingSpinner";
+import EmptyState from "../components/EmptyState";
+import * as api from "../services/apiMock";
 
 const Transferts = () => {
-  const [transferts, setTransferts] = useState([
-    { id: 1, produit: "Savon OMO", source: "Boutique A", destination: "Boutique B", quantite: 10, statut: "en_attente" },
-    { id: 2, produit: "Riz 5kg", source: "Boutique B", destination: "Boutique C", quantite: 5, statut: "validé" },
-    { id: 3, produit: "Lait", source: "Boutique A", destination: "Boutique C", quantite: 8, statut: "rejeté" },
-    { id: 3, produit: "Lait", source: "Boutique A", destination: "Boutique C", quantite: 8, statut: "rejeté" },
-    { id: 3, produit: "Lait", source: "Boutique A", destination: "Boutique C", quantite: 8, statut: "rejeté" },
-
-  ]);
-
+  const [transferts, setTransferts] = useState([]);
   const [recherche, setRecherche] = useState("");
-  // const [filtreStatut, setFiltreStatut] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [nouveau, setNouveau] = useState({ produit: "", source: "", destination: "", quantite: "" });
   const [detailTransfert, setDetailTransfert] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    setLoading(true);
+    api.fetchTransferts().then((res) => {
+      if (!mounted) return;
+      setTransferts(res);
+      setLoading(false);
+    });
+    return () => (mounted = false);
+  }, []);
 
   const transfertsFiltres = transferts.filter(
-    t =>
-      (t.produit.toLowerCase().includes(recherche.toLowerCase()) ||
-       t.source.toLowerCase().includes(recherche.toLowerCase()) ||
-       t.destination.toLowerCase().includes(recherche.toLowerCase()))
-      //   &&
-      // (filtreStatut ? t.statut === filtreStatut : true)
+    (t) => {
+      const q = recherche.trim().toLowerCase();
+      return (
+        !q ||
+        t.produit.toLowerCase().includes(q) ||
+        t.source.toLowerCase().includes(q) ||
+        t.destination.toLowerCase().includes(q)
+      );
+    }
   );
 
   const stats = {
@@ -38,24 +47,21 @@ const Transferts = () => {
 
   const ajouterTransfert = () => {
     if (!nouveau.produit || !nouveau.source || !nouveau.destination) return;
-    setTransferts([...transferts, { id: Date.now(), ...nouveau, statut: "en_attente" }]);
+    setTransferts(prev => [...prev, { id: Date.now(), ...nouveau, statut: "en_attente" }]);
     setNouveau({ produit: "", source: "", destination: "", quantite: "" });
     setShowModal(false);
   };
 
-  const supprimerTransfert = () => {
-    setTransferts(transferts.filter(t => t.id !== confirmDelete));
+  const supprimerTransfert = async () => {
+    const id = confirmDelete;
     setConfirmDelete(null);
+    const res = await api.deleteTransfert(id);
+    if (res && res.ok) setTransferts(prev => prev.filter(t => t.id !== id));
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 overflow-y-auto scrollbar-hide">
-      {/* Navbar fixe */}
-      <div className="fixed top-0 left-64 right-0 h-16 bg-white z-50 shadow">
-        <Navbar />
-      </div>
-
-      <div className="pt-[100px] px-6 space-y-6">
+    <div className="min-h-screen bg-gray-50 overflow-y-auto">
+      <div className="px-6 space-y-6">
         <h2 className="text-2xl font-bold text-[#111827]">Demandes de Reprovisionnement</h2>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -65,8 +71,7 @@ const Transferts = () => {
           <CardStat title="Rejeté" value={stats.rejete} color="bg-red-600" />
         </div>
 
-
-        {/* Recherche, filtre et ajout sur la même ligne */}
+        {/* Recherche et action */}
         <div className="flex justify-between items-center gap-4 flex-wrap">
           <div className="relative w-64">
             <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
@@ -78,19 +83,6 @@ const Transferts = () => {
               onChange={(e) => setRecherche(e.target.value)}
             />
           </div>
-{/* 
-          <div className="relative w-48">
-            <select
-              className="border rounded-lg py-2 px-3 w-full"
-              value={filtreStatut}
-              onChange={(e) => setFiltreStatut(e.target.value)}
-            >
-              <option value="">Tous statuts</option>
-              <option value="en_attente">En attente</option>
-              <option value="validé">Validé</option>
-              <option value="rejeté">Rejeté</option>
-            </select>
-          </div> */}
 
           <button
             onClick={() => setShowModal(true)}
@@ -100,58 +92,40 @@ const Transferts = () => {
           </button>
         </div>
 
-        {/* Tableau demandes */}
-        <div className="bg-white rounded-lg shadow p-4 overflow-x-auto scrollbar-hide">
-          <table className="w-full text-sm border-collapse">
-            <thead className="sticky top-0 bg-white border-b z-10">
-              <tr className="text-left text-[#111827]">
-                <th>Produit</th>
-                <th>Source</th>
-                <th>Destination</th>
-                <th>Quantité</th>
-                <th>Statut</th>
-                <th className="text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {transfertsFiltres.map(t => (
-                <tr key={t.id} className="border-b hover:bg-[#F3F4F6]">
-                  <td className="py-2">{t.produit}</td>
-                  <td>{t.source}</td>
-                  <td>{t.destination}</td>
-                  <td>{t.quantite}</td>
-                  <td
-                    className={
-                      t.statut === "validé"
-                        ? "text-green-600"
-                        : t.statut === "rejeté"
-                        ? "text-red-600"
-                        : "text-[#F58020]"
-                    }
-                  >
-                    {t.statut}
-                  </td>
-                  <td className="text-right flex justify-end gap-2">
-                    <button onClick={() => setDetailTransfert(t)} className="text-blue-600 hover:text-blue-800">
-                      <Eye size={18} />
-                    </button>
-                    <button onClick={() => setConfirmDelete(t.id)} className="text-red-600 hover:text-red-800">
-                      <Trash2 size={18} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="bg-white rounded-lg shadow p-4 overflow-auto">
+          {loading ? (
+            <LoadingSpinner />
+          ) : transfertsFiltres.length === 0 ? (
+            <EmptyState message="Aucune demande trouvée" />
+          ) : (
+            <DataTable
+              columns={[
+                { label: 'Produit', key: 'produit' },
+                { label: 'Source', key: 'source' },
+                { label: 'Destination', key: 'destination' },
+                { label: 'Quantité', key: 'quantite' },
+                { label: 'Statut', key: 'statut', render: (_, row) => (
+                    <span className={row.statut === 'validé' ? 'text-green-600' : row.statut === 'rejeté' ? 'text-red-600' : 'text-[#F58020]'}>{row.statut}</span>
+                  )
+                },
+              ]}
+              data={transfertsFiltres}
+              actions={[
+                { title: 'Voir', icon: <Eye size={16} />, color: 'text-blue-600', hoverBg: 'bg-blue-50', onClick: (row) => setDetailTransfert(row) },
+                { title: 'Supprimer', icon: <Trash2 size={16} />, color: 'text-red-600', hoverBg: 'bg-red-50', onClick: (row) => setConfirmDelete(row.id) },
+              ]}
+              onRowClick={(row) => setDetailTransfert(row)}
+            />
+          )}
         </div>
 
         {/* Modal création */}
         {showModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center z-50">
-            <div className="bg-white w-[600px] rounded-lg shadow-lg p-6 space-y-4">
+          <div className="fixed inset-0 z-200 bg-black/40 bg-opacity-10 flex justify-center items-center">
+            <div className="relative bg-white w-[95%] sm:w-[420px]  rounded-lg shadow-lg p-6 space-y-4">
               <h3 className="text-xl font-bold text-[#111827]">Nouvelle demande</h3>
               <div className="grid grid-cols-2 gap-4">
-                {["produit", "source", "destination", "quantite"].map(f => (
+                {['produit', 'source', 'destination', 'quantite'].map(f => (
                   <input
                     key={f}
                     type="text"
@@ -172,8 +146,8 @@ const Transferts = () => {
 
         {/* Modal détails */}
         {detailTransfert && (
-          <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center z-50">
-            <div className="bg-white w-[600px] rounded-lg shadow-lg p-6 space-y-4">
+          <div className="fixed inset-0 z-200 bg-black/40 bg-opacity-10 flex justify-center items-center">
+            <div className="relative z-50 bg-white w-[600px] rounded-lg shadow-lg p-6 space-y-4">
               <h3 className="text-xl font-bold text-[#111827]">Détails de la demande</h3>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <p><span className="font-medium">Produit :</span> {detailTransfert.produit}</p>
@@ -191,8 +165,8 @@ const Transferts = () => {
 
         {/* Modal confirmation suppression */}
         {confirmDelete && (
-          <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center z-50">
-            <div className="bg-white w-[400px] rounded-lg shadow-lg p-6 space-y-4 text-center">
+          <div className="fixed inset-0 z-200 bg-black/40 bg-opacity-10 flex justify-center items-center">
+            <div className="relative z-50 bg-white w-[400px] rounded-lg shadow-lg p-6 space-y-4 text-center">
               <p className="text-lg">Voulez-vous vraiment supprimer cette demande ?</p>
               <div className="flex justify-center gap-4 pt-4">
                 <button onClick={() => setConfirmDelete(null)} className="px-4 py-2 border rounded">Annuler</button>

@@ -1,23 +1,37 @@
-import React, { useState } from "react";
-import Sidebar from "./gestionnaire-boutique/components/Sidebar";
-import { RenderRoute } from "./gestionnaire-boutique/routeGestionnaireBoutique";
 
-const App = () => {
-  const [currentPage, setCurrentPage] = useState("dashboard");
+import React from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
+import LayoutGestionnaire from "./gestionnaire-boutique/components/LayoutGestionnaire";
+
+// Pages du gestionnaire
+import Dashboard from "./gestionnaire-boutique/pages/Dashboard";
+import Produits from "./gestionnaire-boutique/pages/Produits";
+import Stock from "./gestionnaire-boutique/pages/Stock";
+import Transferts from "./gestionnaire-boutique/pages/Transferts";
+import Alertes from "./gestionnaire-boutique/pages/Alertes";
+import Rapports from "./gestionnaire-boutique/pages/Rapports";
+
+export default function App() {
   return (
-    <div className="flex min-h-screen overflow-y-auto">
-      {/* Sidebar fixe */}
-      <div className="w-64 fixed top-0 left-0 bottom-0 bg-[#472EAD] text-white z-40">
-        <Sidebar currentPage={currentPage} setCurrentPage={setCurrentPage} />
-      </div>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/gestionnaire" element={<LayoutGestionnaire />}>
+          <Route index element={<Dashboard />} />
+          <Route path="dashboard" element={<Dashboard />} />
+          <Route path="produits" element={<Produits />} />
+          <Route path="stock" element={<Stock />} />
+          <Route path="transferts" element={<Transferts />} />
+          <Route path="alertes" element={<Alertes />} />
+          <Route path="rapports" element={<Rapports />} />
 
-      {/* Contenu principal */}
-      <div className="flex-1 ml-64 bg-[#F3F4F6]">
-        <RenderRoute currentPage={currentPage} />
-      </div>
-    </div>
+          {/* fallback */}
+          <Route path="*" element={<Navigate to="/gestionnaire/dashboard" />} />
+        </Route>
+
+        {/* Redirect root → dashboard */}
+        <Route path="/" element={<Navigate to="/gestionnaire/dashboard" replace />} />
+      </Routes>
+    </BrowserRouter>
   );
-};
-
-export default App;
+}
