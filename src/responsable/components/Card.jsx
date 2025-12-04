@@ -28,11 +28,11 @@ export default function Card({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", stiffness: 220, damping: 18 }}
-      className="relative overflow-hidden rounded-2xl border border-black shadow-md bg-white/70 backdrop-blur-xl hover:shadow-2xl hover:-translate-y-1 transition-all duration-500"
+      className="relative overflow-hidden rounded-2xl border border-[#E4E0FF] shadow-[0_12px_30px_rgba(15,23,42,0.06)] bg-white/90 backdrop-blur-xl hover:shadow-[0_18px_45px_rgba(15,23,42,0.08)] hover:-translate-y-1 transition-all duration-500"
     >
       {/* — Halo lumineux réactif — */}
       <div
-        className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-0 hover:opacity-20 transition-all duration-700`}
+        className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-0 hover:opacity-15 transition-all duration-700`}
       />
 
       {/* — Contenu — */}
@@ -70,16 +70,8 @@ export default function Card({
         </motion.div>
       </div>
 
-      {/* — Glow décoratif — */}
-      <div
-        className="absolute bottom-0 left-0 right-0 h-[3px]"
-        style={{
-          background: `linear-gradient(90deg, ${gradient.replace(
-            " ",
-            ", "
-          )})`,
-        }}
-      ></div>
+      {/* — Liseré bas décoratif — */}
+      <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-gradient-to-r from-[#472EAD] via-[#6B4CF5] to-[#F58020]" />
     </motion.div>
   );
 }
@@ -103,7 +95,7 @@ export function CardCompact({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
-      className="relative bg-white/90 border border-black rounded-xl shadow-md p-4 flex items-center justify-between hover:shadow-lg hover:-translate-y-1 transition-all duration-400 backdrop-blur-md"
+      className="relative bg-white/90 border border-[#E4E0FF] rounded-xl shadow-[0_12px_30px_rgba(15,23,42,0.06)] p-4 flex items-center justify-between hover:shadow-[0_18px_45px_rgba(15,23,42,0.08)] hover:-translate-y-1 transition-all duration-400 backdrop-blur-md"
     >
       {/* Glow subtil */}
       <div

@@ -690,7 +690,7 @@ export default function Header() {
                 {showMenu && (
                   <div className="absolute right-0 mt-2 w-48 bg-white border shadow-lg rounded-lg p-2">
                     <ul className="text-sm">
-                      <li
+                     {/* <li
                         onClick={() => {
                           setShowProfileModal(true);
                           setShowMenu(false);
@@ -698,7 +698,7 @@ export default function Header() {
                         className="px-3 py-2 hover:bg-gray-50 cursor-pointer flex gap-2 items-center"
                       >
                         <User size={14} /> Mon Profil
-                      </li>
+                      </li>  */}
 
                       <li
                         onClick={() => {

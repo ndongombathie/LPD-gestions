@@ -1,6 +1,6 @@
 // ==========================================================
 // 📦 Inventaire.jsx — Interface Responsable (LPD Manager)
-// Version PRO harmonisée (Dashboard/Fournisseurs/Utilisateurs)
+// Version PRO harmonisée (Dashboard / Journal / Utilisateurs)
 // KPI dynamiques + Toasts + Charts + Modale + Export PDF
 // ==========================================================
 
@@ -48,7 +48,10 @@ import FormModal from "../components/FormModal.jsx";
 // ————————————————————————————————————————————————
 const cls = (...a) => a.filter(Boolean).join(" ");
 const formatFCFA = (n) =>
-  new Intl.NumberFormat("fr-FR", { style: "currency", currency: "XOF" }).format(Number(n || 0));
+  new Intl.NumberFormat("fr-FR", {
+    style: "currency",
+    currency: "XOF",
+  }).format(Number(n || 0));
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
 // Couleurs charts
@@ -68,10 +71,10 @@ function Toasts({ toasts, remove }) {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 20 }}
             className={cls(
-              "min-w-[280px] max-w-[360px] rounded-xl border shadow-lg px-4 py-3 flex items-start gap-3",
+              "min-w-[280px] max-w-[360px] rounded-xl border border-black shadow-lg px-4 py-3 flex items-start gap-3 bg-white/90 backdrop-blur-sm",
               t.type === "success"
-                ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-                : "bg-rose-50 border-rose-200 text-rose-800"
+                ? "border-emerald-300 bg-emerald-50/90 text-emerald-800"
+                : "border-rose-300 bg-rose-50/90 text-rose-800"
             )}
           >
             <div className="pt-0.5">
@@ -83,9 +86,14 @@ function Toasts({ toasts, remove }) {
             </div>
             <div className="flex-1">
               <div className="font-semibold text-sm">{t.title}</div>
-              {t.message && <div className="text-xs mt-0.5 opacity-90">{t.message}</div>}
+              {t.message && (
+                <div className="text-xs mt-0.5 opacity-90">{t.message}</div>
+              )}
             </div>
-            <button className="opacity-60 hover:opacity-100" onClick={() => remove(t.id)}>
+            <button
+              className="opacity-60 hover:opacity-100"
+              onClick={() => remove(t.id)}
+            >
               <X className="w-4 h-4" />
             </button>
           </motion.div>
@@ -111,7 +119,9 @@ function AjustementModal({ open, onClose, onSubmit, submitting }) {
   });
 
   useEffect(() => {
-    if (open) setForm((f) => ({ ...f, date: todayISO() }));
+    if (open) {
+      setForm((f) => ({ ...f, date: todayISO() }));
+    }
   }, [open]);
 
   const update = (k, v) => setForm((f) => ({ ...f, [k]: v }));
@@ -129,7 +139,11 @@ function AjustementModal({ open, onClose, onSubmit, submitting }) {
   }, [ecart, form.prixUnitaire]);
 
   return (
-    <FormModal open={open} onClose={onClose} title="Nouveau comptage & ajustement">
+    <FormModal
+      open={open}
+      onClose={onClose}
+      title="Nouveau comptage & ajustement"
+    >
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -147,11 +161,13 @@ function AjustementModal({ open, onClose, onSubmit, submitting }) {
             ["Stock réel (comptage)", "stockReel", "Ex: 320", true, "number"],
           ].map(([label, key, ph, req, type]) => (
             <div key={key}>
-              <label className="block text-sm font-medium">{label}</label>
+              <label className="block text-sm font-medium text-gray-800">
+                {label}
+              </label>
               <input
                 type={type || "text"}
                 min={type === "number" ? "0" : undefined}
-                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white"
                 placeholder={ph}
                 value={form[key]}
                 onChange={(e) => update(key, e.target.value)}
@@ -160,20 +176,24 @@ function AjustementModal({ open, onClose, onSubmit, submitting }) {
             </div>
           ))}
           <div>
-            <label className="block text-sm font-medium">Date du comptage</label>
+            <label className="block text-sm font-medium text-gray-800">
+              Date du comptage
+            </label>
             <input
               type="date"
               max={todayISO()}
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white"
               value={form.date}
               onChange={(e) => update("date", e.target.value)}
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium">Motif / Observation</label>
+            <label className="block text-sm font-medium text-gray-800">
+              Motif / Observation
+            </label>
             <input
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white"
               placeholder="Ex: Casse, vol, erreur de saisie…"
               value={form.motif}
               onChange={(e) => update("motif", e.target.value)}
@@ -187,7 +207,15 @@ function AjustementModal({ open, onClose, onSubmit, submitting }) {
             <Scale className="w-4 h-4 text-[#472EAD]" />
             <span>
               Écart :{" "}
-              <b className={ecart === 0 ? "text-gray-700" : ecart > 0 ? "text-emerald-600" : "text-rose-600"}>
+              <b
+                className={
+                  ecart === 0
+                    ? "text-gray-700"
+                    : ecart > 0
+                    ? "text-emerald-600"
+                    : "text-rose-600"
+                }
+              >
                 {ecart > 0 ? `+${ecart}` : ecart}
               </b>
             </span>
@@ -196,7 +224,11 @@ function AjustementModal({ open, onClose, onSubmit, submitting }) {
             Valeur de l’écart :{" "}
             <b
               className={
-                valeurEcart === 0 ? "text-gray-700" : valeurEcart > 0 ? "text-emerald-600" : "text-rose-600"
+                valeurEcart === 0
+                  ? "text-gray-700"
+                  : valeurEcart > 0
+                  ? "text-emerald-600"
+                  : "text-rose-600"
               }
             >
               {formatFCFA(valeurEcart)}
@@ -205,14 +237,18 @@ function AjustementModal({ open, onClose, onSubmit, submitting }) {
         </div>
 
         <div className="flex justify-end gap-3 pt-2">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-sm border border-gray-300 rounded-lg">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-sm border border-gray-300 rounded-lg bg-white hover:bg-gray-50"
+          >
             Annuler
           </button>
           <button
             type="submit"
             disabled={submitting}
             className={cls(
-              "px-4 py-2 text-sm text-white rounded-lg bg-[#472EAD] hover:bg-[#3d26a5]",
+              "px-4 py-2 text-sm text-white rounded-lg bg-[#472EAD] hover:bg-[#3d26a5] shadow-sm",
               submitting && "opacity-70 cursor-not-allowed"
             )}
           >
@@ -260,13 +296,15 @@ export default function Inventaire() {
   const toast = (type, title, message) => {
     const id = Date.now();
     setToasts((t) => [...t, { id, type, title, message }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4000);
+    setTimeout(
+      () => setToasts((t) => t.filter((x) => x.id !== id)),
+      4000
+    );
   };
-  const removeToast = (id) => setToasts((t) => t.filter((x) => x.id !== id));
+  const removeToast = (id) =>
+    setToasts((t) => t.filter((x) => x.id !== id));
 
-  // ————————————————————————
   // Chargement (simulation + hooks API prêts)
-  // ————————————————————————
   const loadData = async () => {
     try {
       setLoading(true);
@@ -279,7 +317,12 @@ export default function Inventaire() {
       // const { data: evo } = await instance.get("/inventaire/evolution-valeur-ecarts", { params: { from: dateDebut, to: dateFin }});
 
       // ——— Simulation locale pour démo UI ———
-      const kpi = { stockTheo: 12470, stockReel: 12310, totalEcarts: -160, valeurEcarts: -125000 };
+      const kpi = {
+        stockTheo: 12470,
+        stockReel: 12310,
+        totalEcarts: -160,
+        valeurEcarts: -125000,
+      };
       const aj = [
         {
           id: 1,
@@ -338,7 +381,6 @@ export default function Inventaire() {
         { date: "Cette semaine", valeur: -35000 },
       ];
 
-      // set via backend quand dispo
       setStats(kpi);
       setAjustements(aj);
       setEcartsParCategorie(ecCat);
@@ -356,9 +398,7 @@ export default function Inventaire() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateDebut, dateFin, cat, fourn]);
 
-  // ————————————————————————
   // Création d’un ajustement
-  // ————————————————————————
   const handleAjustement = async (payload) => {
     try {
       setSubmitting(true);
@@ -390,7 +430,11 @@ export default function Inventaire() {
       }));
 
       setOpenAjust(false);
-      toast("success", "Ajustement enregistré", `${next.produit} — ${formatFCFA(next.valeur)}`);
+      toast(
+        "success",
+        "Ajustement enregistré",
+        `${next.produit} — ${formatFCFA(next.valeur)}`
+      );
     } catch (e) {
       console.error("Ajustement error:", e);
       toast("error", "Erreur", "Impossible d’enregistrer l’ajustement.");
@@ -399,9 +443,7 @@ export default function Inventaire() {
     }
   };
 
-  // ————————————————————————
   // Export PDF (KPI + tableau ajustements)
-  // ————————————————————————
   const handleExportPDF = () => {
     const doc = new jsPDF();
     doc.text("Inventaire — Bilan & Ajustements", 14, 16);
@@ -416,8 +458,22 @@ export default function Inventaire() {
     doc.setFontSize(10);
     doc.autoTable({
       startY: 45,
-      head: [["Stock théorique", "Stock réel", "Écarts (Qté)", "Valeur des écarts"]],
-      body: [[stats.stockTheo, stats.stockReel, stats.totalEcarts, formatFCFA(stats.valeurEcarts)]],
+      head: [
+        [
+          "Stock théorique",
+          "Stock réel",
+          "Écarts (Qté)",
+          "Valeur des écarts",
+        ],
+      ],
+      body: [
+        [
+          stats.stockTheo,
+          stats.stockReel,
+          stats.totalEcarts,
+          formatFCFA(stats.valeurEcarts),
+        ],
+      ],
       theme: "grid",
       styles: { fontSize: 9 },
       headStyles: { fillColor: [71, 46, 173] },
@@ -441,7 +497,20 @@ export default function Inventaire() {
     doc.text("Journal des ajustements", 14, y);
     doc.autoTable({
       startY: y + 3,
-      head: [["Date", "Produit", "Catégorie", "Fournisseur", "Théo", "Réel", "Écart", "Valeur", "Motif", "User"]],
+      head: [
+        [
+          "Date",
+          "Produit",
+          "Catégorie",
+          "Fournisseur",
+          "Théo",
+          "Réel",
+          "Écart",
+          "Valeur",
+          "Motif",
+          "User",
+        ],
+      ],
       body: rows,
       styles: { fontSize: 8 },
       headStyles: { fillColor: [71, 46, 173] },
@@ -450,280 +519,389 @@ export default function Inventaire() {
     doc.save(`Inventaire_${dateDebut}_au_${dateFin}.pdf`);
   };
 
-  // ————————————————————————
   // Filtres (front)
-  // ————————————————————————
   const categories = ["Toutes", "Papeterie", "Fournitures", "Papier"];
   const fournisseurs = ["Tous", "SEN Distribution", "Fournil Office", "Imprisol"];
 
   const filteredAjustements = useMemo(() => {
     return ajustements.filter((a) => {
-      const okDate = (!dateDebut || a.date >= dateDebut) && (!dateFin || a.date <= dateFin);
+      const okDate =
+        (!dateDebut || a.date >= dateDebut) &&
+        (!dateFin || a.date <= dateFin);
       const okCat = cat === "Toutes" || a.categorie === cat;
       const okF = fourn === "Tous" || a.fournisseur === fourn;
       return okDate && okCat && okF;
     });
   }, [ajustements, dateDebut, dateFin, cat, fourn]);
 
-  // ——————————————————————————
-  // 🧭 UI
-  // ——————————————————————————
+  // Loader harmonisé
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-[70vh] text-[#472EAD]">
-        <RefreshCw className="w-6 h-6 animate-spin mr-2" />
-        Chargement des données d’inventaire…
+      <div className="min-h-screen w-full bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white flex items-center justify-center">
+        <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-white/80 border border-[#E4E0FF] shadow-sm">
+          <RefreshCw className="w-5 h-5 text-[#472EAD] animate-spin" />
+          <span className="text-sm font-medium text-[#472EAD]">
+            Chargement des données d’inventaire…
+          </span>
+        </div>
       </div>
     );
   }
 
+  // ——————————————————————————
+  // 🧭 UI
+  // ——————————————————————————
   return (
-    <>
-      {/* Header & actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-[#472EAD]">Inventaire & Bilan des stocks</h1>
-          <p className="text-sm text-gray-500">
-            Comptage, écarts, ajustements journalisés, bénéfices/pertes & graphiques.
-          </p>
+    <div className="min-h-screen w-full bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white px-4 sm:px-6 lg:px-10 py-6 sm:py-8 overflow-y-auto">
+      <div className="max-w-6xl mx-auto space-y-6">
+        {/* Header & actions */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/70 border border-[#E4E0FF] shadow-xs">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+              <span className="text-[11px] font-semibold tracking-wide text-[#472EAD] uppercase">
+                Module Inventaire — Responsable
+              </span>
+            </div>
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#2F1F7A]">
+                Inventaire & bilan des stocks
+              </h1>
+              <p className="mt-1 text-sm text-gray-500">
+                Comptage, écarts, ajustements journalisés, bénéfices/pertes et
+                graphiques d’évolution.
+              </p>
+            </div>
+            <p className="text-[11px] text-gray-400">
+              Période du{" "}
+              <span className="font-semibold">{dateDebut}</span> au{" "}
+              <span className="font-semibold">{dateFin}</span> •{" "}
+              {filteredAjustements.length} ajustement
+              {filteredAjustements.length > 1 && "s"} trouvé
+              {filteredAjustements.length > 1 && "s"}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <motion.button
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => setOpenAjust(true)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-[#472EAD] text-white rounded-lg shadow-md hover:bg-[#5A3CF5] hover:shadow-lg text-xs sm:text-sm transition"
+            >
+              <PlusCircle size={18} /> Nouveau comptage
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={handleExportPDF}
+              className="flex items-center gap-2 px-4 py-2.5 bg-white text-[#472EAD] border border-[#E3E0FF] rounded-lg hover:bg-[#F7F5FF] text-xs sm:text-sm shadow-sm transition"
+            >
+              <FileDown size={18} /> Export PDF
+            </motion.button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setOpenAjust(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-[#472EAD] text-white rounded-lg shadow hover:scale-[1.02] transition"
-          >
-            <PlusCircle size={18} /> Nouveau comptage
-          </button>
-          <button
-            onClick={handleExportPDF}
-            className="flex items-center gap-2 px-4 py-2 bg-white text-[#472EAD] border border-[#E3E0FF] rounded-lg hover:bg-[#F7F5FF]"
-          >
-            <FileDown size={18} /> Export PDF
-          </button>
-        </div>
-      </div>
+        {/* Filtres */}
+        <section className="rounded-2xl border border-[#E4E0FF] bg-white/90 shadow-[0_18px_45px_rgba(15,23,42,0.06)] p-4 sm:p-5">
+          <div className="flex items-center gap-2 text-[#472EAD] font-semibold mb-3 text-sm">
+            <Filter size={16} /> Filtres
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
+            <div className="sm:col-span-2">
+              <label className="block text-xs text-gray-500 mb-1">
+                Période
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="relative">
+                  <Calendar className="w-4 h-4 text-gray-400 absolute left-2 top-3" />
+                  <input
+                    type="date"
+                    value={dateDebut}
+                    max={dateFin}
+                    onChange={(e) => setDateDebut(e.target.value)}
+                    className="pl-7 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white shadow-sm focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD]"
+                  />
+                </div>
+                <div className="relative">
+                  <Calendar className="w-4 h-4 text-gray-400 absolute left-2 top-3" />
+                  <input
+                    type="date"
+                    value={dateFin}
+                    min={dateDebut}
+                    max={todayISO()}
+                    onChange={(e) => setDateFin(e.target.value)}
+                    className="pl-7 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white shadow-sm focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD]"
+                  />
+                </div>
+              </div>
+            </div>
 
-      {/* Filtres */}
-      <div className="rounded-xl border border-gray-200 bg-white p-4 mb-6">
-        <div className="flex items-center gap-2 text-[#472EAD] font-semibold mb-3">
-          <Filter size={16} /> Filtres
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
-          <div className="col-span-2">
-            <label className="block text-xs text-gray-500 mb-1">Période</label>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="relative">
-                <Calendar className="w-4 h-4 text-gray-400 absolute left-2 top-3" />
-                <input
-                  type="date"
-                  value={dateDebut}
-                  max={dateFin}
-                  onChange={(e) => setDateDebut(e.target.value)}
-                  className="pl-7 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                />
-              </div>
-              <div className="relative">
-                <Calendar className="w-4 h-4 text-gray-400 absolute left-2 top-3" />
-                <input
-                  type="date"
-                  value={dateFin}
-                  min={dateDebut}
-                  max={todayISO()}
-                  onChange={(e) => setDateFin(e.target.value)}
-                  className="pl-7 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                />
-              </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">
+                Catégorie
+              </label>
+              <select
+                value={cat}
+                onChange={(e) => setCat(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white shadow-sm focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD]"
+              >
+                {categories.map((c) => (
+                  <option key={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">
+                Fournisseur
+              </label>
+              <select
+                value={fourn}
+                onChange={(e) => setFourn(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white shadow-sm focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD]"
+              >
+                {fournisseurs.map((f) => (
+                  <option key={f}>{f}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-end">
+              <button
+                onClick={loadData}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-sm shadow-sm"
+              >
+                <PackageSearch size={16} /> Actualiser
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* KPI */}
+        <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
+          <KpiCard
+            label="Stock théorique"
+            value={stats.stockTheo}
+            icon={<Package size={20} />}
+            gradient="from-[#472EAD] to-[#7A5BF5]"
+            trend="Stable"
+            trendValue={0}
+          />
+          <KpiCard
+            label="Stock réel"
+            value={stats.stockReel}
+            icon={<ClipboardCheck size={20} />}
+            gradient="from-[#10B981] to-[#34D399]"
+            trend="Variation"
+            trendValue={(
+              ((stats.stockReel - stats.stockTheo) /
+                (stats.stockTheo || 1)) *
+              100
+            ).toFixed(2)}
+          />
+          <KpiCard
+            label="Écart (Qté)"
+            value={stats.totalEcarts}
+            icon={<AlertTriangle size={20} />}
+            gradient="from-[#F58020] to-[#FF995A]"
+            trend="vs période"
+            trendValue={-2.5}
+          />
+          <KpiCard
+            label="Valeur des écarts"
+            value={formatFCFA(stats.valeurEcarts)}
+            icon={<Scale size={20} />}
+            gradient="from-[#EF4444] to-[#FB7185]"
+            trend="Évolution"
+            trendValue={-8.5}
+          />
+        </section>
+
+        {/* Graphiques */}
+        <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          {/* Bar: écarts par catégorie */}
+          <div className="bg-white/95 rounded-2xl border border-black shadow-md p-5">
+            <h3 className="text-[#472EAD] font-semibold mb-3 text-sm sm:text-base flex items-center gap-2">
+              <Package className="w-4 h-4" />
+              Écarts par catégorie
+            </h3>
+            <div className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={ecartsParCategorie}>
+                  <XAxis dataKey="categorie" stroke="#888" />
+                  <YAxis stroke="#888" />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="ecart" fill="#472EAD" />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Catégorie</label>
-            <select
-              value={cat}
-              onChange={(e) => setCat(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            >
-              {categories.map((c) => (
-                <option key={c}>{c}</option>
-              ))}
-            </select>
+          {/* Pie: répartition positifs/négatifs */}
+          <div className="bg-white/95 rounded-2xl border border-black shadow-md p-5">
+            <h3 className="text-[#472EAD] font-semibold mb-3 text-sm sm:text-base flex items-center gap-2">
+              <Scale className="w-4 h-4" />
+              Répartition des écarts
+            </h3>
+            <div className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={repartitionPosNeg}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={90}
+                  >
+                    {repartitionPosNeg.map((e, i) => (
+                      <Cell
+                        key={`pie-${i}`}
+                        fill={COLORS[i % COLORS.length]}
+                      />
+                    ))}
+                  </Pie>
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
           </div>
+        </section>
 
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Fournisseur</label>
-            <select
-              value={fourn}
-              onChange={(e) => setFourn(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            >
-              {fournisseurs.map((f) => (
-                <option key={f}>{f}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex items-end">
-            <button
-              onClick={loadData}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 text-sm"
-            >
-              <PackageSearch size={16} /> Actualiser
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* KPI */}
-      <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
-        <KpiCard
-          label="Stock théorique"
-          value={stats.stockTheo}
-          icon={<Package size={20} />}
-          gradient="from-[#472EAD] to-[#7A5BF5]"
-          trend="Stable"
-          trendValue={0}
-        />
-        <KpiCard
-          label="Stock réel"
-          value={stats.stockReel}
-          icon={<ClipboardCheck size={20} />}
-          gradient="from-[#10B981] to-[#34D399]"
-          trend="Variation"
-          trendValue={(((stats.stockReel - stats.stockTheo) / (stats.stockTheo || 1)) * 100).toFixed(2)}
-        />
-        <KpiCard
-          label="Écart (Qté)"
-          value={stats.totalEcarts}
-          icon={<AlertTriangle size={20} />}
-          gradient="from-[#F58020] to-[#FF995A]"
-          trend="vs période"
-          trendValue={-2.5}
-        />
-        <KpiCard
-          label="Valeur des écarts"
-          value={formatFCFA(stats.valeurEcarts)}
-          icon={<Scale size={20} />}
-          gradient="from-[#EF4444] to-[#FB7185]"
-          trend="Évolution"
-          trendValue={-8.5}
-        />
-      </section>
-
-      {/* Graphiques */}
-      <section className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-6">
-        {/* Bar: écarts par catégorie */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
-          <h3 className="text-[#472EAD] font-semibold mb-3">Écarts par catégorie</h3>
+        {/* Area: évolution valeur écarts */}
+        <section className="bg-white/95 rounded-2xl border border-black shadow-md p-5">
+          <h3 className="text-[#472EAD] font-semibold mb-3 text-sm sm:text-base flex items-center gap-2">
+            <AlertCircle className="w-4 h-4" />
+            Évolution de la valeur des écarts
+          </h3>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={ecartsParCategorie}>
-                <XAxis dataKey="categorie" stroke="#888" />
+              <AreaChart data={evolutionValeur}>
+                <defs>
+                  <linearGradient id="val" x1="0" y1="0" x2="0" y2="1">
+                    <stop
+                      offset="5%"
+                      stopColor="#472EAD"
+                      stopOpacity={0.8}
+                    />
+                    <stop
+                      offset="95%"
+                      stopColor="#472EAD"
+                      stopOpacity={0.1}
+                    />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="date" stroke="#888" />
                 <YAxis stroke="#888" />
                 <Tooltip />
-                <Legend />
-                <Bar dataKey="ecart" fill="#472EAD" />
-              </BarChart>
+                <Area
+                  type="monotone"
+                  dataKey="valeur"
+                  stroke="#472EAD"
+                  fillOpacity={1}
+                  fill="url(#val)"
+                />
+              </AreaChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </section>
 
-        {/* Pie: répartition positifs/négatifs */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
-          <h3 className="text-[#472EAD] font-semibold mb-3">Répartition des écarts</h3>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={repartitionPosNeg} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90}>
-                  {repartitionPosNeg.map((e, i) => (
-                    <Cell key={`pie-${i}`} fill={COLORS[i % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
+        {/* Journal des ajustements */}
+        <section className="bg-white/95 rounded-2xl border border-black shadow-md p-5 mb-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-[#472EAD] font-semibold text-sm sm:text-base flex items-center gap-2">
+              <ClipboardCheck className="w-4 h-4" />
+              Journal des ajustements
+            </h3>
           </div>
-        </div>
-      </section>
 
-      {/* Area: évolution valeur écarts */}
-      <section className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm mb-6">
-        <h3 className="text-[#472EAD] font-semibold mb-3">Évolution de la valeur des écarts</h3>
-        <div className="h-72">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={evolutionValeur}>
-              <defs>
-                <linearGradient id="val" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#472EAD" stopOpacity={0.8} />
-                  <stop offset="95%" stopColor="#472EAD" stopOpacity={0.1} />
-                </linearGradient>
-              </defs>
-              <XAxis dataKey="date" stroke="#888" />
-              <YAxis stroke="#888" />
-              <Tooltip />
-              <Area type="monotone" dataKey="valeur" stroke="#472EAD" fillOpacity={1} fill="url(#val)" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </section>
-
-      {/* Journal des ajustements */}
-      <section className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-[#472EAD] font-semibold">Journal des ajustements</h3>
-        </div>
-
-        <div className="overflow-x-auto rounded-lg border border-gray-100">
-          <table className="min-w-full text-sm">
-            <thead className="bg-[#F7F5FF] text-[#472EAD] uppercase text-xs font-semibold">
-              <tr>
-                <th className="px-4 py-3 text-left">Date</th>
-                <th className="px-4 py-3 text-left">Produit</th>
-                <th className="px-4 py-3 text-left">Catégorie</th>
-                <th className="px-4 py-3 text-left">Fournisseur</th>
-                <th className="px-4 py-3 text-right">Théo</th>
-                <th className="px-4 py-3 text-right">Réel</th>
-                <th className="px-4 py-3 text-right">Écart</th>
-                <th className="px-4 py-3 text-right">Valeur</th>
-                <th className="px-4 py-3 text-left">Motif</th>
-                <th className="px-4 py-3 text-left">User</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredAjustements.length ? (
-                filteredAjustements.map((a) => (
-                  <tr key={a.id} className="border-t border-gray-100 hover:bg-[#F9F9FF]">
-                    <td className="px-4 py-2">{a.date}</td>
-                    <td className="px-4 py-2 font-medium text-gray-800">{a.produit}</td>
-                    <td className="px-4 py-2">{a.categorie}</td>
-                    <td className="px-4 py-2">{a.fournisseur}</td>
-                    <td className="px-4 py-2 text-right">{a.theorique}</td>
-                    <td className="px-4 py-2 text-right">{a.reel}</td>
-                    <td className={cls("px-4 py-2 text-right", a.ecart >= 0 ? "text-emerald-600" : "text-rose-600")}>
-                      {a.ecart > 0 ? `+${a.ecart}` : a.ecart}
-                    </td>
-                    <td className={cls("px-4 py-2 text-right", a.valeur >= 0 ? "text-emerald-600" : "text-rose-600")}>
-                      {formatFCFA(a.valeur)}
-                    </td>
-                    <td className="px-4 py-2">{a.motif || "-"}</td>
-                    <td className="px-4 py-2">{a.user}</td>
-                  </tr>
-                ))
-              ) : (
+          <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+            <table className="min-w-full text-xs sm:text-sm">
+              <thead className="bg-[#F7F5FF] text-[#472EAD] uppercase text-[11px] font-semibold">
                 <tr>
-                  <td colSpan="10" className="px-4 py-6 text-center text-gray-400">
-                    Aucun ajustement pour cette période / ces filtres.
-                  </td>
+                  <th className="px-4 py-3 text-left">Date</th>
+                  <th className="px-4 py-3 text-left">Produit</th>
+                  <th className="px-4 py-3 text-left">Catégorie</th>
+                  <th className="px-4 py-3 text-left">Fournisseur</th>
+                  <th className="px-4 py-3 text-right">Théo</th>
+                  <th className="px-4 py-3 text-right">Réel</th>
+                  <th className="px-4 py-3 text-right">Écart</th>
+                  <th className="px-4 py-3 text-right">Valeur</th>
+                  <th className="px-4 py-3 text-left">Motif</th>
+                  <th className="px-4 py-3 text-left">User</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
+              </thead>
+              <tbody>
+                {filteredAjustements.length ? (
+                  filteredAjustements.map((a) => (
+                    <tr
+                      key={a.id}
+                      className="border-t border-gray-100 hover:bg-[#F9F9FF] transition-colors"
+                    >
+                      <td className="px-4 py-2 whitespace-nowrap">
+                        {a.date}
+                      </td>
+                      <td className="px-4 py-2 font-medium text-gray-800">
+                        {a.produit}
+                      </td>
+                      <td className="px-4 py-2">{a.categorie}</td>
+                      <td className="px-4 py-2">{a.fournisseur}</td>
+                      <td className="px-4 py-2 text-right">
+                        {a.theorique}
+                      </td>
+                      <td className="px-4 py-2 text-right">{a.reel}</td>
+                      <td
+                        className={cls(
+                          "px-4 py-2 text-right",
+                          a.ecart >= 0
+                            ? "text-emerald-600"
+                            : "text-rose-600"
+                        )}
+                      >
+                        {a.ecart > 0 ? `+${a.ecart}` : a.ecart}
+                      </td>
+                      <td
+                        className={cls(
+                          "px-4 py-2 text-right",
+                          a.valeur >= 0
+                            ? "text-emerald-600"
+                            : "text-rose-600"
+                        )}
+                      >
+                        {formatFCFA(a.valeur)}
+                      </td>
+                      <td className="px-4 py-2">
+                        {a.motif || "-"}
+                      </td>
+                      <td className="px-4 py-2">{a.user}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td
+                      colSpan={10}
+                      className="px-4 py-6 text-center text-gray-400 text-xs sm:text-sm"
+                    >
+                      Aucun ajustement pour cette période / ces filtres.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
 
       {/* Modale d’ajustement & Toasts */}
-      <AjustementModal open={openAjust} onClose={() => setOpenAjust(false)} onSubmit={handleAjustement} submitting={submitting} />
+      <AjustementModal
+        open={openAjust}
+        onClose={() => setOpenAjust(false)}
+        onSubmit={handleAjustement}
+        submitting={submitting}
+      />
       <Toasts toasts={toasts} remove={removeToast} />
-    </>
+    </div>
   );
 }

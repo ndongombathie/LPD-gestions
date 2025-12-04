@@ -31,7 +31,7 @@ export default function LayoutResponsable() {
         <footer className="bg-white border-t border-lpd-border shadow-inner text-sm text-gray-500 text-center py-4">
           <span className="block">
             © {new Date().getFullYear()}{" "}
-            <strong className="text-lpd-header font-semibold">LPD Consulting</strong> —
+            <strong className="text-lpd-header font-semibold">SSD Consulting</strong> —
             Interface Responsable <span className="text-lpd-accent font-semibold">v1.0.0</span>
           </span>
         </footer>
