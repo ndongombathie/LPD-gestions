@@ -40,13 +40,15 @@ import jsPDF from "jspdf";
 import "jspdf-autotable";
 
 // === Components réutilisables ===
-import KpiCard from "../components/KpiCard.jsx";
+import Card from "../components/Card";
 import FormModal from "../components/FormModal.jsx";
 
 // ————————————————————————————————————————————————
 // Utils / style
 // ————————————————————————————————————————————————
 const cls = (...a) => a.filter(Boolean).join(" ");
+const formatNumber = (n) =>
+  new Intl.NumberFormat("fr-FR").format(Number(n || 0));
 const formatFCFA = (n) =>
   new Intl.NumberFormat("fr-FR", {
     style: "currency",
@@ -296,10 +298,7 @@ export default function Inventaire() {
   const toast = (type, title, message) => {
     const id = Date.now();
     setToasts((t) => [...t, { id, type, title, message }]);
-    setTimeout(
-      () => setToasts((t) => t.filter((x) => x.id !== id)),
-      4000
-    );
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4000);
   };
   const removeToast = (id) =>
     setToasts((t) => t.filter((x) => x.id !== id));
@@ -551,6 +550,11 @@ export default function Inventaire() {
   // ——————————————————————————
   // 🧭 UI
   // ——————————————————————————
+  const variationStock =
+    stats.stockTheo > 0
+      ? ((stats.stockReel - stats.stockTheo) / stats.stockTheo) * 100
+      : 0;
+
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white px-4 sm:px-6 lg:px-10 py-6 sm:py-8 overflow-y-auto">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -595,7 +599,7 @@ export default function Inventaire() {
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
               onClick={handleExportPDF}
-              className="flex items-center gap-2 px-4 py-2.5 bg-white text-[#472EAD] border border-[#E3E0FF] rounded-lg hover:bg-[#F7F5FF] text-xs sm:text-sm shadow-sm transition"
+              className="flex items-center gap-2 px-4 py-2.5 bg-[#472EAD] text-white rounded-lg shadow-md hover:bg-[#5A3CF5] hover:shadow-lg text-xs sm:text-sm transition"
             >
               <FileDown size={18} /> Export PDF
             </motion.button>
@@ -678,43 +682,39 @@ export default function Inventaire() {
           </div>
         </section>
 
-        {/* KPI */}
-        <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
-          <KpiCard
+        {/* KPI — layout large 2 colonnes (2 cartes au-dessus, 2 en dessous) */}
+        <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-2 gap-6">
+          <Card
             label="Stock théorique"
-            value={stats.stockTheo}
+            value={formatNumber(stats.stockTheo)}
             icon={<Package size={20} />}
+            trend="Quantité attendue en stock"
             gradient="from-[#472EAD] to-[#7A5BF5]"
-            trend="Stable"
-            trendValue={0}
           />
-          <KpiCard
+          <Card
             label="Stock réel"
-            value={stats.stockReel}
+            value={formatNumber(stats.stockReel)}
             icon={<ClipboardCheck size={20} />}
+            trend={`${variationStock.toFixed(1)} % vs stock théorique`}
             gradient="from-[#10B981] to-[#34D399]"
-            trend="Variation"
-            trendValue={(
-              ((stats.stockReel - stats.stockTheo) /
-                (stats.stockTheo || 1)) *
-              100
-            ).toFixed(2)}
           />
-          <KpiCard
+          <Card
             label="Écart (Qté)"
-            value={stats.totalEcarts}
+            value={
+              stats.totalEcarts > 0
+                ? `+${formatNumber(stats.totalEcarts)}`
+                : formatNumber(stats.totalEcarts)
+            }
             icon={<AlertTriangle size={20} />}
+            trend="Différence globale en unités"
             gradient="from-[#F58020] to-[#FF995A]"
-            trend="vs période"
-            trendValue={-2.5}
           />
-          <KpiCard
+          <Card
             label="Valeur des écarts"
             value={formatFCFA(stats.valeurEcarts)}
             icon={<Scale size={20} />}
+            trend="Impact financier cumulé"
             gradient="from-[#EF4444] to-[#FB7185]"
-            trend="Évolution"
-            trendValue={-8.5}
           />
         </section>
 
@@ -781,16 +781,8 @@ export default function Inventaire() {
               <AreaChart data={evolutionValeur}>
                 <defs>
                   <linearGradient id="val" x1="0" y1="0" x2="0" y2="1">
-                    <stop
-                      offset="5%"
-                      stopColor="#472EAD"
-                      stopOpacity={0.8}
-                    />
-                    <stop
-                      offset="95%"
-                      stopColor="#472EAD"
-                      stopOpacity={0.1}
-                    />
+                    <stop offset="5%" stopColor="#472EAD" stopOpacity={0.8} />
+                    <stop offset="95%" stopColor="#472EAD" stopOpacity={0.1} />
                   </linearGradient>
                 </defs>
                 <XAxis dataKey="date" stroke="#888" />
@@ -838,7 +830,7 @@ export default function Inventaire() {
                   filteredAjustements.map((a) => (
                     <tr
                       key={a.id}
-                      className="border-t border-gray-100 hover:bg-[#F9F9FF] transition-colors"
+                      className="border-top border-gray-100 hover:bg-[#F9F9FF] transition-colors"
                     >
                       <td className="px-4 py-2 whitespace-nowrap">
                         {a.date}

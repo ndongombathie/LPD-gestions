@@ -24,7 +24,7 @@ import "jspdf-autotable";
 // 🧩 Composants internes
 import FormModal from "../components/FormModal";
 import DecaissementForm from "../components/DecaissementForm";
-import KpiCard from "../components/KpiCard";
+import Card from "../components/Card";
 import { toast } from "sonner";
 
 // ——————————————————————————————————————————————————
@@ -336,7 +336,7 @@ export default function Decaissements() {
     );
 
   // ——————————————————————————————————————————————————
-  // 🧠 UI principale alignée avec ClientsSpeciaux / Utilisateurs
+  // 🧠 UI principale alignée avec Dashboard / Rapports / Inventaire
   // ——————————————————————————————————————————————————
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white px-4 sm:px-6 lg:px-10 py-6 sm:py-8 overflow-y-auto">
@@ -371,41 +371,47 @@ export default function Decaissements() {
           </div>
 
           <div className="flex flex-wrap gap-2 sm:gap-3 justify-start sm:justify-end">
+
             <button
               onClick={() => setOpenModal(true)}
               className="flex items-center gap-2 bg-[#472EAD] hover:bg-[#5A3CF5] text-white px-4 py-2 rounded-lg shadow-md text-sm transition"
             >
               <PlusCircle size={18} /> Nouvelle demande
             </button>
-
           </div>
         </motion.header>
 
-        {/* KPI */}
-        <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
-          <KpiCard
+        {/* KPI — 2 cartes au-dessus / 2 en dessous (largeur confortable) */}
+        <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-2 gap-6">
+          <Card
             label="Total demandé"
             value={formatFCFA(stats.total)}
             icon={<TrendingDown size={20} />}
-            color="from-[#472EAD] to-[#7A5BF5]"
+            trend={`Sur ${demandes.length || 0} demande${
+              demandes.length > 1 ? "s" : ""
+            }`}
+            gradient="from-[#472EAD] to-[#7A5BF5]"
           />
-          <KpiCard
+          <Card
             label="Moyenne / demande"
             value={formatFCFA(stats.moyenne)}
             icon={<TrendingDown size={20} />}
-            color="from-[#F58020] to-[#FF995A]"
+            trend="Montant moyen par demande"
+            gradient="from-[#F58020] to-[#FF995A]"
           />
-          <KpiCard
-            label="Validés"
+          <Card
+            label="Demandes validées"
             value={stats.valides}
             icon={<TrendingDown size={20} />}
-            color="from-[#10B981] to-[#34D399]"
+            trend="Décaissements approuvés"
+            gradient="from-[#10B981] to-[#34D399]"
           />
-          <KpiCard
-            label="En attente"
-            value={stats.enAttente}
+          <Card
+            label="En attente / Refusées"
+            value={`${stats.enAttente} en attente • ${stats.refuses} refusées`}
             icon={<TrendingDown size={20} />}
-            color="from-[#FBBF24] to-[#F59E0B]"
+            trend="Décisions restantes"
+            gradient="from-[#FBBF24] to-[#F59E0B]"
           />
         </section>
 
@@ -468,9 +474,6 @@ export default function Decaissements() {
             </tbody>
           </table>
         </section>
-
-        {/* FOOTER */}
-
 
         {/* MODALE CRÉATION */}
         <FormModal

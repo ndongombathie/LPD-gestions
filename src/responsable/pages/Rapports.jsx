@@ -1,7 +1,7 @@
 // ==========================================================
 // 📊 Rapports.jsx — Interface Responsable (LPD Manager)
 // Version Premium — Filtres dynamiques + KPI + Graphiques + Export
-// Style harmonisé avec Utilisateurs / Inventaire / Journal
+// Style harmonisé avec Dashboard / Utilisateurs / Inventaire / Journal
 // ==========================================================
 
 import React, { useEffect, useState } from "react";
@@ -30,7 +30,7 @@ import jsPDF from "jspdf";
 import "jspdf-autotable";
 import * as XLSX from "xlsx";
 
-import KpiCard from "../components/KpiCard";
+import Card from "../components/Card";
 import ChartBox from "../components/ChartBox";
 
 const formatFCFA = (n) =>
@@ -129,6 +129,13 @@ export default function Rapports() {
     }, {});
     return Object.entries(counts).map(([name, value]) => ({ name, value }));
   })();
+
+  // -------------------- Indicateurs dérivés pour KPI --------------------
+  const margeBenefice =
+    kpi.totalVentes > 0 ? (kpi.benefice / kpi.totalVentes) * 100 : 0;
+
+  const ratioSortiesEntrees =
+    kpi.entrees > 0 ? (kpi.sorties / kpi.entrees) * 100 : 0;
 
   // -------------------- Exports PDF / Excel --------------------
   const exportPDF = () => {
@@ -232,16 +239,11 @@ export default function Rapports() {
           <div className="flex gap-3">
             <button
               onClick={exportPDF}
-              className="flex items-center gap-2 bg-white border border-[#E3E0FF] text-[#472EAD] px-4 py-2 rounded-lg shadow-sm hover:bg-[#F7F5FF] hover:shadow-md transition text-sm"
+              className="flex items-center gap-2 px-4 py-2.5 bg-[#472EAD] text-white rounded-lg shadow-md hover:bg-[#5A3CF5] hover:shadow-lg text-xs sm:text-sm transition"
             >
-              <FileDown size={16} /> PDF
+              <FileDown size={16} /> Export PDF
             </button>
-            <button
-              onClick={exportExcel}
-              className="flex items-center gap-2 bg-[#472EAD] text-white px-4 py-2 rounded-lg shadow-md hover:shadow-lg hover:scale-[1.02] transition text-sm"
-            >
-              <FileSpreadsheet size={16} /> Excel
-            </button>
+
           </div>
         </motion.header>
 
@@ -332,55 +334,59 @@ export default function Rapports() {
           </div>
         </section>
 
-        {/* KPIs */}
-        <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
-          <KpiCard
+        {/* KPI CARDS (layout large : 2 colonnes) */}
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.7 }}
+          className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-2 gap-6"
+        >
+          <Card
             label="Total ventes"
             value={formatFCFA(kpi.totalVentes)}
-            icon={<ShoppingCart className="w-6 h-6" />}
-            trend="Depuis 30 jours"
-            trendValue={8}
+            icon={<ShoppingCart size={22} />}
+            trend="+8 % sur 30 jours ce mois"
             gradient="from-[#472EAD] to-[#7A5BF5]"
           />
-          <KpiCard
+
+          <Card
             label="Entrées stock"
             value={formatFCFA(kpi.entrees)}
-            icon={<Package className="w-6 h-6" />}
-            trend="Par rapport au mois dernier"
-            trendValue={3}
+            icon={<Package size={22} />}
+            trend="+3 % vs mois dernier ce mois"
             gradient="from-[#34D399] to-[#10B981]"
           />
-          <KpiCard
+
+          <Card
             label="Sorties stock"
             value={formatFCFA(kpi.sorties)}
-            icon={<Package className="w-6 h-6" />}
-            trend="Flux sortants"
-            trendValue={6}
+            icon={<Package size={22} />}
+            trend={`${ratioSortiesEntrees.toFixed(1)} % des entrées ce mois`}
             gradient="from-[#F58020] to-[#FF995A]"
           />
-          <KpiCard
-            label="Alertes"
+
+          <Card
+            label="Alertes actives"
             value={kpi.alertes}
-            icon={<AlertTriangle className="w-6 h-6" />}
-            trend="Produits critiques"
-            trendValue={-2}
+            icon={<AlertTriangle size={22} />}
+            trend="Produits en anomalie ce mois"
             gradient="from-[#EF4444] to-[#FB7185]"
           />
-          <KpiCard
+
+          <Card
             label="Bénéfice net"
             value={formatFCFA(kpi.benefice)}
             icon={
               kpi.benefice >= 0 ? (
-                <TrendingUp className="w-6 h-6" />
+                <TrendingUp size={22} />
               ) : (
-                <TrendingDown className="w-6 h-6" />
+                <TrendingDown size={22} />
               )
             }
-            trend="Performance globale"
-            trendValue={12}
+            trend={`${margeBenefice.toFixed(1)} % de marge ce mois`}
             gradient="from-[#10B981] to-[#34D399]"
           />
-        </section>
+        </motion.section>
 
         {/* GRAPHIQUES PRINCIPAUX */}
         <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">

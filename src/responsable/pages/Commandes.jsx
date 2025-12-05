@@ -631,7 +631,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
             <button
               type="button"
               onClick={handleAddLigne}
-              className="px-4 py-2 bg-[#472EAD] text-white rounded-lg text-sm font-semibold hover:opacity-95 shadow-sm transition"
+              className="flex items-center gap-2 px-4 py-2.5 bg-[#472EAD] text-white rounded-lg shadow-md hover:bg-[#5A3CF5] hover:shadow-lg text-xs sm:text-sm transition"
             >
               Ajouter à la commande
             </button>

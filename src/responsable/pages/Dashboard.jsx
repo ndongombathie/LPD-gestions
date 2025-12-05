@@ -11,7 +11,6 @@ import {
   DollarSign,
   AlertCircle,
   FileDown,
-  Activity,
   CheckCircle,
   XCircle,
 } from "lucide-react";
@@ -134,15 +133,17 @@ export default function Dashboard() {
             </div>
           </div>
 
+          <div className="flex gap-3">
 
+          </div>
         </motion.header>
 
-        {/* === KPI CARDS === */}
+        {/* === KPI CARDS (2x2 pour alignement) === */}
         <motion.section
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7 }}
-          className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6"
+          className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-2 gap-6"
         >
           {stats.map((s, i) => (
             <Card

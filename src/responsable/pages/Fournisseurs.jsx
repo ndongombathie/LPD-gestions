@@ -413,7 +413,7 @@ export default function Fournisseurs() {
 
             <button
               onClick={() => setOpenAdd(true)}
-              className="inline-flex items-center gap-2 px-4 sm:px-5 py-2.5 bg-gradient-to-r from-[#472EAD] to-[#6A4DF5] text-white rounded-xl shadow-[0_12px_30px_rgba(71,46,173,0.35)] text-sm font-semibold hover:translate-y-[1px] active:scale-[0.97] transition"
+              className="flex items-center gap-2 px-4 py-2.5 bg-[#472EAD] text-white rounded-lg shadow-md hover:bg-[#5A3CF5] hover:shadow-lg text-xs sm:text-sm transition"
             >
               <UserPlus size={18} />
               Nouveau fournisseur
