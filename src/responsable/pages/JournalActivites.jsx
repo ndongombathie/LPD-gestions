@@ -808,15 +808,7 @@ export default function JournalActivites() {
             </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-end gap-3">
-            <button
-              onClick={exportPDF}
-              className="inline-flex items-center gap-2 bg-white text-[#472EAD] border border-[#E4E0FF] rounded-lg px-4 py-2 text-sm font-medium hover:bg-[#F7F5FF] shadow-sm transition"
-            >
-              <FileDown className="w-4 h-4" />
-              Exporter PDF
-            </button>
-          </div>
+
         </motion.header>
 
         {/* CARTES PROFILS */}

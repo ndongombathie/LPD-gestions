@@ -3,7 +3,7 @@
 // Connecté Laravel + Sanctum : profil, logout, update, password + Raccourcis
 // ==========================================================
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   Bell,
@@ -51,6 +51,7 @@ const loadJSON = (k, def) => {
 const saveJSON = (k, v) => localStorage.setItem(k, JSON.stringify(v));
 
 const RECENTS_KEY = "lpd_recent_paths";
+const NOTIF_STORAGE_KEY = "lpd_notifications";
 
 // 🔗 Pages éligibles aux raccourcis (mêmes infos que la Sidebar)
 const SHORTCUT_ITEMS = [
@@ -64,6 +65,15 @@ const SHORTCUT_ITEMS = [
   { name: "Décaissements", path: "/responsable/decaissements", icon: Banknote },
   { name: "Journal d’activités", path: "/responsable/journal-activites", icon: Clock },
 ];
+
+const getPageInfo = (key) => {
+  if (!key || key === "autres") {
+    return { name: "Autres notifications", icon: Bell };
+  }
+  const item = SHORTCUT_ITEMS.find((i) => i.path === key);
+  if (item) return { name: item.name, icon: item.icon };
+  return { name: "Notification", icon: Bell };
+};
 
 // ==========================================================
 // 🔔 Toast system
@@ -168,7 +178,7 @@ function PasswordModal({ open, onClose, onSuccess, addToast }) {
             <Key className="w-5 h-5" /> Changer le mot de passe
           </h2>
 
-        <button onClick={onClose}>
+          <button onClick={onClose}>
             <X size={18} className="text-gray-500" />
           </button>
         </div>
@@ -415,9 +425,21 @@ export default function Header() {
   const [user, setUser] = useState(null);
   const [toasts, setToasts] = useState([]);
   const [notifications, setNotifications] = useState(
-    loadJSON("lpd_notifications", [
-      { id: 1, type: "stock", text: "3 produits presque en rupture", read: false },
-      { id: 2, type: "rapport", text: "Nouveau rapport disponible", read: false },
+    loadJSON(NOTIF_STORAGE_KEY, [
+      {
+        id: 1,
+        type: "stock",
+        text: "3 produits presque en rupture",
+        read: false,
+        path: "/responsable/inventaire",
+      },
+      {
+        id: 2,
+        type: "rapport",
+        text: "Nouveau rapport disponible",
+        read: false,
+        path: "/responsable/rapports",
+      },
     ])
   );
 
@@ -435,6 +457,34 @@ export default function Header() {
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
+  const groupedNotifications = useMemo(() => {
+    const map = new Map();
+    notifications.forEach((n) => {
+      const key = n.path || "autres";
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          unread: 0,
+          total: 0,
+          lastText: "",
+          lastType: n.type,
+        });
+      }
+      const g = map.get(key);
+      g.total += 1;
+      if (!n.read) g.unread += 1;
+      g.lastText = n.text;
+      g.lastType = n.type;
+    });
+
+    return Array.from(map.values()).sort((a, b) => {
+      const aHasUnread = a.unread > 0;
+      const bHasUnread = b.unread > 0;
+      if (aHasUnread === bHasUnread) return b.total - a.total;
+      return (bHasUnread ? 1 : 0) - (aHasUnread ? 1 : 0);
+    });
+  }, [notifications]);
+
   const addToast = (type, title, message) => {
     const id = Date.now();
     setToasts((prev) => [...prev, { id, type, title, message }]);
@@ -451,11 +501,16 @@ export default function Header() {
 
     setRecentPaths((prev) => {
       const without = prev.filter((p) => p !== path);
-      const updated = [path, ...without].slice(0, 4); // 4 derniers seulement
+      const updated = [path, ...without].slice(0, 4);
       saveJSON(RECENTS_KEY, updated);
       return updated;
     });
   };
+
+  // 💾 Sauvegarde des notifications dès qu'elles changent
+  useEffect(() => {
+    saveJSON(NOTIF_STORAGE_KEY, notifications);
+  }, [notifications]);
 
   // Quand l'URL change → mettre à jour les raccourcis
   useEffect(() => {
@@ -519,18 +574,39 @@ export default function Header() {
   // 🔔 Notifications
   // ==========================================================
 
+  const handleNotificationGroupClick = (groupKey) => {
+    setNotifications((prev) =>
+      prev.map((n) =>
+        (n.path || "autres") === groupKey ? { ...n, read: true } : n
+      )
+    );
+
+    if (groupKey && groupKey !== "autres") {
+      navigate(groupKey);
+    }
+
+    setShowNotif(false);
+  };
+
+  // Quand on arrive sur une page, marquer les notifs liées comme lues
+  useEffect(() => {
+    setNotifications((prev) => {
+      let changed = false;
+      const updated = prev.map((n) => {
+        if (n.path && location.pathname.startsWith(n.path) && !n.read) {
+          changed = true;
+          return { ...n, read: true };
+        }
+        return n;
+      });
+      return changed ? updated : prev;
+    });
+  }, [location.pathname]);
+
   const toggleNotif = () => {
     setShowNotif((v) => !v);
     setShowMenu(false);
     setShowQuick(false);
-
-    if (!showNotif) {
-      setTimeout(() => {
-        setNotifications((prev) =>
-          prev.map((n) => ({ ...n, read: true }))
-        );
-      }, 400);
-    }
   };
 
   if (!user) return null;
@@ -631,24 +707,58 @@ export default function Header() {
                 </button>
 
                 {showNotif && (
-                  <div className="absolute right-0 mt-2 w-72 bg-white border rounded-lg shadow-lg p-2">
-                    <p className="text-xs font-semibold px-2 py-1 text-gray-500">Notifications</p>
+                  <div className="absolute right-0 mt-2 w-80 bg-white border rounded-lg shadow-lg p-2">
+                    <p className="text-xs font-semibold px-2 py-1 text-gray-500">
+                      Notifications par module
+                    </p>
 
                     <ul className="max-h-64 overflow-auto divide-y">
-                      {notifications.length ? (
-                        notifications.map((n) => (
-                          <li
-                            key={n.id}
-                            className="px-3 py-2 hover:bg-gray-50 flex gap-2 items-start cursor-pointer"
-                          >
-                            <span>{n.type === "stock" ? "⚠️" : "📄"}</span>
-                            <span className={n.read ? "text-gray-500" : "font-medium"}>
-                              {n.text}
-                            </span>
-                          </li>
-                        ))
+                      {groupedNotifications.length ? (
+                        groupedNotifications.map((g) => {
+                          const { name, icon: Icon } = getPageInfo(g.key);
+                          const hasUnread = g.unread > 0;
+                          return (
+                            <li
+                              key={g.key}
+                              onClick={() => handleNotificationGroupClick(g.key)}
+                              className="px-3 py-2 hover:bg-gray-50 flex items-center justify-between gap-2 cursor-pointer"
+                            >
+                              <div className="flex items-start gap-2">
+                                <div className="mt-0.5 flex h-7 w-7 items-center justify-center rounded-full bg-[#F7F5FF] text-[#472EAD]">
+                                  <Icon size={16} />
+                                </div>
+                                <div className="flex flex-col">
+                                  <span
+                                    className={`text-xs font-semibold ${
+                                      hasUnread ? "text-[#2F1F7A]" : "text-gray-500"
+                                    }`}
+                                  >
+                                    {name}
+                                  </span>
+                                  {g.lastText && (
+                                    <span className="text-[11px] text-gray-500 max-w-[180px] truncate">
+                                      {g.lastText}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div>
+                                {hasUnread ? (
+                                  <span className="inline-flex items-center justify-center min-w-[20px] px-1.5 py-[2px] text-[10px] font-bold rounded-full bg-[#F58020] text-white">
+                                    {g.unread}
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-gray-400 italic">
+                                    Vu
+                                  </span>
+                                )}
+                              </div>
+                            </li>
+                          );
+                        })
                       ) : (
-                        <li className="px-3 py-6 text-center text-gray-400">
+                        <li className="px-3 py-6 text-center text-gray-400 text-xs">
                           Aucune notification
                         </li>
                       )}
@@ -690,7 +800,7 @@ export default function Header() {
                 {showMenu && (
                   <div className="absolute right-0 mt-2 w-48 bg-white border shadow-lg rounded-lg p-2">
                     <ul className="text-sm">
-                     {/* <li
+                      {/* <li
                         onClick={() => {
                           setShowProfileModal(true);
                           setShowMenu(false);
@@ -698,7 +808,7 @@ export default function Header() {
                         className="px-3 py-2 hover:bg-gray-50 cursor-pointer flex gap-2 items-center"
                       >
                         <User size={14} /> Mon Profil
-                      </li>  */}
+                      </li> */}
 
                       <li
                         onClick={() => {

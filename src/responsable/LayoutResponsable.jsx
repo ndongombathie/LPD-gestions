@@ -28,13 +28,29 @@ export default function LayoutResponsable() {
         </main>
 
         {/* === Pied de page === */}
-        <footer className="bg-white border-t border-lpd-border shadow-inner text-sm text-gray-500 text-center py-4">
-          <span className="block">
-            © {new Date().getFullYear()}{" "}
-            <strong className="text-lpd-header font-semibold">SSD Consulting</strong> —
-            Interface Responsable <span className="text-lpd-accent font-semibold">v1.0.0</span>
-          </span>
+        <footer className="mt-6 border-t border-lpd-border/80 bg-white/90 backdrop-blur-sm">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] sm:text-xs text-gray-500">
+            <div className="flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-lpd-accent" />
+              <span>
+                © {new Date().getFullYear()}{" "}
+                <span className="font-semibold text-lpd-header">SSD Consulting</span>
+                {" · "}
+                <span className="text-gray-400">Tous droits réservés.</span>
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2 text-[11px] sm:text-xs">
+              <span className="hidden sm:inline-block h-3 w-px bg-gray-200" />
+              <span className="text-gray-400">LPD Manager</span>
+              <span className="text-gray-300">•</span>
+              <span>Interface Responsable</span>
+              <span className="text-gray-300">•</span>
+              <span className="font-semibold text-lpd-accent">v1.0.0</span>
+            </div>
+          </div>
         </footer>
+
       </div>
     </div>
   );

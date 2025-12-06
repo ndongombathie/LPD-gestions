@@ -243,13 +243,7 @@ export default function Dashboard() {
         </motion.section>
 
         {/* === FOOTER === */}
-        <footer className="text-center text-xs text-gray-500 pt-2 pb-6">
-          © 2025{" "}
-          <span className="text-[#472EAD] font-semibold">
-            SSD Consulting
-          </span>{" "}
-          — Interface Responsable v1.0.0
-        </footer>
+
       </motion.div>
     </div>
   );
