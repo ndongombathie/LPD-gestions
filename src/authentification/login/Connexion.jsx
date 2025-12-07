@@ -1,12 +1,44 @@
 // ==========================================================
 // 🔐 Connexion.jsx — Authentification Sanctum (Frontend LPD)
-// Ajout : Affichage / Masquage mot de passe (œil)
 // ==========================================================
 
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Eye, EyeOff } from "lucide-react"; 
+import { Eye, EyeOff } from "lucide-react";
 import { instance } from "../../utils/axios";
+
+// ----------- Normalisation des rôles ----------
+const normalizeRole = (role) => {
+  if (!role) return "";
+
+  const r = role.toString().toLowerCase();
+
+  if (r.includes("respons")) return "responsable";
+  if (r.includes("compt")) return "comptable";
+  if (r.includes("gest")) return "gestionnaire";
+  if (r.includes("vend")) return "vendeur";
+  if (r.includes("cais")) return "caissier";
+
+  return r;
+};
+
+// ----------- Redirection selon rôle ----------
+const redirectByRole = (role = "") => {
+  switch (role.toLowerCase()) {
+    case "responsable":
+      return "/responsable/dashboard";
+    case "comptable":
+      return "/comptable/dashboard";
+    case "gestionnaire":
+      return "/gestionnaire";
+    case "vendeur":
+      return "/vendeur";
+    case "caissier":
+      return "/caissier";
+    default:
+      return "/login";
+  }
+};
 
 export default function Connexion() {
   const navigate = useNavigate();
@@ -17,50 +49,44 @@ export default function Connexion() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const redirectByRole = (role = "") => {
-    switch (role.toLowerCase()) {
-      case "responsable":
-        return "/responsable/dashboard";
-      case "gestionnaire":
-        return "/gestionnaire";
-      case "vendeur":
-        return "/vendeur";
-      case "caissier":
-        return "/caissier";
-      default:
-        return "/login";
-    }
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage("");
 
-    if (!email || !password)
+    if (!email || !password) {
       return setMessage("⚠️ Veuillez remplir tous les champs.");
+    }
 
     setLoading(true);
 
     try {
-      const { data } = await instance.post("/auth/login", {
-        email,
+      // 🔹 APPEL API → CHEMIN CORRIGÉ : /api/auth/login
+      const { data } = await instance.post("auth/login", {
+        email: email.trim(),
         password,
       });
 
-      if (!data?.token || !data?.user)
+      if (!data?.token || !data?.user) {
+        setLoading(false);
         return setMessage("❌ Réponse inattendue du serveur.");
+      }
 
+      // 🔹 Normaliser le rôle
+      const normalizedRole = normalizeRole(data.user.role);
+
+      // 🔹 Sauvegarder token + user
       localStorage.setItem("token", data.token);
       instance.defaults.headers.common["Authorization"] = `Bearer ${data.token}`;
 
-      const me = await instance.get("/mon-profil");
-      localStorage.setItem("user", JSON.stringify(me.data));
+      const userToStore = { ...data.user, role: normalizedRole };
+      localStorage.setItem("user", JSON.stringify(userToStore));
 
       setMessage("✅ Connexion réussie !");
-      setTimeout(() => {
-        navigate(redirectByRole(me.data.role), { replace: true });
-      }, 800);
 
+      // 🔹 Redirection selon rôle
+      setTimeout(() => {
+        navigate(redirectByRole(normalizedRole), { replace: true });
+      }, 800);
     } catch (error) {
       const msg =
         error?.response?.data?.message ||
@@ -75,7 +101,6 @@ export default function Connexion() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-500 to-orange-500 p-4">
-
       <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-2xl p-8 w-full max-w-md text-center border border-white/20">
 
         {/* === Logo === */}
@@ -118,7 +143,7 @@ export default function Connexion() {
             required
           />
 
-          {/* Mot de passe + œil */}
+          {/* Mot de passe */}
           <div className="relative">
             <input
               type={showPwd ? "text" : "password"}

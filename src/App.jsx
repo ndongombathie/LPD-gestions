@@ -1,62 +1,68 @@
 // ==========================================================
-// ⚙️ App.jsx — Interface Responsable LPD
+// ⚙️ App.jsx — Interface Comptable LPD
 // ==========================================================
 
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
-// ✅ Layout
-import LayoutResponsable from "./responsable/LayoutResponsable.jsx";
+// ✅ Layout Comptable
+import LayoutComptable from "./comptable/LayoutComptable.jsx";
 
-// ✅ Pages principales
-import Dashboard from "./responsable/pages/Dashboard.jsx";
-import Utilisateurs from "./responsable/pages/Utilisateurs.jsx";
-import Fournisseurs from "./responsable/pages/Fournisseurs.jsx";
-import Commandes from "./responsable/pages/Commandes.jsx";
-import Inventaire from "./responsable/pages/Inventaire.jsx";
-import Rapports from "./responsable/pages/Rapports.jsx";
-import JournalActivites from "./responsable/pages/JournalActivites.jsx";
-import ClientsSpeciaux from "./responsable/pages/ClientsSpeciaux.jsx";
-import Decaissements from "./responsable/pages/Decaissements.jsx";
+// ✅ Pages Comptable
+import DashboardComptable from "./comptable/pages/Dashboard.jsx";
+import UtilisateursComptable from "./comptable/pages/Utilisateurs.jsx";
+import FournisseursComptable from "./comptable/pages/Fournisseurs.jsx";
+import CommandesComptable from "./comptable/pages/Commandes.jsx";
+import InventaireComptable from "./comptable/pages/Inventaire.jsx";
+import RapportsComptable from "./comptable/pages/Rapports.jsx";
+import JournalActivitesComptable from "./comptable/pages/JournalActivites.jsx";
+import ClientsSpeciauxComptable from "./comptable/pages/ClientsSpeciaux.jsx";
+import VentesJournalieres from "./comptable/pages/VentesJournalieres.jsx"; // ⚠️ assure-toi que ce fichier existe !
 
-// ✅ Page Authentification
+// ✅ Page Auth
 import Connexion from "./authentification/login/Connexion.jsx";
 
-// ✅ Middleware — protection de route
+// ==========================================================
+// 🔐 Middleware — Protection de route
+// ==========================================================
 const PrivateRoute = ({ children }) => {
   const token = localStorage.getItem("token");
   return token ? children : <Navigate to="/login" replace />;
 };
 
+// ==========================================================
+// 🚀 APP PRINCIPALE — Comptable
+// ==========================================================
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Route de connexion */}
+
+        {/* === Connexion === */}
         <Route path="/login" element={<Connexion />} />
 
-        {/* Routes protégées du Responsable */}
+        {/* === Routes protégées Comptable === */}
         <Route
-          path="/responsable"
+          path="/comptable"
           element={
             <PrivateRoute>
-              <LayoutResponsable />
+              <LayoutComptable />
             </PrivateRoute>
           }
         >
-          <Route index element={<Dashboard />} />
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="utilisateurs" element={<Utilisateurs />} />
-          <Route path="fournisseurs" element={<Fournisseurs />} />
-          <Route path="clients-speciaux" element={<ClientsSpeciaux />} />
-          <Route path="commandes" element={<Commandes />} />
-          <Route path="inventaire" element={<Inventaire />} />
-          <Route path="rapports" element={<Rapports />} />
-          <Route path="decaissements" element={<Decaissements />} />
-          <Route path="journal-activites" element={<JournalActivites />} />
+          <Route index element={<DashboardComptable />} />
+          <Route path="dashboard" element={<DashboardComptable />} />
+          <Route path="utilisateurs" element={<UtilisateursComptable />} />
+          <Route path="fournisseurs" element={<FournisseursComptable />} />
+          <Route path="clients-speciaux" element={<ClientsSpeciauxComptable />} />
+          <Route path="commandes" element={<CommandesComptable />} />
+          <Route path="inventaire" element={<InventaireComptable />} />
+          <Route path="rapports" element={<RapportsComptable />} />
+          <Route path="journal-activites" element={<JournalActivitesComptable />} />
+          <Route path="ventes-journalieres" element={<VentesJournalieres />} />
 
-          {/* Fallback interne */}
-          <Route path="*" element={<Navigate to="/responsable/dashboard" replace />} />
+          {/* Fallback interne Comptable */}
+          <Route path="*" element={<Navigate to="/comptable/dashboard" replace />} />
         </Route>
 
         {/* Redirection par défaut */}
