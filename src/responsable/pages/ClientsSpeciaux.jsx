@@ -25,6 +25,7 @@ import DataTable from "../components/DataTable.jsx";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 import { useNavigate } from "react-router-dom";
+import { instance as axios } from "../../utils/axios.jsx";
 
 const cls = (...a) => a.filter(Boolean).join(" ");
 const formatFCFA = (n) =>
@@ -549,7 +550,7 @@ function ClientForm({ initial, onSubmit, onCancel, submitting }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* Nom */}
+        {/* Nom complet */}
         <div>
           <label className="block text-sm font-medium text-gray-700">
             Nom complet <span className="text-rose-600">*</span>
@@ -599,9 +600,7 @@ function ClientForm({ initial, onSubmit, onCancel, submitting }) {
             required
           />
           {errors.entreprise && (
-            <p className="text-xs text-rose-600 mt-1">
-              {errors.entreprise}
-            </p>
+            <p className="text-xs text-rose-600 mt-1">{errors.entreprise}</p>
           )}
         </div>
 
@@ -666,7 +665,6 @@ export default function ClientsSpeciaux() {
   const [toasts, setToasts] = useState([]);
   const [historiqueClient, setHistoriqueClient] = useState(null);
   const [openHistorique, setOpenHistorique] = useState(false);
-
   const [trancheClient, setTrancheClient] = useState(null);
   const [openTranche, setOpenTranche] = useState(false);
 
@@ -679,121 +677,106 @@ export default function ClientsSpeciaux() {
   };
   const removeToast = (id) => setToasts((t) => t.filter((x) => x.id !== id));
 
-  // Simulation initiale : clients + commandes
+  // ======================================================
+  // 🔗 Chargement des clients spéciaux + commandes
+  // ======================================================
   useEffect(() => {
-    const simulatedClients = [
-      {
-        id: 1,
-        nom: "DIOP Mamadou",
-        contact: "771234567",
-        entreprise: "Bureau Afrique Service",
-        adresse: "Dakar Plateau",
-      },
-      {
-        id: 2,
-        nom: "SOW Aissatou",
-        contact: "781112233",
-        entreprise: "Imprisol SARL",
-        adresse: "Thiès",
-      },
-      {
-        id: 3,
-        nom: "NDIAYE Cheikh",
-        contact: "761234555",
-        entreprise: "École Al Falah",
-        adresse: "Kaolack",
-      },
-    ];
+    const fetchData = async () => {
+      try {
+        setLoading(true);
 
-    const total1 = 24000 * 1.18;
-    const paye1 = 30000;
-    const reste1 = Math.max(total1 - paye1, 0);
+        // Clients spéciaux + toutes les commandes
+        const [clientsRes, commandesRes] = await Promise.all([
+          axios.get("/clients", { params: { type_client: "special" } }),
+          axios.get("/commandes"),
+        ]);
 
-    const total2 = 20000 * 1.18;
-    const paye2 = total2;
-    const reste2 = Math.max(total2 - paye2, 0);
+        const clientsPayload = Array.isArray(clientsRes.data?.data)
+          ? clientsRes.data.data
+          : clientsRes.data;
 
-    const total3 = 60000 * 1.18;
-    const paye3 = 30000;
-    const reste3 = Math.max(total3 - paye3, 0);
+        const normalizedClients = (clientsPayload || []).map((c) => ({
+          id: c.id,
+          nom: c.nom || "",
+          contact: c.contact || c.telephone || "",
+          entreprise: c.entreprise || "",
+          adresse: c.adresse || "",
+        }));
 
-    const simulatedCommandes = [
-      {
-        id: 1,
-        numero: "CMD-2025-1001",
-        clientId: 1,
-        clientNom: "DIOP Mamadou",
-        clientCode: "CL-DIOP-001",
-        dateCommande: "2025-11-03",
-        totalTTC: total1,
-        montantPaye: Math.min(paye1, total1),
-        resteAPayer: reste1,
-        statut: reste1 === 0 ? "soldee" : "partiellement_payee",
-        statutLabel: reste1 === 0 ? "Soldée" : "Partiellement payée",
-        paiements: [
-          {
-            id: 1,
-            date: "2025-11-03",
-            montant: 20000,
-            mode: "especes",
-          },
-          {
-            id: 2,
-            date: "2025-11-05",
-            montant: 10000,
-            mode: "orange_money",
-          },
-        ],
-      },
-      {
-        id: 2,
-        numero: "CMD-2025-1002",
-        clientId: 2,
-        clientNom: "SOW Aissatou",
-        clientCode: "CL-SOW-002",
-        dateCommande: "2025-11-02",
-        totalTTC: total2,
-        montantPaye: Math.min(paye2, total2),
-        resteAPayer: reste2,
-        statut: "soldee",
-        statutLabel: "Soldée",
-        paiements: [
-          {
-            id: 3,
-            date: "2025-11-02",
-            montant: total2,
-            mode: "wave",
-          },
-        ],
-      },
-      {
-        id: 3,
-        numero: "CMD-2025-1003",
-        clientId: 3,
-        clientNom: "NDIAYE Cheikh",
-        clientCode: "CL-NDI-003",
-        dateCommande: "2025-10-30",
-        totalTTC: total3,
-        montantPaye: Math.min(paye3, total3),
-        resteAPayer: reste3,
-        statut: reste3 === 0 ? "soldee" : "partiellement_payee",
-        statutLabel: reste3 === 0 ? "Soldée" : "Partiellement payée",
-        paiements: [
-          {
-            id: 4,
-            date: "2025-10-30",
-            montant: 30000,
-            mode: "cheque",
-          },
-        ],
-      },
-    ];
+        const commandesPayload = Array.isArray(commandesRes.data?.data)
+          ? commandesRes.data.data
+          : commandesRes.data;
 
-    setTimeout(() => {
-      setClients(simulatedClients);
-      setCommandes(simulatedCommandes);
-      setLoading(false);
-    }, 500);
+        const clientIds = new Set(normalizedClients.map((c) => c.id));
+
+        const normalizedCommandes = (commandesPayload || [])
+          // On garde seulement les commandes des clients spéciaux
+          .filter((cmd) => clientIds.has(cmd.client_id || cmd.clientId))
+          .map((cmd) => {
+            const total =
+              Number(
+                cmd.total_ttc ?? cmd.totalTTC ?? cmd.montant_total ?? 0
+              ) || 0;
+            const paye =
+              Number(
+                cmd.montant_paye ?? cmd.montantPaye ?? cmd.total_paye ?? 0
+              ) || 0;
+            const reste =
+              Number(
+                cmd.reste_a_payer ??
+                  cmd.resteAPayer ??
+                  Math.max(total - paye, 0)
+              ) || 0;
+
+            const statut = cmd.statut || "en_attente_caisse";
+            const statutLabelMap = {
+              en_attente_caisse: "En attente caisse",
+              partiellement_payee: "Partiellement payée",
+              soldee: "Soldée",
+              annulee: "Annulée",
+            };
+            const statutLabel =
+              cmd.statut_label || cmd.statutLabel || statutLabelMap[statut];
+
+            const paiements = (cmd.paiements || []).map((p) => ({
+              id: p.id,
+              date: p.date_paiement || p.date || "",
+              montant:
+                Number(p.montant || p.montant_paye || p.montant_paiement || 0) ||
+                0,
+              mode: p.mode_paiement || p.mode || "especes",
+              commentaire: p.commentaire || "",
+            }));
+
+            return {
+              id: cmd.id,
+              clientId: cmd.client_id || cmd.clientId,
+              numero: cmd.numero || cmd.reference || `CMD-${cmd.id}`,
+              dateCommande: cmd.date_commande || cmd.dateCommande || "",
+              totalTTC: total,
+              montantPaye: paye,
+              resteAPayer: reste,
+              statut,
+              statutLabel,
+              paiements,
+            };
+          });
+
+        setClients(normalizedClients);
+        setCommandes(normalizedCommandes);
+      } catch (error) {
+        console.error("Erreur chargement clients/commandes :", error);
+        toast(
+          "error",
+          "Erreur de chargement",
+          "Impossible de charger les clients spéciaux."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
   }, []);
 
   // Agrégation : enrichir chaque client avec ses commandes
@@ -849,30 +832,140 @@ export default function ClientsSpeciaux() {
     return { nbClients, totalTTC, totalPaye, detteTotale };
   }, [clientsEnrichis]);
 
-  const handleAdd = (data) => {
+  // ============================
+  // 🔁 CRUD connecté au backend
+  // ============================
+  const handleAdd = async (data) => {
     setSubmitting(true);
-    setClients((p) => [{ id: Date.now(), ...data }, ...p]);
-    toast("success", "Client ajouté", `${data.nom} a été ajouté avec succès.`);
-    setSubmitting(false);
-    setOpenAdd(false);
+    try {
+      const payload = {
+        nom: data.nom,
+        prenom: null,
+        entreprise: data.entreprise,
+        adresse: data.adresse,
+        numero_cni: null,
+        telephone: null,
+        type_client: "special",
+        solde: 0,
+        contact: data.contact,
+      };
+
+      const res = await axios.post("/clients", payload);
+      const c = res.data;
+
+      const newClient = {
+        id: c.id,
+        nom: c.nom || data.nom,
+        contact: c.contact || c.telephone || data.contact,
+        entreprise: c.entreprise || data.entreprise,
+        adresse: c.adresse || data.adresse,
+      };
+
+      setClients((prev) => [newClient, ...prev]);
+
+      toast(
+        "success",
+        "Client ajouté",
+        `${newClient.nom} a été ajouté avec succès.`
+      );
+      setOpenAdd(false);
+    } catch (error) {
+      console.error("Erreur création client spécial :", error);
+
+      if (error.response) {
+        const { status, data } = error.response;
+
+        if (status === 422 && data?.errors) {
+          const firstError =
+            Object.values(data.errors)[0]?.[0] ||
+            "Vérifiez les champs obligatoires.";
+          toast("error", "Impossible d'ajouter ce client spécial", firstError);
+        } else {
+          toast(
+            "error",
+            "Création impossible",
+            data?.message || "Erreur lors de la création du client."
+          );
+        }
+      } else {
+        toast(
+          "error",
+          "Erreur réseau",
+          "Impossible de contacter le serveur."
+        );
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleEdit = (data) => {
+  const handleEdit = async (data) => {
+    if (!editTarget) return;
     setSubmitting(true);
-    setClients((p) =>
-      p.map((c) => (c.id === editTarget.id ? { ...c, ...data } : c))
-    );
-    toast("success", "Client modifié", `${data.nom} a été mis à jour.`);
-    setSubmitting(false);
-    setEditTarget(null);
+
+    try {
+      const payload = {
+        nom: data.nom,
+        entreprise: data.entreprise,
+        adresse: data.adresse,
+        contact: data.contact,
+      };
+
+      await axios.put(`/clients/${editTarget.id}`, payload);
+
+      setClients((prev) =>
+        prev.map((c) =>
+          c.id === editTarget.id
+            ? {
+                ...c,
+                nom: data.nom,
+                entreprise: data.entreprise,
+                adresse: data.adresse,
+                contact: data.contact,
+              }
+            : c
+        )
+      );
+
+      toast("success", "Client modifié", `${data.nom} a été mis à jour.`);
+      setEditTarget(null);
+    } catch (error) {
+      console.error(error);
+      toast(
+        "error",
+        "Erreur",
+        "Impossible de modifier ce client spécial pour le moment."
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
     setSubmitting(true);
-    setClients((p) => p.filter((c) => c.id !== deleteTarget.id));
-    toast("success", "Client supprimé", `${deleteTarget.nom} a été supprimé.`);
-    setSubmitting(false);
-    setDeleteTarget(null);
+
+    try {
+      await axios.delete(`/clients/${deleteTarget.id}`);
+
+      setClients((prev) => prev.filter((c) => c.id !== deleteTarget.id));
+
+      toast(
+        "success",
+        "Client supprimé",
+        `${deleteTarget.nom} a été supprimé.`
+      );
+      setDeleteTarget(null);
+    } catch (error) {
+      console.error(error);
+      toast(
+        "error",
+        "Erreur",
+        "Impossible de supprimer ce client spécial pour le moment."
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const goToCommandes = (client) => {
@@ -881,9 +974,58 @@ export default function ClientsSpeciaux() {
     });
   };
 
+  // 🔄 Charge les paiements d'un client (si l'API /commandes/{id}/paiements est dispo)
+  const loadPaiementsForClient = async (clientId) => {
+    try {
+      const commandesClient = commandes.filter((c) => c.clientId === clientId);
+      if (!commandesClient.length) return;
+
+      const updated = [...commandes];
+
+      await Promise.all(
+        commandesClient.map(async (cmd) => {
+          try {
+            const res = await axios.get(`/commandes/${cmd.id}/paiements`);
+            const payload = Array.isArray(res.data?.data)
+              ? res.data.data
+              : res.data;
+
+            const paiements = (payload || []).map((p) => ({
+              id: p.id,
+              date: p.date_paiement || p.date || "",
+              montant:
+                Number(
+                  p.montant || p.montant_paye || p.montant_paiement || 0
+                ) || 0,
+              mode: p.mode_paiement || p.mode || "especes",
+              commentaire: p.commentaire || "",
+            }));
+
+            const idx = updated.findIndex((c) => c.id === cmd.id);
+            if (idx !== -1) {
+              updated[idx] = { ...updated[idx], paiements };
+            }
+          } catch (e) {
+            console.error("Erreur chargement paiements commande :", e);
+          }
+        })
+      );
+
+      setCommandes(updated);
+    } catch (error) {
+      console.error("Erreur chargement paiements client :", error);
+      toast(
+        "error",
+        "Erreur",
+        "Impossible de charger les paiements de ce client."
+      );
+    }
+  };
+
   const openHistoriqueClient = (client) => {
     setHistoriqueClient(client);
     setOpenHistorique(true);
+    loadPaiementsForClient(client.id);
   };
 
   const openTrancheClient = (client) => {
@@ -891,56 +1033,83 @@ export default function ClientsSpeciaux() {
     setOpenTranche(true);
   };
 
-  const handleTrancheSubmit = (commande, tranche) => {
-    setCommandes((prev) =>
-      prev.map((c) => {
-        if (c.id !== commande.id) return c;
+  // 🔗 Enregistrement d'une nouvelle tranche côté API
+  const handleTrancheSubmit = async (commande, tranche) => {
+    try {
+      // Enregistrement côté backend
+      await axios.post(`/commandes/${commande.id}/paiements`, {
+        montant: tranche.montant,
+        mode_paiement: tranche.mode,
+        date_paiement: tranche.date,
+        commentaire: tranche.commentaire || "",
+      });
 
-        const total = c.totalTTC || 0;
-        const ancienPaye = c.montantPaye || 0;
-        const nouveauPaye = ancienPaye + tranche.montant;
-        const montantPayeClampe = Math.min(nouveauPaye, total);
-        const reste = Math.max(total - montantPayeClampe, 0);
+      // Mise à jour optimiste du state local
+      setCommandes((prev) =>
+        prev.map((c) => {
+          if (c.id !== commande.id) return c;
 
-        const nouveauPaiement = {
-          id: Date.now(),
-          date: tranche.date,
-          montant: tranche.montant,
-          mode: tranche.mode,
-          commentaire: tranche.commentaire || "",
-        };
+          const total = c.totalTTC || 0;
+          const ancienPaye = c.montantPaye || 0;
+          const nouveauPaye = ancienPaye + tranche.montant;
+          const montantPayeClampe = Math.min(nouveauPaye, total);
+          const reste = Math.max(total - montantPayeClampe, 0);
 
-        let statut = c.statut;
-        let statutLabel = c.statutLabel;
-        if (reste === 0) {
-          statut = "soldee";
-          statutLabel = "Soldée";
-        } else {
-          statut = "partiellement_payee";
-          statutLabel = "Partiellement payée";
-        }
+          const nouveauPaiement = {
+            id: Date.now(),
+            date: tranche.date,
+            montant: tranche.montant,
+            mode: tranche.mode,
+            commentaire: tranche.commentaire || "",
+          };
 
-        return {
-          ...c,
-          montantPaye: montantPayeClampe,
-          resteAPayer: reste,
-          statut,
-          statutLabel,
-          paiements: [...(c.paiements || []), nouveauPaiement],
-        };
-      })
-    );
+          let statut = c.statut;
+          let statutLabel = c.statutLabel;
+          if (reste === 0) {
+            statut = "soldee";
+            statutLabel = "Soldée";
+          } else {
+            statut = "partiellement_payee";
+            statutLabel = "Partiellement payée";
+          }
 
-    toast(
-      "success",
-      "Tranche envoyée à la caisse",
-      `${trancheClient?.nom || commande.clientNom} — ${formatFCFA(
-        tranche.montant
-      )}`
-    );
+          return {
+            ...c,
+            montantPaye: montantPayeClampe,
+            resteAPayer: reste,
+            statut,
+            statutLabel,
+            paiements: [...(c.paiements || []), nouveauPaiement],
+          };
+        })
+      );
 
-    setOpenTranche(false);
-    setTrancheClient(null);
+      toast(
+        "success",
+        "Tranche envoyée à la caisse",
+        `${trancheClient?.nom || commande.clientNom} — ${formatFCFA(
+          tranche.montant
+        )}`
+      );
+
+      setOpenTranche(false);
+      setTrancheClient(null);
+    } catch (error) {
+      console.error("Erreur enregistrement tranche :", error);
+
+      if (error.response?.status === 422 && error.response.data?.errors) {
+        const firstError =
+          Object.values(error.response.data.errors)[0]?.[0] ||
+          "Vérifiez les informations de la tranche.";
+        toast("error", "Tranche refusée", firstError);
+      } else {
+        toast(
+          "error",
+          "Erreur",
+          "Impossible d'enregistrer cette tranche pour le moment."
+        );
+      }
+    }
   };
 
   const exportPDF = () => {
@@ -986,9 +1155,9 @@ export default function ClientsSpeciaux() {
     return clientsEnrichis.filter(
       (c) =>
         c.nom.toLowerCase().includes(q) ||
-        c.contact.toLowerCase().includes(q) ||
-        c.entreprise.toLowerCase().includes(q) ||
-        c.adresse.toLowerCase().includes(q)
+        (c.contact || "").toLowerCase().includes(q) ||
+        (c.entreprise || "").toLowerCase().includes(q) ||
+        (c.adresse || "").toLowerCase().includes(q)
     );
   }, [clientsEnrichis, searchTerm]);
 
@@ -1040,7 +1209,6 @@ export default function ClientsSpeciaux() {
             </div>
 
             <div className="flex flex-wrap gap-2 justify-start sm:justify-end">
-
               <button
                 onClick={() => setOpenAdd(true)}
                 className="flex items-center gap-2 px-4 py-2.5 bg-[#472EAD] text-white rounded-lg shadow-md hover:bg-[#5A3CF5] hover:shadow-lg text-xs sm:text-sm transition"
@@ -1048,6 +1216,8 @@ export default function ClientsSpeciaux() {
                 <UserPlus size={16} />
                 Nouveau client
               </button>
+
+
             </div>
           </motion.header>
 
@@ -1057,39 +1227,55 @@ export default function ClientsSpeciaux() {
             animate={{ opacity: 1, y: 0 }}
             className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3"
           >
-            <div className="rounded-xl border bg-amber-50 border border-amber-200 px-3 py-2.5">
-              <div className="text-[15px] text-rose-700 mb-0.5">
+            {/* Clients spéciaux (or / gold) */}
+            <div className="rounded-xl border border-yellow-400 bg-gradient-to-br from-yellow-50 via-amber-50 to-yellow-100 px-3 py-2.5 shadow-sm">
+              <div className="text-[15px] font-semibold text-yellow-800 mb-0.5">
                 Clients spéciaux
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-lg font-bold text-rose-700">
+                <span className="text-lg font-extrabold text-yellow-700">
                   {statsGlobales.nbClients}
                 </span>
-                <BadgeDollarSign className="w-5 h-5 text-rose-700" />
+                <BadgeDollarSign className="w-5 h-5 text-yellow-600" />
               </div>
             </div>
+
+            {/* Total TTC commandes */}
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
               <div className="text-[15px] text-gray-500 mb-0.5">
                 Total TTC commandes
               </div>
-              <div className="text-xs sm:text-sm font-semibold text-emerald-700 truncate">
-                {formatFCFA(statsGlobales.totalTTC)}
+              <div className="flex items-center justify-between">
+                <span className="text-xs sm:text-sm font-semibold text-emerald-700 truncate">
+                  {formatFCFA(statsGlobales.totalTTC)}
+                </span>
+                <ShoppingCart className="w-5 h-5 text-emerald-600" />
               </div>
             </div>
+
+            {/* Total payé */}
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
               <div className="text-[15px] text-gray-500 mb-0.5">
                 Total payé
               </div>
-              <div className="text-xs sm:text-sm font-semibold text-emerald-700 truncate">
-                {formatFCFA(statsGlobales.totalPaye)}
+              <div className="flex items-center justify-between">
+                <span className="text-xs sm:text-sm font-semibold text-emerald-700 truncate">
+                  {formatFCFA(statsGlobales.totalPaye)}
+                </span>
+                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
               </div>
             </div>
+
+            {/* Dette globale */}
             <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5">
               <div className="text-[15px] text-gray-500 mb-0.5">
                 Dette globale
               </div>
-              <div className="text-xs sm:text-sm font-semibold text-rose-700 truncate">
-                {formatFCFA(statsGlobales.detteTotale)}
+              <div className="flex items-center justify-between">
+                <span className="text-xs sm:text-sm font-semibold text-rose-700 truncate">
+                  {formatFCFA(statsGlobales.detteTotale)}
+                </span>
+                <AlertCircle className="w-5 h-5 text-rose-600" />
               </div>
             </div>
           </motion.div>

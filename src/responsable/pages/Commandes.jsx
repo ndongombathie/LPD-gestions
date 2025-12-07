@@ -1,12 +1,6 @@
 // ==========================================================
 // 🛒 Commandes.jsx — Interface Responsable (LPD Manager)
-// Commandes Clients Spéciaux → Envoi à la Caisse
-// - Prix libres (même sous le seuil)
-// - Calcul automatique HT / TVA / TTC (18% ou 0%)
-// - Multi-lignes produits
-// - Sélection Clients / Produits via Modal de recherche (Option B)
-// - Statuts : en attente caisse / partiellement payée / soldée / annulée
-// - Export PDF
+// Branché sur l’API Laravel (clients, produits, commandes)
 // ==========================================================
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -27,6 +21,7 @@ import {
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 import { useLocation } from "react-router-dom";
+import { instance as axios } from "../../utils/axios.jsx";
 
 // === Utils ===
 const formatFCFA = (n) =>
@@ -339,23 +334,14 @@ function FactureModal({ open, onClose, commande }) {
   );
 }
 
-// ==========================================================
-// 🧩 Formulaire Commande (multi-lignes produits + recherche modal)
-// ==========================================================
+// ======================================================================
+// 🧩 Formulaire Commande (multi-lignes produits + branché sur API refs)
+// ======================================================================
 function CommandeForm({ clientInitial, onCreate, toast }) {
-  // Clients simulés pour l’instant (mêmes IDs que ClientsSpeciaux)
-  const [clients] = useState([
-    { id: 1, nom: "DIOP Mamadou", code: "CL-DIOP-001" },
-    { id: 2, nom: "SOW Aissatou", code: "CL-SOW-002" },
-    { id: 3, nom: "NDIAYE Cheikh", code: "CL-NDI-003" },
-  ]);
-
-  // Produits simulés (pour l’instant en front)
-  const [catalogue] = useState([
-    { id: 101, ref: "LPD-CAR-001", libelle: "Carton cahiers 200p", prix: 1500 },
-    { id: 102, ref: "LPD-STY-010", libelle: "Lot stylos premium", prix: 500 },
-    { id: 103, ref: "LPD-CLS-025", libelle: "Classeur archives A4", prix: 2000 },
-  ]);
+  // Clients spéciaux & catalogue produits depuis l’API
+  const [clients, setClients] = useState([]);
+  const [catalogue, setCatalogue] = useState([]);
+  const [loadingRefs, setLoadingRefs] = useState(true);
 
   const [clientId, setClientId] = useState(clientInitial || "");
   const [dateCommande] = useState(todayISO());
@@ -375,6 +361,59 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
 
   // Lignes de la commande
   const [lignes, setLignes] = useState([]);
+
+  // 🔗 Charger clients spéciaux + produits
+  useEffect(() => {
+    const loadRefs = async () => {
+      try {
+        setLoadingRefs(true);
+
+        const [clientsRes, produitsRes] = await Promise.all([
+          axios.get("/clients", { params: { type_client: "special" } }),
+          axios.get("/produits"),
+        ]);
+
+        const clientsPayload = Array.isArray(clientsRes.data?.data)
+          ? clientsRes.data.data
+          : clientsRes.data;
+
+        const produitsPayload = Array.isArray(produitsRes.data?.data)
+          ? produitsRes.data.data
+          : produitsRes.data;
+
+        const normalizedClients = (clientsPayload || []).map((c) => ({
+          id: c.id,
+          nom: c.nom || c.razon_social || "",
+          code:
+            c.code_client ||
+            c.code ||
+            (c.id ? `CL-${String(c.id).padStart(3, "0")}` : ""),
+        }));
+
+        const normalizedProduits = (produitsPayload || []).map((p) => ({
+          id: p.id,
+          ref: p.code_produit || p.reference || p.ref || null,
+          libelle: p.nom_produit || p.libelle || p.designation || "",
+          prix: Number(p.prix_unitaire || p.prix || 0),
+        }));
+
+        setClients(normalizedClients);
+        setCatalogue(normalizedProduits);
+      } catch (error) {
+        console.error("Erreur chargement références:", error);
+        toast(
+          "error",
+          "Erreur de chargement",
+          "Impossible de charger les clients ou les produits."
+        );
+      } finally {
+        setLoadingRefs(false);
+      }
+    };
+
+    loadRefs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const clientActuel = useMemo(
     () => clients.find((c) => String(c.id) === String(clientId)) || null,
@@ -480,6 +519,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
     const tauxTVA = applyTVA ? 0.18 : 0;
 
     const commande = {
+      // id & numero seront redéfinis par le backend ; ceux-ci sont provisoires
       id: Date.now(),
       numero: `CMD-${new Date().getFullYear()}-${Math.floor(
         Math.random() * 9000 + 1000
@@ -494,16 +534,14 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
       totalTTC,
       tauxTVA,
       appliquerTVA: applyTVA,
-      // Côté caisse : suivra les paiements réels (par tranches)
-      paiements: [], // à remplir côté caisse
+      paiements: [],
       montantPaye: 0,
       resteAPayer: totalTTC,
       statut: "en_attente_caisse",
-      statutLabel: "En attente Caisse",
+      statutLabel: "En attente caisse",
     };
 
     onCreate(commande);
-    // reset
     setLignes([]);
   };
 
@@ -542,9 +580,12 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
                   ? "border-gray-300"
                   : "border-dashed border-gray-300 bg-gray-50 text-gray-500"
               )}
+              disabled={loadingRefs}
             >
               <span>
-                {clientActuel
+                {loadingRefs
+                  ? "Chargement des clients..."
+                  : clientActuel
                   ? clientActuel.nom
                   : "Rechercher un client spécial..."}
               </span>
@@ -581,10 +622,13 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
                     ? "border-gray-300"
                     : "border-dashed border-gray-300 bg-gray-50 text-gray-500"
                 )}
+                disabled={loadingRefs}
               >
                 <span>
-                  {ligneLibelle ||
-                    "Rechercher un produit dans le catalogue..."}
+                  {loadingRefs
+                    ? "Chargement du catalogue..."
+                    : ligneLibelle ||
+                      "Rechercher un produit dans le catalogue..."}
                 </span>
                 <Search className="w-4 h-4 text-gray-400" />
               </button>
@@ -773,10 +817,95 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
         items={catalogue}
         onSelect={handleSelectProduitFromModal}
         getLabel={(p) => p.libelle}
-        getSubLabel={(p) => `${p.ref} • ${formatFCFA(p.prix)}`}
+        getSubLabel={(p) => `${p.ref || "—"} • ${formatFCFA(p.prix)}`}
       />
     </>
   );
+}
+
+// ======================================================================
+// 🔧 Helper : normaliser une commande provenant du backend
+// ======================================================================
+function normalizeCommande(cmd) {
+  const client = cmd.client || cmd.client_special || {};
+
+  const lignesSource =
+    cmd.lignes || cmd.ligne_commandes || cmd.details || cmd.items || [];
+
+  const lignes = (lignesSource || []).map((l) => {
+    const qte = Number(l.quantite || l.qte || 0);
+    const pu = Number(l.prix_unitaire || l.prix || 0);
+    const totalHT =
+      Number(l.total_ht || l.totalHT || (qte && pu ? qte * pu : 0));
+    const totalTTC = Number(
+      l.total_ttc || l.totalTTC || totalHT * 1.18 || 0
+    );
+
+    return {
+      id: l.id,
+      produitId: l.produit_id || l.produitId || null,
+      libelle: l.libelle || l.nom_produit || l.designation || "",
+      ref: l.ref || l.code_produit || l.reference || null,
+      qte,
+      prixUnitaire: pu,
+      totalHT,
+      totalTTC,
+    };
+  });
+
+  const totalHT = Number(cmd.total_ht || cmd.totalHT || 0);
+  const totalTTC = Number(
+    cmd.total_ttc || cmd.totalTTC || cmd.montant_total || 0
+  );
+  const totalTVA = Number(
+    cmd.total_tva || cmd.totalTVA || (totalTTC - totalHT)
+  );
+
+  const montantPaye = Number(
+    cmd.montant_paye || cmd.montantPaye || cmd.total_paye || 0
+  );
+  const resteAPayer = Number(
+    cmd.reste_a_payer || cmd.resteAPayer || totalTTC - montantPaye
+  );
+
+  const statut = cmd.statut || "en_attente_caisse";
+  const statutLabelMap = {
+    en_attente_caisse: "En attente caisse",
+    partiellement_payee: "Partiellement payée",
+    soldee: "Soldée",
+    annulee: "Annulée",
+  };
+  const statutLabel =
+    cmd.statut_label || cmd.statutLabel || statutLabelMap[statut] || statut;
+
+  return {
+    id: cmd.id,
+    numero: cmd.numero || cmd.reference || cmd.code || `CMD-${cmd.id}`,
+    clientId: cmd.client_id || cmd.clientId || client.id || null,
+    clientNom: client.nom || client.raison_sociale || cmd.client_nom || "",
+    clientCode:
+      client.code_client || client.code || cmd.client_code || undefined,
+    dateCommande:
+      cmd.date_commande ||
+      cmd.dateCommande ||
+      (cmd.created_at ? String(cmd.created_at).slice(0, 10) : todayISO()),
+    lignes,
+    totalHT,
+    totalTVA,
+    totalTTC,
+    tauxTVA: totalHT ? totalTVA / totalHT : 0.18,
+    paiements: (cmd.paiements || []).map((p) => ({
+      id: p.id,
+      date: p.date_paiement || p.date || null,
+      montant: Number(p.montant || p.montant_paye || 0),
+      mode: p.mode_paiement || p.mode || "",
+      commentaire: p.commentaire || "",
+    })),
+    montantPaye,
+    resteAPayer,
+    statut,
+    statutLabel,
+  };
 }
 
 // ==========================================================
@@ -794,7 +923,7 @@ export default function Commandes() {
   const [toasts, setToasts] = useState([]);
   const [selectedCommande, setSelectedCommande] = useState(null);
   const [openFacture, setOpenFacture] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState(false);
 
   const toast = (type, title, message) => {
     const id = Date.now();
@@ -803,70 +932,35 @@ export default function Commandes() {
   };
   const removeToast = (id) => setToasts((t) => t.filter((x) => x.id !== id));
 
-  // Simulation initiale de commandes (quand la caisse aura encaissé)
+  // ======================================================
+  // 🔗 Chargement des commandes depuis le backend
+  // ======================================================
   useEffect(() => {
-    const simulated = [
-      {
-        id: 1,
-        numero: "CMD-2025-1001",
-        clientId: 1,
-        clientNom: "DIOP Mamadou",
-        clientCode: "CL-DIOP-001",
-        dateCommande: "2025-11-03",
-        lignes: [
-          {
-            id: 11,
-            libelle: "Carton cahiers 200p",
-            ref: "LPD-CAR-001",
-            qte: 20,
-            prixUnitaire: 1200,
-            totalHT: 24000,
-            totalTTC: 24000 * 1.18,
-          },
-        ],
-        totalHT: 24000,
-        totalTVA: 24000 * 0.18,
-        totalTTC: 24000 * 1.18,
-        tauxTVA: 0.18,
-        paiements: [],
-        montantPaye: 30000,
-        resteAPayer: 24000 * 1.18 - 30000,
-        statut: "partiellement_payee",
-        statutLabel: "Partiellement payée",
-      },
-      {
-        id: 2,
-        numero: "CMD-2025-1002",
-        clientId: 2,
-        clientNom: "SOW Aissatou",
-        clientCode: "CL-SOW-002",
-        dateCommande: "2025-11-02",
-        lignes: [
-          {
-            id: 21,
-            libelle: "Lot stylos premium",
-            ref: "LPD-STY-010",
-            qte: 50,
-            prixUnitaire: 400,
-            totalHT: 20000,
-            totalTTC: 20000 * 1.18,
-          },
-        ],
-        totalHT: 20000,
-        totalTVA: 20000 * 0.18,
-        totalTTC: 20000 * 1.18,
-        tauxTVA: 0.18,
-        paiements: [],
-        montantPaye: 20000 * 1.18,
-        resteAPayer: 0,
-        statut: "soldee",
-        statutLabel: "Soldée",
-      },
-    ];
-    setTimeout(() => {
-      setCommandes(simulated);
-      setLoading(false);
-    }, 500);
+    const fetchCommandes = async () => {
+      try {
+        setLoading(true);
+
+        const res = await axios.get("/commandes");
+        const payload = Array.isArray(res.data?.data)
+          ? res.data.data
+          : res.data;
+
+        const normalized = (payload || []).map(normalizeCommande);
+        setCommandes(normalized);
+      } catch (error) {
+        console.error("Erreur chargement commandes :", error);
+        toast(
+          "error",
+          "Erreur de chargement",
+          "Impossible de charger les commandes clients spéciaux."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCommandes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Stats globales
@@ -881,14 +975,57 @@ export default function Commandes() {
     return { nbCommandes: nb, totalTTC, totalPaye, detteTotale };
   }, [commandes]);
 
-  // Quand le Responsable crée une commande
-  const handleCreateCommande = (commande) => {
-    setCommandes((prev) => [commande, ...prev]);
-    toast(
-      "success",
-      "Commande envoyée à la caisse",
-      `${commande.clientNom} — ${formatFCFA(commande.totalTTC)}`
-    );
+  // Quand le Responsable crée une commande (formulaire)
+  const handleCreateCommande = async (commandeDraft) => {
+    try {
+      // Payload pour ton API Laravel
+      const payload = {
+        client_id: commandeDraft.clientId,
+        date_commande: commandeDraft.dateCommande,
+        total_ht: commandeDraft.totalHT,
+        total_tva: commandeDraft.totalTVA,
+        total_ttc: commandeDraft.totalTTC,
+        appliquer_tva: commandeDraft.appliquerTVA ? 1 : 0,
+        statut: "en_attente_caisse",
+        lignes: commandeDraft.lignes.map((l) => ({
+          produit_id: l.produitId,
+          libelle: l.libelle,
+          quantite: l.qte,
+          prix_unitaire: l.prixUnitaire,
+          total_ht: l.totalHT,
+          total_ttc: l.totalTTC,
+        })),
+      };
+
+      const res = await axios.post("/commandes", payload);
+      const raw = Array.isArray(res.data?.data) ? res.data.data : res.data;
+
+      const normalized =
+        raw && !Array.isArray(raw) ? normalizeCommande(raw) : commandeDraft;
+
+      setCommandes((prev) => [normalized, ...prev]);
+
+      toast(
+        "success",
+        "Commande envoyée à la caisse",
+        `${normalized.clientNom} — ${formatFCFA(normalized.totalTTC)}`
+      );
+    } catch (error) {
+      console.error("Erreur création commande :", error);
+      if (error.response?.status === 422 && error.response.data?.errors) {
+        const firstError =
+          Object.values(error.response.data.errors)[0]?.[0] ||
+          "Vérifiez les champs obligatoires.";
+        toast("error", "Création impossible", firstError);
+      } else {
+        toast(
+          "error",
+          "Erreur",
+          error.response?.data?.message ||
+            "Impossible de créer cette commande pour le moment."
+        );
+      }
+    }
   };
 
   const badgeStatut = (statut) => {
@@ -906,8 +1043,7 @@ export default function Commandes() {
     }
   };
 
-  const handleAnnuler = (commande) => {
-    // Ici, côté backend, on vérifiera l'état des paiements avant d'autoriser
+  const handleAnnuler = async (commande) => {
     if (commande.montantPaye > 0) {
       toast(
         "error",
@@ -917,18 +1053,30 @@ export default function Commandes() {
       return;
     }
 
-    setCommandes((prev) =>
-      prev.map((c) =>
-        c.id === commande.id
-          ? { ...c, statut: "annulee", statutLabel: "Annulée" }
-          : c
-      )
-    );
-    toast(
-      "success",
-      "Commande annulée",
-      `Commande #${commande.numero} pour ${commande.clientNom}`
-    );
+    try {
+      await axios.post(`/commandes/${commande.id}/annuler`);
+
+      setCommandes((prev) =>
+        prev.map((c) =>
+          c.id === commande.id
+            ? { ...c, statut: "annulee", statutLabel: "Annulée" }
+            : c
+        )
+      );
+
+      toast(
+        "success",
+        "Commande annulée",
+        `Commande #${commande.numero} pour ${commande.clientNom}`
+      );
+    } catch (error) {
+      console.error("Erreur annulation commande :", error);
+      toast(
+        "error",
+        "Erreur",
+        "Impossible d'annuler cette commande pour le moment."
+      );
+    }
   };
 
   const exportPDF = () => {
@@ -964,7 +1112,7 @@ export default function Commandes() {
       list = list.filter((c) => c.clientNom === clientNameFromState);
     }
 
-    const q = searchTerm.toLowerCase();
+    const q = (searchTerm || "").toLowerCase();
     if (q) {
       list = list.filter(
         (c) =>
@@ -1025,7 +1173,15 @@ export default function Commandes() {
               </p>
             </div>
 
-
+            <div className="flex flex-wrap gap-2 justify-start sm:justify-end">
+              <button
+                onClick={exportPDF}
+                className="flex items-center gap-2 px-3 py-2 text-xs sm:text-sm rounded-lg border border-[#E4E0FF] bg-white hover:bg-[#F7F5FF] text-[#472EAD]"
+              >
+                <FileDown size={16} />
+                Export PDF
+              </button>
+            </div>
           </motion.header>
 
           {/* CARTES STATS GLOBALES */}
@@ -1034,7 +1190,7 @@ export default function Commandes() {
             animate={{ opacity: 1, y: 0 }}
             className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3"
           >
-            <div className="rounded-xl border  bg-amber-50 border border-amber-200 px-3 py-2.5">
+            <div className="rounded-xl border bg-amber-50 border border-amber-200 px-3 py-2.5">
               <div className="text-[15px] text-rose-700 mb-0.5">
                 Nombre de commandes
               </div>
@@ -1083,7 +1239,7 @@ export default function Commandes() {
               <input
                 type="text"
                 placeholder="Rechercher une commande par numéro, client ou statut..."
-                value={searchTerm}
+                value={searchTerm || ""}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-xl text-sm bg-white shadow-sm focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD] placeholder:text-gray-400"
               />

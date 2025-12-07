@@ -1,6 +1,6 @@
 // ==========================================================
 // 🚚 Fournisseurs.jsx — Interface Responsable (LPD Manager)
-// Version PRO harmonisée + fiche fournisseur en slide-over
+// Version PRO harmonisée + API Laravel (/api/fournisseurs)
 // ==========================================================
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import FormModal from "../components/FormModal.jsx";
 import DataTable from "../components/DataTable.jsx";
+import { instance } from "../../utils/axios"; // 🔗 Axios connecté à Laravel
 
 const cls = (...a) => a.filter(Boolean).join(" ");
 
@@ -119,7 +120,6 @@ function FournisseurForm({ initial, onSubmit, onCancel, submitting }) {
     if (validate()) onSubmit(form);
   };
 
-  // ✅ Bordures renforcées et bien visibles
   const base = (err) =>
     `mt-1 w-full rounded-xl border px-3 py-2.5 text-sm bg-white focus:ring-2 transition shadow-sm ${
       err
@@ -264,45 +264,47 @@ export default function Fournisseurs() {
   const [toasts, setToasts] = useState([]);
   const [selectedFournisseur, setSelectedFournisseur] = useState(null);
 
+  const removeToast = (id) =>
+    setToasts((t) => t.filter((x) => x.id !== id));
+
   const toast = (type, title, message) => {
     const id = Date.now();
     setToasts((t) => [...t, { id, type, title, message }]);
     setTimeout(() => removeToast(id), 4000);
   };
-  const removeToast = (id) =>
-    setToasts((t) => t.filter((x) => x.id !== id));
 
+  // 🔗 Chargement depuis l'API Laravel
   useEffect(() => {
-    const simulated = [
-      {
-        id: 1,
-        nom: "SEN DISTRIBUTION",
-        contact: "774567890",
-        adresse: "Dakar Plateau",
-        typeProduit: "Papeterie & Scolaire",
-        derniereLivraison: "2025-10-12",
-      },
-      {
-        id: 2,
-        nom: "Imprisol SARL",
-        contact: "789876543",
-        adresse: "Thiès",
-        typeProduit: "Imprimés & Papier A4",
-        derniereLivraison: "",
-      },
-      {
-        id: 3,
-        nom: "Fournil Office",
-        contact: "761234567",
-        adresse: "Mbour",
-        typeProduit: "Stylos et Marqueurs",
-        derniereLivraison: "2025-09-22",
-      },
-    ];
-    setTimeout(() => {
-      setFournisseurs(simulated);
-      setLoading(false);
-    }, 600);
+    const fetchFournisseurs = async () => {
+      try {
+        setLoading(true);
+        const { data } = await instance.get("/fournisseurs");
+        const raw = Array.isArray(data) ? data : data.data || [];
+
+        const normalized = raw.map((f) => ({
+          id: f.id,
+          nom: f.nom || "",
+          contact: f.contact || "",
+          adresse: f.adresse || "",
+          typeProduit: f.type_produit || "",
+          derniereLivraison: f.derniere_livraison || "",
+          totalAchats: f.total_achats ?? 0,
+        }));
+
+        setFournisseurs(normalized);
+      } catch (err) {
+        console.error("Erreur chargement fournisseurs :", err);
+        toast(
+          "error",
+          "Erreur",
+          "Impossible de charger la liste des fournisseurs."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchFournisseurs();
   }, []);
 
   // Stats rapides
@@ -317,51 +319,142 @@ export default function Fournisseurs() {
   // Filtre recherche
   const filtered = useMemo(() => {
     const q = searchTerm.toLowerCase();
-    return fournisseurs.filter(
-      (f) =>
-        f.nom.toLowerCase().includes(q) ||
-        f.contact.toLowerCase().includes(q) ||
-        f.adresse.toLowerCase().includes(q) ||
-        f.typeProduit.toLowerCase().includes(q)
-    );
+    return fournisseurs.filter((f) => {
+      const nom = (f.nom || "").toLowerCase();
+      const contact = String(f.contact || "").toLowerCase();
+      const adresse = (f.adresse || "").toLowerCase();
+      const typeProd = (f.typeProduit || "").toLowerCase();
+      return (
+        nom.includes(q) ||
+        contact.includes(q) ||
+        adresse.includes(q) ||
+        typeProd.includes(q)
+      );
+    });
   }, [fournisseurs, searchTerm]);
 
-  const handleAdd = (form) => {
-    setSubmitting(true);
-    setFournisseurs((p) => [{ id: Date.now(), ...form }, ...p]);
-    toast(
-      "success",
-      "Fournisseur ajouté",
-      `${form.nom} a été ajouté avec succès.`
-    );
-    setSubmitting(false);
-    setOpenAdd(false);
+  // ➕ Ajout (POST /api/fournisseurs)
+  const handleAdd = async (form) => {
+    try {
+      setSubmitting(true);
+
+      const payload = {
+        nom: form.nom,
+        contact: form.contact,
+        adresse: form.adresse,
+        type_produit: form.typeProduit,
+        derniere_livraison: form.derniereLivraison || null,
+      };
+
+      const { data } = await instance.post("/fournisseurs", payload);
+
+      const newF = {
+        id: data.id,
+        nom: data.nom || "",
+        contact: data.contact || "",
+        adresse: data.adresse || "",
+        typeProduit: data.type_produit || "",
+        derniereLivraison: data.derniere_livraison || "",
+        totalAchats: data.total_achats ?? 0,
+      };
+
+      setFournisseurs((prev) => [newF, ...prev]);
+      toast(
+        "success",
+        "Fournisseur ajouté",
+        `${newF.nom} a été ajouté avec succès.`
+      );
+      setOpenAdd(false);
+    } catch (err) {
+      console.error("Erreur ajout fournisseur :", err);
+      toast(
+        "error",
+        "Erreur",
+        "Impossible d’ajouter le fournisseur."
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleEdit = (form) => {
-    setSubmitting(true);
-    setFournisseurs((p) =>
-      p.map((f) => (f.id === editTarget.id ? { ...f, ...form } : f))
-    );
-    toast(
-      "success",
-      "Fournisseur modifié",
-      `${form.nom} a été mis à jour.`
-    );
-    setSubmitting(false);
-    setEditTarget(null);
+  // ✏️ Modification (PUT /api/fournisseurs/{id})
+  const handleEdit = async (form) => {
+    if (!editTarget) return;
+    try {
+      setSubmitting(true);
+
+      const payload = {
+        nom: form.nom,
+        contact: form.contact,
+        adresse: form.adresse,
+        type_produit: form.typeProduit,
+        derniere_livraison: form.derniereLivraison || null,
+      };
+
+      const { data } = await instance.put(
+        `/fournisseurs/${editTarget.id}`,
+        payload
+      );
+
+      const updated = {
+        id: data.id,
+        nom: data.nom || "",
+        contact: data.contact || "",
+        adresse: data.adresse || "",
+        typeProduit: data.type_produit || "",
+        derniereLivraison: data.derniere_livraison || "",
+        totalAchats: data.total_achats ?? editTarget.totalAchats ?? 0,
+      };
+
+      setFournisseurs((prev) =>
+        prev.map((f) => (f.id === editTarget.id ? updated : f))
+      );
+
+      toast(
+        "success",
+        "Fournisseur modifié",
+        `${updated.nom} a été mis à jour.`
+      );
+      setEditTarget(null);
+    } catch (err) {
+      console.error("Erreur modification fournisseur :", err);
+      toast(
+        "error",
+        "Erreur",
+        "Impossible de modifier le fournisseur."
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleDelete = () => {
-    setSubmitting(true);
-    setFournisseurs((p) => p.filter((f) => f.id !== deleteTarget.id));
-    toast(
-      "success",
-      "Fournisseur supprimé",
-      `${deleteTarget.nom} a été supprimé.`
-    );
-    setSubmitting(false);
-    setDeleteTarget(null);
+  // 🗑️ Suppression (DELETE /api/fournisseurs/{id})
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      setSubmitting(true);
+      await instance.delete(`/fournisseurs/${deleteTarget.id}`);
+
+      setFournisseurs((prev) =>
+        prev.filter((f) => f.id !== deleteTarget.id)
+      );
+
+      toast(
+        "success",
+        "Fournisseur supprimé",
+        `${deleteTarget.nom} a été supprimé.`
+      );
+      setDeleteTarget(null);
+    } catch (err) {
+      console.error("Erreur suppression fournisseur :", err);
+      toast(
+        "error",
+        "Erreur",
+        "Impossible de supprimer le fournisseur."
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   // Loader harmonisé
@@ -400,8 +493,8 @@ export default function Fournisseurs() {
                   Gestion des fournisseurs
                 </h1>
                 <p className="mt-1 text-sm text-gray-500">
-                  Suivi des partenaires d’approvisionnement : ajout, modification
-                  et suppression des fournisseurs.
+                  Suivi des partenaires d’approvisionnement : ajout,
+                  modification et suppression des fournisseurs.
                 </p>
               </div>
               <p className="text-[11px] text-gray-400">
@@ -474,7 +567,13 @@ export default function Fournisseurs() {
               ]}
               data={filtered}
               actions={[
-
+                {
+                  title: "Voir la fiche",
+                  icon: <Eye size={16} />,
+                  color: "text-sky-600",
+                  hoverBg: "bg-sky-50",
+                  onClick: (row) => setSelectedFournisseur(row),
+                },
                 {
                   title: "Modifier",
                   icon: <Edit2 size={16} />,

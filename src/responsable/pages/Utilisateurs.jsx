@@ -1,7 +1,7 @@
 // ========================================================== 
 // 👥 Utilisateurs.jsx — Interface Responsable (LPD Manager)
 // Version Responsable = CONSULTATION SEULEMENT (lecture seule)
-// Style harmonisé avec le module Décaissements / Fournisseurs
+// Connecté à l'API Laravel (/api/users) + Présence
 // ==========================================================
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -18,8 +18,24 @@ import {
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 import DataTable from "../components/DataTable.jsx";
+import { instance } from "../../utils/axios"; // ✅
 
-const ROLES = ["Vendeur", "Caissier", "Gestionnaire Dépôt", "Gestionnaire Boutique"];
+const ROLES = [
+  "Vendeur",
+  "Caissier",
+  "Gestionnaire Dépôt",
+  "Gestionnaire Boutique",
+  "Responsable",
+];
+
+const ROLE_LABELS = {
+  vendeur: "Vendeur",
+  caissier: "Caissier",
+  gestionnaire_depot: "Gestionnaire Dépôt",
+  gestionnaire_boutique: "Gestionnaire Boutique",
+  responsable: "Responsable",
+};
+
 const cls = (...a) => a.filter(Boolean).join(" ");
 
 // ————————————————————————————————————————————————
@@ -71,7 +87,7 @@ function Toasts({ toasts, remove }) {
 }
 
 // ————————————————————————————————————————————————
-// ✅ Page principale (lecture seule)
+// ✅ Page principale (lecture seule, API réelle)
 // ————————————————————————————————————————————————
 export default function Utilisateurs() {
   const [users, setUsers] = useState([]);
@@ -80,62 +96,102 @@ export default function Utilisateurs() {
   const [filterRole, setFilterRole] = useState("Tous");
   const [toasts, setToasts] = useState([]);
 
+  const removeToast = (id) =>
+    setToasts((t) => t.filter((x) => x.id !== id));
+
   const toast = (type, title, message) => {
     const id = Date.now();
     setToasts((t) => [...t, { id, type, title, message }]);
     setTimeout(() => removeToast(id), 4000);
   };
-  const removeToast = (id) =>
-    setToasts((t) => t.filter((x) => x.id !== id));
 
-  // Simulation initiale (à remplacer plus tard par GET /api/users)
+  // ————————————————————————————————————————————————
+  // 🔗 Chargement des vrais utilisateurs depuis l'API
+  // GET /api/users (protégé Sanctum + role:responsable)
+  // ————————————————————————————————————————————————
   useEffect(() => {
-    const simulated = [
-      {
-        id: 1,
-        prenom: "Aïcha",
-        nom: "Fall",
-        email: "aicha@lpd.com",
-        tel: "771234567",
-        adresse: "Thiaroye",
-        cni: "1234567890123",
-        role: "Vendeur",
-        isOnline: true,
-      },
-      {
-        id: 2,
-        prenom: "Moussa",
-        nom: "Diop",
-        email: "moussa@lpd.com",
-        tel: "774561234",
-        adresse: "Colobane",
-        cni: "2345678901234",
-        role: "Caissier",
-        isOnline: false,
-      },
-    ];
-    setTimeout(() => {
-      setUsers(simulated);
-      setLoading(false);
-    }, 400);
+    const fetchUsers = async () => {
+      try {
+        setLoading(true);
+
+        const { data } = await instance.get("/users");
+
+        // data peut être un tableau brut OU data.data (Resource Laravel)
+        const rawUsers = Array.isArray(data) ? data : data.data || [];
+
+        const normalized = rawUsers.map((u) => {
+          // Présence : priorité à un booléen is_online si dispo,
+          // sinon estimation via last_login_at (ex: connecté il y a < 30 min).
+          let isOnline = false;
+
+          if (typeof u.is_online !== "undefined") {
+            isOnline = Boolean(u.is_online);
+          } else if (u.last_login_at) {
+            const last = new Date(u.last_login_at);
+            const diffMin = (Date.now() - last.getTime()) / 60000;
+            isOnline = diffMin <= 30; // 30 minutes = considéré comme "en ligne"
+          }
+
+          return {
+            id: u.id,
+            prenom: u.prenom || "",
+            nom: u.nom || "",
+            email: u.email || "",
+            tel: u.telephone || u.tel || "",
+            adresse: u.adresse || "",
+            cni: u.numero_cni || u.cni || "",
+            role: ROLE_LABELS[u.role] || u.role || "",
+            isOnline,
+          };
+        });
+
+        setUsers(normalized);
+      } catch (err) {
+        console.error("Erreur chargement utilisateurs :", err);
+        toast(
+          "error",
+          "Erreur",
+          "Impossible de charger la liste des utilisateurs."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUsers();
   }, []);
 
   // Stats rapides (pour les petits badges)
   const stats = useMemo(() => {
     const total = users.length;
     const enLigne = users.filter((u) => u.isOnline).length;
-    const vendeurs = users.filter((u) => u.role === "Vendeur").length;
-    return { total, enLigne, vendeurs };
+    const horsLigne = total - enLigne;
+
+    return { total, enLigne, horsLigne };
   }, [users]);
 
-  // Export PDF
+  // Liste filtrée (recherche + rôle)
+  const filtered = useMemo(() => {
+    const q = searchTerm.toLowerCase();
+    return users.filter(
+      (u) =>
+        (u.nom.toLowerCase().includes(q) ||
+          u.prenom.toLowerCase().includes(q) ||
+          u.email.toLowerCase().includes(q) ||
+          (u.tel || "").includes(q) ||
+          (u.adresse || "").toLowerCase().includes(q)) &&
+        (filterRole === "Tous" || u.role === filterRole)
+    );
+  }, [users, searchTerm, filterRole]);
+
+  // Export PDF (liste courante filtrée)
   const exportPDF = () => {
     const doc = new jsPDF();
     doc.text("Liste des utilisateurs — LPD Manager", 14, 16);
     doc.autoTable({
       startY: 24,
       head: [["Nom complet", "Email", "Téléphone", "Rôle", "Adresse"]],
-      body: users.map((u) => [
+      body: filtered.map((u) => [
         `${u.prenom} ${u.nom}`,
         u.email,
         u.tel,
@@ -150,19 +206,6 @@ export default function Utilisateurs() {
     );
     toast("success", "Export PDF", "Fichier téléchargé avec succès.");
   };
-
-  const filtered = useMemo(() => {
-    const q = searchTerm.toLowerCase();
-    return users.filter(
-      (u) =>
-        (u.nom.toLowerCase().includes(q) ||
-          u.prenom.toLowerCase().includes(q) ||
-          u.email.toLowerCase().includes(q) ||
-          u.tel.includes(q) ||
-          u.adresse.toLowerCase().includes(q)) &&
-        (filterRole === "Tous" || u.role === filterRole)
-    );
-  }, [users, searchTerm, filterRole]);
 
   // ————————————————————————————————————————————————
   // ⏳ Loader harmonisé
@@ -211,6 +254,7 @@ export default function Utilisateurs() {
             </p>
           </div>
 
+          {/* Bouton Export PDF */}
 
         </motion.header>
 
@@ -232,8 +276,8 @@ export default function Utilisateurs() {
           <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[#F7F5FF] border border-[#E4E0FF]">
             <span className="h-1.5 w-1.5 rounded-full bg-[#F58020]" />
             <span>
-              Vendeurs :{" "}
-              <span className="font-semibold">{stats.vendeurs}</span>
+              Hors ligne :{" "}
+              <span className="font-semibold">{stats.horsLigne}</span>
             </span>
           </div>
         </section>
@@ -241,7 +285,7 @@ export default function Utilisateurs() {
         {/* RECHERCHE + FILTRE */}
         <section className="bg-white/90 border border-[#E4E0FF] rounded-2xl shadow-[0_18px_45px_rgba(15,23,42,0.06)] px-4 sm:px-5 py-4 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            {/* 🔍 Barre de recherche avec border-gray-300 + shadow-sm */}
+            {/* 🔍 Barre de recherche */}
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-2.5 text-gray-400 w-4 h-4" />
               <input
@@ -253,7 +297,7 @@ export default function Utilisateurs() {
               />
             </div>
 
-            {/* 🎯 Filtre par rôle avec border-gray-300 + shadow-sm */}
+            {/* 🎯 Filtre par rôle */}
             <div className="flex items-center gap-2 sm:w-56">
               <span className="text-[11px] text-gray-500 uppercase tracking-wide">
                 Filtrer par rôle
@@ -294,6 +338,8 @@ export default function Utilisateurs() {
                           ? "bg-[#FFF4E5] text-[#F58020] border border-[#FFE0B8]"
                           : val.includes("Gestionnaire")
                           ? "bg-[#F7F5FF] text-[#472EAD] border border-[#E4E0FF]"
+                          : val === "Responsable"
+                          ? "bg-sky-50 text-sky-700 border border-sky-200"
                           : "bg-gray-100 text-gray-700 border border-gray-200"
                       )}
                     >
