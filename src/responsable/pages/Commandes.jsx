@@ -3,7 +3,7 @@
 // Branché sur l’API Laravel (clients, produits, commandes)
 // ==========================================================
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FileDown,
@@ -361,6 +361,10 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
   const [lignePrix, setLignePrix] = useState("");
   const [ligneMode, setLigneMode] = useState("gros"); // "detail" | "gros" (défaut : gros)
 
+  // Scan code-barres (scanner ou saisie manuelle)
+  const [scanCode, setScanCode] = useState("");
+  const qteInputRef = useRef(null);
+
   // Lignes de la commande
   const [lignes, setLignes] = useState([]);
 
@@ -422,6 +426,8 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
               p.reference ||
               p.ref ||
               null,
+            codeBarre:
+              p.code_barre || p.code_produit || p.code || p.barcode || null,
             libelle:
               p.nom ||
               p.nom_produit ||
@@ -493,6 +499,44 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
       setLignePrix(String(p.prixDetail));
     } else if (mode === "gros" && p.prixGros) {
       setLignePrix(String(p.prixGros));
+    }
+  };
+
+  // 🔍 Scan code-barres (scanner ou saisie clavier)
+  const handleScanBarcode = (e) => {
+    if (e) e.preventDefault();
+    const value = (scanCode || "").trim();
+    if (!value) return;
+
+    const produit = catalogue.find((p) => {
+      const ref = (p.ref || "").toString().trim();
+      const code = (p.codeBarre || "").toString().trim();
+      return ref === value || code === value;
+    });
+
+    if (!produit) {
+      toast(
+        "error",
+        "Produit introuvable",
+        "Aucun produit ne correspond à ce code-barres."
+      );
+      return;
+    }
+
+    setLigneProduitId(produit.id);
+    setLigneLibelle(produit.libelle);
+
+    const prixPropose =
+      ligneMode === "gros"
+        ? produit.prixGros || produit.prixDetail || produit.prix || 0
+        : produit.prixDetail || produit.prixGros || produit.prix || 0;
+
+    setLignePrix(String(prixPropose || 0));
+    setScanCode("");
+
+    // Focus sur la quantité pour enchaîner rapidement
+    if (qteInputRef.current) {
+      qteInputRef.current.focus();
     }
   };
 
@@ -635,6 +679,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
     setLigneQte("");
     setLignePrix("");
     setLigneMode("gros");
+    setScanCode("");
   };
 
   return (
@@ -738,13 +783,13 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
               <div className="text-[11px] text-gray-600 space-y-0.5">
                 <div>
                   Stock :{" "}
-                  <span className="font-semibold">
-                    {produitSelectionne.stockGlobal} unité(s)
-                  </span>{" "}
-                  —{" "}
-                  <span className="font-semibold">
-                    {produitSelectionne.nombreCartons} carton(s)
-                  </span>
+                    <span className="font-semibold">
+                      {produitSelectionne.stockGlobal} unité(s)
+                    </span>{" "}
+                    —{" "}
+                    <span className="font-semibold">
+                      {produitSelectionne.nombreCartons} carton(s)
+                    </span>
                 </div>
                 <div>
                   Prix ref. détail :{" "}
@@ -792,6 +837,38 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
                 onChange={(e) => setLigneLibelle(e.target.value)}
                 className={baseInput}
               />
+
+              {/* Scan code-barres */}
+              <div className="mt-3">
+                <label className="block text-xs text-gray-500 mb-1">
+                  Scan code-barres (facultatif)
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={scanCode}
+                    onChange={(e) => setScanCode(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === "NumpadEnter") {
+                        handleScanBarcode(e);
+                      }
+                    }}
+                    placeholder="Placez le curseur ici et scannez, ou tapez le code puis Entrée"
+                    className={baseInput}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleScanBarcode}
+                    className="px-3 py-2 rounded-xl border border-[#472EAD] text-xs text-[#472EAD] bg-white hover:bg-[#F7F5FF] shadow-sm"
+                  >
+                    Scanner
+                  </button>
+                </div>
+                <p className="mt-1 text-[10px] text-gray-500">
+                  Compatible lecteur code-barres et saisie manuelle (chiffres
+                  tapés au clavier).
+                </p>
+              </div>
             </div>
 
             <div>
@@ -802,6 +879,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
                   : "(unités)"}
               </label>
               <input
+                ref={qteInputRef}
                 type="number"
                 min="1"
                 value={ligneQte}
@@ -1189,30 +1267,30 @@ export default function Commandes() {
   const removeToast = (id) => setToasts((t) => t.filter((x) => x.id !== id));
 
   // 🔗 Chargement des commandes depuis le backend
+  const fetchCommandes = async () => {
+    try {
+      setLoading(true);
+
+      const res = await axios.get("/commandes");
+      const payload = Array.isArray(res.data?.data)
+        ? res.data.data
+        : res.data;
+
+      const normalized = (payload || []).map(normalizeCommande);
+      setCommandes(normalized);
+    } catch (error) {
+      console.error("Erreur chargement commandes :", error);
+      toast(
+        "error",
+        "Erreur de chargement",
+        "Impossible de charger les commandes clients spéciaux."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchCommandes = async () => {
-      try {
-        setLoading(true);
-
-        const res = await axios.get("/commandes");
-        const payload = Array.isArray(res.data?.data)
-          ? res.data.data
-          : res.data;
-
-        const normalized = (payload || []).map(normalizeCommande);
-        setCommandes(normalized);
-      } catch (error) {
-        console.error("Erreur chargement commandes :", error);
-        toast(
-          "error",
-          "Erreur de chargement",
-          "Impossible de charger les commandes clients spéciaux."
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchCommandes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1366,7 +1444,7 @@ export default function Commandes() {
       case "soldee":
         return "bg-emerald-100 text-emerald-700 border border-emerald-300";
       case "annulee":
-        return "bg-rose-100 text-rose-700 border border-rose-300";
+        return "bg-rose-100 text-rose-700 border-rose-300 border";
       default:
         return "bg-gray-100 text-gray-700 border border-gray-300";
     }
@@ -1511,7 +1589,7 @@ export default function Commandes() {
                 Exporter en PDF
               </button>
               <button
-                onClick={() => window.location.reload()}
+                onClick={fetchCommandes}
                 className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white text-xs sm:text-sm text-gray-700 hover:bg-gray-50"
               >
                 <RefreshCw size={16} />
@@ -1526,7 +1604,7 @@ export default function Commandes() {
             animate={{ opacity: 1, y: 0 }}
             className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3"
           >
-            <div className="rounded-xl border bg-amber-50 border border-amber-200 px-3 py-2.5">
+            <div className="rounded-xl border bg-amber-50 border-amber-200 px-3 py-2.5">
               <div className="text-[15px] text-rose-700 mb-0.5">
                 Nombre de commandes
               </div>
