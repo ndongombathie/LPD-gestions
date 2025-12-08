@@ -1,4 +1,4 @@
-// ==========================================================
+// ========================================================== 
 // 🧠 Header.jsx — LPD Manager (Responsable)
 // Connecté Laravel + Sanctum : profil, logout, update, password + Raccourcis + Notifications API
 // ==========================================================
@@ -200,7 +200,7 @@ function PasswordModal({ open, onClose, onSuccess, addToast }) {
             <Key className="w-5 h-5" /> Changer le mot de passe
           </h2>
 
-          <button onClick={onClose}>
+        <button onClick={onClose}>
             <X size={18} className="text-gray-500" />
           </button>
         </div>
@@ -630,7 +630,8 @@ export default function Header() {
 
   return (
     <>
-      <header className="relative z-20 w-full" ref={menuRef}>
+      <header className="sticky top-0 z-20 w-full bg-white" ref={menuRef} >
+
         <div className="h-[6px] w-full bg-gradient-to-r from-[#472EAD] via-[#472EAD] to-[#F58020]" />
 
         <div className="bg-white h-16 shadow-sm border-b">
@@ -656,19 +657,19 @@ export default function Header() {
             </div>
 
             {/* ACTIONS */}
-            <div className="flex items-center gap-4">
-              {/* 🆕 RACCOURCIS */}
-              <div className="relative hidden sm:block">
+            <div className="flex items-center gap-3 sm:gap-4">
+              {/* 🆕 RACCOURCIS — maintenant visible aussi sur mobile */}
+              <div className="relative">
                 <button
                   onClick={() => {
                     setShowQuick((v) => !v);
                     setShowNotif(false);
                     setShowMenu(false);
                   }}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-[#F7F5FF] hover:text-[#472EAD] transition"
+                  className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 rounded-lg border border-gray-200 text-xs sm:text-sm text-gray-700 hover:bg-[#F7F5FF] hover:text-[#472EAD] transition"
                 >
                   <LayoutGrid size={18} className="text-[#472EAD]" />
-                  <span>Raccourcis</span>
+                  <span className="hidden sm:inline">Raccourcis</span>
                 </button>
 
                 {showQuick && (

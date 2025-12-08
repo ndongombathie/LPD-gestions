@@ -202,7 +202,6 @@ function SearchModal({
 function FactureModal({ open, onClose, commande }) {
   if (!open || !commande) return null;
 
-  // Taux TVA dynamique (18% par défaut si non précisé)
   const tauxTVA =
     typeof commande.tauxTVA === "number"
       ? commande.tauxTVA
@@ -258,6 +257,7 @@ function FactureModal({ open, onClose, commande }) {
             <thead className="bg-[#F7F5FF] text-[#472EAD]">
               <tr>
                 <th className="px-3 py-2 text-left">Produit</th>
+                <th className="px-3 py-2 text-left">Mode</th>
                 <th className="px-3 py-2 text-right">Qté</th>
                 <th className="px-3 py-2 text-right">PU (libre)</th>
                 <th className="px-3 py-2 text-right">Total HT</th>
@@ -275,6 +275,11 @@ function FactureModal({ open, onClose, commande }) {
                       </div>
                     )}
                   </td>
+                  <td className="px-3 py-2 text-left text-[11px] text-gray-600">
+                    {l.modeVente === "gros"
+                      ? "Gros (cartons/boîtes)"
+                      : "Détail (unités)"}
+                  </td>
                   <td className="px-3 py-2 text-right">{l.qte}</td>
                   <td className="px-3 py-2 text-right">
                     {formatFCFA(l.prixUnitaire)}
@@ -283,11 +288,7 @@ function FactureModal({ open, onClose, commande }) {
                     {formatFCFA(l.totalHT)}
                   </td>
                   <td className="px-3 py-2 text-right">
-                    {formatFCFA(
-                      typeof l.totalTTC === "number"
-                        ? l.totalTTC
-                        : l.totalHT * (1 + tauxTVA)
-                    )}
+                    {formatFCFA(l.totalTTC)}
                   </td>
                 </tr>
               ))}
@@ -358,9 +359,16 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
   const [ligneLibelle, setLigneLibelle] = useState("");
   const [ligneQte, setLigneQte] = useState("");
   const [lignePrix, setLignePrix] = useState("");
+  const [ligneMode, setLigneMode] = useState("gros"); // "detail" | "gros" (défaut : gros)
 
   // Lignes de la commande
   const [lignes, setLignes] = useState([]);
+
+  const produitSelectionne = useMemo(
+    () =>
+      catalogue.find((p) => String(p.id) === String(ligneProduitId)) || null,
+    [catalogue, ligneProduitId]
+  );
 
   // 🔗 Charger clients spéciaux + produits
   useEffect(() => {
@@ -390,12 +398,48 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
             (c.id ? `CL-${String(c.id).padStart(3, "0")}` : ""),
         }));
 
-        const normalizedProduits = (produitsPayload || []).map((p) => ({
-          id: p.id,
-          ref: p.code_produit || p.reference || p.ref || null,
-          libelle: p.nom_produit || p.libelle || p.designation || "",
-          prix: Number(p.prix_unitaire || p.prix || 0),
-        }));
+        const normalizedProduits = (produitsPayload || []).map((p) => {
+          const prixDetail = Number(
+            p.prix_basique_detail ??
+              p.prix_vente ??
+              p.prix_unitaire ??
+              p.prix ??
+              0
+          );
+          const prixGros = Number(
+            p.prix_basique_gros ??
+              p.prix_gros ??
+              p.prix_unitaire ??
+              p.prix ??
+              0
+          );
+
+          return {
+            id: p.id,
+            ref:
+              p.code_barre ||
+              p.code_produit ||
+              p.reference ||
+              p.ref ||
+              null,
+            libelle:
+              p.nom ||
+              p.nom_produit ||
+              p.libelle ||
+              p.designation ||
+              "",
+            prixDetail,
+            prixGros,
+            prix: prixDetail || prixGros || 0,
+            prixSeuilDetail:
+              p.prix_seuil_detail != null ? Number(p.prix_seuil_detail) : null,
+            prixSeuilGros:
+              p.prix_seuil_gros != null ? Number(p.prix_seuil_gros) : null,
+            unitesParCarton: Number(p.unites_par_carton ?? 1),
+            stockGlobal: Number(p.stock_global ?? 0),
+            nombreCartons: Number(p.nombre_cartons ?? 0),
+          };
+        });
 
         setClients(normalizedClients);
         setCatalogue(normalizedProduits);
@@ -421,11 +465,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
   );
 
   const totalHT = useMemo(
-    () =>
-      lignes.reduce(
-        (sum, l) => sum + Number(l.qte || 0) * Number(l.prixUnitaire || 0),
-        0
-      ),
+    () => lignes.reduce((sum, l) => sum + Number(l.totalHT || 0), 0),
     [lignes]
   );
   const totalTVA = useMemo(
@@ -443,6 +483,18 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
 
   const baseInput =
     "w-full rounded-xl border px-3 py-2 text-sm bg-white shadow-sm border-gray-300 focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD]";
+
+  const handleChangeMode = (mode) => {
+    setLigneMode(mode);
+    const p = produitSelectionne;
+    if (!p) return;
+
+    if (mode === "detail" && p.prixDetail) {
+      setLignePrix(String(p.prixDetail));
+    } else if (mode === "gros" && p.prixGros) {
+      setLignePrix(String(p.prixGros));
+    }
+  };
 
   const handleAddLigne = () => {
     if (!ligneLibelle.trim() || !ligneQte || !lignePrix) {
@@ -466,12 +518,47 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
       return;
     }
 
+    const p = produitSelectionne;
+    if (p) {
+      const unitsPerCarton = p.unitesParCarton || 1;
+      const stockGlobal = p.stockGlobal ?? null;
+      const nbCartons =
+        p.nombreCartons ??
+        (stockGlobal != null ? Math.floor(stockGlobal / unitsPerCarton) : null);
+
+      // Détail : stock en unités
+      if (ligneMode === "detail" && stockGlobal != null) {
+        if (qteNum > stockGlobal) {
+          toast(
+            "error",
+            "Stock insuffisant",
+            `Stock disponible : ${stockGlobal} unité(s).`
+          );
+          return;
+        }
+      }
+
+      // Gros : stock en cartons
+      if (ligneMode === "gros" && nbCartons != null) {
+        if (qteNum > nbCartons) {
+          toast(
+            "error",
+            "Stock cartons insuffisant",
+            `Stock disponible : ${nbCartons} carton(s).`
+          );
+          return;
+        }
+      }
+    }
+
+    const unitsPerCarton = produitSelectionne?.unitesParCarton || 1;
+    const quantiteUnites =
+      ligneMode === "gros" ? qteNum * unitsPerCarton : qteNum;
+
     const totalHTLigne = qteNum * prixNum;
     const totalTTCLigne = applyTVA ? totalHTLigne * 1.18 : totalHTLigne;
 
-    const ref =
-      catalogue.find((p) => String(p.id) === String(ligneProduitId))?.ref ||
-      null;
+    const ref = produitSelectionne?.ref || null;
 
     const nouvelle = {
       id: Date.now(),
@@ -482,6 +569,8 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
       prixUnitaire: prixNum,
       totalHT: totalHTLigne,
       totalTTC: totalTTCLigne,
+      modeVente: ligneMode, // "detail" | "gros"
+      quantiteUnites,
     };
 
     setLignes((prev) => [...prev, nouvelle]);
@@ -494,19 +583,28 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
   const handleSelectProduitFromModal = (p) => {
     setLigneProduitId(p.id);
     setLigneLibelle(p.libelle);
-    setLignePrix(p.prix); // prix catalogue proposé, mais modifiable (libre)
+
+    const prixPropose =
+      ligneMode === "gros"
+        ? p.prixGros || p.prixDetail || p.prix || 0
+        : p.prixDetail || p.prixGros || p.prix || 0;
+
+    setLignePrix(String(prixPropose));
   };
 
-  const handleCreateCommande = (e) => {
+  // ✅ Soumission du formulaire : on construit un brouillon et on délègue au parent
+  const handleSubmit = (e) => {
     e.preventDefault();
+
     if (!clientActuel) {
       toast(
         "error",
         "Client manquant",
-        "Veuillez sélectionner un client spécial."
+        "Veuillez sélectionner un client spécial avant d'envoyer la commande."
       );
       return;
     }
+
     if (!lignes.length) {
       toast(
         "error",
@@ -516,39 +614,33 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
       return;
     }
 
-    const tauxTVA = applyTVA ? 0.18 : 0;
-
-    const commande = {
-      // id & numero seront redéfinis par le backend ; ceux-ci sont provisoires
-      id: Date.now(),
-      numero: `CMD-${new Date().getFullYear()}-${Math.floor(
-        Math.random() * 9000 + 1000
-      )}`,
-      clientId: clientActuel.id,
+    const commandeDraft = {
+      clientId,
       clientNom: clientActuel.nom,
       clientCode: clientActuel.code,
       dateCommande,
-      lignes,
+      appliquerTVA: applyTVA,
       totalHT,
       totalTVA,
       totalTTC,
-      tauxTVA,
-      appliquerTVA: applyTVA,
-      paiements: [],
-      montantPaye: 0,
-      resteAPayer: totalTTC,
-      statut: "en_attente_caisse",
-      statutLabel: "En attente caisse",
+      lignes,
     };
 
-    onCreate(commande);
+    onCreate(commandeDraft);
+
+    // Option : reset formulaire
     setLignes([]);
+    setLigneProduitId("");
+    setLigneLibelle("");
+    setLigneQte("");
+    setLignePrix("");
+    setLigneMode("gros");
   };
 
   return (
     <>
       <motion.form
-        onSubmit={handleCreateCommande}
+        onSubmit={handleSubmit}
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35 }}
@@ -607,8 +699,68 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
         </div>
 
         {/* Saisie ligne produit */}
-        <div className="border border-[#E4E0FF] rounded-xl p-4 bg-[#F9FAFF]">
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+        <div className="border border-[#E4E0FF] rounded-xl p-4 bg-[#F9FAFF] space-y-3">
+          {/* Mode de vente */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">
+                Mode de vente
+              </label>
+              <div className="inline-flex rounded-full border border-[#E4E0FF] bg-white p-1">
+                <button
+                  type="button"
+                  onClick={() => handleChangeMode("gros")}
+                  className={cls(
+                    "px-3 py-1.5 text-xs rounded-full transition",
+                    ligneMode === "gros"
+                      ? "bg-[#472EAD] text-white shadow-sm"
+                      : "text-gray-600 hover:bg-gray-50"
+                  )}
+                >
+                  En Gros (cartons/boîtes)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleChangeMode("detail")}
+                  className={cls(
+                    "px-3 py-1.5 text-xs rounded-full transition",
+                    ligneMode === "detail"
+                      ? "bg-[#472EAD] text-white shadow-sm"
+                      : "text-gray-600 hover:bg-gray-50"
+                  )}
+                >
+                  Détail (unités)
+                </button>
+              </div>
+            </div>
+
+            {produitSelectionne && (
+              <div className="text-[11px] text-gray-600 space-y-0.5">
+                <div>
+                  Stock :{" "}
+                  <span className="font-semibold">
+                    {produitSelectionne.stockGlobal} unité(s)
+                  </span>{" "}
+                  —{" "}
+                  <span className="font-semibold">
+                    {produitSelectionne.nombreCartons} carton(s)
+                  </span>
+                </div>
+                <div>
+                  Prix ref. détail :{" "}
+                  <span className="font-semibold">
+                    {formatFCFA(produitSelectionne.prixDetail || 0)}
+                  </span>{" "}
+                  | gros :{" "}
+                  <span className="font-semibold">
+                    {formatFCFA(produitSelectionne.prixGros || 0)}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end mt-2">
             <div className="sm:col-span-2">
               <label className="block text-xs text-gray-500 mb-1">
                 Produit
@@ -644,7 +796,10 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
 
             <div>
               <label className="block text-xs text-gray-500 mb-1">
-                Quantité
+                Quantité{" "}
+                {ligneMode === "gros"
+                  ? "(cartons/boîtes)"
+                  : "(unités)"}
               </label>
               <input
                 type="number"
@@ -652,8 +807,17 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
                 value={ligneQte}
                 onChange={(e) => setLigneQte(e.target.value)}
                 className={baseInput}
-                placeholder="Ex: 10"
+                placeholder={
+                  ligneMode === "gros" ? "Ex: 3 cartons" : "Ex: 24 unités"
+                }
               />
+              {ligneMode === "gros" &&
+                produitSelectionne &&
+                produitSelectionne.unitesParCarton && (
+                  <div className="mt-1 text-[10px] text-gray-500">
+                    1 carton = {produitSelectionne.unitesParCarton} unité(s)
+                  </div>
+                )}
             </div>
 
             <div>
@@ -666,7 +830,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
                 value={lignePrix}
                 onChange={(e) => setLignePrix(e.target.value)}
                 className={baseInput}
-                placeholder="Ex: 1200"
+                placeholder="Ex: 12000"
               />
             </div>
           </div>
@@ -688,6 +852,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
             <thead className="bg-[#F7F5FF] text-[#472EAD] uppercase text-[11px] font-semibold">
               <tr>
                 <th className="px-3 py-2 text-left">Produit</th>
+                <th className="px-3 py-2 text-left">Mode</th>
                 <th className="px-3 py-2 text-right">Qté</th>
                 <th className="px-3 py-2 text-right">PU (libre)</th>
                 <th className="px-3 py-2 text-right">Total HT</th>
@@ -709,6 +874,11 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
                           Réf : {l.ref}
                         </div>
                       )}
+                    </td>
+                    <td className="px-3 py-2 text-[11px] text-gray-600">
+                      {l.modeVente === "gros"
+                        ? "Gros (cartons/boîtes)"
+                        : "Détail (unités)"}
                     </td>
                     <td className="px-3 py-2 text-right">{l.qte}</td>
                     <td className="px-3 py-2 text-right">
@@ -735,7 +905,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
               ) : (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="px-3 py-4 text-center text-gray-400 text-xs"
                   >
                     Aucune ligne ajoutée pour le moment.
@@ -817,7 +987,11 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
         items={catalogue}
         onSelect={handleSelectProduitFromModal}
         getLabel={(p) => p.libelle}
-        getSubLabel={(p) => `${p.ref || "—"} • ${formatFCFA(p.prix)}`}
+        getSubLabel={(p) =>
+          `${p.ref || "—"} • Détail: ${formatFCFA(
+            p.prixDetail
+          )} • Gros: ${p.prixGros ? formatFCFA(p.prixGros) : "--"}`
+        }
       />
     </>
   );
@@ -827,47 +1001,126 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
 // 🔧 Helper : normaliser une commande provenant du backend
 // ======================================================================
 function normalizeCommande(cmd) {
-  const client = cmd.client || cmd.client_special || {};
+  // 1) Normaliser les infos client
+  const client =
+    cmd.client ||
+    cmd.client_special ||
+    cmd.clientSpecial ||
+    cmd.client_speciale ||
+    cmd.client_speciale_detail ||
+    {};
 
+  let clientNom =
+    cmd.client_nom ||
+    cmd.nom_client ||
+    cmd.nom_client_special ||
+    cmd.client_name ||
+    cmd.customer_name ||
+    client.nom ||
+    client.nom_client ||
+    client.nom_client_special ||
+    client.raison_sociale ||
+    client.raisonSociale ||
+    client.name ||
+    client.libelle ||
+    client.intitule ||
+    "";
+
+  if (!clientNom && client && typeof client === "object") {
+    const firstStringValue = Object.values(client).find(
+      (v) => typeof v === "string" && v.trim() !== ""
+    );
+    if (firstStringValue) clientNom = firstStringValue;
+  }
+
+  const clientCode =
+    cmd.client_code ||
+    cmd.code_client ||
+    client.code_client ||
+    client.codeClient ||
+    client.code ||
+    cmd.code ||
+    undefined;
+
+  // 2) Normaliser les lignes
   const lignesSource =
     cmd.lignes || cmd.ligne_commandes || cmd.details || cmd.items || [];
 
   const lignes = (lignesSource || []).map((l) => {
-    const qte = Number(l.quantite || l.qte || 0);
-    const pu = Number(l.prix_unitaire || l.prix || 0);
-    const totalHT =
-      Number(l.total_ht || l.totalHT || (qte && pu ? qte * pu : 0));
-    const totalTTC = Number(
-      l.total_ttc || l.totalTTC || totalHT * 1.18 || 0
+    const qte = Number(l.quantite || l.qte || l.qty || 0);
+    const pu = Number(l.prix_unitaire || l.prix || l.price || 0);
+    const modeVente = l.mode_vente || l.modeVente || l.mode || "detail";
+
+    const totalHTLigne = Number(
+      l.total_ht || l.totalHT || (qte && pu ? qte * pu : 0)
+    );
+    const totalTTCLigne = Number(
+      l.total_ttc || l.totalTTC || l.total || totalHTLigne * 1.18 || 0
+    );
+
+    const quantiteUnites = Number(
+      l.quantite_unites ||
+        l.quantiteUnites ||
+        (modeVente === "gros"
+          ? qte * (l.unites_par_carton || 1)
+          : qte)
     );
 
     return {
       id: l.id,
       produitId: l.produit_id || l.produitId || null,
-      libelle: l.libelle || l.nom_produit || l.designation || "",
-      ref: l.ref || l.code_produit || l.reference || null,
+      libelle: l.libelle || l.nom_produit || l.designation || l.nom || "",
+      ref: l.ref || l.code_produit || l.reference || l.code || null,
       qte,
       prixUnitaire: pu,
-      totalHT,
-      totalTTC,
+      totalHT: totalHTLigne,
+      totalTTC: totalTTCLigne,
+      modeVente,
+      quantiteUnites,
     };
   });
 
-  const totalHT = Number(cmd.total_ht || cmd.totalHT || 0);
-  const totalTTC = Number(
-    cmd.total_ttc || cmd.totalTTC || cmd.montant_total || 0
+  // 3) Totaux
+  let totalHT = Number(
+    cmd.total_ht ?? cmd.totalHT ?? cmd.montant_ht ?? 0
   );
-  const totalTVA = Number(
-    cmd.total_tva || cmd.totalTVA || (totalTTC - totalHT)
+  let totalTTC = Number(
+    cmd.total_ttc ?? cmd.totalTTC ?? cmd.montant_total ?? cmd.total ?? 0
   );
 
+  if ((!totalHT || Number.isNaN(totalHT)) && lignes.length) {
+    totalHT = lignes.reduce(
+      (s, l) => s + (Number(l.totalHT) || l.qte * l.prixUnitaire || 0),
+      0
+    );
+  }
+
+  if ((!totalTTC || Number.isNaN(totalTTC)) && lignes.length) {
+    totalTTC = lignes.reduce(
+      (s, l) => s + (Number(l.totalTTC) || Number(l.totalHT) || 0),
+      0
+    );
+  }
+
+  let totalTVA = Number(
+    cmd.total_tva ?? cmd.totalTVA ?? cmd.montant_tva ?? (totalTTC - totalHT)
+  );
+  if (Number.isNaN(totalTVA)) {
+    totalTVA = totalTTC - totalHT;
+  }
+
+  // 4) Paiements
   const montantPaye = Number(
     cmd.montant_paye || cmd.montantPaye || cmd.total_paye || 0
   );
   const resteAPayer = Number(
-    cmd.reste_a_payer || cmd.resteAPayer || totalTTC - montantPaye
+    cmd.reste_a_payer ||
+      cmd.resteAPayer ||
+      cmd.montant_restant ||
+      totalTTC - montantPaye
   );
 
+  // 5) Statut
   const statut = cmd.statut || "en_attente_caisse";
   const statutLabelMap = {
     en_attente_caisse: "En attente caisse",
@@ -882,9 +1135,8 @@ function normalizeCommande(cmd) {
     id: cmd.id,
     numero: cmd.numero || cmd.reference || cmd.code || `CMD-${cmd.id}`,
     clientId: cmd.client_id || cmd.clientId || client.id || null,
-    clientNom: client.nom || client.raison_sociale || cmd.client_nom || "",
-    clientCode:
-      client.code_client || client.code || cmd.client_code || undefined,
+    clientNom,
+    clientCode,
     dateCommande:
       cmd.date_commande ||
       cmd.dateCommande ||
@@ -914,7 +1166,8 @@ function normalizeCommande(cmd) {
 export default function Commandes() {
   const { state } = useLocation();
 
-  // Quand on vient depuis ClientsSpeciaux : navigate("/responsable/commandes", { state: { clientId, clientNom } })
+  // Quand on vient depuis ClientsSpeciaux :
+  // navigate("/responsable/commandes", { state: { clientId, clientNom } })
   const clientIdFromState = state?.clientId || null;
   const clientNameFromState = state?.clientNom || state?.client || "";
 
@@ -923,7 +1176,10 @@ export default function Commandes() {
   const [toasts, setToasts] = useState([]);
   const [selectedCommande, setSelectedCommande] = useState(null);
   const [openFacture, setOpenFacture] = useState(false);
-  const [searchTerm, setSearchTerm] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+
+  // map id client -> nom client pour compléter ce que le backend n’envoie pas
+  const [clientsMap, setClientsMap] = useState({});
 
   const toast = (type, title, message) => {
     const id = Date.now();
@@ -932,9 +1188,7 @@ export default function Commandes() {
   };
   const removeToast = (id) => setToasts((t) => t.filter((x) => x.id !== id));
 
-  // ======================================================
   // 🔗 Chargement des commandes depuis le backend
-  // ======================================================
   useEffect(() => {
     const fetchCommandes = async () => {
       try {
@@ -963,6 +1217,58 @@ export default function Commandes() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 🔗 Chargement des clients spéciaux pour retrouver les noms
+  useEffect(() => {
+    const fetchClients = async () => {
+      try {
+        const res = await axios.get("/clients", {
+          params: { type_client: "special" },
+        });
+
+        const clientsPayload = Array.isArray(res.data?.data)
+          ? res.data.data
+          : res.data;
+
+        const map = {};
+        (clientsPayload || []).forEach((c) => {
+          const nom =
+            c.nom ||
+            c.nom_client ||
+            c.nom_client_special ||
+            c.raison_sociale ||
+            c.raisonSociale ||
+            "";
+          if (c.id && nom) {
+            map[c.id] = nom;
+          }
+        });
+
+        setClientsMap(map);
+      } catch (error) {
+        console.error("Erreur chargement clients spéciaux :", error);
+      }
+    };
+
+    fetchClients();
+  }, []);
+
+  // Compléter les commandes sans nom dès qu’on a la map des clients
+  useEffect(() => {
+    if (!clientsMap || !Object.keys(clientsMap).length) return;
+
+    setCommandes((prev) =>
+      prev.map((c) => {
+        if (c.clientNom && c.clientNom.trim() !== "") return c;
+        if (!c.clientId) return c;
+
+        const nom = clientsMap[c.clientId];
+        if (!nom) return c;
+
+        return { ...c, clientNom: nom };
+      })
+    );
+  }, [clientsMap]);
+
   // Stats globales
   const statsGlobales = useMemo(() => {
     const nb = commandes.length;
@@ -975,10 +1281,9 @@ export default function Commandes() {
     return { nbCommandes: nb, totalTTC, totalPaye, detteTotale };
   }, [commandes]);
 
-  // Quand le Responsable crée une commande (formulaire)
+  // ✅ Unique handleCreateCommande : envoi à la caisse
   const handleCreateCommande = async (commandeDraft) => {
     try {
-      // Payload pour ton API Laravel
       const payload = {
         client_id: commandeDraft.clientId,
         date_commande: commandeDraft.dateCommande,
@@ -991,6 +1296,8 @@ export default function Commandes() {
           produit_id: l.produitId,
           libelle: l.libelle,
           quantite: l.qte,
+          quantite_unites: l.quantiteUnites,
+          mode_vente: l.modeVente,
           prix_unitaire: l.prixUnitaire,
           total_ht: l.totalHT,
           total_ttc: l.totalTTC,
@@ -998,17 +1305,39 @@ export default function Commandes() {
       };
 
       const res = await axios.post("/commandes", payload);
-      const raw = Array.isArray(res.data?.data) ? res.data.data : res.data;
 
-      const normalized =
-        raw && !Array.isArray(raw) ? normalizeCommande(raw) : commandeDraft;
+      let raw = res.data;
+      if (Array.isArray(res.data?.data)) {
+        raw = res.data.data[0];
+      } else if (res.data?.data && typeof res.data.data === "object") {
+        raw = res.data.data;
+      }
+
+      let normalized;
+
+      if (raw && !Array.isArray(raw)) {
+        normalized = normalizeCommande(raw);
+
+        if (!normalized.clientNom && commandeDraft.clientNom) {
+          normalized = {
+            ...normalized,
+            clientId: commandeDraft.clientId,
+            clientNom: commandeDraft.clientNom,
+            clientCode: commandeDraft.clientCode,
+          };
+        }
+      } else {
+        normalized = commandeDraft;
+      }
 
       setCommandes((prev) => [normalized, ...prev]);
 
       toast(
         "success",
         "Commande envoyée à la caisse",
-        `${normalized.clientNom} — ${formatFCFA(normalized.totalTTC)}`
+        `${normalized.clientNom || "Client"} — ${formatFCFA(
+          normalized.totalTTC
+        )}`
       );
     } catch (error) {
       console.error("Erreur création commande :", error);
@@ -1117,7 +1446,7 @@ export default function Commandes() {
       list = list.filter(
         (c) =>
           c.numero.toLowerCase().includes(q) ||
-          c.clientNom.toLowerCase().includes(q) ||
+          (c.clientNom || "").toLowerCase().includes(q) ||
           c.statutLabel.toLowerCase().includes(q)
       );
     }
@@ -1173,13 +1502,20 @@ export default function Commandes() {
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-2 justify-start sm:justify-end">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <button
                 onClick={exportPDF}
-                className="flex items-center gap-2 px-3 py-2 text-xs sm:text-sm rounded-lg border border-[#E4E0FF] bg-white hover:bg-[#F7F5FF] text-[#472EAD]"
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white text-xs sm:text-sm text-gray-700 hover:bg-gray-50"
               >
                 <FileDown size={16} />
-                Export PDF
+                Exporter en PDF
+              </button>
+              <button
+                onClick={() => window.location.reload()}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white text-xs sm:text-sm text-gray-700 hover:bg-gray-50"
+              >
+                <RefreshCw size={16} />
+                Actualiser
               </button>
             </div>
           </motion.header>

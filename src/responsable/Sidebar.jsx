@@ -1,10 +1,4 @@
-// ==========================================================
-// 🧭 Sidebar.jsx — Interface Responsable (LPD Manager)
-// Version Ultra Premium : design réactif + animations fluides
-// - Icônes toujours visibles
-// - Survol animé (scale + lueur)
-// - Indicateur animé pour la page active
-// ==========================================================
+// Sidebar.jsx
 
 import React from "react";
 import { NavLink, useLocation } from "react-router-dom";
@@ -17,7 +11,7 @@ import {
   ClipboardList,
   FileText,
   Clock,
-  Banknote, // 💵 ajout pour Décaissements
+  Banknote,
 } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -32,12 +26,13 @@ export default function Sidebar() {
     { name: "Commandes", icon: ShoppingCart, path: "/responsable/commandes" },
     { name: "Inventaire", icon: BarChart2, path: "/responsable/inventaire" },
     { name: "Rapports", icon: FileText, path: "/responsable/rapports" },
-    { name: "Décaissements", icon: Banknote, path: "/responsable/decaissements" }, // 💵 nouvelle entrée
+    { name: "Décaissements", icon: Banknote, path: "/responsable/decaissements" },
     { name: "Journal d’activités", icon: Clock, path: "/responsable/journal-activites" },
   ];
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-64 bg-white border-r border-gray-200 shadow-md flex flex-col z-40">
+    // ⬇⬇⬇ ICI : hidden sur mobile, flex à partir de md
+    <aside className="hidden md:flex fixed left-0 top-0 h-screen w-64 bg-white border-r border-gray-200 shadow-md flex-col z-40">
       {/* === Logo LPD === */}
       <div className="h-20 flex flex-col items-center justify-center border-b border-gray-200 bg-gradient-to-r from-[#472EAD] to-[#4e33c9] text-white shadow-md">
         <div className="flex flex-col items-center justify-center -mt-1">
@@ -78,7 +73,6 @@ export default function Sidebar() {
             const Icon = item.icon;
             return (
               <li key={item.path} className="relative">
-                {/* Indicateur animé à gauche */}
                 {isActive && (
                   <motion.div
                     layoutId="activeIndicator"
@@ -97,7 +91,6 @@ export default function Sidebar() {
                     }`
                   }
                 >
-                  {/* Icône avec animation subtile */}
                   <motion.div
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.95 }}
@@ -120,7 +113,6 @@ export default function Sidebar() {
                     {item.name}
                   </span>
 
-                  {/* Effet de halo lumineux sur survol */}
                   <motion.div
                     className="absolute inset-0 rounded-md bg-[#472EAD]/5 opacity-0"
                     whileHover={{ opacity: 1 }}
@@ -132,9 +124,6 @@ export default function Sidebar() {
           })}
         </ul>
       </nav>
-
-      {/* === Footer version info === */}
-
     </aside>
   );
 }
