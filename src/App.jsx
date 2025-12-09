@@ -1,17 +1,17 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+// App.jsx
+import React from "react";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import Connexion from "./authentification/login/Connexion";          // adapte le chemin
+import VendeurInterface from "./vendeur/VendeurInterface"; // adapte le chemin
 
-
-function App() {
-  const [count, setCount] = useState(0)
-
+export default function App() {
   return (
-    <>
-      <h1>Bonjour</h1>
-    </>
-  )
+    <Router>
+      <Routes>
+        <Route path="/" element={<Connexion />} />
+        <Route path="/login" element={<Connexion />} />
+        <Route path="/vendeur" element={<VendeurInterface />} />
+      </Routes>
+    </Router>
+  );
 }
-
-export default App
