@@ -1,4 +1,4 @@
-// ==========================================================
+// ========================================================== 
 // 🛒 Commandes.jsx — Interface Responsable (LPD Manager)
 // Branché sur l’API Laravel (clients, produits, commandes)
 // ==========================================================
@@ -14,11 +14,16 @@ import {
   AlertCircle,
   X,
   Receipt,
+  BadgeDollarSign,
   Eye,
   Search,
   Loader2,
+  Pencil,      // 👈 ajouter ceci
+  Check,       // 👈 et ceci
+  XCircle,     // 👈 et ceci
 } from "lucide-react";
 import jsPDF from "jspdf";
+import { QRCodeCanvas as QRCode } from "qrcode.react";
 import "jspdf-autotable";
 import { useLocation } from "react-router-dom";
 import { instance as axios } from "../../utils/axios.jsx";
@@ -197,8 +202,261 @@ function SearchModal({
 }
 
 // ==========================================================
+// 🧾 Modal QR Code Commande (ticket)
+// ==========================================================
+
+function QrCommandeModal({ open, onClose, commande, qrPayload }) {
+  const qrWrapperRef = useRef(null);
+
+  if (!open || !commande || !qrPayload) return null;
+
+const handlePrint = () => {
+  try {
+    const canvas = qrWrapperRef.current?.querySelector("canvas");
+    if (!canvas) {
+      window.print();
+      return;
+    }
+
+    const dataUrl = canvas.toDataURL("image/png");
+
+    // 📏 VRAI FORMAT TICKET (80 mm de large)
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: [80, 130], // largeur ticket, hauteur ~13 cm
+    });
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const centerX = pageWidth / 2;
+
+    // ================= HEADER VIOLET =================
+    const headerHeight = 36;
+    doc.setFillColor(71, 46, 173);
+    doc.setDrawColor(71, 46, 173);
+    doc.rect(0, 0, pageWidth, headerHeight, "F");
+
+    // --- Logo "ellipse" + LPD ---
+    const logoEllipseY = 10; // un peu en haut du header
+    doc.setFillColor(71, 46, 173);
+    doc.setDrawColor(255, 255, 255);
+    doc.ellipse(centerX, logoEllipseY, 16, 10, "F");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.setTextColor(245, 128, 32);
+    const logoText = "LPD";
+    const logoTextWidth = doc.getTextWidth(logoText);
+    doc.text(logoText, centerX - logoTextWidth / 2, logoEllipseY + 4);
+
+    // --- Texte sous le logo ---
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(255, 255, 255);
+    const title1 = "LIBRAIRIE PAPETERIE DARADJI";
+    doc.text(title1, centerX, 22, { align: "center" });
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(229, 231, 235);
+    // 🔹 ICI : on enlève "Ticket commande" et on garde uniquement la réf
+    const title2 = `#${commande.numero}`;
+    doc.text(title2, centerX, 28.5, { align: "center" });
+
+    // ================= QR CODE =================
+    const qrSize = 40; // mm
+    const qrX = (pageWidth - qrSize) / 2;
+    const qrY = headerHeight + 6;
+    doc.addImage(dataUrl, "PNG", qrX, qrY, qrSize, qrSize);
+
+    // ================= INFOS COMMANDE =================
+    const infoStartY = qrY + qrSize + 8;
+    const leftX = 8;
+
+    // Badge "Client spécial" à droite
+    const badgeText = "Client spécial";
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    const badgeTextWidth = doc.getTextWidth(badgeText);
+    const badgeWidth = badgeTextWidth + 10;
+    const badgeHeight = 8;
+    const badgeX = pageWidth - badgeWidth - 8;
+    const badgeY = infoStartY - 5;
+
+    doc.setFillColor(254, 249, 195);
+    doc.setDrawColor(234, 179, 8);
+    doc.roundedRect(badgeX, badgeY, badgeWidth, badgeHeight, 4, 4, "FD");
+
+    doc.setTextColor(202, 138, 4);
+    doc.text(badgeText, badgeX + 5, badgeY + 5);
+
+    // Texte à gauche
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(17, 24, 39);
+    doc.text(
+      `Client : ${commande.clientNom || "Client spécial"}`,
+      leftX,
+      infoStartY
+    );
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    // 💡 Montant TTC volontairement retiré du ticket
+    doc.text(
+      `Date : ${commande.dateCommande}`,
+      leftX,
+      infoStartY + 5
+    );
+
+    // ================= TEXTE D'AIDE BAS DE TICKET =================
+    const aideY = pageHeight - 12;
+    doc.setFontSize(8);
+    doc.setTextColor(107, 114, 128);
+    const aideText =
+      "Présentez ce QR code à la caisse pour retrouver la commande.";
+    doc.text(aideText, centerX, aideY, { align: "center" });
+
+    const noteY = aideY + 5;
+    doc.setFontSize(7);
+    doc.setTextColor(202, 138, 4);
+    const noteText = "Ticket spécial LPD — Client privilégié";
+    doc.text(noteText, centerX, noteY, { align: "center" });
+
+    // ================= SAUVEGARDE =================
+    doc.save(`Ticket_commande_${commande.numero}.pdf`);
+  } catch (e) {
+    console.error(e);
+    window.print();
+  }
+};
+
+
+  return (
+    <div className="fixed inset-0 z-[115] bg-black/40 backdrop-blur-sm flex items-center justify-center px-3">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 20 }}
+        className="bg-white w-full max-w-sm sm:max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+      >
+        {/* Header compact avec logo LPD */}
+        <div className="h-16 flex flex-col justify-center border-b border-gray-200 bg-gradient-to-r from-[#472EAD] to-[#4e33c9] text-white shadow-md">
+          <div className="flex items-center justify-between w-full px-4">
+            <div className="flex items-center gap-2">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="40"
+                height="26"
+                viewBox="0 0 200 120"
+                fill="none"
+              >
+                <ellipse cx="100" cy="60" rx="90" ry="45" fill="#472EAD" />
+                <text
+                  x="50%"
+                  y="66%"
+                  textAnchor="middle"
+                  fill="#F58020"
+                  fontFamily="Arial Black, sans-serif"
+                  fontSize="48"
+                  fontWeight="900"
+                  dy=".1em"
+                >
+                  LPD
+                </text>
+              </svg>
+              <div className="flex flex-col">
+                <span className="text-[11px] font-semibold tracking-wider uppercase leading-none">
+                  Librairie Papeterie Daradji
+                </span>
+                <span className="text-[10px] text-white/80">
+                  #{commande.numero}
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="text-white/80 hover:text-white rounded-full p-1 hover:bg-white/10"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+
+        {/* Contenu */}
+        <div className="p-4 flex-1 flex flex-col gap-3">
+          <div className="text-center">
+            <h2 className="text-sm font-semibold text-[#472EAD]">
+              QR de la commande
+            </h2>
+            <p className="text-[11px] text-gray-500 mt-1">
+              À présenter à la caisse pour charger automatiquement la commande.
+            </p>
+          </div>
+
+          {/* QR + infos commande */}
+          <div
+            ref={qrWrapperRef}
+            className="flex flex-col items-center justify-center gap-2 mt-1"
+          >
+            <div className="p-2 rounded-2xl border border-gray-200 bg-white shadow-sm">
+              <QRCode value={qrPayload} size={160} includeMargin />
+            </div>
+
+            <div className="text-xs text-gray-600 text-center space-y-0.5">
+              <div className="font-semibold text-gray-800">
+                Commande #{commande.numero}
+              </div>
+              <div className="truncate max-w-[220px]">
+                {commande.clientNom || "Client spécial"}
+              </div>
+              <div className="text-[11px] text-gray-500">
+                Montant TTC :{" "}
+                <span className="font-semibold text-emerald-600">
+                  {formatFCFA(commande.totalTTC)}
+                </span>
+              </div>
+              <div className="text-[11px] text-gray-400">
+                Date : {commande.dateCommande}
+              </div>
+            </div>
+          </div>
+
+          {/* Texte d'aide */}
+          <div className="bg-[#F9FAFF] border border-[#E4E0FF] rounded-xl px-3 py-2 text-[11px] text-gray-600">
+            Le code embarque un résumé complet de la commande (client, date,
+            lignes, montants…). Le module caisse le lit et retrouve la commande
+            même si la liste est très longue.
+          </div>
+
+          {/* Boutons */}
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-3 py-2 rounded-lg border border-gray-300 bg-white text-xs sm:text-sm text-gray-700 hover:bg-gray-50"
+            >
+              Plus tard
+            </button>
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="px-4 py-2 rounded-lg bg-gradient-to-r from-[#472EAD] to-[#6A4DF5] text-white text-xs sm:text-sm font-semibold shadow-sm hover:opacity-95"
+            >
+              Imprimer le QR
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+// ==========================================================
 // 🧾 Modal de détail / pseudo facture
 // ==========================================================
+
 function FactureModal({ open, onClose, commande }) {
   if (!open || !commande) return null;
 
@@ -356,13 +614,11 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
 
   // Champ de saisie "ligne en cours"
   const [ligneProduitId, setLigneProduitId] = useState("");
-  const [ligneLibelle, setLigneLibelle] = useState("");
+  const [ligneLibelle, setLigneLibelle] = useState(""); // champ unique: libellé OU code-barres
   const [ligneQte, setLigneQte] = useState("");
   const [lignePrix, setLignePrix] = useState("");
   const [ligneMode, setLigneMode] = useState("gros"); // "detail" | "gros" (défaut : gros)
 
-  // Scan code-barres (scanner ou saisie manuelle)
-  const [scanCode, setScanCode] = useState("");
   const qteInputRef = useRef(null);
 
   // Lignes de la commande
@@ -373,6 +629,32 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
       catalogue.find((p) => String(p.id) === String(ligneProduitId)) || null,
     [catalogue, ligneProduitId]
   );
+
+  // 🔎 Liste des produits qui matchent le champ unique (nom / ref / code-barres)
+  const produitsFiltres = useMemo(() => {
+    const q = (ligneLibelle || "").trim().toLowerCase();
+    if (!q) return [];
+
+    const isNumeric = /^\d+$/.test(q);
+
+    return catalogue.filter((p) => {
+      const lib = (p.libelle || "").toLowerCase();
+      const refStr = (p.ref || "").toString().toLowerCase();
+      const codeStr = (p.codeBarre || "").toString().toLowerCase();
+
+      if (isNumeric) {
+        // Recherche plutôt sur code-barres / ref
+        return (
+          codeStr.includes(q) ||
+          refStr.includes(q) ||
+          lib.includes(q) // par sécurité
+        );
+      }
+
+      // Recherche texte sur libellé / ref
+      return lib.includes(q) || refStr.includes(q);
+    });
+  }, [ligneLibelle, catalogue]);
 
   // 🔗 Charger clients spéciaux + produits
   useEffect(() => {
@@ -502,41 +784,89 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
     }
   };
 
-  // 🔍 Scan code-barres (scanner ou saisie clavier)
-  const handleScanBarcode = (e) => {
-    if (e) e.preventDefault();
-    const value = (scanCode || "").trim();
-    if (!value) return;
+  // 🧩 Appliquer la sélection d’un produit (peu importe la source : scan / saisie / modal)
+  const applyProduitSelection = (p) => {
+    if (!p) return;
 
-    const produit = catalogue.find((p) => {
-      const ref = (p.ref || "").toString().trim();
-      const code = (p.codeBarre || "").toString().trim();
-      return ref === value || code === value;
-    });
-
-    if (!produit) {
-      toast(
-        "error",
-        "Produit introuvable",
-        "Aucun produit ne correspond à ce code-barres."
-      );
-      return;
-    }
-
-    setLigneProduitId(produit.id);
-    setLigneLibelle(produit.libelle);
+    setLigneProduitId(p.id);
+    setLigneLibelle(p.libelle || "");
 
     const prixPropose =
       ligneMode === "gros"
-        ? produit.prixGros || produit.prixDetail || produit.prix || 0
-        : produit.prixDetail || produit.prixGros || produit.prix || 0;
+        ? p.prixGros || p.prixDetail || p.prix || 0
+        : p.prixDetail || p.prixGros || p.prix || 0;
 
     setLignePrix(String(prixPropose || 0));
-    setScanCode("");
 
-    // Focus sur la quantité pour enchaîner rapidement
+    // Focus sur la quantité pour enchaîner vite
     if (qteInputRef.current) {
       qteInputRef.current.focus();
+    }
+  };
+
+  // ✅ Champ unique : saisie libellé / code-barres / scan
+  const handleProduitInputChange = (e) => {
+    const value = e.target.value;
+    setLigneLibelle(value);
+
+    // Tant qu’on tape, on considère qu’on n’a pas encore confirmé le produit
+    // (permet aussi le cas "produit hors catalogue")
+    setLigneProduitId("");
+
+    const trimmed = value.trim();
+    if (!trimmed) return;
+
+    const isNumeric = /^\d+$/.test(trimmed);
+
+    // Cas "code-barres" saisi ou scanné
+    if (isNumeric && trimmed.length >= 6) {
+      const exact = catalogue.find((p) => {
+        const code = (p.codeBarre || "").toString().trim();
+        const ref = (p.ref || "").toString().trim();
+        return code === trimmed || ref === trimmed;
+      });
+
+      if (exact) {
+        applyProduitSelection(exact);
+      }
+    }
+  };
+
+  const handleProduitInputKeyDown = (e) => {
+    if (e.key !== "Enter" && e.key !== "NumpadEnter") return;
+
+    e.preventDefault();
+    const q = (ligneLibelle || "").trim();
+    if (!q) return;
+
+    const isNumeric = /^\d+$/.test(q);
+
+    if (isNumeric) {
+      // Essayer d’abord un match exact sur code-barres / ref
+      const exact = catalogue.find((p) => {
+        const code = (p.codeBarre || "").toString().trim();
+        const ref = (p.ref || "").toString().trim();
+        return code === q || ref === q;
+      });
+
+      if (exact) {
+        applyProduitSelection(exact);
+        return;
+      }
+    }
+
+    // Sinon, utiliser les produits filtrés (par nom / ref)
+    if (produitsFiltres.length === 1) {
+      applyProduitSelection(produitsFiltres[0]);
+    } else if (produitsFiltres.length > 1) {
+      // On prend le premier pour aller vite (comportement "autocomplete")
+      applyProduitSelection(produitsFiltres[0]);
+    } else {
+      toast(
+        "error",
+        "Produit introuvable",
+        "Aucun produit ne correspond à cette recherche."
+      );
     }
   };
 
@@ -625,16 +955,106 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
     setLignes((prev) => prev.filter((l) => l.id !== id));
 
   const handleSelectProduitFromModal = (p) => {
-    setLigneProduitId(p.id);
-    setLigneLibelle(p.libelle);
-
-    const prixPropose =
-      ligneMode === "gros"
-        ? p.prixGros || p.prixDetail || p.prix || 0
-        : p.prixDetail || p.prixGros || p.prix || 0;
-
-    setLignePrix(String(prixPropose));
+    applyProduitSelection(p);
   };
+
+    // 🔧 Édition d'une ligne (qte + prix uniquement)
+  const [editingId, setEditingId] = useState(null);
+  const [editingQte, setEditingQte] = useState("");
+  const [editingPrix, setEditingPrix] = useState("");
+
+  const handleStartEditLigne = (ligne) => {
+    setEditingId(ligne.id);
+    setEditingQte(String(ligne.qte));
+    setEditingPrix(String(ligne.prixUnitaire));
+  };
+
+  const handleCancelEditLigne = () => {
+    setEditingId(null);
+    setEditingQte("");
+    setEditingPrix("");
+  };
+
+  const handleSaveEditLigne = () => {
+    if (!editingId) return;
+
+    const ligne = lignes.find((l) => l.id === editingId);
+    if (!ligne) return;
+
+    const qteNum = Number(editingQte);
+    const prixNum = Number(editingPrix);
+
+    if (!qteNum || qteNum <= 0 || !prixNum || prixNum <= 0) {
+      toast(
+        "error",
+        "Valeurs invalides",
+        "La quantité et le prix doivent être positifs."
+      );
+      return;
+    }
+
+    // 🔍 Retrouver le produit pour refaire les vérifications de stock
+    const produit = catalogue.find(
+      (p) => String(p.id) === String(ligne.produitId)
+    );
+
+    if (produit) {
+      const unitsPerCarton = produit.unitesParCarton || 1;
+      const stockGlobal = produit.stockGlobal ?? null;
+      const nbCartons =
+        produit.nombreCartons ??
+        (stockGlobal != null ? Math.floor(stockGlobal / unitsPerCarton) : null);
+
+      if (ligne.modeVente === "detail" && stockGlobal != null) {
+        if (qteNum > stockGlobal) {
+          toast(
+            "error",
+            "Stock insuffisant",
+            `Stock disponible : ${stockGlobal} unité(s).`
+          );
+          return;
+        }
+      }
+
+      if (ligne.modeVente === "gros" && nbCartons != null) {
+        if (qteNum > nbCartons) {
+          toast(
+            "error",
+            "Stock cartons insuffisant",
+            `Stock disponible : ${nbCartons} carton(s).`
+          );
+          return;
+        }
+      }
+    }
+
+    const unitsPerCarton = produit?.unitesParCarton || 1;
+    const quantiteUnites =
+      ligne.modeVente === "gros" ? qteNum * unitsPerCarton : qteNum;
+
+    const totalHTLigne = qteNum * prixNum;
+    const totalTTCLigne = applyTVA ? totalHTLigne * 1.18 : totalHTLigne;
+
+    setLignes((prev) =>
+      prev.map((l) =>
+        l.id === editingId
+          ? {
+              ...l,
+              qte: qteNum,
+              prixUnitaire: prixNum,
+              totalHT: totalHTLigne,
+              totalTTC: totalTTCLigne,
+              quantiteUnites,
+            }
+          : l
+      )
+    );
+
+    setEditingId(null);
+    setEditingQte("");
+    setEditingPrix("");
+  };
+
 
   // ✅ Soumission du formulaire : on construit un brouillon et on délègue au parent
   const handleSubmit = (e) => {
@@ -679,8 +1099,16 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
     setLigneQte("");
     setLignePrix("");
     setLigneMode("gros");
-    setScanCode("");
   };
+
+  const shouldShowSuggestions =
+    ligneLibelle &&
+    produitsFiltres.length > 0 &&
+    !(
+      produitSelectionne &&
+      ligneLibelle.trim().toLowerCase() ===
+        (produitSelectionne.libelle || "").toLowerCase()
+    );
 
   return (
     <>
@@ -783,13 +1211,13 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
               <div className="text-[11px] text-gray-600 space-y-0.5">
                 <div>
                   Stock :{" "}
-                    <span className="font-semibold">
-                      {produitSelectionne.stockGlobal} unité(s)
-                    </span>{" "}
-                    —{" "}
-                    <span className="font-semibold">
-                      {produitSelectionne.nombreCartons} carton(s)
-                    </span>
+                  <span className="font-semibold">
+                    {produitSelectionne.stockGlobal} unité(s)
+                  </span>{" "}
+                  —{" "}
+                  <span className="font-semibold">
+                    {produitSelectionne.nombreCartons} carton(s)
+                  </span>
                 </div>
                 <div>
                   Prix ref. détail :{" "}
@@ -805,70 +1233,68 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
             )}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end mt-2">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-start mt-2">
             <div className="sm:col-span-2">
               <label className="block text-xs text-gray-500 mb-1">
-                Produit
+                Produit (nom, référence ou code-barres)
               </label>
-              <button
-                type="button"
-                onClick={() => setOpenProduitSearch(true)}
-                className={cls(
-                  "w-full px-3 py-2 text-sm rounded-xl flex items-center justify-between border bg-white shadow-sm mb-2",
-                  ligneLibelle
-                    ? "border-gray-300"
-                    : "border-dashed border-gray-300 bg-gray-50 text-gray-500"
-                )}
-                disabled={loadingRefs}
-              >
-                <span>
-                  {loadingRefs
-                    ? "Chargement du catalogue..."
-                    : ligneLibelle ||
-                      "Rechercher un produit dans le catalogue..."}
-                </span>
-                <Search className="w-4 h-4 text-gray-400" />
-              </button>
 
-              <input
-                type="text"
-                placeholder="Ou saisir manuellement le libellé du produit"
-                value={ligneLibelle}
-                onChange={(e) => setLigneLibelle(e.target.value)}
-                className={baseInput}
-              />
-
-              {/* Scan code-barres */}
-              <div className="mt-3">
-                <label className="block text-xs text-gray-500 mb-1">
-                  Scan code-barres (facultatif)
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={scanCode}
-                    onChange={(e) => setScanCode(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === "NumpadEnter") {
-                        handleScanBarcode(e);
-                      }
-                    }}
-                    placeholder="Placez le curseur ici et scannez, ou tapez le code puis Entrée"
-                    className={baseInput}
-                  />
-                  <button
-                    type="button"
-                    onClick={handleScanBarcode}
-                    className="px-3 py-2 rounded-xl border border-[#472EAD] text-xs text-[#472EAD] bg-white hover:bg-[#F7F5FF] shadow-sm"
-                  >
-                    Scanner
-                  </button>
-                </div>
-                <p className="mt-1 text-[10px] text-gray-500">
-                  Compatible lecteur code-barres et saisie manuelle (chiffres
-                  tapés au clavier).
-                </p>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={ligneLibelle}
+                  onChange={handleProduitInputChange}
+                  onKeyDown={handleProduitInputKeyDown}
+                  placeholder="Tapez le libellé, scannez ou saisissez un code-barres..."
+                  className={cls(baseInput, "pr-9")}
+                  disabled={loadingRefs}
+                />
+                <button
+                  type="button"
+                  onClick={() => setOpenProduitSearch(true)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-gray-100 text-gray-500"
+                  title="Ouvrir le catalogue"
+                >
+                  <Search className="w-4 h-4" />
+                </button>
               </div>
+
+              {shouldShowSuggestions && (
+                <div className="mt-1 max-h-44 overflow-auto rounded-xl border border-gray-200 bg-white shadow-lg text-xs z-20 relative">
+                  {produitsFiltres.slice(0, 10).map((p) => (
+                    <button
+                      type="button"
+                      key={p.id}
+                      onClick={() => applyProduitSelection(p)}
+                      className="w-full px-3 py-2 flex items-center justify-between hover:bg-[#F7F5FF]"
+                    >
+                      <div className="text-left">
+                        <div className="font-medium text-gray-800">
+                          {p.libelle}
+                        </div>
+                        <div className="text-[10px] text-gray-500">
+                          {(p.ref || "—") +
+                            " • Détail: " +
+                            formatFCFA(p.prixDetail) +
+                            " • Gros: " +
+                            (p.prixGros ? formatFCFA(p.prixGros) : "--")}
+                        </div>
+                      </div>
+                      <span className="text-[10px] px-2 py-1 rounded-full bg-[#F7F5FF] text-[#472EAD] border border-[#E4E0FF]">
+                        Choisir
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <p className="mt-1 text-[10px] text-gray-500">
+                Placez le curseur dans ce champ puis{" "}
+                <span className="font-semibold">
+                  scannez le code-barres
+                </span>{" "}
+                ou tapez directement le libellé / les chiffres du code.
+              </p>
             </div>
 
             <div>
@@ -940,46 +1366,110 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
             </thead>
             <tbody>
               {lignes.length ? (
-                lignes.map((l) => (
-                  <tr
-                    key={l.id}
-                    className="border-t border-gray-100 hover:bg-[#F9F9FF]"
-                  >
-                    <td className="px-3 py-2">
-                      <div className="font-medium">{l.libelle}</div>
-                      {l.ref && (
-                        <div className="text-[10px] text-gray-500">
-                          Réf : {l.ref}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-[11px] text-gray-600">
-                      {l.modeVente === "gros"
-                        ? "Gros (cartons/boîtes)"
-                        : "Détail (unités)"}
-                    </td>
-                    <td className="px-3 py-2 text-right">{l.qte}</td>
-                    <td className="px-3 py-2 text-right">
-                      {formatFCFA(l.prixUnitaire)}
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      {formatFCFA(l.totalHT)}
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      {formatFCFA(l.totalTTC)}
-                    </td>
-                    <td className="px-3 py-2 text-center">
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveLigne(l.id)}
-                        className="p-1.5 rounded-md hover:bg-rose-50 text-rose-600"
-                        title="Retirer la ligne"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                lignes.map((l) => {
+                  const isEditing = editingId === l.id;
+
+                  return (
+                    <tr
+                      key={l.id}
+                      className="border-t border-gray-100 hover:bg-[#F9F9FF]"
+                    >
+                      <td className="px-3 py-2">
+                        <div className="font-medium">{l.libelle}</div>
+                        {l.ref && (
+                          <div className="text-[10px] text-gray-500">
+                            Réf : {l.ref}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-[11px] text-gray-600">
+                        {l.modeVente === "gros"
+                          ? "Gros (cartons/boîtes)"
+                          : "Détail (unités)"}
+                      </td>
+
+                      {/* Qté éditable */}
+                      <td className="px-3 py-2 text-right">
+                        {isEditing ? (
+                          <input
+                            type="number"
+                            min="1"
+                            value={editingQte}
+                            onChange={(e) => setEditingQte(e.target.value)}
+                            className="w-20 text-right border border-gray-300 rounded-lg px-2 py-1 text-xs focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD]"
+                          />
+                        ) : (
+                          l.qte
+                        )}
+                      </td>
+
+                      {/* PU (libre) éditable */}
+                      <td className="px-3 py-2 text-right">
+                        {isEditing ? (
+                          <input
+                            type="number"
+                            min="0"
+                            value={editingPrix}
+                            onChange={(e) => setEditingPrix(e.target.value)}
+                            className="w-24 text-right border border-gray-300 rounded-lg px-2 py-1 text-xs focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD]"
+                          />
+                        ) : (
+                          formatFCFA(l.prixUnitaire)
+                        )}
+                      </td>
+
+                      <td className="px-3 py-2 text-right">
+                        {formatFCFA(l.totalHT)}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {formatFCFA(l.totalTTC)}
+                      </td>
+
+                      {/* Actions */}
+                      <td className="px-3 py-2 text-center">
+                        {isEditing ? (
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={handleSaveEditLigne}
+                              className="p-1.5 rounded-md bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                              title="Valider les modifications"
+                            >
+                              <Check size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleCancelEditLigne}
+                              className="p-1.5 rounded-md bg-gray-50 text-gray-500 hover:bg-gray-100"
+                              title="Annuler"
+                            >
+                              <XCircle size={14} />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleStartEditLigne(l)}
+                              className="p-1.5 rounded-md hover:bg-indigo-50 text-[#472EAD]"
+                              title="Modifier quantité et PU"
+                            >
+                              <Pencil size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveLigne(l.id)}
+                              className="p-1.5 rounded-md hover:bg-rose-50 text-rose-600"
+                              title="Retirer la ligne"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
               ) : (
                 <tr>
                   <td
@@ -1073,6 +1563,61 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
       />
     </>
   );
+}
+
+// ======================================================================
+// 🔐 Construction du payload QR (Option 2 : toutes les infos dans le code)
+// ======================================================================
+function buildQrPayloadFromCommande(commande) {
+  if (!commande) return "";
+
+  const payload = {
+    type: "commande_client_special",
+    version: 1,
+    id: commande.id,
+    numero: commande.numero,
+    dateCommande: commande.dateCommande,
+    client: {
+      id: commande.clientId,
+      nom: commande.clientNom,
+      code: commande.clientCode,
+    },
+    montant: {
+      totalHT: commande.totalHT,
+      totalTVA: commande.totalTVA,
+      totalTTC: commande.totalTTC,
+      montantPaye: commande.montantPaye,
+      resteAPayer: commande.resteAPayer,
+    },
+    statut: {
+      code: commande.statut,
+      label: commande.statutLabel,
+    },
+    lignes: (commande.lignes || []).map((l) => ({
+      id: l.id,
+      produitId: l.produitId,
+      libelle: l.libelle,
+      ref: l.ref,
+      modeVente: l.modeVente,
+      qte: l.qte,
+      prixUnitaire: l.prixUnitaire,
+      totalHT: l.totalHT,
+      totalTTC: l.totalTTC,
+    })),
+  };
+
+  // Résumé humain lisible (ce que voit une app de scan basique)
+  const resumeHumain = [
+    `LPD_CMD#${commande.numero}`,
+    `Client: ${commande.clientNom || "Client spécial"}`,
+    `TTC: ${commande.totalTTC} XOF`,
+    `Date: ${commande.dateCommande}`,
+  ].join("\n");
+
+  const jsonPart = JSON.stringify(payload);
+
+  // Le module caisse lira ce qui est après "JSON::"
+  return `${resumeHumain}\n\nJSON::${jsonPart}`;
 }
 
 // ======================================================================
@@ -1258,6 +1803,17 @@ export default function Commandes() {
 
   // map id client -> nom client pour compléter ce que le backend n’envoie pas
   const [clientsMap, setClientsMap] = useState({});
+  // Pour le QR code de la dernière commande créée
+  const [lastCreatedCommande, setLastCreatedCommande] = useState(null);
+  const [showQrModal, setShowQrModal] = useState(false);
+
+  const qrPayload = useMemo(
+    () =>
+      lastCreatedCommande
+        ? buildQrPayloadFromCommande(lastCreatedCommande)
+        : "",
+    [lastCreatedCommande]
+  );
 
   const toast = (type, title, message) => {
     const id = Date.now();
@@ -1349,17 +1905,21 @@ export default function Commandes() {
 
   // Stats globales
   const statsGlobales = useMemo(() => {
-    const nb = commandes.length;
-    const totalTTC = commandes.reduce((s, c) => s + (c.totalTTC || 0), 0);
-    const totalPaye = commandes.reduce((s, c) => s + (c.montantPaye || 0), 0);
-    const detteTotale = commandes.reduce(
+    // On ne compte que les commandes non annulées
+    const actives = commandes.filter((c) => c.statut !== "annulee");
+
+    const nb = actives.length;
+    const totalTTC = actives.reduce((s, c) => s + (c.totalTTC || 0), 0);
+    const totalPaye = actives.reduce((s, c) => s + (c.montantPaye || 0), 0);
+    const detteTotale = actives.reduce(
       (s, c) => s + Math.max(c.resteAPayer || 0, 0),
       0
     );
+
     return { nbCommandes: nb, totalTTC, totalPaye, detteTotale };
   }, [commandes]);
 
-  // ✅ Unique handleCreateCommande : envoi à la caisse
+  // ✅ handleCreateCommande : envoi à la caisse
   const handleCreateCommande = async (commandeDraft) => {
     try {
       const payload = {
@@ -1409,6 +1969,10 @@ export default function Commandes() {
       }
 
       setCommandes((prev) => [normalized, ...prev]);
+
+      // ✅ Mémoriser la dernière commande créée pour le QR
+      setLastCreatedCommande(normalized);
+      setShowQrModal(true);
 
       toast(
         "success",
@@ -1582,19 +2146,13 @@ export default function Commandes() {
 
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <button
-                onClick={exportPDF}
-                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white text-xs sm:text-sm text-gray-700 hover:bg-gray-50"
-              >
-                <FileDown size={16} />
-                Exporter en PDF
-              </button>
-              <button
                 onClick={fetchCommandes}
-                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white text-xs sm:text-sm text-gray-700 hover:bg-gray-50"
+                className="flex items-center gap-2 px-4 py-2.5 bg-[#472EAD] text-white rounded-lg shadow-md hover:bg-[#5A3CF5] hover:shadow-lg text-xs sm:text-sm transition"
               >
                 <RefreshCw size={16} />
                 Actualiser
               </button>
+
             </div>
           </motion.header>
 
@@ -1602,38 +2160,56 @@ export default function Commandes() {
           <motion.div
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3"
+            className="w-full max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3"
           >
-            <div className="rounded-xl border bg-amber-50 border-amber-200 px-3 py-2.5">
-              <div className="text-[15px] text-rose-700 mb-0.5">
+            {/* Nombre de commandes */}
+            <div className="rounded-xl border border-yellow-400 bg-gradient-to-br from-yellow-50 via-amber-50 to-yellow-100 px-3 py-2.5 shadow-sm">
+              <div className="text-[15px] font-semibold text-yellow-800 mb-0.5">
                 Nombre de commandes
               </div>
-              <div className="text-lg font-bold text-rose-700">
-                {statsGlobales.nbCommandes}
+              <div className="flex items-center justify-between">
+                <span className="text-lg font-extrabold text-yellow-700">
+                  {statsGlobales.nbCommandes}
+                </span>
+                <BadgeDollarSign className="w-5 h-5 text-yellow-600" />
               </div>
             </div>
+
+            {/* Total TTC global */}
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
               <div className="text-[15px] text-gray-500 mb-0.5">
                 Total TTC global
               </div>
-              <div className="text-xs sm:text-sm font-semibold text-emerald-700 truncate">
-                {formatFCFA(statsGlobales.totalTTC)}
+              <div className="flex items-center justify-between">
+                <span className="text-sm sm:text-lg font-extrabold text-emerald-700">
+                  {formatFCFA(statsGlobales.totalTTC)}
+                </span>
               </div>
             </div>
+
+            {/* Montant payé (caisse) */}
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
               <div className="text-[15px] text-gray-500 mb-0.5">
                 Montant payé (caisse)
               </div>
-              <div className="text-xs sm:text-sm font-semibold text-emerald-700 truncate">
-                {formatFCFA(statsGlobales.totalPaye)}
+              <div className="flex items-center justify-between">
+                <span className="text-sm sm:text-lg font-extrabold text-emerald-700">
+                  {formatFCFA(statsGlobales.totalPaye)}
+                </span>
+                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
               </div>
             </div>
+
+            {/* Dette globale */}
             <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5">
               <div className="text-[15px] text-gray-500 mb-0.5">
                 Dette globale
               </div>
-              <div className="text-xs sm:text-sm font-semibold text-rose-700 truncate">
-                {formatFCFA(statsGlobales.detteTotale)}
+              <div className="flex items-center justify-between">
+                <span className="text-sm sm:text-lg font-extrabold text-rose-700">
+                  {formatFCFA(statsGlobales.detteTotale)}
+                </span>
+                <AlertCircle className="w-5 h-5 text-rose-600" />
               </div>
             </div>
           </motion.div>
@@ -1748,6 +2324,14 @@ export default function Commandes() {
             open={openFacture}
             onClose={() => setOpenFacture(false)}
             commande={selectedCommande}
+          />
+
+          {/* MODAL QR CODE COMMANDE (après création) */}
+          <QrCommandeModal
+            open={showQrModal}
+            onClose={() => setShowQrModal(false)}
+            commande={lastCreatedCommande}
+            qrPayload={qrPayload}
           />
 
           {/* TOASTS */}

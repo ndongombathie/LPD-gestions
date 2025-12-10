@@ -1,7 +1,7 @@
-// ==========================================================
+// ==========================================================   
 // 🧍‍♂️ ClientsSpeciaux.jsx — Interface Responsable (LPD Manager)
 // Gestion des clients privilégiés (vente en gros + paiements par tranches)
-// Version ULTRA PRO (agrégats + historique + nouvelle tranche + redirection Commandes)
+// Version ULTRA PRO (agrégats + historique + nouvelle tranche + édition tranche)
 // ==========================================================
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -11,8 +11,6 @@ import {
   Edit2,
   Trash2,
   Search,
-  ShoppingCart,
-  FileDown,
   Loader2,
   CheckCircle2,
   AlertCircle,
@@ -22,9 +20,7 @@ import {
 } from "lucide-react";
 import FormModal from "../components/FormModal.jsx";
 import DataTable from "../components/DataTable.jsx";
-import jsPDF from "jspdf";
-import "jspdf-autotable";
-import { useNavigate } from "react-router-dom";
+import VoirDetailClient from "../components/VoirDetailClient.jsx";
 import { instance as axios } from "../../utils/axios.jsx";
 
 const cls = (...a) => a.filter(Boolean).join(" ");
@@ -33,6 +29,8 @@ const formatFCFA = (n) =>
     style: "currency",
     currency: "XOF",
   }).format(Number(n || 0));
+
+const todayISO = () => new Date().toISOString().slice(0, 10);
 
 // ==========================================================
 // ✅ Toasts Premium
@@ -81,184 +79,167 @@ function Toasts({ toasts, remove }) {
 }
 
 // ==========================================================
-// 🧾 Modal Historique Client (commandes + paiements)
+// 🔧 Helper : normaliser une commande (même modèle que Commandes.jsx)
 // ==========================================================
-function HistoriqueClientModal({ open, onClose, client, commandes }) {
-  if (!open || !client) return null;
+function normalizeCommande(cmd) {
+  const client =
+    cmd.client ||
+    cmd.client_special ||
+    cmd.clientSpecial ||
+    cmd.client_speciale ||
+    cmd.client_speciale_detail ||
+    {};
 
-  const commandesTriees = [...commandes].sort((a, b) =>
-    a.dateCommande < b.dateCommande ? 1 : -1
+  let clientNom =
+    cmd.client_nom ||
+    cmd.nom_client ||
+    cmd.nom_client_special ||
+    cmd.client_name ||
+    cmd.customer_name ||
+    client.nom ||
+    client.nom_client ||
+    client.nom_client_special ||
+    client.raison_sociale ||
+    client.raisonSociale ||
+    client.name ||
+    client.libelle ||
+    client.intitule ||
+    "";
+
+  if (!clientNom && client && typeof client === "object") {
+    const firstStringValue = Object.values(client).find(
+      (v) => typeof v === "string" && v.trim() !== ""
+    );
+    if (firstStringValue) clientNom = firstStringValue;
+  }
+
+  const clientCode =
+    cmd.client_code ||
+    cmd.code_client ||
+    client.code_client ||
+    client.codeClient ||
+    client.code ||
+    cmd.code ||
+    undefined;
+
+  const lignesSource =
+    cmd.lignes || cmd.ligne_commandes || cmd.details || cmd.items || [];
+
+  const lignes = (lignesSource || []).map((l) => {
+    const qte = Number(l.quantite || l.qte || l.qty || 0);
+    const pu = Number(l.prix_unitaire || l.prix || l.price || 0);
+    const modeVente = l.mode_vente || l.modeVente || l.mode || "detail";
+
+    const totalHTLigne = Number(
+      l.total_ht || l.totalHT || (qte && pu ? qte * pu : 0)
+    );
+    const totalTTCLigne = Number(
+      l.total_ttc || l.totalTTC || l.total || totalHTLigne * 1.18 || 0
+    );
+
+    const quantiteUnites = Number(
+      l.quantite_unites ||
+        l.quantiteUnites ||
+        (modeVente === "gros" ? qte * (l.unites_par_carton || 1) : qte)
+    );
+
+    return {
+      id: l.id,
+      produitId: l.produit_id || l.produitId || null,
+      libelle: l.libelle || l.nom_produit || l.designation || l.nom || "",
+      ref: l.ref || l.code_produit || l.reference || l.code || null,
+      qte,
+      prixUnitaire: pu,
+      totalHT: totalHTLigne,
+      totalTTC: totalTTCLigne,
+      modeVente,
+      quantiteUnites,
+    };
+  });
+
+  let totalHT = Number(cmd.total_ht ?? cmd.totalHT ?? cmd.montant_ht ?? 0);
+  let totalTTC = Number(
+    cmd.total_ttc ?? cmd.totalTTC ?? cmd.montant_total ?? cmd.total ?? 0
   );
 
-  return (
-    <div className="fixed inset-0 z-[110] bg-black/40 flex items-center justify-center px-2">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 10 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl p-6"
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between border-b pb-3 mb-4">
-          <div>
-            <h2 className="text-lg font-semibold text-[#472EAD] flex items-center gap-2">
-              <ListChecks className="w-5 h-5" />
-              Historique — {client.nom}
-            </h2>
-            <p className="text-xs text-gray-500">
-              Suivi des commandes, paiements par tranches et dettes.
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="rounded-full p-1.5 hover:bg-gray-100 text-gray-500"
-          >
-            <X size={18} />
-          </button>
-        </div>
+  if ((!totalHT || Number.isNaN(totalHT)) && lignes.length) {
+    totalHT = lignes.reduce(
+      (s, l) => s + (Number(l.totalHT) || l.qte * l.prixUnitaire || 0),
+      0
+    );
+  }
 
-        {/* Résumé global */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4 text-xs">
-          <div className="rounded-xl border border-[#E4E0FF] bg-[#F7F5FF] px-3 py-2">
-            <div className="text-gray-500 mb-1">Total TTC commandes</div>
-            <div className="font-semibold text-[#472EAD]">
-              {formatFCFA(
-                commandesTriees.reduce((s, c) => s + (c.totalTTC || 0), 0)
-              )}
-            </div>
-          </div>
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
-            <div className="text-gray-500 mb-1">Total payé</div>
-            <div className="font-semibold text-emerald-700">
-              {formatFCFA(
-                commandesTriees.reduce((s, c) => s + (c.montantPaye || 0), 0)
-              )}
-            </div>
-          </div>
-          <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2">
-            <div className="text-gray-500 mb-1">Dette totale</div>
-            <div className="font-semibold text-rose-700">
-              {formatFCFA(
-                commandesTriees.reduce(
-                  (s, c) => s + Math.max(c.resteAPayer || 0, 0),
-                  0
-                )
-              )}
-            </div>
-          </div>
-        </div>
+  if ((!totalTTC || Number.isNaN(totalTTC)) && lignes.length) {
+    totalTTC = lignes.reduce(
+      (s, l) => s + (Number(l.totalTTC) || Number(l.totalHT) || 0),
+      0
+    );
+  }
 
-        {/* Infos client */}
-        <div className="mb-3 text-xs text-gray-600">
-          <div className="font-semibold text-gray-700">{client.nom}</div>
-          <div>{client.entreprise}</div>
-          <div className="text-gray-500">
-            {client.adresse} — {client.contact}
-          </div>
-        </div>
-
-        {/* Liste commandes */}
-        <div className="max-h-[420px] overflow-y-auto rounded-xl border border-gray-200">
-          <table className="w-full text-xs">
-            <thead className="bg-[#F7F5FF] text-[#472EAD] uppercase text-[11px] font-semibold">
-              <tr>
-                <th className="px-3 py-2 text-left">N°</th>
-                <th className="px-3 py-2 text-left">Date</th>
-                <th className="px-3 py-2 text-right">Total TTC</th>
-                <th className="px-3 py-2 text-right">Payé</th>
-                <th className="px-3 py-2 text-right">Reste</th>
-                <th className="px-3 py-2 text-left">Statut</th>
-                <th className="px-3 py-2 text-left">Paiements</th>
-              </tr>
-            </thead>
-            <tbody>
-              {commandesTriees.length ? (
-                commandesTriees.map((c) => (
-                  <tr
-                    key={c.id}
-                    className="border-t border-gray-100 hover:bg-[#F9F9FF]"
-                  >
-                    <td className="px-3 py-2 font-medium">{c.numero}</td>
-                    <td className="px-3 py-2">{c.dateCommande}</td>
-                    <td className="px-3 py-2 text-right">
-                      {formatFCFA(c.totalTTC)}
-                    </td>
-                    <td className="px-3 py-2 text-right text-emerald-700">
-                      {formatFCFA(c.montantPaye)}
-                    </td>
-                    <td className="px-3 py-2 text-right text-rose-700">
-                      {formatFCFA(Math.max(c.resteAPayer, 0))}
-                    </td>
-                    <td className="px-3 py-2">
-                      <span
-                        className={cls(
-                          "px-2 py-1 rounded-full inline-flex items-center gap-1 text-[11px] font-semibold border",
-                          c.statut === "en_attente_caisse" &&
-                            "bg-gray-100 text-gray-700 border-gray-300",
-                          c.statut === "partiellement_payee" &&
-                            "bg-amber-100 text-amber-700 border-amber-300",
-                          c.statut === "soldee" &&
-                            "bg-emerald-100 text-emerald-700 border-emerald-300",
-                          c.statut === "annulee" &&
-                            "bg-rose-100 text-rose-700 border-rose-300"
-                        )}
-                      >
-                        {c.statutLabel}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2">
-                      {c.paiements && c.paiements.length ? (
-                        <div className="space-y-1">
-                          {c.paiements.map((p) => (
-                            <div
-                              key={p.id}
-                              className="flex items-center justify-between gap-2 text-[11px]"
-                            >
-                              <span className="text-gray-500">
-                                {p.date} — {p.mode.toUpperCase()}
-                              </span>
-                              <span className="font-semibold">
-                                {formatFCFA(p.montant)}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <span className="text-[11px] text-gray-400">
-                          Aucun paiement
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td
-                    className="px-3 py-4 text-center text-gray-400"
-                    colSpan={7}
-                  >
-                    Aucune commande enregistrée pour ce client.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="flex justify-end mt-4">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 rounded-lg border border-gray-300 text-sm hover:bg-gray-50"
-          >
-            Fermer
-          </button>
-        </div>
-      </motion.div>
-    </div>
+  let totalTVA = Number(
+    cmd.total_tva ?? cmd.totalTVA ?? cmd.montant_tva ?? (totalTTC - totalHT)
   );
+  if (Number.isNaN(totalTVA)) {
+    totalTVA = totalTTC - totalHT;
+  }
+
+  const montantPaye = Number(
+    cmd.montant_paye || cmd.montantPaye || cmd.total_paye || 0
+  );
+  const resteAPayer = Number(
+    cmd.reste_a_payer ||
+      cmd.resteAPayer ||
+      cmd.montant_restant ||
+      totalTTC - montantPaye
+  );
+
+  const statut = cmd.statut || "en_attente_caisse";
+  const statutLabelMap = {
+    en_attente_caisse: "En attente caisse",
+    partiellement_payee: "Partiellement payée",
+    soldee: "Soldée",
+    annulee: "Annulée",
+  };
+  const statutLabel =
+    cmd.statut_label || cmd.statutLabel || statutLabelMap[statut] || statut;
+
+  const paiements = (cmd.paiements || []).map((p) => ({
+    id: p.id,
+    date: p.date_paiement || p.date || null,
+    montant: Number(p.montant || p.montant_paye || 0),
+    mode: p.mode_paiement || p.mode || "",
+    commentaire: p.commentaire || "",
+    statut:
+      p.statut || p.status || p.statut_paiement || p.statutPaiement || null,
+    type: p.type_paiement || p.type || p.typePaiement || null,
+  }));
+
+  return {
+    id: cmd.id,
+    numero: cmd.numero || cmd.reference || cmd.code || `CMD-${cmd.id}`,
+    clientId: cmd.client_id || cmd.clientId || client.id || null,
+    clientNom,
+    clientCode,
+    dateCommande:
+      cmd.date_commande ||
+      cmd.dateCommande ||
+      (cmd.created_at ? String(cmd.created_at).slice(0, 10) : todayISO()),
+    lignes,
+    totalHT,
+    totalTVA,
+    totalTTC,
+    tauxTVA: totalHT ? totalTVA / totalHT : 0.18,
+    paiements,
+    montantPaye,
+    resteAPayer,
+    statut,
+    statutLabel,
+  };
 }
 
 // ==========================================================
 // 💸 Modal Nouvelle Tranche (côté Responsable)
+//  ⚠️ Corrigée : Hooks toujours appelés, puis on retourne null si !open || !client
 // ==========================================================
 function NouvelleTrancheModal({
   open,
@@ -268,36 +249,47 @@ function NouvelleTrancheModal({
   onSubmit,
   toast,
 }) {
-  if (!open || !client) return null;
-
-  // On ne propose que les commandes avec reste > 0 et non annulées
-  const commandesEligibles = commandes.filter(
-    (c) => (c.resteAPayer || 0) > 0 && c.statut !== "annulee"
+  // ✅ Commandes éligibles = reste à payer > 0, non annulées, ET aucune tranche en attente caisse déjà enregistrée
+  const commandesEligibles = useMemo(
+    () =>
+      (commandes || []).filter((c) => {
+        if ((c.resteAPayer || 0) <= 0 || c.statut === "annulee") return false;
+        const hasTrancheEnAttente = (c.paiements || []).some(
+          (p) =>
+            p.type === "tranche" &&
+            p.statut === "en_attente_caisse" &&
+            p.montant
+        );
+        return !hasTrancheEnAttente;
+      }),
+    [commandes]
   );
 
-  const [commandeId, setCommandeId] = useState(
-    commandesEligibles[0]?.id || ""
-  );
+  const [commandeId, setCommandeId] = useState("");
   const [montant, setMontant] = useState("");
   const [mode, setMode] = useState("especes");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(todayISO());
   const [commentaire, setCommentaire] = useState("");
+
+  // 🔄 Réinitialisation propre à chaque ouverture
+  useEffect(() => {
+    if (!open) return;
+    if (commandesEligibles.length > 0) {
+      setCommandeId(String(commandesEligibles[0].id));
+    } else {
+      setCommandeId("");
+    }
+    setMontant("");
+    setMode("especes");
+    setDate(todayISO());
+    setCommentaire("");
+  }, [open, commandesEligibles]);
 
   const commandeSelectionnee =
     commandesEligibles.find((c) => String(c.id) === String(commandeId)) ||
-    commandesEligibles[0] ||
     null;
 
-  const resetForm = () => {
-    setCommandeId(commandesEligibles[0]?.id || "");
-    setMontant("");
-    setMode("especes");
-    setDate(new Date().toISOString().slice(0, 10));
-    setCommentaire("");
-  };
-
   const handleClose = () => {
-    resetForm();
     onClose();
   };
 
@@ -307,12 +299,11 @@ function NouvelleTrancheModal({
       toast(
         "error",
         "Aucune commande",
-        "Ce client n'a aucune commande en attente."
+        "Ce client n'a aucune commande éligible pour une nouvelle tranche."
       );
       return;
     }
 
-    const reste = Math.max(commandeSelectionnee.resteAPayer || 0, 0);
     const m = Number(montant);
 
     if (!m || m <= 0) {
@@ -324,13 +315,39 @@ function NouvelleTrancheModal({
       return;
     }
 
-    if (m > reste) {
+    // 🔍 Calcul du reste théorique en tenant compte des tranches déjà en attente
+    const totalTTCCommande = Number(commandeSelectionnee.totalTTC || 0);
+    const montantDejaEncaisse = Number(commandeSelectionnee.montantPaye || 0);
+    const totalTranchesEnAttente = (commandeSelectionnee.paiements || [])
+      .filter(
+        (p) =>
+          p.type === "tranche" &&
+          p.statut === "en_attente_caisse" &&
+          p.montant
+      )
+      .reduce((s, p) => s + Number(p.montant || 0), 0);
+
+    const resteTheorique = Math.max(
+      totalTTCCommande - montantDejaEncaisse - totalTranchesEnAttente,
+      0
+    );
+
+    if (resteTheorique <= 0) {
+      toast(
+        "error",
+        "Aucun reste pour nouvelle tranche",
+        "Le montant total de la commande est déjà couvert par les encaissements et tranches en attente."
+      );
+      return;
+    }
+
+    if (m > resteTheorique) {
       toast(
         "error",
         "Montant trop élevé",
-        `La tranche ne peut pas dépasser le reste à payer (${formatFCFA(
-          reste
-        )}).`
+        `La tranche ne peut pas dépasser le reste théorique disponible (${formatFCFA(
+          resteTheorique
+        )}) en tenant compte des autres tranches en attente.`
       );
       return;
     }
@@ -341,9 +358,9 @@ function NouvelleTrancheModal({
       date,
       commentaire: commentaire?.trim() || "",
     });
-
-    resetForm();
   };
+
+  if (!open || !client) return null;
 
   const baseInput =
     "w-full rounded-xl border px-3 py-2.5 text-sm bg-white shadow-sm border-gray-300 focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD]";
@@ -363,7 +380,8 @@ function NouvelleTrancheModal({
               Nouvelle tranche — {client.nom}
             </h2>
             <p className="text-xs text-gray-500">
-              Préparation d&apos;un paiement partiel (validation en caisse).
+              Préparation d&apos;un paiement partiel{" "}
+              <span className="font-semibold">(validation en caisse)</span>.
             </p>
           </div>
           <button
@@ -386,25 +404,44 @@ function NouvelleTrancheModal({
         {commandesEligibles.length === 0 ? (
           <div className="text-sm text-gray-500 mb-4">
             Ce client n&apos;a actuellement{" "}
-            <span className="font-semibold">aucune commande en attente</span>{" "}
-            ou avec reste à payer.
+            <span className="font-semibold">
+              aucune commande éligible à une tranche
+            </span>{" "}
+            (soit aucune dette, soit une tranche est déjà en attente caisse).
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4 text-sm">
             {/* Commande + reste */}
             <div>
               <label className="block text-xs text-gray-500 mb-1">
-                Commande à encaisser
+                Commande concernée
               </label>
               <select
-                value={commandeSelectionnee?.id || ""}
+                value={commandeId}
                 onChange={(e) => setCommandeId(e.target.value)}
                 className={baseInput}
               >
                 {commandesEligibles.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.numero} — Date : {c.dateCommande} — Reste :{" "}
-                    {formatFCFA(Math.max(c.resteAPayer || 0, 0))}
+                    {c.numero} — Date : {c.dateCommande} — Reste théorique :{" "}
+                    {formatFCFA(
+                      Math.max(
+                        (c.totalTTC || 0) -
+                          (c.montantPaye || 0) -
+                          (c.paiements || [])
+                            .filter(
+                              (p) =>
+                                p.type === "tranche" &&
+                                p.statut === "en_attente_caisse" &&
+                                p.montant
+                            )
+                            .reduce(
+                              (s, p) => s + Number(p.montant || 0),
+                              0
+                            ),
+                        0
+                      )
+                    )}
                   </option>
                 ))}
               </select>
@@ -414,15 +451,36 @@ function NouvelleTrancheModal({
                   <span className="font-semibold">
                     {formatFCFA(commandeSelectionnee.totalTTC)}
                   </span>{" "}
-                  — Payé :{" "}
+                  — Payé (encaissé) :{" "}
                   <span className="font-semibold text-emerald-700">
                     {formatFCFA(commandeSelectionnee.montantPaye)}
                   </span>{" "}
-                  — Reste :{" "}
+                  — Reste théorique (avec tranches en attente) :{" "}
                   <span className="font-semibold text-rose-700">
-                    {formatFCFA(
-                      Math.max(commandeSelectionnee.resteAPayer || 0, 0)
-                    )}
+                    {(() => {
+                      const total = Number(
+                        commandeSelectionnee.totalTTC || 0
+                      );
+                      const encaisse = Number(
+                        commandeSelectionnee.montantPaye || 0
+                      );
+                      const tranchesAttente = (
+                        commandeSelectionnee.paiements || []
+                      )
+                        .filter(
+                          (p) =>
+                            p.type === "tranche" &&
+                            p.statut === "en_attente_caisse" &&
+                            p.montant
+                        )
+                        .reduce(
+                          (s, p) => s + Number(p.montant || 0),
+                          0
+                        );
+                      return formatFCFA(
+                        Math.max(total - encaisse - tranchesAttente, 0)
+                      );
+                    })()}
                   </span>
                 </div>
               )}
@@ -511,6 +569,226 @@ function NouvelleTrancheModal({
 }
 
 // ==========================================================
+// ✏️ Modal Édition Tranche (en attente caisse)
+// ==========================================================
+function EditTrancheModal({
+  open,
+  onClose,
+  client,
+  commande,
+  paiement,
+  onSubmit,
+  toast,
+}) {
+  const [montant, setMontant] = useState("");
+  const [mode, setMode] = useState("especes");
+  const [date, setDate] = useState(todayISO());
+  const [commentaire, setCommentaire] = useState("");
+
+  useEffect(() => {
+    if (open && paiement && commande) {
+      setMontant(paiement.montant != null ? String(paiement.montant) : "");
+      setMode(paiement.mode || "especes");
+      setDate(paiement.date || todayISO());
+      setCommentaire(paiement.commentaire || "");
+    }
+  }, [open, paiement, commande]);
+
+  if (!open || !client || !commande || !paiement) return null;
+
+  const handleClose = () => {
+    onClose();
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+
+    const m = Number(montant);
+
+    if (!m || m <= 0) {
+      toast(
+        "error",
+        "Montant invalide",
+        "Veuillez saisir un montant de tranche valide."
+      );
+      return;
+    }
+
+    // 🔍 Calcul du plafond max pour CETTE tranche en tenant compte des autres tranches en attente
+    const totalTTCCommande = Number(commande.totalTTC || 0);
+    const montantDejaEncaisse = Number(commande.montantPaye || 0);
+
+    const totalAutresTranchesEnAttente = (commande.paiements || [])
+      .filter(
+        (p) =>
+          p.id !== paiement.id &&
+          p.type === "tranche" &&
+          p.statut === "en_attente_caisse" &&
+          p.montant
+      )
+      .reduce((s, p) => s + Number(p.montant || 0), 0);
+
+    const maxPourCetteTranche = Math.max(
+      totalTTCCommande - montantDejaEncaisse - totalAutresTranchesEnAttente,
+      0
+    );
+
+    if (maxPourCetteTranche <= 0) {
+      toast(
+        "error",
+        "Impossible de modifier",
+        "Le montant total de la commande est déjà couvert par les encaissements et les autres tranches en attente."
+      );
+      return;
+    }
+
+    if (m > maxPourCetteTranche) {
+      toast(
+        "error",
+        "Montant trop élevé",
+        `La tranche ne peut pas dépasser ${formatFCFA(
+          maxPourCetteTranche
+        )} en tenant compte des autres tranches en attente.`
+      );
+      return;
+    }
+
+    onSubmit(commande, paiement, {
+      montant: m,
+      mode,
+      date,
+      commentaire: commentaire?.trim() || "",
+    });
+  };
+
+  const baseInput =
+    "w-full rounded-xl border px-3 py-2.5 text-sm bg-white shadow-sm border-gray-300 focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD]";
+
+  return (
+    <div className="fixed inset-0 z-[110] bg-black/40 flex items-center justify-center px-2">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        className="bg-white w-full max-w-lg rounded-2xl shadow-2xl p-6"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between border-b pb-3 mb-4">
+          <div>
+            <h2 className="text-lg font-semibold text-[#472EAD] flex items-center gap-2">
+              <BadgeDollarSign className="w-5 h-5" />
+              Modifier la tranche — {client.nom}
+            </h2>
+            <p className="text-xs text-gray-500">
+              La tranche est <span className="font-semibold">en attente</span>{" "}
+              de validation caisse. Vous pouvez corriger les informations avant
+              encaissement.
+            </p>
+          </div>
+          <button
+            onClick={handleClose}
+            className="rounded-full p-1.5 hover:bg-gray-100 text-gray-500"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Infos client + commande */}
+        <div className="mb-4 text-xs text-gray-600 space-y-1">
+          <div className="font-semibold text-gray-700">{client.nom}</div>
+          <div>{client.entreprise}</div>
+          <div className="text-gray-500">
+            {client.adresse} — {client.contact}
+          </div>
+          <div className="text-[11px] text-gray-500 mt-1">
+            Commande{" "}
+            <span className="font-semibold">{commande.numero}</span> — Total
+            TTC :{" "}
+            <span className="font-semibold">
+              {formatFCFA(commande.totalTTC)}
+            </span>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4 text-sm">
+          {/* Montant + date */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="sm:col-span-2">
+              <label className="block text-xs text-gray-500 mb-1">
+                Montant de la tranche
+              </label>
+              <input
+                type="number"
+                min="1"
+                value={montant}
+                onChange={(e) => setMontant(e.target.value)}
+                className={baseInput}
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">
+                Date du paiement
+              </label>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className={baseInput}
+              />
+            </div>
+          </div>
+
+          {/* Mode + commentaire */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">
+                Mode de paiement
+              </label>
+              <select
+                value={mode}
+                onChange={(e) => setMode(e.target.value)}
+                className={baseInput}
+              >
+                <option value="especes">Espèces</option>
+                <option value="wave">Wave</option>
+                <option value="orange_money">Orange Money</option>
+                <option value="cheque">Chèque</option>
+                <option value="virement">Virement</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">
+                Commentaire (optionnel)
+              </label>
+              <input
+                value={commentaire}
+                onChange={(e) => setCommentaire(e.target.value)}
+                className={baseInput}
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={handleClose}
+              className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm hover:bg-gray-50 shadow-sm"
+            >
+              Annuler
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 rounded-lg text-sm text-white bg-[#472EAD] hover:opacity-95 shadow-sm"
+            >
+              Mettre à jour la tranche
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </div>
+  );
+}
+
+// ==========================================================
 // 🧾 Formulaire client spécial
 // ==========================================================
 function ClientForm({ initial, onSubmit, onCancel, submitting }) {
@@ -518,6 +796,17 @@ function ClientForm({ initial, onSubmit, onCancel, submitting }) {
     initial ?? { nom: "", contact: "", entreprise: "", adresse: "" }
   );
   const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    if (initial) {
+      setForm({
+        nom: initial.nom || "",
+        contact: initial.contact || "",
+        entreprise: initial.entreprise || "",
+        adresse: initial.adresse || "",
+      });
+    }
+  }, [initial]);
 
   const update = (k, v) => {
     setForm((f) => ({ ...f, [k]: v }));
@@ -668,7 +957,8 @@ export default function ClientsSpeciaux() {
   const [trancheClient, setTrancheClient] = useState(null);
   const [openTranche, setOpenTranche] = useState(false);
 
-  const navigate = useNavigate();
+  const [editTrancheData, setEditTrancheData] = useState(null);
+  const [openEditTranche, setOpenEditTranche] = useState(false);
 
   const toast = (type, title, message) => {
     const id = Date.now();
@@ -680,109 +970,67 @@ export default function ClientsSpeciaux() {
   // ======================================================
   // 🔗 Chargement des clients spéciaux + commandes
   // ======================================================
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+
+      const [clientsRes, commandesRes] = await Promise.all([
+        axios.get("/clients", { params: { type_client: "special" } }),
+        axios.get("/commandes"),
+      ]);
+
+      const clientsPayload = Array.isArray(clientsRes.data?.data)
+        ? clientsRes.data.data
+        : clientsRes.data;
+
+      const normalizedClients = (clientsPayload || []).map((c) => ({
+        id: c.id,
+        nom: c.nom || "",
+        contact: c.contact || c.telephone || "",
+        entreprise: c.entreprise || "",
+        adresse: c.adresse || "",
+      }));
+
+      const commandesPayload = Array.isArray(commandesRes.data?.data)
+        ? commandesRes.data.data
+        : commandesRes.data;
+
+      const allCommandes = (commandesPayload || []).map(normalizeCommande);
+
+      const clientIds = new Set(normalizedClients.map((c) => c.id));
+      const commandesClientsSpeciaux = allCommandes.filter((cmd) =>
+        clientIds.has(cmd.clientId)
+      );
+
+      setClients(normalizedClients);
+      setCommandes(commandesClientsSpeciaux);
+    } catch (error) {
+      console.error("Erreur chargement clients/commandes :", error);
+      toast(
+        "error",
+        "Erreur de chargement",
+        "Impossible de charger les clients spéciaux."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-
-        // Clients spéciaux + toutes les commandes
-        const [clientsRes, commandesRes] = await Promise.all([
-          axios.get("/clients", { params: { type_client: "special" } }),
-          axios.get("/commandes"),
-        ]);
-
-        const clientsPayload = Array.isArray(clientsRes.data?.data)
-          ? clientsRes.data.data
-          : clientsRes.data;
-
-        const normalizedClients = (clientsPayload || []).map((c) => ({
-          id: c.id,
-          nom: c.nom || "",
-          contact: c.contact || c.telephone || "",
-          entreprise: c.entreprise || "",
-          adresse: c.adresse || "",
-        }));
-
-        const commandesPayload = Array.isArray(commandesRes.data?.data)
-          ? commandesRes.data.data
-          : commandesRes.data;
-
-        const clientIds = new Set(normalizedClients.map((c) => c.id));
-
-        const normalizedCommandes = (commandesPayload || [])
-          // On garde seulement les commandes des clients spéciaux
-          .filter((cmd) => clientIds.has(cmd.client_id || cmd.clientId))
-          .map((cmd) => {
-            const total =
-              Number(
-                cmd.total_ttc ?? cmd.totalTTC ?? cmd.montant_total ?? 0
-              ) || 0;
-            const paye =
-              Number(
-                cmd.montant_paye ?? cmd.montantPaye ?? cmd.total_paye ?? 0
-              ) || 0;
-            const reste =
-              Number(
-                cmd.reste_a_payer ??
-                  cmd.resteAPayer ??
-                  Math.max(total - paye, 0)
-              ) || 0;
-
-            const statut = cmd.statut || "en_attente_caisse";
-            const statutLabelMap = {
-              en_attente_caisse: "En attente caisse",
-              partiellement_payee: "Partiellement payée",
-              soldee: "Soldée",
-              annulee: "Annulée",
-            };
-            const statutLabel =
-              cmd.statut_label || cmd.statutLabel || statutLabelMap[statut];
-
-            const paiements = (cmd.paiements || []).map((p) => ({
-              id: p.id,
-              date: p.date_paiement || p.date || "",
-              montant:
-                Number(p.montant || p.montant_paye || p.montant_paiement || 0) ||
-                0,
-              mode: p.mode_paiement || p.mode || "especes",
-              commentaire: p.commentaire || "",
-            }));
-
-            return {
-              id: cmd.id,
-              clientId: cmd.client_id || cmd.clientId,
-              numero: cmd.numero || cmd.reference || `CMD-${cmd.id}`,
-              dateCommande: cmd.date_commande || cmd.dateCommande || "",
-              totalTTC: total,
-              montantPaye: paye,
-              resteAPayer: reste,
-              statut,
-              statutLabel,
-              paiements,
-            };
-          });
-
-        setClients(normalizedClients);
-        setCommandes(normalizedCommandes);
-      } catch (error) {
-        console.error("Erreur chargement clients/commandes :", error);
-        toast(
-          "error",
-          "Erreur de chargement",
-          "Impossible de charger les clients spéciaux."
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Agrégation : enrichir chaque client avec ses commandes
+  // On ignore TOUTES les commandes annulées pour les agrégats
+  const commandesActives = useMemo(
+    () => commandes.filter((c) => c.statut !== "annulee"),
+    [commandes]
+  );
+
+  // Agrégation : enrichir chaque client avec ses commandes actives + tranches en attente
   const clientsEnrichis = useMemo(() => {
     return clients.map((c) => {
-      const cs = commandes.filter((cmd) => cmd.clientId === c.id);
+      const cs = commandesActives.filter((cmd) => cmd.clientId === c.id);
       if (!cs.length) {
         return {
           ...c,
@@ -791,6 +1039,8 @@ export default function ClientsSpeciaux() {
           totalPaye: 0,
           detteTotale: 0,
           derniereActivite: null,
+          nbTranchesEnAttente: 0,
+          montantTranchesEnAttente: 0,
         };
       }
 
@@ -809,6 +1059,19 @@ export default function ClientsSpeciaux() {
         ? datesActivite.sort().slice(-1)[0]
         : null;
 
+      const paiementsClient = cs.flatMap((cmd) => cmd.paiements || []);
+      const tranchesEnAttente = paiementsClient.filter(
+        (p) =>
+          p.type === "tranche" &&
+          p.statut === "en_attente_caisse" &&
+          p.montant
+      );
+      const nbTranchesEnAttente = tranchesEnAttente.length;
+      const montantTranchesEnAttente = tranchesEnAttente.reduce(
+        (s, p) => s + Number(p.montant || 0),
+        0
+      );
+
       return {
         ...c,
         nbCommandes: cs.length,
@@ -816,11 +1079,13 @@ export default function ClientsSpeciaux() {
         totalPaye,
         detteTotale,
         derniereActivite,
+        nbTranchesEnAttente,
+        montantTranchesEnAttente,
       };
     });
-  }, [clients, commandes]);
+  }, [clients, commandesActives]);
 
-  // Stats globales
+  // Stats globales (basées sur clientsEnrichis donc SANS commandes annulées)
   const statsGlobales = useMemo(() => {
     const nbClients = clientsEnrichis.length;
     const totalTTC = clientsEnrichis.reduce((s, c) => s + c.totalTTC, 0);
@@ -968,13 +1233,7 @@ export default function ClientsSpeciaux() {
     }
   };
 
-  const goToCommandes = (client) => {
-    navigate("/responsable/commandes", {
-      state: { clientId: client.id, clientNom: client.nom },
-    });
-  };
-
-  // 🔄 Charge les paiements d'un client (si l'API /commandes/{id}/paiements est dispo)
+  // 🔄 Charge les paiements d'un client
   const loadPaiementsForClient = async (clientId) => {
     try {
       const commandesClient = commandes.filter((c) => c.clientId === clientId);
@@ -999,6 +1258,13 @@ export default function ClientsSpeciaux() {
                 ) || 0,
               mode: p.mode_paiement || p.mode || "especes",
               commentaire: p.commentaire || "",
+              statut:
+                p.statut ||
+                p.status ||
+                p.statut_paiement ||
+                p.statutPaiement ||
+                null,
+              type: p.type_paiement || p.type || p.typePaiement || null,
             }));
 
             const idx = updated.findIndex((c) => c.id === cmd.id);
@@ -1033,60 +1299,79 @@ export default function ClientsSpeciaux() {
     setOpenTranche(true);
   };
 
-  // 🔗 Enregistrement d'une nouvelle tranche côté API
+  const openEditTrancheModal = (commande, paiement) => {
+    // On ne laisse éditer que les tranches encore en attente caisse
+    if (
+      paiement.statut &&
+      paiement.statut !== "en_attente_caisse" &&
+      paiement.type === "tranche"
+    ) {
+      toast(
+        "error",
+        "Modification impossible",
+        "Seules les tranches en attente caisse sont modifiables."
+      );
+      return;
+    }
+
+    const client = clients.find((c) => c.id === commande.clientId);
+    setEditTrancheData({ commande, paiement, client });
+    setOpenEditTranche(true);
+  };
+
+  // 🔗 Enregistrement d'une nouvelle tranche côté API (préparation Responsable)
   const handleTrancheSubmit = async (commande, tranche) => {
     try {
-      // Enregistrement côté backend
-      await axios.post(`/commandes/${commande.id}/paiements`, {
+      const res = await axios.post(`/commandes/${commande.id}/paiements`, {
         montant: tranche.montant,
         mode_paiement: tranche.mode,
         date_paiement: tranche.date,
+        type_paiement: "tranche",
+        statut_paiement: "en_attente_caisse",
+        statut: "en_attente_caisse",
         commentaire: tranche.commentaire || "",
       });
 
-      // Mise à jour optimiste du state local
+      const created = Array.isArray(res.data?.data)
+        ? res.data.data[0]
+        : res.data;
+
+      const nouveauPaiement = {
+        id: created?.id || Date.now(),
+        date: created?.date_paiement || created?.date || tranche.date,
+        montant:
+          Number(
+            created?.montant ||
+              created?.montant_paye ||
+              created?.montant_paiement ||
+              tranche.montant
+          ) || tranche.montant,
+        mode: created?.mode_paiement || created?.mode || tranche.mode,
+        commentaire: created?.commentaire || tranche.commentaire || "",
+        statut:
+          created?.statut ||
+          created?.status ||
+          created?.statut_paiement ||
+          "en_attente_caisse",
+        type: created?.type_paiement || created?.type || "tranche",
+      };
+
+      // ⚠️ IMPORTANT : on NE touche PAS au montant payé / reste / statut de la commande ici.
+      // La commande ne sera soldée que quand la caisse encaisse réellement.
       setCommandes((prev) =>
-        prev.map((c) => {
-          if (c.id !== commande.id) return c;
-
-          const total = c.totalTTC || 0;
-          const ancienPaye = c.montantPaye || 0;
-          const nouveauPaye = ancienPaye + tranche.montant;
-          const montantPayeClampe = Math.min(nouveauPaye, total);
-          const reste = Math.max(total - montantPayeClampe, 0);
-
-          const nouveauPaiement = {
-            id: Date.now(),
-            date: tranche.date,
-            montant: tranche.montant,
-            mode: tranche.mode,
-            commentaire: tranche.commentaire || "",
-          };
-
-          let statut = c.statut;
-          let statutLabel = c.statutLabel;
-          if (reste === 0) {
-            statut = "soldee";
-            statutLabel = "Soldée";
-          } else {
-            statut = "partiellement_payee";
-            statutLabel = "Partiellement payée";
-          }
-
-          return {
-            ...c,
-            montantPaye: montantPayeClampe,
-            resteAPayer: reste,
-            statut,
-            statutLabel,
-            paiements: [...(c.paiements || []), nouveauPaiement],
-          };
-        })
+        prev.map((c) =>
+          c.id === commande.id
+            ? {
+                ...c,
+                paiements: [...(c.paiements || []), nouveauPaiement],
+              }
+            : c
+        )
       );
 
       toast(
         "success",
-        "Tranche envoyée à la caisse",
+        "Tranche en attente caisse",
         `${trancheClient?.nom || commande.clientNom} — ${formatFCFA(
           tranche.montant
         )}`
@@ -1112,42 +1397,64 @@ export default function ClientsSpeciaux() {
     }
   };
 
-  const exportPDF = () => {
-    const doc = new jsPDF();
-    doc.text("Liste des clients spéciaux — LPD Manager", 14, 16);
-    doc.autoTable({
-      startY: 24,
-      head: [
-        [
-          "Nom",
-          "Contact",
-          "Entreprise",
-          "Adresse",
-          "Nb commandes",
-          "Total TTC",
-          "Total payé",
-          "Dette",
-        ],
-      ],
-      body: clientsEnrichis.map((c) => [
-        c.nom,
-        c.contact,
-        c.entreprise,
-        c.adresse,
-        String(c.nbCommandes || 0),
-        formatFCFA(c.totalTTC),
-        formatFCFA(c.totalPaye),
-        formatFCFA(c.detteTotale),
-      ]),
-      styles: { fontSize: 9 },
-      headStyles: { fillColor: [71, 46, 173] },
-    });
-    doc.save("ClientsSpeciaux_LPD.pdf");
-    toast(
-      "success",
-      "Export PDF",
-      "Le fichier ClientsSpeciaux_LPD.pdf a été généré."
-    );
+  // 🔄 Mise à jour d'une tranche en attente caisse
+  const handleEditTrancheSubmit = async (commande, paiement, data) => {
+    try {
+      await axios.put(`/paiements/${paiement.id}`, {
+        montant: data.montant,
+        mode_paiement: data.mode,
+        date_paiement: data.date,
+        commentaire: data.commentaire || "",
+        // On laisse le statut à "en_attente_caisse" tant que la caisse n'a pas encaissé
+        statut_paiement: "en_attente_caisse",
+      });
+
+      setCommandes((prev) =>
+        prev.map((c) => {
+          if (c.id !== commande.id) return c;
+          return {
+            ...c,
+            paiements: (c.paiements || []).map((p) =>
+              p.id === paiement.id
+                ? {
+                    ...p,
+                    montant: data.montant,
+                    mode: data.mode,
+                    date: data.date,
+                    commentaire: data.commentaire,
+                    statut: "en_attente_caisse",
+                    type: p.type || "tranche",
+                  }
+                : p
+            ),
+          };
+        })
+      );
+
+      toast(
+        "success",
+        "Tranche modifiée",
+        `La tranche a été mise à jour (toujours en attente caisse).`
+      );
+
+      setOpenEditTranche(false);
+      setEditTrancheData(null);
+    } catch (error) {
+      console.error("Erreur modification tranche :", error);
+
+      if (error.response?.status === 422 && error.response.data?.errors) {
+        const firstError =
+          Object.values(error.response.data.errors)[0]?.[0] ||
+          "Vérifiez les informations de la tranche.";
+        toast("error", "Modification refusée", firstError);
+      } else {
+        toast(
+          "error",
+          "Erreur",
+          "Impossible de modifier cette tranche pour le moment."
+        );
+      }
+    }
   };
 
   const filtered = useMemo(() => {
@@ -1164,7 +1471,7 @@ export default function ClientsSpeciaux() {
   // Loader compact aligné
   if (loading)
     return (
-      <div className="flex items-center justify-center h-[60vh]">
+      <div className="flex items-center justify-center h-[60vh] overflow-x-hidden">
         <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-gray-200 shadow-sm">
           <Loader2 className="w-5 h-5 text-[#472EAD] animate-spin" />
           <span className="text-xs font-medium text-[#472EAD]">
@@ -1175,7 +1482,7 @@ export default function ClientsSpeciaux() {
     );
 
   return (
-    <>
+    <div className="w-full h-full overflow-x-hidden">
       <div className="w-full h-full bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white px-3 sm:px-4 lg:px-6 py-4 sm:py-5 overflow-y-auto">
         <div className="max-w-6xl mx-auto space-y-5">
           {/* HEADER */}
@@ -1197,9 +1504,12 @@ export default function ClientsSpeciaux() {
                   Clients spéciaux
                 </h1>
                 <p className="mt-0.5 text-xs sm:text-sm text-gray-500">
-                  Gestion des clients privilégiés, commandes en gros et paiements
-                  par tranches (préparation côté Responsable, validation en
-                  caisse).
+                  Gestion des clients privilégiés, commandes en gros et
+                  paiements par tranches (préparation côté Responsable,{" "}
+                  <span className="font-semibold">
+                    encaissement côté caisse
+                  </span>
+                  ).
                 </p>
               </div>
               <p className="text-[11px] text-gray-400">
@@ -1216,8 +1526,6 @@ export default function ClientsSpeciaux() {
                 <UserPlus size={16} />
                 Nouveau client
               </button>
-
-
             </div>
           </motion.header>
 
@@ -1225,9 +1533,9 @@ export default function ClientsSpeciaux() {
           <motion.div
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3"
+            className="w-full max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3"
           >
-            {/* Clients spéciaux (or / gold) */}
+            {/* Clients spéciaux */}
             <div className="rounded-xl border border-yellow-400 bg-gradient-to-br from-yellow-50 via-amber-50 to-yellow-100 px-3 py-2.5 shadow-sm">
               <div className="text-[15px] font-semibold text-yellow-800 mb-0.5">
                 Clients spéciaux
@@ -1246,20 +1554,19 @@ export default function ClientsSpeciaux() {
                 Total TTC commandes
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-xs sm:text-sm font-semibold text-emerald-700 truncate">
+                <span className="text-sm sm:text-lg font-extrabold text-emerald-700">
                   {formatFCFA(statsGlobales.totalTTC)}
                 </span>
-                <ShoppingCart className="w-5 h-5 text-emerald-600" />
               </div>
             </div>
 
             {/* Total payé */}
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
               <div className="text-[15px] text-gray-500 mb-0.5">
-                Total payé
+                Total payé (encaissé)
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-xs sm:text-sm font-semibold text-emerald-700 truncate">
+                <span className="text-sm sm:text-lg font-extrabold text-emerald-700">
                   {formatFCFA(statsGlobales.totalPaye)}
                 </span>
                 <CheckCircle2 className="w-5 h-5 text-emerald-600" />
@@ -1272,7 +1579,7 @@ export default function ClientsSpeciaux() {
                 Dette globale
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-xs sm:text-sm font-semibold text-rose-700 truncate">
+                <span className="text-sm sm:text-lg font-extrabold text-rose-700">
                   {formatFCFA(statsGlobales.detteTotale)}
                 </span>
                 <AlertCircle className="w-5 h-5 text-rose-600" />
@@ -1346,6 +1653,25 @@ export default function ClientsSpeciaux() {
                     ),
                 },
                 {
+                  key: "tranches",
+                  label: "Tranches",
+                  render: (_, row) =>
+                    row.nbTranchesEnAttente > 0 ? (
+                      <div className="flex flex-col text-xs">
+                        <span className="font-semibold text-amber-700">
+                          {row.nbTranchesEnAttente} en attente
+                        </span>
+                        <span className="text-[11px] text-gray-600">
+                          {formatFCFA(row.montantTranchesEnAttente)}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                        Aucune tranche en attente
+                      </span>
+                    ),
+                },
+                {
                   key: "nbCommandes",
                   label: "Commandes",
                   render: (v) => (
@@ -1354,24 +1680,12 @@ export default function ClientsSpeciaux() {
                     </span>
                   ),
                 },
-                {
-                  key: "derniereActivite",
-                  label: "Dernière activité",
-                  render: (v) =>
-                    v ? (
-                      <span className="text-xs text-gray-600">{v}</span>
-                    ) : (
-                      <span className="text-[11px] text-gray-400">
-                        Aucune activité
-                      </span>
-                    ),
-                },
               ]}
               data={filtered}
               actions={[
                 {
                   icon: <BadgeDollarSign size={16} />,
-                  title: "Nouvelle tranche",
+                  title: "Nouvelle tranche (en attente caisse)",
                   color: "text-emerald-700",
                   hoverBg: "bg-emerald-50",
                   onClick: (row) => openTrancheClient(row),
@@ -1455,14 +1769,15 @@ export default function ClientsSpeciaux() {
             </div>
           </FormModal>
 
-          {/* MODALE HISTORIQUE CLIENT */}
-          <HistoriqueClientModal
+          {/* MODALE HISTORIQUE CLIENT (VoirDetailClient.jsx) */}
+          <VoirDetailClient
             open={openHistorique}
             onClose={() => setOpenHistorique(false)}
             client={historiqueClient}
             commandes={commandes.filter(
               (cmd) => cmd.clientId === historiqueClient?.id
             )}
+            onEditTranche={openEditTrancheModal}
           />
 
           {/* MODALE NOUVELLE TRANCHE */}
@@ -1480,10 +1795,24 @@ export default function ClientsSpeciaux() {
             toast={toast}
           />
 
+          {/* MODALE ÉDITION TRANCHE */}
+          <EditTrancheModal
+            open={openEditTranche}
+            onClose={() => {
+              setOpenEditTranche(false);
+              setEditTrancheData(null);
+            }}
+            client={editTrancheData?.client}
+            commande={editTrancheData?.commande}
+            paiement={editTrancheData?.paiement}
+            onSubmit={handleEditTrancheSubmit}
+            toast={toast}
+          />
+
           {/* TOASTS */}
           <Toasts toasts={toasts} remove={removeToast} />
         </div>
       </div>
-    </>
+    </div>
   );
 }
