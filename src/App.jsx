@@ -17,9 +17,17 @@ import InventaireComptable from "./comptable/pages/Inventaire.jsx";
 import RapportsComptable from "./comptable/pages/Rapports.jsx";
 import JournalActivitesComptable from "./comptable/pages/JournalActivites.jsx";
 import ClientsSpeciauxComptable from "./comptable/pages/ClientsSpeciaux.jsx";
-import VentesJournalieres from "./comptable/pages/VentesJournalieres.jsx"; // ⚠️ assure-toi que ce fichier existe !
+// en haut avec les autres imports comptable
+import JournalCaisse from "./comptable/pages/controle-caissier/JournalCaisse.jsx";
+import EnregistrerVersement from "./comptable/pages/controle-caissier/EnregistrerVersement.jsx";
+import HistoriqueVersements from "./comptable/pages/controle-caissier/HistoriqueVersements.jsx";
 
-// ✅ Page Auth
+
+
+// ✅ Nouvelle page regroupée : ventes journalières + ventes mensuelles
+import VentesControle from "./comptable/pages/VentesControle.jsx";
+
+// ✅ Auth
 import Connexion from "./authentification/login/Connexion.jsx";
 
 // ==========================================================
@@ -59,11 +67,33 @@ export default function App() {
           <Route path="inventaire" element={<InventaireComptable />} />
           <Route path="rapports" element={<RapportsComptable />} />
           <Route path="journal-activites" element={<JournalActivitesComptable />} />
-          <Route path="ventes-journalieres" element={<VentesJournalieres />} />
+          <Route path="controle-caissier/enregistrer-versement" element={<EnregistrerVersement />} />
+          <Route
+  path="controle-caissier/historique-versements"
+  element={<HistoriqueVersements />}
+/>
+
+          
+
+          {/* === NOUVELLE ROUTE UNIQUE POUR CONTROLE VENDEUR === */}
+          <Route path="controle-vendeur" element={<VentesControle />} />
 
           {/* Fallback interne Comptable */}
           <Route path="*" element={<Navigate to="/comptable/dashboard" replace />} />
         </Route>
+        <Route path="/comptable" element={
+  <PrivateRoute>
+    <LayoutComptable />
+  </PrivateRoute>
+}>
+  {/* ... tes autres routes ... */}
+
+  {/* ✅ Contrôle Caissier : Journal des caisses */}
+  <Route path="controle-caissier/caisse" element={<JournalCaisse />} />
+
+  {/* ... */}
+</Route>
+
 
         {/* Redirection par défaut */}
         <Route path="/" element={<Navigate to="/login" replace />} />
