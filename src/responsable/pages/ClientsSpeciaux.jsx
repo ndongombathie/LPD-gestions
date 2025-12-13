@@ -239,7 +239,6 @@ function normalizeCommande(cmd) {
 
 // ==========================================================
 // 💸 Modal Nouvelle Tranche (côté Responsable)
-//  ⚠️ Corrigée : Hooks toujours appelés, puis on retourne null si !open || !client
 // ==========================================================
 function NouvelleTrancheModal({
   open,
@@ -569,226 +568,6 @@ function NouvelleTrancheModal({
 }
 
 // ==========================================================
-// ✏️ Modal Édition Tranche (en attente caisse)
-// ==========================================================
-function EditTrancheModal({
-  open,
-  onClose,
-  client,
-  commande,
-  paiement,
-  onSubmit,
-  toast,
-}) {
-  const [montant, setMontant] = useState("");
-  const [mode, setMode] = useState("especes");
-  const [date, setDate] = useState(todayISO());
-  const [commentaire, setCommentaire] = useState("");
-
-  useEffect(() => {
-    if (open && paiement && commande) {
-      setMontant(paiement.montant != null ? String(paiement.montant) : "");
-      setMode(paiement.mode || "especes");
-      setDate(paiement.date || todayISO());
-      setCommentaire(paiement.commentaire || "");
-    }
-  }, [open, paiement, commande]);
-
-  if (!open || !client || !commande || !paiement) return null;
-
-  const handleClose = () => {
-    onClose();
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-
-    const m = Number(montant);
-
-    if (!m || m <= 0) {
-      toast(
-        "error",
-        "Montant invalide",
-        "Veuillez saisir un montant de tranche valide."
-      );
-      return;
-    }
-
-    // 🔍 Calcul du plafond max pour CETTE tranche en tenant compte des autres tranches en attente
-    const totalTTCCommande = Number(commande.totalTTC || 0);
-    const montantDejaEncaisse = Number(commande.montantPaye || 0);
-
-    const totalAutresTranchesEnAttente = (commande.paiements || [])
-      .filter(
-        (p) =>
-          p.id !== paiement.id &&
-          p.type === "tranche" &&
-          p.statut === "en_attente_caisse" &&
-          p.montant
-      )
-      .reduce((s, p) => s + Number(p.montant || 0), 0);
-
-    const maxPourCetteTranche = Math.max(
-      totalTTCCommande - montantDejaEncaisse - totalAutresTranchesEnAttente,
-      0
-    );
-
-    if (maxPourCetteTranche <= 0) {
-      toast(
-        "error",
-        "Impossible de modifier",
-        "Le montant total de la commande est déjà couvert par les encaissements et les autres tranches en attente."
-      );
-      return;
-    }
-
-    if (m > maxPourCetteTranche) {
-      toast(
-        "error",
-        "Montant trop élevé",
-        `La tranche ne peut pas dépasser ${formatFCFA(
-          maxPourCetteTranche
-        )} en tenant compte des autres tranches en attente.`
-      );
-      return;
-    }
-
-    onSubmit(commande, paiement, {
-      montant: m,
-      mode,
-      date,
-      commentaire: commentaire?.trim() || "",
-    });
-  };
-
-  const baseInput =
-    "w-full rounded-xl border px-3 py-2.5 text-sm bg-white shadow-sm border-gray-300 focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD]";
-
-  return (
-    <div className="fixed inset-0 z-[110] bg-black/40 flex items-center justify-center px-2">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 10 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        className="bg-white w-full max-w-lg rounded-2xl shadow-2xl p-6"
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between border-b pb-3 mb-4">
-          <div>
-            <h2 className="text-lg font-semibold text-[#472EAD] flex items-center gap-2">
-              <BadgeDollarSign className="w-5 h-5" />
-              Modifier la tranche — {client.nom}
-            </h2>
-            <p className="text-xs text-gray-500">
-              La tranche est <span className="font-semibold">en attente</span>{" "}
-              de validation caisse. Vous pouvez corriger les informations avant
-              encaissement.
-            </p>
-          </div>
-          <button
-            onClick={handleClose}
-            className="rounded-full p-1.5 hover:bg-gray-100 text-gray-500"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* Infos client + commande */}
-        <div className="mb-4 text-xs text-gray-600 space-y-1">
-          <div className="font-semibold text-gray-700">{client.nom}</div>
-          <div>{client.entreprise}</div>
-          <div className="text-gray-500">
-            {client.adresse} — {client.contact}
-          </div>
-          <div className="text-[11px] text-gray-500 mt-1">
-            Commande{" "}
-            <span className="font-semibold">{commande.numero}</span> — Total
-            TTC :{" "}
-            <span className="font-semibold">
-              {formatFCFA(commande.totalTTC)}
-            </span>
-          </div>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4 text-sm">
-          {/* Montant + date */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="sm:col-span-2">
-              <label className="block text-xs text-gray-500 mb-1">
-                Montant de la tranche
-              </label>
-              <input
-                type="number"
-                min="1"
-                value={montant}
-                onChange={(e) => setMontant(e.target.value)}
-                className={baseInput}
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">
-                Date du paiement
-              </label>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className={baseInput}
-              />
-            </div>
-          </div>
-
-          {/* Mode + commentaire */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">
-                Mode de paiement
-              </label>
-              <select
-                value={mode}
-                onChange={(e) => setMode(e.target.value)}
-                className={baseInput}
-              >
-                <option value="especes">Espèces</option>
-                <option value="wave">Wave</option>
-                <option value="orange_money">Orange Money</option>
-                <option value="cheque">Chèque</option>
-                <option value="virement">Virement</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">
-                Commentaire (optionnel)
-              </label>
-              <input
-                value={commentaire}
-                onChange={(e) => setCommentaire(e.target.value)}
-                className={baseInput}
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={handleClose}
-              className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm hover:bg-gray-50 shadow-sm"
-            >
-              Annuler
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 rounded-lg text-sm text-white bg-[#472EAD] hover:opacity-95 shadow-sm"
-            >
-              Mettre à jour la tranche
-            </button>
-          </div>
-        </form>
-      </motion.div>
-    </div>
-  );
-}
-
-// ==========================================================
 // 🧾 Formulaire client spécial
 // ==========================================================
 function ClientForm({ initial, onSubmit, onCancel, submitting }) {
@@ -956,9 +735,6 @@ export default function ClientsSpeciaux() {
   const [openHistorique, setOpenHistorique] = useState(false);
   const [trancheClient, setTrancheClient] = useState(null);
   const [openTranche, setOpenTranche] = useState(false);
-
-  const [editTrancheData, setEditTrancheData] = useState(null);
-  const [openEditTranche, setOpenEditTranche] = useState(false);
 
   const toast = (type, title, message) => {
     const id = Date.now();
@@ -1299,26 +1075,6 @@ export default function ClientsSpeciaux() {
     setOpenTranche(true);
   };
 
-  const openEditTrancheModal = (commande, paiement) => {
-    // On ne laisse éditer que les tranches encore en attente caisse
-    if (
-      paiement.statut &&
-      paiement.statut !== "en_attente_caisse" &&
-      paiement.type === "tranche"
-    ) {
-      toast(
-        "error",
-        "Modification impossible",
-        "Seules les tranches en attente caisse sont modifiables."
-      );
-      return;
-    }
-
-    const client = clients.find((c) => c.id === commande.clientId);
-    setEditTrancheData({ commande, paiement, client });
-    setOpenEditTranche(true);
-  };
-
   // 🔗 Enregistrement d'une nouvelle tranche côté API (préparation Responsable)
   const handleTrancheSubmit = async (commande, tranche) => {
     try {
@@ -1397,15 +1153,15 @@ export default function ClientsSpeciaux() {
     }
   };
 
-  // 🔄 Mise à jour d'une tranche en attente caisse
-  const handleEditTrancheSubmit = async (commande, paiement, data) => {
+  // 🔄 Édition de tranche depuis VoirDetailClient (modal interne)
+  const handleVoirDetailEditTranche = async (commande, updatedPaiement) => {
     try {
-      await axios.put(`/paiements/${paiement.id}`, {
-        montant: data.montant,
-        mode_paiement: data.mode,
-        date_paiement: data.date,
-        commentaire: data.commentaire || "",
-        // On laisse le statut à "en_attente_caisse" tant que la caisse n'a pas encaissé
+      await axios.put(`/paiements/${updatedPaiement.id}`, {
+        montant: updatedPaiement.montant,
+        mode_paiement: updatedPaiement.mode,
+        date_paiement: updatedPaiement.date,
+        commentaire: updatedPaiement.commentaire || "",
+        // Toujours en attente caisse tant que non encaissé
         statut_paiement: "en_attente_caisse",
       });
 
@@ -1415,13 +1171,13 @@ export default function ClientsSpeciaux() {
           return {
             ...c,
             paiements: (c.paiements || []).map((p) =>
-              p.id === paiement.id
+              p.id === updatedPaiement.id
                 ? {
                     ...p,
-                    montant: data.montant,
-                    mode: data.mode,
-                    date: data.date,
-                    commentaire: data.commentaire,
+                    montant: updatedPaiement.montant,
+                    mode: updatedPaiement.mode,
+                    date: updatedPaiement.date,
+                    commentaire: updatedPaiement.commentaire || "",
                     statut: "en_attente_caisse",
                     type: p.type || "tranche",
                   }
@@ -1434,13 +1190,10 @@ export default function ClientsSpeciaux() {
       toast(
         "success",
         "Tranche modifiée",
-        `La tranche a été mise à jour (toujours en attente caisse).`
+        "La tranche a été mise à jour (toujours en attente caisse)."
       );
-
-      setOpenEditTranche(false);
-      setEditTrancheData(null);
     } catch (error) {
-      console.error("Erreur modification tranche :", error);
+      console.error("Erreur modification tranche (VoirDetail) :", error);
 
       if (error.response?.status === 422 && error.response.data?.errors) {
         const firstError =
@@ -1454,6 +1207,35 @@ export default function ClientsSpeciaux() {
           "Impossible de modifier cette tranche pour le moment."
         );
       }
+    }
+  };
+
+  // 🔄 Suppression de tranche depuis VoirDetailClient
+  const handleVoirDetailDeleteTranche = async (commande, paiement) => {
+    try {
+      await axios.delete(`/paiements/${paiement.id}`);
+
+      setCommandes((prev) =>
+        prev.map((c) =>
+          c.id === commande.id
+            ? {
+                ...c,
+                paiements: (c.paiements || []).filter(
+                  (p) => p.id !== paiement.id
+                ),
+              }
+            : c
+        )
+      );
+
+      toast("success", "Tranche supprimée", "La tranche a été supprimée.");
+    } catch (error) {
+      console.error("Erreur suppression tranche (VoirDetail) :", error);
+      toast(
+        "error",
+        "Erreur",
+        "Impossible de supprimer cette tranche pour le moment."
+      );
     }
   };
 
@@ -1777,7 +1559,8 @@ export default function ClientsSpeciaux() {
             commandes={commandes.filter(
               (cmd) => cmd.clientId === historiqueClient?.id
             )}
-            onEditTranche={openEditTrancheModal}
+            onEditTranche={handleVoirDetailEditTranche}
+            onDeleteTranche={handleVoirDetailDeleteTranche}
           />
 
           {/* MODALE NOUVELLE TRANCHE */}
@@ -1792,20 +1575,6 @@ export default function ClientsSpeciaux() {
               (cmd) => cmd.clientId === trancheClient?.id
             )}
             onSubmit={handleTrancheSubmit}
-            toast={toast}
-          />
-
-          {/* MODALE ÉDITION TRANCHE */}
-          <EditTrancheModal
-            open={openEditTranche}
-            onClose={() => {
-              setOpenEditTranche(false);
-              setEditTrancheData(null);
-            }}
-            client={editTrancheData?.client}
-            commande={editTrancheData?.commande}
-            paiement={editTrancheData?.paiement}
-            onSubmit={handleEditTrancheSubmit}
             toast={toast}
           />
 
