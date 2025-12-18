@@ -1,271 +1,274 @@
 // ==========================================================
-// 🧾 JournalCaisse.jsx — Journal des caisses (Comptable)
-// - Date du jour auto
-// - Filtre nom / téléphone
-// - Filtre intervalle de dates
-// - Calcul des écarts
-// - Export PDF (Imprimer)
+// 🧾 JournalCaisse.jsx — Journal de Caisse PRO (Comptable)
 // ==========================================================
 
 import React, { useState, useMemo, useEffect } from "react";
-import { Calendar, Search, Printer } from "lucide-react";
+import { Printer } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
-// Données simulées (mock)
-const mockCaisses = [
+// ===============================
+// 🔧 CONFIG
+// ===============================
+const FOND_CAISSE = 50000;
+
+// ===============================
+// 🔧 DONNÉES MOCK
+// ===============================
+const caissesMock = [
   {
     id: 1,
     caissier: "Moussa Ndiaye",
-    telephone: "771234567",
-    date: "2025-01-12",
-    totalVentes: 150000,
-    totalDeclare: 148000,
+    date: "2025-02-22",
+    paiements: [10000, 15000, 5000],
+    encaissements: [5000],
+    decaissements: [3000],
   },
   {
     id: 2,
     caissier: "Aissatou Diop",
-    telephone: "781112233",
-    date: "2025-01-12",
-    totalVentes: 170000,
-    totalDeclare: 170000,
-  },
-  {
-    id: 3,
-    caissier: "Moussa Ndiaye",
-    telephone: "771234567",
-    date: "2025-02-01",
-    totalVentes: 210000,
-    totalDeclare: 209500,
+    date: "2025-02-22",
+    paiements: [20000, 12000],
+    encaissements: [],
+    decaissements: [2000],
   },
 ];
 
-// Format monnaie
-const formatFCFA = (n) =>
+// ===============================
+// 🔧 FORMAT ÉCRAN
+// ===============================
+const fcfa = (n) =>
   new Intl.NumberFormat("fr-FR", {
     style: "currency",
     currency: "XOF",
   }).format(n || 0);
 
+// ===============================
+// 🔧 FORMAT PDF (SANS /)
+// ===============================
+const fcfaPDF = (n) => {
+  if (!n && n !== 0) return "0 FCFA";
+  return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " FCFA";
+};
+
+// ===============================
+// 📌 COMPOSANT
+// ===============================
 export default function JournalCaisse() {
   const [search, setSearch] = useState("");
-  const [dateJour, setDateJour] = useState("");
+  const [dateExacte, setDateExacte] = useState("");
   const [dateDebut, setDateDebut] = useState("");
   const [dateFin, setDateFin] = useState("");
 
-  // 📌 Mettre la date du jour automatiquement
+  // Date du jour automatique
   useEffect(() => {
-    setDateJour(new Date().toISOString().split("T")[0]);
+    setDateExacte(new Date().toISOString().split("T")[0]);
   }, []);
 
-  // ============================================
-  // 🔍 Filtrage GLOBAL
-  // ============================================
-  const filtered = useMemo(() => {
-    let data = [...mockCaisses];
+  // ===============================
+  // 🔍 FILTRAGE + CALCUL
+  // ===============================
+  const caisses = useMemo(() => {
+    let data = [...caissesMock];
 
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      data = data.filter(
-        (c) =>
-          c.caissier.toLowerCase().includes(q) ||
-          (c.telephone && c.telephone.includes(q))
+    if (search) {
+      data = data.filter((c) =>
+        c.caissier.toLowerCase().includes(search.toLowerCase())
       );
     }
 
-    if (dateJour) {
-      data = data.filter((c) => c.date === dateJour);
+    if (dateDebut || dateFin) {
+      data = data.filter((c) => {
+        if (dateDebut && c.date < dateDebut) return false;
+        if (dateFin && c.date > dateFin) return false;
+        return true;
+      });
+    } else if (dateExacte) {
+      data = data.filter((c) => c.date === dateExacte);
     }
 
-    if (dateDebut) data = data.filter((c) => c.date >= dateDebut);
-    if (dateFin) data = data.filter((c) => c.date <= dateFin);
+    return data.map((c) => {
+      const sommePaiements = c.paiements.reduce((s, v) => s + v, 0);
+      const nbPaiements = c.paiements.length;
+      const totalEncaisse = c.encaissements.reduce((s, v) => s + v, 0);
+      const totalDecaisse = c.decaissements.reduce((s, v) => s + v, 0);
 
-    data.sort((a, b) => (a.date < b.date ? 1 : -1));
+      const caisseFinale =
+        FOND_CAISSE + sommePaiements + totalEncaisse - totalDecaisse;
 
-    return data;
-  }, [search, dateJour, dateDebut, dateFin]);
+      return {
+        ...c,
+        nbPaiements,
+        sommePaiements,
+        totalEncaisse,
+        totalDecaisse,
+        caisseFinale,
+      };
+    });
+  }, [search, dateExacte, dateDebut, dateFin]);
 
-  // Totaux
-  const totalVentes = filtered.reduce((s, v) => s + (v.totalVentes || 0), 0);
-  const totalDeclare = filtered.reduce((s, v) => s + (v.totalDeclare || 0), 0);
-  const totalEcart = totalDeclare - totalVentes;
+  // ===============================
+  // 📊 TOTAUX GLOBAUX
+  // ===============================
+  const totalEncaissements = caisses.reduce((s, c) => s + c.totalEncaisse, 0);
+  const totalDecaissements = caisses.reduce((s, c) => s + c.totalDecaisse, 0);
+  const totalCaisses = caisses.reduce((s, c) => s + c.caisseFinale, 0);
 
-  // ======================================================
-  // 🖨 Fonction : IMPRIMER PDF
-  // ======================================================
+  // ===============================
+  // 🖨 PDF
+  // ===============================
   const imprimerPDF = () => {
-    if (!filtered.length) {
-      alert("Aucune caisse à imprimer.");
+    if (!caisses.length) {
+      alert("Aucune donnée à imprimer");
       return;
     }
 
-    const doc = new jsPDF({
-      orientation: "portrait",
-      unit: "pt",
-      format: "A4",
-    });
-
-    doc.setFontSize(16);
-    doc.text("Journal des Caisses — LPD Manager", 40, 40);
-
-    doc.setFontSize(11);
-    doc.text(`Date du jour : ${dateJour}`, 40, 60);
-
-    if (dateDebut) doc.text(`Début : ${dateDebut}`, 40, 75);
-    if (dateFin) doc.text(`Fin : ${dateFin}`, 40, 90);
+    const doc = new jsPDF();
+    doc.setFontSize(14);
+    doc.text("Journal de Caisse — Toutes les caisses", 14, 16);
 
     autoTable(doc, {
-      startY: 110,
-      head: [["Caissier", "Téléphone", "Date", "Ventes", "Déclaré", "Écart"]],
-      body: filtered.map((c) => [
+      startY: 30,
+      head: [
+        [
+          "Caissier",
+          "Date",
+          "Fond",
+          "Paiements",
+          "Total paiements",
+          "Décaissements",
+          "Encaissements",
+          "Caisse finale",
+        ],
+      ],
+      body: caisses.map((c) => [
         c.caissier,
-        c.telephone,
         c.date,
-        formatFCFA(c.totalVentes),
-        formatFCFA(c.totalDeclare),
-        formatFCFA(c.totalDeclare - c.totalVentes),
+        fcfaPDF(FOND_CAISSE),
+        c.nbPaiements,
+        fcfaPDF(c.sommePaiements),
+        fcfaPDF(c.totalDecaisse),
+        fcfaPDF(c.totalEncaisse),
+        fcfaPDF(c.caisseFinale),
       ]),
-      styles: { fontSize: 10 },
       headStyles: { fillColor: [71, 46, 173] },
     });
 
-    const y = doc.lastAutoTable.finalY + 20;
+    let y = doc.lastAutoTable.finalY + 14;
+    doc.text(`Total encaissements : ${fcfaPDF(totalEncaissements)}`, 14, y);
+    doc.text(`Total décaissements : ${fcfaPDF(totalDecaissements)}`, 14, y + 14);
+    doc.text(`Total caisses : ${fcfaPDF(totalCaisses)}`, 14, y + 28);
 
-    doc.setFontSize(12);
-    doc.text(`TOTAL Ventes : ${formatFCFA(totalVentes)}`, 40, y);
-    doc.text(`TOTAL Déclaré : ${formatFCFA(totalDeclare)}`, 40, y + 15);
-    doc.text(`ÉCART GLOBAL : ${formatFCFA(totalEcart)}`, 40, y + 30);
-
-    doc.save("Journal_Caisses_LPD.pdf");
+    doc.save("Journal_Caisse_LPD.pdf");
   };
 
   return (
-    <div className="p-5 space-y-5">
-      {/* HEADER */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-[#472EAD]">Journal des Caisses</h1>
-          <p className="text-sm text-gray-500">Caisse du jour + filtre par date & export PDF</p>
-        </div>
+    <div className="p-6 space-y-6">
+      <h1 className="text-xl font-semibold text-[#472EAD]">
+        Journal de Caisse
+      </h1>
+
+      {/* FILTRES */}
+      <div className="bg-white p-4 rounded-xl shadow border flex flex-wrap gap-4">
+        <input
+          className="border px-3 py-2 rounded"
+          placeholder="Rechercher caissier…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+
+        <input
+          type="date"
+          className="border px-3 py-2 rounded"
+          value={dateExacte}
+          onChange={(e) => {
+            setDateExacte(e.target.value);
+            setDateDebut("");
+            setDateFin("");
+          }}
+        />
+
+        <input
+          type="date"
+          className="border px-3 py-2 rounded"
+          value={dateDebut}
+          onChange={(e) => {
+            setDateDebut(e.target.value);
+            setDateExacte("");
+          }}
+        />
+
+        <input
+          type="date"
+          className="border px-3 py-2 rounded"
+          value={dateFin}
+          onChange={(e) => {
+            setDateFin(e.target.value);
+            setDateExacte("");
+          }}
+        />
 
         <button
           onClick={imprimerPDF}
-          className="px-4 py-2 bg-[#472EAD] text-white rounded-lg flex items-center gap-2 shadow hover:bg-[#5A3BE6]"
+          className="ml-auto px-4 py-2 bg-[#472EAD] text-white rounded flex gap-2"
         >
-          <Printer size={18} /> Imprimer
+          <Printer size={16} /> Imprimer
         </button>
       </div>
 
-      {/* === FILTRES === */}
-      <div className="bg-white shadow rounded-xl p-4 border flex flex-wrap gap-4 items-center">
-
-        {/* Recherche */}
-        <div className="flex items-center gap-2 flex-1 min-w-[250px]">
-          <Search size={18} className="text-[#472EAD]" />
-          <input
-            placeholder="Rechercher caissier / téléphone..."
-            className="px-3 py-2 border rounded w-full text-sm"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-
-        {/* Date du jour */}
-        <div>
-          <label className="text-sm text-gray-600">Date du jour</label>
-          <input
-            type="date"
-            className="px-3 py-2 border rounded text-sm"
-            value={dateJour}
-            onChange={(e) => setDateJour(e.target.value)}
-          />
-        </div>
-
-        {/* Date début */}
-        <div>
-          <label className="text-sm text-gray-600">Début</label>
-          <input
-            type="date"
-            className="px-3 py-2 border rounded text-sm"
-            value={dateDebut}
-            onChange={(e) => setDateDebut(e.target.value)}
-          />
-        </div>
-
-        {/* Date fin */}
-        <div>
-          <label className="text-sm text-gray-600">Fin</label>
-          <input
-            type="date"
-            className="px-3 py-2 border rounded text-sm"
-            value={dateFin}
-            onChange={(e) => setDateFin(e.target.value)}
-          />
-        </div>
-      </div>
-
-      {/* === TABLEAU === */}
-      <div className="bg-white shadow rounded-xl p-4 border">
+      {/* TABLE */}
+      <div className="bg-white p-4 rounded-xl shadow border overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-[#EFEAFF] text-[#472EAD]">
             <tr>
-              <th className="px-3 py-2 text-left">Caissier</th>
-              <th className="px-3 py-2">Téléphone</th>
-              <th className="px-3 py-2">Date</th>
-              <th className="px-3 py-2 text-right">Ventes</th>
-              <th className="px-3 py-2 text-right">Déclaré</th>
-              <th className="px-3 py-2 text-right">Écart</th>
+              <th>Caissier</th>
+              <th>Date</th>
+              <th>Fond</th>
+              <th>Paiements</th>
+              <th>Total paiements</th>
+              <th>Décaissements</th>
+              <th>Encaissements</th>
+              <th>Caisse finale</th>
             </tr>
           </thead>
-
           <tbody>
-            {filtered.length ? (
-              filtered.map((c) => (
-                <tr key={c.id}>
-                  <td className="px-3 py-2">{c.caissier}</td>
-                  <td className="px-3 py-2">{c.telephone}</td>
-                  <td className="px-3 py-2">{c.date}</td>
-                  <td className="px-3 py-2 text-right">{formatFCFA(c.totalVentes)}</td>
-                  <td className="px-3 py-2 text-right">{formatFCFA(c.totalDeclare)}</td>
-                  <td className="px-3 py-2 text-right">{formatFCFA(c.totalDeclare - c.totalVentes)}</td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={7} className="text-center py-4 text-gray-400">
-                  Aucune caisse trouvée.
-                </td>
+            {caisses.map((c) => (
+              <tr key={c.id} className="border-b">
+                <td>{c.caissier}</td>
+                <td>{c.date}</td>
+                <td>{fcfa(FOND_CAISSE)}</td>
+                <td className="text-center">{c.nbPaiements}</td>
+                <td>{fcfa(c.sommePaiements)}</td>
+                <td>{fcfa(c.totalDecaisse)}</td>
+                <td>{fcfa(c.totalEncaisse)}</td>
+                <td className="font-semibold">{fcfa(c.caisseFinale)}</td>
               </tr>
-            )}
+            ))}
           </tbody>
         </table>
+      </div>
 
-        {/* Résumé global */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
-          <div className="p-3 bg-[#F7F5FF] rounded">
-            <p className="text-gray-600 text-sm">Total Ventes</p>
-            <p className="font-bold text-[#472EAD]">{formatFCFA(totalVentes)}</p>
-          </div>
+      {/* TOTAUX */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white p-4 rounded shadow border text-center">
+          <p className="text-sm text-gray-500">Total encaissements</p>
+          <p className="font-bold text-green-600">
+            {fcfa(totalEncaissements)}
+          </p>
+        </div>
 
-          <div className="p-3 bg-[#F7F5FF] rounded">
-            <p className="text-gray-600 text-sm">Total Déclaré</p>
-            <p className="font-bold text-[#472EAD]">{formatFCFA(totalDeclare)}</p>
-          </div>
+        <div className="bg-white p-4 rounded shadow border text-center">
+          <p className="text-sm text-gray-500">Total décaissements</p>
+          <p className="font-bold text-red-600">
+            {fcfa(totalDecaissements)}
+          </p>
+        </div>
 
-          <div className="p-3 bg-[#F7F5FF] rounded">
-            <p className="text-gray-600 text-sm">Écart</p>
-            <p
-              className={`font-bold ${
-                totalEcart === 0
-                  ? "text-green-600"
-                  : totalEcart > 0
-                  ? "text-yellow-600"
-                  : "text-red-600"
-              }`}
-            >
-              {formatFCFA(totalEcart)}
-            </p>
-          </div>
+        <div className="bg-white p-4 rounded shadow border text-center">
+          <p className="text-sm text-gray-500">Total des caisses</p>
+          <p className="font-bold text-[#472EAD]">
+            {fcfa(totalCaisses)}
+          </p>
         </div>
       </div>
     </div>

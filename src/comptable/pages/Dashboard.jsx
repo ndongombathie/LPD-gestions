@@ -1,17 +1,14 @@
 // ==========================================================
-// 📊 Dashboard.jsx — Interface Comptable Premium (LPD)
-// Version améliorée : StatCards CLIQUABLES 🔥
+// 📊 Dashboard.jsx — Comptable (REDIRECTIONS OK + GRAPHE)
 // ==========================================================
 
-import React from "react";
-import { motion } from "framer-motion";
+import React, { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import {
-  TrendingUp,
   Wallet,
-  ShoppingBag,
-  AlertTriangle,
-  CalendarRange,
-  Activity,
+  ArrowDownUp,
+  Store,
+  Warehouse,
 } from "lucide-react";
 
 import {
@@ -19,265 +16,186 @@ import {
   LineChart,
   Line,
   XAxis,
+  YAxis,
   CartesianGrid,
   Tooltip,
-  BarChart,
-  Bar,
 } from "recharts";
 
-import { useNavigate } from "react-router-dom";
-
-import {
-  statsComptable,
-  evolutionVentes,
-  dernieresActivites,
-} from "../../data/mockComptable";
-
-// Variants pour les animations des cartes
-const cardVariants = {
-  hidden: { opacity: 0, y: 12 },
-  visible: { opacity: 1, y: 0 },
+// ===============================
+// 🔧 MOCK (remplacé plus tard par API)
+// ===============================
+const stats = {
+  caisseJour: 325000,
+  actionsBoutique: 12,
+  actionsDepot: 7,
 };
 
-// Tooltip Recharts custom
-function ChartTooltip({ active, payload, label }) {
-  if (!active || !payload || !payload.length) return null;
-  const value = payload[0].value;
-  return (
-    <div className="bg-white/95 border border-gray-200 rounded-lg px-3 py-2 text-xs shadow-md">
-      <div className="font-semibold text-[11px] text-gray-500 mb-1">{label}</div>
-      <div className="text-[13px] font-bold text-[#472EAD]">
-        {value.toLocaleString("fr-FR")} FCFA
-      </div>
-    </div>
-  );
-}
+// ===============================
+// 🔧 FORMAT FCFA
+// ===============================
+const fcfa = (n) =>
+  new Intl.NumberFormat("fr-FR", {
+    style: "currency",
+    currency: "XOF",
+  }).format(n || 0);
 
-export default function Dashboard() {
+export default function DashboardComptable() {
   const navigate = useNavigate();
 
+  // ===============================
+  // 🔁 LECTURE DES VERSEMENTS
+  // ===============================
+  const versements = useMemo(() => {
+    return JSON.parse(localStorage.getItem("versements")) || [];
+  }, []);
+
+  // ===============================
+  // 📊 AGRÉGATION PAR DATE
+  // ===============================
+  const versementsParJour = useMemo(() => {
+    const map = {};
+
+    versements.forEach((v) => {
+      map[v.date] = (map[v.date] || 0) + Number(v.montant);
+    });
+
+    return Object.keys(map).map((date) => ({
+      date,
+      montant: map[date],
+    }));
+  }, [versements]);
+
+  // ===============================
+  // 📊 TOTAL VERSEMENTS
+  // ===============================
+  const totalVersements = versements.reduce(
+    (s, v) => s + Number(v.montant),
+    0
+  );
+
   return (
-    <div className="space-y-6 pb-4">
+    <div className="space-y-8">
 
-      {/* ======================================================
-          EN-TÊTE DU DASHBOARD
-      ====================================================== */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-[#472EAD]">
-            Tableau de bord comptable
-          </h1>
-          <p className="text-sm text-gray-500">
-            Vue globale sur les ventes, encaissements et activités financières.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 text-xs">
-          <button className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full border border-gray-200 text-gray-700 bg-white shadow-sm">
-            <CalendarRange size={14} />
-            Période : <span className="font-semibold">Janv – Déc 2025</span>
-          </button>
-        </div>
+      {/* ================= TITRE ================= */}
+      <div>
+        <h1 className="text-xl font-semibold text-[#472EAD]">
+          Tableau de bord comptable
+        </h1>
+        <p className="text-sm text-gray-500">
+          Vue rapide sur la caisse, les versements et la gestion
+        </p>
       </div>
 
-      {/* ======================================================
-          CARTES STATISTIQUES — maintenant CLIQUABLES 🔥
-      ====================================================== */}
-      <motion.div
-        className="grid grid-cols-1 md:grid-cols-4 gap-5"
-        initial="hidden"
-        animate="visible"
-        transition={{ staggerChildren: 0.08 }}
-      >
-        <StatCard
+      {/* ================= CARTES (2 x 2) ================= */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+        {/* JOURNAL CAISSE */}
+        <DashboardCard
+          title="Caisse du jour"
+          value={fcfa(stats.caisseJour)}
+          subtitle="Total journalier"
           icon={Wallet}
-          iconBg="bg-emerald-50"
-          iconColor="text-emerald-500"
-          title="Chiffre d'affaires du jour"
-          value={`${statsComptable.chiffreAffairesJour.toLocaleString("fr-FR")} FCFA`}
-          trend="+8,5 % vs hier"
-          onClick={() => navigate("/comptable/ventes-journalieres")}
+          color="bg-emerald-50 text-emerald-600"
+          onClick={() =>
+            navigate("/comptable/controle-caissier/caisse")
+          }
         />
 
-        <StatCard
-          icon={TrendingUp}
-          iconBg="bg-indigo-50"
-          iconColor="text-indigo-500"
-          title="Chiffre d'affaires du mois"
-          value={`${statsComptable.chiffreAffairesMois.toLocaleString("fr-FR")} FCFA`}
-          trend="+12,3 % vs mois dernier"
-          onClick={() => navigate("/comptable/ventes-mensuelles")}
+        {/* VERSEMENTS */}
+        <DashboardCard
+          title="Versements"
+          value={fcfa(totalVersements)}
+          subtitle="Total enregistré"
+          icon={ArrowDownUp}
+          color="bg-indigo-50 text-indigo-600"
+          onClick={() =>
+            navigate("/comptable/controle-caissier/historique-versements")
+          }
         />
 
-        <StatCard
-          icon={ShoppingBag}
-          iconBg="bg-sky-50"
-          iconColor="text-sky-500"
-          title="Nombre total de ventes"
-          value={statsComptable.totalVentes.toLocaleString("fr-FR")}
-          trend="Ventes validées"
-          onClick={() => navigate("/comptable/ventes")}
+        {/* BOUTIQUE */}
+        <DashboardCard
+          title="Gestion Boutique"
+          value={stats.actionsBoutique}
+          subtitle="Actions enregistrées"
+          icon={Store}
+          color="bg-sky-50 text-sky-600"
+          onClick={() =>
+            navigate("/comptable/controle-gestionnaire/boutique")
+          }
         />
 
-        <StatCard
-          icon={AlertTriangle}
-          iconBg="bg-rose-50"
-          iconColor="text-rose-500"
-          title="Produits en rupture"
-          value={statsComptable.produitsRupture}
-          trend="À surveiller rapidement"
-          onClick={() => navigate("/comptable/ruptures-stock")}
+        {/* DEPOT */}
+        <DashboardCard
+          title="Gestion Dépôt"
+          value={stats.actionsDepot}
+          subtitle="Actions enregistrées"
+          icon={Warehouse}
+          color="bg-orange-50 text-orange-600"
+          onClick={() =>
+            navigate("/comptable/controle-gestionnaire/depot")
+          }
         />
-      </motion.div>
+      </div>
 
-      {/* ======================================================
-          GRAPHIQUES
-      ====================================================== */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Courbe des ventes */}
-        <motion.div
-          className="bg-white rounded-2xl shadow-md border border-gray-100 p-5 lg:col-span-2"
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25 }}
-        >
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h2 className="text-sm font-semibold text-gray-800">
-                Évolution du chiffre d'affaires
-              </h2>
-              <p className="text-xs text-gray-500">
-                Suivi mensuel des ventes globales (dépôt + boutique)
-              </p>
-            </div>
-          </div>
+      {/* ================= GRAPHE DES VERSEMENTS ================= */}
+      <div className="bg-white rounded-xl shadow border p-5">
+        <h2 className="text-sm font-semibold text-[#472EAD] mb-1">
+          Évolution des versements
+        </h2>
+        <p className="text-xs text-gray-500 mb-4">
+          Total des versements enregistrés par jour
+        </p>
 
-          <div className="h-60">
+        {versementsParJour.length ? (
+          <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={evolutionVentes}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                <XAxis
-                  dataKey="mois"
-                  tick={{ fontSize: 11 }}
-                  tickLine={false}
-                  axisLine={{ stroke: "#E5E7EB" }}
-                />
-                <Tooltip content={<ChartTooltip />} />
+              <LineChart data={versementsParJour}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" />
+                <YAxis />
+                <Tooltip formatter={(v) => fcfa(v)} />
                 <Line
                   type="monotone"
-                  dataKey="total"
+                  dataKey="montant"
                   stroke="#472EAD"
-                  strokeWidth={2.4}
-                  dot={{ r: 3 }}
-                  activeDot={{ r: 5 }}
+                  strokeWidth={3}
+                  dot={{ r: 4 }}
                 />
               </LineChart>
             </ResponsiveContainer>
           </div>
-        </motion.div>
-
-        {/* Histogramme simple */}
-        <motion.div
-          className="bg-white rounded-2xl shadow-md border border-gray-100 p-5"
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25, delay: 0.05 }}
-        >
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h2 className="text-sm font-semibold text-gray-800">
-                Ventes par mois (aperçu)
-              </h2>
-              <p className="text-xs text-gray-500">
-                Comparaison rapide des volumes par mois.
-              </p>
-            </div>
-          </div>
-
-          <div className="h-60">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={evolutionVentes}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                <XAxis
-                  dataKey="mois"
-                  tick={{ fontSize: 11 }}
-                  tickLine={false}
-                  axisLine={{ stroke: "#E5E7EB" }}
-                />
-                <Tooltip content={<ChartTooltip />} />
-                <Bar dataKey="total" radius={[6, 6, 0, 0]} fill="#F58020" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </motion.div>
+        ) : (
+          <p className="text-center text-sm text-gray-400 py-10">
+            Aucun versement enregistré
+          </p>
+        )}
       </div>
-
-      {/* ======================================================
-          ACTIVITÉS RÉCENTES
-      ====================================================== */}
-      <motion.div
-        className="bg-white rounded-2xl shadow-md border border-gray-100 p-5"
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.25, delay: 0.1 }}
-      >
-        <div className="flex items-center gap-2 mb-4">
-          <div className="w-8 h-8 rounded-full bg-[#472EAD]/10 flex items-center justify-center">
-            <Activity size={16} className="text-[#472EAD]" />
-          </div>
-          <div>
-            <h2 className="text-sm font-semibold text-gray-800">Dernières activités</h2>
-            <p className="text-xs text-gray-500">
-              Ventes, versements, anomalies remontées par le système.
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          {dernieresActivites.map((act) => (
-            <div
-              key={act.id}
-              className="flex items-start gap-3 pb-3 border-b last:border-0 last:pb-0"
-            >
-              <div className="mt-1 w-2 h-2 rounded-full bg-[#472EAD]" />
-              <div className="flex-1">
-                <p className="text-sm text-gray-800">{act.message}</p>
-                <p className="text-[11px] text-gray-500 mt-0.5">{act.date}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </motion.div>
     </div>
   );
 }
 
-/* ==========================================================
-   Carte Statistique — maintenant CLIQUABLE 🟣
-========================================================== */
-function StatCard({ icon: Icon, iconBg, iconColor, title, value, trend, onClick }) {
+/* ================= CARTE ================= */
+function DashboardCard({ title, value, subtitle, icon: Icon, color, onClick }) {
   return (
-    <motion.div
-      variants={cardVariants}
+    <div
       onClick={onClick}
-      className="bg-white rounded-2xl shadow-md border border-gray-100 px-4 py-4 flex flex-col gap-3 cursor-pointer hover:shadow-lg hover:-translate-y-[2px] transition-all duration-200"
+      className="cursor-pointer bg-white rounded-xl shadow border p-4
+                 hover:shadow-lg hover:-translate-y-1 transition-all"
     >
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold">
+          <p className="text-xs text-gray-500 font-medium uppercase">
             {title}
           </p>
-          <p className="mt-1 text-lg font-bold text-gray-900">{value}</p>
+          <p className="text-lg font-bold mt-1">{value}</p>
+          <p className="text-xs text-gray-400 mt-1">{subtitle}</p>
         </div>
-        <div className={`w-9 h-9 rounded-full ${iconBg} flex items-center justify-center`}>
-          <Icon size={18} className={iconColor} />
+
+        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${color}`}>
+          <Icon size={20} />
         </div>
       </div>
-
-      <p className="text-[11px] text-gray-500 flex items-center gap-1">
-        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-        {trend}
-      </p>
-    </motion.div>
+    </div>
   );
 }

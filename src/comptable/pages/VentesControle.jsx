@@ -1,299 +1,264 @@
 // ==========================================================
-// 📊 VentesControle.jsx — Filtre complet + statistiques + graphique animé
+// 🧾 JournalCaisse.jsx — Journal de Caisse PRO (Comptable)
 // ==========================================================
 
-import React, { useState, useMemo } from "react";
-import { Printer, Calendar, User, Search } from "lucide-react";
+import React, { useState, useMemo, useEffect } from "react";
+import { Search, Printer } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import { motion } from "framer-motion";
 
 // ===============================
-// 🔧 Données simulées
+// 🔧 CONFIG
 // ===============================
-const mockVentes = [
-  { id: 1, vendeur: "Moussa Ndiaye", telephone: "771234567", role: "vendeur", date: "2025-01-12", mois: "Janvier", total: 55000 },
-  { id: 2, vendeur: "Aissatou Diop", telephone: "781112233", role: "vendeur", date: "2025-01-12", mois: "Janvier", total: 35000 },
-  { id: 3, vendeur: "Moussa Ndiaye", telephone: "771234567", role: "vendeur", date: "2025-02-03", mois: "Février", total: 82000 },
-  { id: 4, vendeur: "Fatou Ndour", telephone: "761234555", role: "vendeur", date: "2025-02-03", mois: "Février", total: 61000 },
-  { id: 5, vendeur: "Responsable Général", telephone: "700000000", role: "responsable", date: "2025-02-10", mois: "Février", total: 120000 },
+const FOND_CAISSE = 50000;
+
+// ===============================
+// 🔧 DONNÉES MOCK
+// ===============================
+const caissesMock = [
+  {
+    id: 1,
+    caissier: "Moussa Ndiaye",
+    date: "2025-02-22",
+    paiements: [10000, 15000, 5000],
+    encaissements: [5000],
+    decaissements: [3000],
+  },
+  {
+    id: 2,
+    caissier: "Aissatou Diop",
+    date: "2025-02-22",
+    paiements: [20000, 12000],
+    encaissements: [],
+    decaissements: [2000],
+  },
 ];
 
-// Format CFA
-const formatFCFA = (n) =>
-  new Intl.NumberFormat("fr-FR", { style: "currency", currency: "XOF" }).format(n || 0);
+// ===============================
+// 🔧 FORMAT
+// ===============================
+const fcfa = (n) =>
+  new Intl.NumberFormat("fr-FR", {
+    style: "currency",
+    currency: "XOF",
+  }).format(n || 0);
 
-const COLORS = ["#472EAD", "#F58020"];
-
-// Animation des tranches du graphique
-const sliceVariants = {
-  hidden: { scale: 0, opacity: 0 },
-  visible: (i) => ({
-    scale: 1,
-    opacity: 1,
-    transition: {
-      delay: 0.2 + i * 0.1,
-      type: "spring",
-      stiffness: 120,
-      damping: 12,
-    },
-  }),
-};
-
-export default function VentesControle() {
-  const [mode, setMode] = useState("journalier");
-  const [selectedVendeur, setSelectedVendeur] = useState("");
-  const [searchTerm, setSearchTerm] = useState("");
+// ===============================
+// 📌 COMPOSANT
+// ===============================
+export default function JournalCaisse() {
+  const [search, setSearch] = useState("");
+  const [dateJour, setDateJour] = useState("");
   const [dateDebut, setDateDebut] = useState("");
   const [dateFin, setDateFin] = useState("");
 
-  const vendeurs = [...new Set(mockVentes.map((v) => v.vendeur))];
-
-  // ==================================================
-  // 🔍 Filtrage GLOBAL
-  // ==================================================
-  const filteredData = useMemo(() => {
-    let data = [...mockVentes];
-
-    if (mode === "journalier") {
-      data.sort((a, b) => new Date(b.date) - new Date(a.date));
-    }
-
-    if (selectedVendeur) data = data.filter((v) => v.vendeur === selectedVendeur);
-
-    if (searchTerm.trim()) {
-      const q = searchTerm.toLowerCase();
-      data = data.filter(
-        (v) =>
-          v.vendeur.toLowerCase().includes(q) ||
-          (v.telephone && v.telephone.includes(q))
-      );
-    }
-
-    if (dateDebut) data = data.filter((v) => v.date >= dateDebut);
-    if (dateFin) data = data.filter((v) => v.date <= dateFin);
-
-    return data;
-  }, [mode, selectedVendeur, searchTerm, dateDebut, dateFin]);
-
-  // ==================================================
-  // 📊 STATISTIQUES
-  // ==================================================
-  const totalGeneral = filteredData.reduce((s, v) => s + v.total, 0);
-  const nombreOperations = filteredData.length;
-
-  // Meilleur vendeur
-  const meilleurVendeur = useMemo(() => {
-    const scores = {};
-    filteredData.forEach((v) => {
-      scores[v.vendeur] = (scores[v.vendeur] || 0) + v.total;
-    });
-
-    let best = null;
-    let max = 0;
-    Object.keys(scores).forEach((vendeur) => {
-      if (scores[vendeur] > max) {
-        best = vendeur;
-        max = scores[vendeur];
-      }
-    });
-
-    return best ? `${best} (${formatFCFA(max)})` : "-";
-  }, [filteredData]);
-
-  // Répartition vendeur / responsable
-  const ventesParRole = useMemo(() => {
-    const roleData = [
-      {
-        role: "Vendeurs",
-        total: mockVentes
-          .filter((v) => v.role === "vendeur")
-          .reduce((s, v) => s + v.total, 0),
-      },
-      {
-        role: "Responsable",
-        total: mockVentes
-          .filter((v) => v.role === "responsable")
-          .reduce((s, v) => s + v.total, 0),
-      },
-    ];
-    return roleData;
+  useEffect(() => {
+    setDateJour(new Date().toISOString().split("T")[0]);
   }, []);
 
-  // ==================================================
-  // 🖨 Impression PDF
-  // ==================================================
+  // ===============================
+  // 🔍 FILTRAGE + CALCULS
+  // ===============================
+  const caisses = useMemo(() => {
+    return caissesMock
+      .filter(
+        (c) =>
+          !search ||
+          c.caissier.toLowerCase().includes(search.toLowerCase())
+      )
+      .filter((c) => (!dateJour ? true : c.date === dateJour))
+      .filter((c) => (!dateDebut ? true : c.date >= dateDebut))
+      .filter((c) => (!dateFin ? true : c.date <= dateFin))
+      .map((c) => {
+        const sommePaiements = c.paiements.reduce((s, v) => s + v, 0);
+        const nbPaiements = c.paiements.length;
+        const totalEncaisse = c.encaissements.reduce((s, v) => s + v, 0);
+        const totalDecaisse = c.decaissements.reduce((s, v) => s + v, 0);
+
+        const caisseFinale =
+          FOND_CAISSE +
+          sommePaiements +
+          totalEncaisse -
+          totalDecaisse;
+
+        return {
+          ...c,
+          nbPaiements,
+          sommePaiements,
+          totalEncaisse,
+          totalDecaisse,
+          caisseFinale,
+        };
+      });
+  }, [search, dateJour, dateDebut, dateFin]);
+
+  // ===============================
+  // 📊 TOTAUX GLOBAUX
+  // ===============================
+  const totalCaisseGlobale = caisses.reduce(
+    (s, c) => s + c.caisseFinale,
+    0
+  );
+
+  const totalEncaissementsGlobaux = caisses.reduce(
+    (s, c) => s + c.totalEncaisse,
+    0
+  );
+
+  const totalDecaissementsGlobaux = caisses.reduce(
+    (s, c) => s + c.totalDecaisse,
+    0
+  );
+
+  // ===============================
+  // 🖨 PDF
+  // ===============================
   const imprimerPDF = () => {
-    if (!filteredData.length) {
+    if (!caisses.length) {
       alert("Aucune donnée à imprimer.");
       return;
     }
 
     const doc = new jsPDF();
+    doc.text("Journal de Caisse — LPD Manager", 14, 16);
 
-    doc.text("Rapport des Ventes — LPD Manager", 14, 16);
+    doc.setFontSize(10);
+    if (dateDebut || dateFin) {
+      doc.text(
+        `Période : ${dateDebut || "..."} → ${dateFin || "..."}`,
+        14,
+        26
+      );
+    }
 
     autoTable(doc, {
-      startY: 30,
-      head: [["Vendeur", "Téléphone", "Date", "Montant"]],
-      body: filteredData.map((v) => [
-        v.vendeur,
-        v.telephone,
-        v.date,
-        formatFCFA(v.total),
+      startY: 35,
+      head: [
+        [
+          "Caissier",
+          "Date",
+          "Fond",
+          "Nb paiements",
+          "Somme paiements",
+          "Décaissements",
+          "Encaissements",
+          "Caisse finale",
+        ],
+      ],
+      body: caisses.map((c) => [
+        c.caissier,
+        c.date,
+        fcfa(FOND_CAISSE),
+        c.nbPaiements,
+        fcfa(c.sommePaiements),
+        fcfa(c.totalDecaisse),
+        fcfa(c.totalEncaisse),
+        fcfa(c.caisseFinale),
       ]),
       headStyles: { fillColor: [71, 46, 173] },
     });
 
-    const y = doc.lastAutoTable.finalY + 10;
-    doc.text(`TOTAL : ${formatFCFA(totalGeneral)}`, 14, y);
+    let y = doc.lastAutoTable.finalY + 10;
 
-    doc.save("Rapport_Ventes_LPD.pdf");
+    doc.text(`Total encaissements : ${fcfa(totalEncaissementsGlobaux)}`, 14, y);
+    doc.text(`Total décaissements : ${fcfa(totalDecaissementsGlobaux)}`, 14, y + 14);
+    doc.text(`Total caisses : ${fcfa(totalCaisseGlobale)}`, 14, y + 28);
+
+    doc.save("Journal_Caisse_LPD.pdf");
   };
 
-  // ==================================================
-  // 🖥 Rendu
-  // ==================================================
   return (
-    <div className="p-5 space-y-5">
+    <div className="p-6 space-y-6">
+      <h1 className="text-xl font-semibold text-[#472EAD]">
+        Journal de Caisse (détaillé)
+      </h1>
 
-      <h1 className="text-xl font-semibold text-[#472EAD]">Contrôle des Ventes</h1>
+      {/* FILTRES */}
+      <div className="bg-white p-4 rounded-xl shadow border flex flex-wrap gap-4">
+        <input
+          className="border px-3 py-2 rounded w-full md:w-64"
+          placeholder="Rechercher caissier…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
 
-      {/* === FILTRES === */}
-      <div className="p-4 bg-white rounded-xl shadow border flex flex-wrap gap-4 items-center">
+        <input
+          type="date"
+          className="border px-3 py-2 rounded"
+          value={dateDebut}
+          onChange={(e) => setDateDebut(e.target.value)}
+        />
 
-        {/* Mode */}
-        <div>
-          <Calendar size={18} className="text-[#472EAD]" />
-          <select value={mode} onChange={(e) => setMode(e.target.value)} className="px-2 py-1 border rounded">
-            <option value="journalier">Journalier</option>
-            <option value="mensuel">Mensuel</option>
-          </select>
-        </div>
+        <input
+          type="date"
+          className="border px-3 py-2 rounded"
+          value={dateFin}
+          onChange={(e) => setDateFin(e.target.value)}
+        />
 
-        {/* Vendeur */}
-        <div>
-          <User size={18} className="text-[#472EAD]" />
-          <select value={selectedVendeur} onChange={(e) => setSelectedVendeur(e.target.value)} className="px-2 py-1 border rounded">
-            <option value="">Tous</option>
-            {vendeurs.map((v) => (
-              <option key={v}>{v}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Recherche */}
-        <div className="flex-1 flex items-center gap-2">
-          <Search size={18} className="text-[#472EAD]" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Nom ou téléphone…"
-            className="w-full px-3 py-2 border rounded"
-          />
-        </div>
-
-        {/* Dates */}
-        <div>
-          <label className="text-sm">Date début</label>
-          <input type="date" value={dateDebut} onChange={(e) => setDateDebut(e.target.value)} className="px-2 py-1 border rounded" />
-        </div>
-
-        <div>
-          <label className="text-sm">Date fin</label>
-          <input type="date" value={dateFin} onChange={(e) => setDateFin(e.target.value)} className="px-2 py-1 border rounded" />
-        </div>
-
-        {/* Bouton PDF */}
-        <button onClick={imprimerPDF} className="ml-auto px-4 py-2 bg-[#472EAD] text-white rounded-lg flex items-center gap-2">
+        <button
+          onClick={imprimerPDF}
+          className="ml-auto px-4 py-2 bg-[#472EAD] text-white rounded flex gap-2"
+        >
           <Printer size={16} /> Imprimer
         </button>
       </div>
 
-      {/* === TABLEAU === */}
-      <div className="bg-white p-4 rounded-xl shadow border">
+      {/* TABLE */}
+      <div className="bg-white p-4 rounded-xl shadow border overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-[#EFEAFF] text-[#472EAD]">
             <tr>
-              <th className="px-3 py-2 text-left">Vendeur</th>
-              <th className="px-3 py-2">Téléphone</th>
-              <th className="px-3 py-2">Date</th>
-              <th className="px-3 py-2 text-right">Montant</th>
+              <th>Caissier</th>
+              <th>Date</th>
+              <th>Fond</th>
+              <th>Paiements</th>
+              <th>Somme paiements</th>
+              <th>Décaissements</th>
+              <th>Encaissements</th>
+              <th>Caisse finale</th>
             </tr>
           </thead>
           <tbody>
-            {filteredData.map((v) => (
-              <tr key={v.id} className="border-b">
-                <td className="px-3 py-2">{v.vendeur}</td>
-                <td className="px-3 py-2">{v.telephone}</td>
-                <td className="px-3 py-2">{v.date}</td>
-                <td className="px-3 py-2 text-right">{formatFCFA(v.total)}</td>
+            {caisses.map((c) => (
+              <tr key={c.id} className="border-b">
+                <td>{c.caissier}</td>
+                <td>{c.date}</td>
+                <td>{fcfa(FOND_CAISSE)}</td>
+                <td className="text-center">{c.nbPaiements}</td>
+                <td>{fcfa(c.sommePaiements)}</td>
+                <td>{fcfa(c.totalDecaisse)}</td>
+                <td>{fcfa(c.totalEncaisse)}</td>
+                <td className="font-semibold">{fcfa(c.caisseFinale)}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      {/* === STATISTIQUES + GRAPHIQUE === */}
+      {/* RÉCAP GLOBAL */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-
-        {/* Total */}
-        <div className="p-3 bg-white rounded shadow border text-center">
-          <p className="text-gray-500 text-sm">Total Général</p>
-          <p className="text-xl font-bold">{formatFCFA(totalGeneral)}</p>
+        <div className="bg-white p-4 rounded shadow border text-center">
+          <p className="text-gray-500 text-sm">Total encaissements</p>
+          <p className="text-lg font-bold text-green-600">
+            {fcfa(totalEncaissementsGlobaux)}
+          </p>
         </div>
 
-        {/* Meilleur vendeur */}
-        <div className="p-3 bg-white rounded shadow border text-center">
-          <p className="text-gray-500 text-sm">Meilleur vendeur</p>
-          <p className="text-lg font-semibold">{meilleurVendeur}</p>
+        <div className="bg-white p-4 rounded shadow border text-center">
+          <p className="text-gray-500 text-sm">Total décaissements</p>
+          <p className="text-lg font-bold text-red-600">
+            {fcfa(totalDecaissementsGlobaux)}
+          </p>
         </div>
 
-        {/* Nombre opérations */}
-        <div className="p-3 bg-white rounded shadow border text-center">
-          <p className="text-gray-500 text-sm">Opérations</p>
-          <p className="text-xl font-bold">{nombreOperations}</p>
+        <div className="bg-white p-4 rounded shadow border text-center">
+          <p className="text-gray-500 text-sm">Total de toutes les caisses</p>
+          <p className="text-xl font-bold text-[#472EAD]">
+            {fcfa(totalCaisseGlobale)}
+          </p>
         </div>
       </div>
-
-      {/* === GRAPHIQUE ANIMÉ === */}
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.45, ease: "easeOut" }}
-        className="bg-white p-4 rounded-xl shadow border"
-      >
-        <h3 className="text-sm font-medium mb-2 text-gray-700">
-          Répartition des ventes par rôle
-        </h3>
-
-        <div className="w-full h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={ventesParRole}
-                cx="50%"
-                cy="50%"
-                outerRadius={90}
-                dataKey="total"
-                nameKey="role"
-              >
-                {ventesParRole.map((entry, index) => (
-                  <Cell key={index} fill={COLORS[index]}>
-                    <motion.g custom={index} initial="hidden" animate="visible" variants={sliceVariants} />
-                  </Cell>
-                ))}
-              </Pie>
-
-              <Tooltip formatter={(v) => formatFCFA(v)} />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      </motion.div>
-
     </div>
   );
 }
