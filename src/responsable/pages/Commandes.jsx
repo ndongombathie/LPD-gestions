@@ -437,7 +437,7 @@ const handlePrint = () => {
               onClick={onClose}
               className="px-3 py-2 rounded-lg border border-gray-300 bg-white text-xs sm:text-sm text-gray-700 hover:bg-gray-50"
             >
-              Plus tard
+              Fermer 
             </button>
             <button
               type="button"
@@ -2291,15 +2291,7 @@ export default function Commandes() {
                             >
                               <Eye size={16} />
                             </button>
-                            {c.statut === "en_attente_caisse" && (
-                              <button
-                                onClick={() => handleAnnuler(c)}
-                                className="p-1.5 rounded-md hover:bg-rose-50 text-rose-600"
-                                title="Annuler la commande"
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            )}
+
                           </div>
                         </td>
                       </tr>

@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
-import { X, ListChecks, BadgeDollarSign, Edit2, Trash2 } from "lucide-react";
+import { X, ListChecks, BadgeDollarSign, Edit2, Trash2, Search } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 
 
@@ -68,7 +68,12 @@ const getPaiementStatusClasses = (statut) => {
 
   if (s.includes("attente")) return "bg-amber-50 text-amber-700"; // 🟠
   if (s.includes("annul")) return "bg-red-50 text-red-700"; // 🔴
-  if (s.includes("sold") || s.includes("pay") || s.includes("valid"))
+  if (
+    s.includes("sold") ||
+    s.includes("pay") ||
+    s.includes("valid") ||
+    s.includes("encaisse")
+  )
     return "bg-emerald-50 text-emerald-700"; // 🟢
 
   return "bg-gray-100 text-gray-600";
@@ -100,9 +105,14 @@ export default function VoirDetailClient({
   // 🧭 Mode : "choice" | "commandes" | "paiements"
   const [mode, setMode] = useState("choice");
 
+  // 🔎 Filtres pour la vue commandes
+  const [commandeFilter, setCommandeFilter] = useState("toutes"); // toutes | payees | attente_caisse | annulees
+  const [searchCommandeCmd, setSearchCommandeCmd] = useState(""); // recherche par ID / numéro / QR dans la carte commandes
+
   // 🔎 Filtres pour la vue paiements
   const [filterType, setFilterType] = useState("tous"); // tous | tranches | paiements | annules
   const [searchDate, setSearchDate] = useState("");
+  const [searchCommandePay, setSearchCommandePay] = useState(""); // recherche par ID / numéro / QR dans la carte paiements
 
   // 🗑️ Tranche sélectionnée pour confirmation de suppression
   const [trancheToDelete, setTrancheToDelete] = useState(null); // { cmd, paiement }
@@ -131,8 +141,11 @@ export default function VoirDetailClient({
   useEffect(() => {
     if (open) {
       setMode("choice");
+      setCommandeFilter("toutes");
+      setSearchCommandeCmd("");
       setFilterType("tous");
       setSearchDate("");
+      setSearchCommandePay("");
       setTrancheToDelete(null);
       setTrancheToEdit(null);
       setEditForm({
@@ -166,6 +179,98 @@ export default function VoirDetailClient({
     };
   }, [mode, hasAtLeastOnePaiement]);
 
+  // 🧠 Adaptation automatique du filtre de commandes en fonction de la recherche (ID / numéro / QR)
+  useEffect(() => {
+    const q = (searchCommandeCmd || "").trim().toLowerCase();
+    if (!q) return;
+
+    const matches = sortedCmds.filter((cmd) => {
+      const haystack = [
+        cmd.id,
+        cmd.numero,
+        cmd.reference,
+        cmd.codeCommande,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+
+    if (matches.length === 1) {
+      const cmd = matches[0];
+      const statutLabel = (cmd.statutLabel || cmd.statut || "").toLowerCase();
+
+      if (statutLabel.includes("annul")) {
+        setCommandeFilter("annulees");
+      } else if (statutLabel.includes("attente")) {
+        setCommandeFilter("attente_caisse");
+      } else if (statutLabel.includes("pay") || statutLabel.includes("sold")) {
+        setCommandeFilter("payees");
+      } else {
+        setCommandeFilter("toutes");
+      }
+    }
+  }, [searchCommandeCmd, sortedCmds]);
+
+  // 🧠 Adaptation automatique du filtre de paiements en fonction de la recherche (ID / numéro / QR)
+  useEffect(() => {
+    const q = (searchCommandePay || "").trim().toLowerCase();
+    if (!q) return;
+
+    const matches = sortedCmds.filter((cmd) => {
+      const haystack = [
+        cmd.id,
+        cmd.numero,
+        cmd.reference,
+        cmd.codeCommande,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+
+    if (matches.length === 1) {
+      const cmd = matches[0];
+      const paiements = cmd.paiements || [];
+      if (!paiements.length) return;
+
+      let hasFinal = false;
+      let hasAttente = false;
+      let hasAnnule = false;
+
+      for (const p of paiements) {
+        const status = (
+          getPaiementEffectiveStatus(p, cmd) || ""
+        ).toLowerCase();
+
+        if (status.includes("annul")) {
+          hasAnnule = true;
+        } else if (status.includes("attente")) {
+          hasAttente = true;
+        } else if (
+          status.includes("sold") ||
+          status.includes("pay") ||
+          status.includes("encaisse") ||
+          status.includes("valid")
+        ) {
+          hasFinal = true;
+        }
+      }
+
+      if (hasFinal && !hasAttente && !hasAnnule) {
+        setFilterType("paiements");
+      } else if (hasAttente && !hasFinal && !hasAnnule) {
+        setFilterType("tranches");
+      } else if (hasAnnule && !hasFinal && !hasAttente) {
+        setFilterType("annules");
+      } else {
+        setFilterType("tous");
+      }
+    }
+  }, [searchCommandePay, sortedCmds]);
+
   // 📊 Agrégats pour le client (pour l'écran de choix)
   const summary = useMemo(() => {
     // ✅ On exclut toutes les commandes annulées pour le résumé
@@ -197,9 +302,7 @@ export default function VoirDetailClient({
     // Tranches en attente : supporte statut / statut_paiement & type / type_paiement
     const tranchesEnAttente = allPaiements.filter((p) => {
       const type =
-        p.type !== undefined && p.type !== null
-          ? p.type
-          : p.type_paiement;
+        p.type !== undefined && p.type !== null ? p.type : p.type_paiement;
       const statut =
         p.statut !== undefined && p.statut !== null
           ? p.statut
@@ -336,7 +439,44 @@ export default function VoirDetailClient({
       );
     }
 
-    return sortedCmds.map((cmd) => {
+    const q = (searchCommandeCmd || "").trim().toLowerCase();
+
+    const filteredCommandes = sortedCmds.filter((cmd) => {
+      const statutLabel = cmd.statutLabel || cmd.statut || "";
+      const s = statutLabel.toLowerCase();
+
+      if (commandeFilter === "payees") {
+        if (!(s.includes("pay") || s.includes("sold"))) return false;
+      } else if (commandeFilter === "attente_caisse") {
+        if (!s.includes("attente")) return false;
+      } else if (commandeFilter === "annulees") {
+        if (!s.includes("annul")) return false;
+      }
+
+      if (!q) return true;
+
+      const haystack = [
+        cmd.id,
+        cmd.numero,
+        cmd.reference,
+        cmd.codeCommande,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(q);
+    });
+
+    if (filteredCommandes.length === 0) {
+      return (
+        <div className="text-center text-xs text-gray-500 py-6">
+          Aucune commande ne correspond aux filtres sélectionnés.
+        </div>
+      );
+    }
+
+    return filteredCommandes.map((cmd) => {
       const paiements = cmd.paiements || [];
       const tranchesEnAttente = paiements.filter((p) => {
         const type =
@@ -552,9 +692,23 @@ export default function VoirDetailClient({
       );
     }
 
+    const searchCmd = (searchCommandePay || "").trim().toLowerCase();
+
     // On prépare les commandes avec leurs paiements filtrés
     const entries = sortedCmds
       .map((cmd) => {
+        const commandeMatches =
+          !searchCmd ||
+          [cmd.id, cmd.numero, cmd.reference, cmd.codeCommande]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase()
+            .includes(searchCmd);
+
+        if (!commandeMatches) {
+          return { cmd, paiements: [] };
+        }
+
         const paiements = (cmd.paiements || []).filter((p) => {
           const effectiveStatus = getPaiementEffectiveStatus(p, cmd);
           const s = String(effectiveStatus || "").toLowerCase();
@@ -573,17 +727,28 @@ export default function VoirDetailClient({
               : p.type_paiement;
 
           if (filterType === "tranches") {
+            // Tranches non annulées
             return type === "tranche" && !s.includes("annul");
           }
 
           if (filterType === "paiements") {
-            // Paiements finaux : paiements directs OU tranches soldées
+            // Paiements finaux : tout ce qui est complètement encaissé
             const isTranche = type === "tranche";
-            const isSold = s.includes("sold") || s.includes("pay");
+            const isFinal =
+              s.includes("sold") ||
+              s.includes("pay") ||
+              s.includes("encaisse") ||
+              s.includes("valid");
+
             if (isTranche) {
-              return isSold;
+              return isFinal;
             }
-            return true; // paiement direct
+
+            // Paiement direct : on le considère final si statut final OU commande soldée
+            if (isFinal) return true;
+
+            const resteCmd = Number(cmd.resteAPayer || 0);
+            return resteCmd <= 0;
           }
 
           if (filterType === "annules") {
@@ -959,11 +1124,72 @@ export default function VoirDetailClient({
           {/* VUE A : commandes */}
           {mode === "commandes" && (
             <div className="space-y-3">
-              <div className="flex items-center justify-between mb-1">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-1">
                 <h3 className="text-sm font-semibold text-[#2F1F7A]">
                   Historique des commandes
                 </h3>
+
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                  {/* Filtres par statut de commande */}
+                  <div className="inline-flex rounded-full border border-gray-200 bg-gray-50 p-0.5 text-[11px]">
+                    {[
+                      { id: "toutes", label: "Toutes" },
+                      { id: "payees", label: "Payées" },
+                      { id: "attente_caisse", label: "En attente caisse" },
+                      { id: "annulees", label: "Annulées" },
+                    ].map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setCommandeFilter(opt.id)}
+                        className={
+                          "px-2.5 py-1 rounded-full transition " +
+                          (commandeFilter === opt.id
+                            ? "bg-white text-[#472EAD] font-semibold shadow-sm"
+                            : "text-gray-500 hover:text-gray-700")
+                        }
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Recherche commande / QR */}
+                  {/* Recherche commande / QR */}
+                  <div className="flex items-center gap-2 text-[11px]">
+                    <span className="hidden sm:inline text-gray-500">
+                      Commande / QR
+                    </span>
+
+                    <div className="relative flex items-center">
+                      <span className="absolute left-2 flex items-center justify-center">
+                        <Search className="w-3.5 h-3.5 text-gray-400" />
+                      </span>
+
+                      <input
+                        type="text"
+                        value={searchCommandeCmd}
+                        onChange={(e) => setSearchCommandeCmd(e.target.value)}
+                        className="pl-7 pr-6 py-1.5 rounded-full border border-gray-200 bg-white/80 text-[11px] text-gray-700 shadow-sm focus:outline-none focus:border-[#472EAD] focus:ring-1 focus:ring-[#472EAD] placeholder:text-gray-400"
+                        placeholder="ID, numéro ou scan ticket"
+                      />
+
+                      {searchCommandeCmd && (
+                        <button
+                          type="button"
+                          onClick={() => setSearchCommandeCmd("")}
+                          className="absolute right-2 text-gray-300 hover:text-gray-600 text-xs font-semibold"
+                          aria-label="Réinitialiser la recherche"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                </div>
               </div>
+
               {renderCommandesView()}
             </div>
           )}
@@ -1007,23 +1233,49 @@ export default function VoirDetailClient({
                     ))}
                   </div>
 
-                  <div className="flex items-center gap-1 text-[11px]">
-                    <span className="text-gray-500">Date :</span>
-                    <input
-                      type="date"
-                      value={searchDate}
-                      onChange={(e) => setSearchDate(e.target.value)}
-                      className="border border-gray-200 rounded-lg px-2 py-1 text-[11px] focus:outline-none focus:border-[#472EAD] focus:ring-1 focus:ring-[#472EAD]"
-                    />
-                    {searchDate && (
-                      <button
-                        type="button"
-                        onClick={() => setSearchDate("")}
-                        className="text-gray-400 hover:text-gray-600 text-xs"
-                      >
-                        Réinitialiser
-                      </button>
-                    )}
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                    {/* Filtre date */}
+                    <div className="flex items-center gap-1 text-[11px]">
+                      <span className="text-gray-500">Date :</span>
+                      <input
+                        type="date"
+                        value={searchDate}
+                        onChange={(e) => setSearchDate(e.target.value)}
+                        className="border border-gray-200 rounded-lg px-2 py-1 text-[11px] focus:outline-none focus:border-[#472EAD] focus:ring-1 focus:ring-[#472EAD]"
+                      />
+                      {searchDate && (
+                        <button
+                          type="button"
+                          onClick={() => setSearchDate("")}
+                          className="text-gray-400 hover:text-gray-600 text-xs"
+                        >
+                          Réinit.
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Recherche commande / QR */}
+                    <div className="flex items-center gap-1 text-[11px]">
+                      <span className="text-gray-500">
+                        Commande / QR :
+                      </span>
+                      <input
+                        type="text"
+                        value={searchCommandePay}
+                        onChange={(e) => setSearchCommandePay(e.target.value)}
+                        className="border border-gray-200 rounded-lg px-2 py-1 text-[11px] focus:outline-none focus:border-[#472EAD] focus:ring-1 focus:ring-[#472EAD]"
+                        placeholder="ID, numéro ou scan ticket"
+                      />
+                      {searchCommandePay && (
+                        <button
+                          type="button"
+                          onClick={() => setSearchCommandePay("")}
+                          className="text-gray-400 hover:text-gray-600 text-xs"
+                        >
+                          Réinit.
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1139,7 +1391,6 @@ export default function VoirDetailClient({
                   <option value="virement">Virement</option>
                 </select>
               </div>
-
 
               <div className="flex flex-col gap-1">
                 <label className="text-[11px] text-gray-600">
