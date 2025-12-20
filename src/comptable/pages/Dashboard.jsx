@@ -1,5 +1,5 @@
 // ==========================================================
-// 📊 Dashboard.jsx — Comptable (REDIRECTIONS OK + GRAPHE)
+// 📊 Dashboard.jsx — Comptable (SHADOW DESIGN FINAL)
 // ==========================================================
 
 import React, { useMemo } from "react";
@@ -22,7 +22,7 @@ import {
 } from "recharts";
 
 // ===============================
-// 🔧 MOCK (remplacé plus tard par API)
+// 🔧 MOCK
 // ===============================
 const stats = {
   caisseJour: 325000,
@@ -43,18 +43,17 @@ export default function DashboardComptable() {
   const navigate = useNavigate();
 
   // ===============================
-  // 🔁 LECTURE DES VERSEMENTS
+  // 🔁 VERSEMENTS
   // ===============================
   const versements = useMemo(() => {
     return JSON.parse(localStorage.getItem("versements")) || [];
   }, []);
 
   // ===============================
-  // 📊 AGRÉGATION PAR DATE
+  // 📊 AGRÉGATION PAR JOUR
   // ===============================
   const versementsParJour = useMemo(() => {
     const map = {};
-
     versements.forEach((v) => {
       map[v.date] = (map[v.date] || 0) + Number(v.montant);
     });
@@ -65,9 +64,6 @@ export default function DashboardComptable() {
     }));
   }, [versements]);
 
-  // ===============================
-  // 📊 TOTAL VERSEMENTS
-  // ===============================
   const totalVersements = versements.reduce(
     (s, v) => s + Number(v.montant),
     0
@@ -86,10 +82,8 @@ export default function DashboardComptable() {
         </p>
       </div>
 
-      {/* ================= CARTES (2 x 2) ================= */}
+      {/* ================= CARTES ================= */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-        {/* JOURNAL CAISSE */}
         <DashboardCard
           title="Caisse du jour"
           value={fcfa(stats.caisseJour)}
@@ -101,7 +95,6 @@ export default function DashboardComptable() {
           }
         />
 
-        {/* VERSEMENTS */}
         <DashboardCard
           title="Versements"
           value={fcfa(totalVersements)}
@@ -113,7 +106,6 @@ export default function DashboardComptable() {
           }
         />
 
-        {/* BOUTIQUE */}
         <DashboardCard
           title="Gestion Boutique"
           value={stats.actionsBoutique}
@@ -125,7 +117,6 @@ export default function DashboardComptable() {
           }
         />
 
-        {/* DEPOT */}
         <DashboardCard
           title="Gestion Dépôt"
           value={stats.actionsDepot}
@@ -138,8 +129,8 @@ export default function DashboardComptable() {
         />
       </div>
 
-      {/* ================= GRAPHE DES VERSEMENTS ================= */}
-      <div className="bg-white rounded-xl shadow border p-5">
+      {/* ================= GRAPHE ================= */}
+      <div className="bg-white rounded-2xl shadow-md p-6">
         <h2 className="text-sm font-semibold text-[#472EAD] mb-1">
           Évolution des versements
         </h2>
@@ -151,7 +142,10 @@ export default function DashboardComptable() {
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={versementsParJour}>
-                <CartesianGrid strokeDasharray="3 3" />
+                <CartesianGrid
+                  stroke="#E5E7EB"
+                  strokeDasharray="4 4"
+                />
                 <XAxis dataKey="date" />
                 <YAxis />
                 <Tooltip formatter={(v) => fcfa(v)} />
@@ -180,8 +174,16 @@ function DashboardCard({ title, value, subtitle, icon: Icon, color, onClick }) {
   return (
     <div
       onClick={onClick}
-      className="cursor-pointer bg-white rounded-xl shadow border p-4
-                 hover:shadow-lg hover:-translate-y-1 transition-all"
+      className="
+        cursor-pointer
+        bg-white
+        rounded-2xl
+        shadow-md
+        p-5
+        transition-all
+        hover:shadow-lg
+        hover:-translate-y-1
+      "
     >
       <div className="flex items-center justify-between">
         <div>
@@ -192,7 +194,9 @@ function DashboardCard({ title, value, subtitle, icon: Icon, color, onClick }) {
           <p className="text-xs text-gray-400 mt-1">{subtitle}</p>
         </div>
 
-        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${color}`}>
+        <div
+          className={`w-11 h-11 rounded-full flex items-center justify-center ${color}`}
+        >
           <Icon size={20} />
         </div>
       </div>

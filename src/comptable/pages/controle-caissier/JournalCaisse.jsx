@@ -1,5 +1,6 @@
 // ==========================================================
 // 🧾 JournalCaisse.jsx — Journal de Caisse PRO (Comptable)
+// DESIGN SHADOW FINAL (SANS BORDURES)
 // ==========================================================
 
 import React, { useState, useMemo, useEffect } from "react";
@@ -44,12 +45,10 @@ const fcfa = (n) =>
   }).format(n || 0);
 
 // ===============================
-// 🔧 FORMAT PDF (SANS /)
+// 🔧 FORMAT PDF (POINTS)
 // ===============================
-const fcfaPDF = (n) => {
-  if (!n && n !== 0) return "0 FCFA";
-  return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " FCFA";
-};
+const fcfaPDF = (n) =>
+  n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " FCFA";
 
 // ===============================
 // 📌 COMPOSANT
@@ -60,7 +59,6 @@ export default function JournalCaisse() {
   const [dateDebut, setDateDebut] = useState("");
   const [dateFin, setDateFin] = useState("");
 
-  // Date du jour automatique
   useEffect(() => {
     setDateExacte(new Date().toISOString().split("T")[0]);
   }, []);
@@ -108,7 +106,7 @@ export default function JournalCaisse() {
   }, [search, dateExacte, dateDebut, dateFin]);
 
   // ===============================
-  // 📊 TOTAUX GLOBAUX
+  // 📊 TOTAUX
   // ===============================
   const totalEncaissements = caisses.reduce((s, c) => s + c.totalEncaisse, 0);
   const totalDecaissements = caisses.reduce((s, c) => s + c.totalDecaisse, 0);
@@ -156,22 +154,29 @@ export default function JournalCaisse() {
 
     let y = doc.lastAutoTable.finalY + 14;
     doc.text(`Total encaissements : ${fcfaPDF(totalEncaissements)}`, 14, y);
-    doc.text(`Total décaissements : ${fcfaPDF(totalDecaissements)}`, 14, y + 14);
-    doc.text(`Total caisses : ${fcfaPDF(totalCaisses)}`, 14, y + 28);
+    doc.text(`Total décaissements : ${fcfaPDF(totalDecaissements)}`, 14, y + 12);
+    doc.text(`Total caisses : ${fcfaPDF(totalCaisses)}`, 14, y + 24);
 
     doc.save("Journal_Caisse_LPD.pdf");
   };
 
   return (
-    <div className="p-6 space-y-6">
-      <h1 className="text-xl font-semibold text-[#472EAD]">
-        Journal de Caisse
-      </h1>
+    <div className="space-y-8">
 
-      {/* FILTRES */}
-      <div className="bg-white p-4 rounded-xl shadow border flex flex-wrap gap-4">
+      {/* ================= TITRE ================= */}
+      <div>
+        <h1 className="text-xl font-semibold text-[#472EAD]">
+          Journal de Caisse
+        </h1>
+        <p className="text-sm text-gray-500">
+          Suivi détaillé des caisses journalières
+        </p>
+      </div>
+
+      {/* ================= FILTRES ================= */}
+      <div className="bg-white rounded-2xl shadow-md p-5 flex flex-wrap gap-4">
         <input
-          className="border px-3 py-2 rounded"
+          className="px-3 py-2 rounded-lg bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-[#472EAD]/30"
           placeholder="Rechercher caissier…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -179,7 +184,7 @@ export default function JournalCaisse() {
 
         <input
           type="date"
-          className="border px-3 py-2 rounded"
+          className="px-3 py-2 rounded-lg bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-[#472EAD]/30"
           value={dateExacte}
           onChange={(e) => {
             setDateExacte(e.target.value);
@@ -190,7 +195,7 @@ export default function JournalCaisse() {
 
         <input
           type="date"
-          className="border px-3 py-2 rounded"
+          className="px-3 py-2 rounded-lg bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-[#472EAD]/30"
           value={dateDebut}
           onChange={(e) => {
             setDateDebut(e.target.value);
@@ -200,7 +205,7 @@ export default function JournalCaisse() {
 
         <input
           type="date"
-          className="border px-3 py-2 rounded"
+          className="px-3 py-2 rounded-lg bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-[#472EAD]/30"
           value={dateFin}
           onChange={(e) => {
             setDateFin(e.target.value);
@@ -210,14 +215,14 @@ export default function JournalCaisse() {
 
         <button
           onClick={imprimerPDF}
-          className="ml-auto px-4 py-2 bg-[#472EAD] text-white rounded flex gap-2"
+          className="ml-auto flex items-center gap-2 px-4 py-2 bg-[#472EAD] text-white rounded-xl shadow hover:shadow-lg transition"
         >
           <Printer size={16} /> Imprimer
         </button>
       </div>
 
-      {/* TABLE */}
-      <div className="bg-white p-4 rounded-xl shadow border overflow-x-auto">
+      {/* ================= TABLE ================= */}
+      <div className="bg-white rounded-2xl shadow-md p-4 overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-[#EFEAFF] text-[#472EAD]">
             <tr>
@@ -233,7 +238,7 @@ export default function JournalCaisse() {
           </thead>
           <tbody>
             {caisses.map((c) => (
-              <tr key={c.id} className="border-b">
+              <tr key={c.id} className="odd:bg-gray-50">
                 <td>{c.caissier}</td>
                 <td>{c.date}</td>
                 <td>{fcfa(FOND_CAISSE)}</td>
@@ -248,29 +253,34 @@ export default function JournalCaisse() {
         </table>
       </div>
 
-      {/* TOTAUX */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white p-4 rounded shadow border text-center">
-          <p className="text-sm text-gray-500">Total encaissements</p>
-          <p className="font-bold text-green-600">
-            {fcfa(totalEncaissements)}
-          </p>
-        </div>
-
-        <div className="bg-white p-4 rounded shadow border text-center">
-          <p className="text-sm text-gray-500">Total décaissements</p>
-          <p className="font-bold text-red-600">
-            {fcfa(totalDecaissements)}
-          </p>
-        </div>
-
-        <div className="bg-white p-4 rounded shadow border text-center">
-          <p className="text-sm text-gray-500">Total des caisses</p>
-          <p className="font-bold text-[#472EAD]">
-            {fcfa(totalCaisses)}
-          </p>
-        </div>
+      {/* ================= TOTAUX ================= */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <StatCard
+          label="Total encaissements"
+          value={fcfa(totalEncaissements)}
+          color="text-green-600"
+        />
+        <StatCard
+          label="Total décaissements"
+          value={fcfa(totalDecaissements)}
+          color="text-red-600"
+        />
+        <StatCard
+          label="Total des caisses"
+          value={fcfa(totalCaisses)}
+          color="text-[#472EAD]"
+        />
       </div>
+    </div>
+  );
+}
+
+/* ================== STAT CARD ================== */
+function StatCard({ label, value, color }) {
+  return (
+    <div className="bg-white rounded-2xl shadow-md p-5 text-center">
+      <p className="text-sm text-gray-500">{label}</p>
+      <p className={`font-bold text-lg mt-1 ${color}`}>{value}</p>
     </div>
   );
 }

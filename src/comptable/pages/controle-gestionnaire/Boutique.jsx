@@ -1,19 +1,19 @@
 // ==========================================================
-// 🏪 Boutique.jsx — Contrôle Gestionnaire (Version PRO + Graphique)
-// - Suivi complet du stock
-// - Historique des réapprovisionnements
-// - Nombre total de réapprovisionnements
-// - Stock avant/après
-// - Quantité totale ayant transité
-// - Filtre + Impression + Graphique d’évolution
+// 🏪 Boutique.jsx — Contrôle Gestionnaire (PRO)
+// DESIGN SHADOW (SANS BORDURES)
 // ==========================================================
 
 import React, { useState, useMemo } from "react";
-import { Calendar, Search, Printer, AlertTriangle, CheckCircle } from "lucide-react";
+import {
+  Search,
+  Printer,
+  AlertTriangle,
+  CheckCircle,
+} from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
-// === 📊 Recharts (GRAPHIQUE) ===
+// === 📊 GRAPHIQUE ===
 import {
   LineChart,
   Line,
@@ -26,7 +26,7 @@ import {
 } from "recharts";
 
 // ==========================================================
-// 📦 STOCK AVEC HISTORIQUE COMPLET
+// 📦 DONNÉES STOCK
 // ==========================================================
 const stockBoutique = [
   {
@@ -65,7 +65,7 @@ const stockBoutique = [
 ];
 
 // ==========================================================
-// 🔧 FONCTIONS UTILES
+// 🔧 ÉTAT STOCK
 // ==========================================================
 const getEtat = (p) => {
   if (p.quantite === 0) return "rupture";
@@ -74,24 +74,18 @@ const getEtat = (p) => {
 };
 
 // ==========================================================
-// 📈 GRAPHIQUE D'ÉVOLUTION DU STOCK
+// 📈 GRAPHIQUE ÉVOLUTION
 // ==========================================================
 function EvolutionStockGraph({ produit }) {
-  if (!produit || !produit.historiqueReappro) return null;
+  if (!produit) return null;
 
-  let historique = [];
+  const historique = produit.historiqueReappro.map((h) => ({
+    date: h.date,
+    entrees: h.ajout,
+    sorties: 0,
+    stock: h.avant + h.ajout,
+  }));
 
-  // Entrées (réappro)
-  produit.historiqueReappro.forEach((h) => {
-    historique.push({
-      date: h.date,
-      entrees: h.ajout,
-      sorties: 0,
-      stock: h.avant + h.ajout,
-    });
-  });
-
-  // Sorties cumulées
   historique.push({
     date: "Sorties",
     entrees: 0,
@@ -100,28 +94,30 @@ function EvolutionStockGraph({ produit }) {
   });
 
   return (
-    <div className="bg-white p-4 rounded-xl shadow border mt-5">
-      <h2 className="text-lg font-semibold text-[#472EAD] mb-3">
-        📈 Évolution du stock — {produit.produit}
+    <div className="bg-white rounded-2xl shadow-md p-5 mt-6">
+      <h2 className="text-sm font-semibold text-[#472EAD] mb-4">
+        Évolution du stock — {produit.produit}
       </h2>
 
-      <ResponsiveContainer width="100%" height={300}>
+      <ResponsiveContainer width="100%" height={280}>
         <LineChart data={historique}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="date" />
           <YAxis />
           <Tooltip />
           <Legend />
-
-          <Line type="monotone" dataKey="entrees" stroke="#4CAF50" strokeWidth={3} name="Entrées" />
-          <Line type="monotone" dataKey="sorties" stroke="#F44336" strokeWidth={3} name="Sorties" />
-          <Line type="monotone" dataKey="stock" stroke="#3F51B5" strokeWidth={3} name="Stock restant" />
+          <Line dataKey="entrees" stroke="#22c55e" strokeWidth={3} name="Entrées" />
+          <Line dataKey="sorties" stroke="#ef4444" strokeWidth={3} name="Sorties" />
+          <Line dataKey="stock" stroke="#472EAD" strokeWidth={3} name="Stock restant" />
         </LineChart>
       </ResponsiveContainer>
     </div>
   );
 }
 
+// ==========================================================
+// 📌 PAGE
+// ==========================================================
 export default function Boutique() {
   const [searchTerm, setSearchTerm] = useState("");
   const [dateDebut, setDateDebut] = useState("");
@@ -129,7 +125,7 @@ export default function Boutique() {
   const [selectedProduitId, setSelectedProduitId] = useState("");
 
   // ==========================================================
-  // 🔍 FILTRAGE INTELLIGENT
+  // 🔍 FILTRAGE
   // ==========================================================
   const filteredData = useMemo(() => {
     let data = [...stockBoutique];
@@ -150,23 +146,21 @@ export default function Boutique() {
   }, [searchTerm, dateDebut, dateFin]);
 
   // ==========================================================
-  // 🖨 IMPRESSION PDF
+  // 🖨 PDF
   // ==========================================================
   const imprimerPDF = () => {
     const doc = new jsPDF();
-    doc.text("📦 Stock Boutique — Rapport Complet LPD", 14, 16);
+    doc.text("Stock Boutique — Rapport LPD", 14, 16);
 
     autoTable(doc, {
       startY: 26,
-      head: [["Produit", "Stock Actuel", "Entrées totales", "Sorties", "Réappro (nb)", "Dernier Réappro"]],
+      head: [["Produit", "Stock", "Entrées", "Sorties", "Réappro (nb)", "Dernier"]],
       body: filteredData.map((p) => {
         const totalReappro = p.historiqueReappro.reduce((s, h) => s + h.ajout, 0);
         const nbReappro = p.historiqueReappro.length;
         const dernier = nbReappro ? p.historiqueReappro[nbReappro - 1].date : "-";
-
         return [p.produit, p.quantite, totalReappro, p.sorties, nbReappro, dernier];
       }),
-      styles: { fontSize: 10 },
       headStyles: { fillColor: [71, 46, 173] },
     });
 
@@ -174,110 +168,91 @@ export default function Boutique() {
   };
 
   return (
-    <div className="p-6 space-y-5">
-      <h1 className="text-xl font-semibold text-[#472EAD]">Contrôle Gestionnaire — Boutique</h1>
-      <p className="text-gray-600">Visualisation complète du stock + historique réapprovisionnement + graphique.</p>
+    <div className="space-y-8">
 
-      {/* ======================================================
-          🔧 BARRE DE RECHERCHE + FILTRES
-      ====================================================== */}
-      <div className="p-4 bg-white rounded-xl shadow border flex flex-wrap items-center gap-4">
+      {/* TITRE */}
+      <div>
+        <h1 className="text-xl font-semibold text-[#472EAD]">
+          Contrôle Gestionnaire — Boutique
+        </h1>
+        <p className="text-sm text-gray-500">
+          Suivi du stock, réapprovisionnements et évolution
+        </p>
+      </div>
 
+      {/* FILTRES */}
+      <div className="bg-white rounded-2xl shadow-md p-4 flex flex-wrap gap-4">
         <div className="flex items-center gap-2 flex-1">
           <Search size={18} className="text-[#472EAD]" />
           <input
-            type="text"
-            placeholder="Rechercher un produit..."
+            className="w-full px-3 py-2 rounded-lg bg-gray-50 text-sm focus:ring-2 focus:ring-[#472EAD]/30"
+            placeholder="Rechercher produit ou catégorie…"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full px-3 py-2 border rounded-lg"
           />
         </div>
 
-        <div>
-          <label>Produit</label>
-          <select
-            value={selectedProduitId}
-            onChange={(e) => setSelectedProduitId(e.target.value)}
-            className="px-3 py-2 border rounded-lg"
-          >
-            <option value="">Choisir un produit</option>
-            {stockBoutique.map((p) => (
-              <option key={p.id} value={p.id}>{p.produit}</option>
-            ))}
-          </select>
-        </div>
+        <select
+          value={selectedProduitId}
+          onChange={(e) => setSelectedProduitId(e.target.value)}
+          className="px-3 py-2 rounded-lg bg-gray-50 text-sm"
+        >
+          <option value="">Tous les produits</option>
+          {stockBoutique.map((p) => (
+            <option key={p.id} value={p.id}>{p.produit}</option>
+          ))}
+        </select>
 
-        <div>
-          <label>Date début</label>
-          <input type="date" value={dateDebut} onChange={(e) => setDateDebut(e.target.value)} className="px-3 py-2 border rounded-lg" />
-        </div>
+        <input
+          type="date"
+          value={dateDebut}
+          onChange={(e) => setDateDebut(e.target.value)}
+          className="px-3 py-2 rounded-lg bg-gray-50 text-sm"
+        />
 
-        <div>
-          <label>Date fin</label>
-          <input type="date" value={dateFin} onChange={(e) => setDateFin(e.target.value)} className="px-3 py-2 border rounded-lg" />
-        </div>
+        <input
+          type="date"
+          value={dateFin}
+          onChange={(e) => setDateFin(e.target.value)}
+          className="px-3 py-2 rounded-lg bg-gray-50 text-sm"
+        />
 
-        <button className="ml-auto px-4 py-2 bg-[#472EAD] text-white rounded-lg flex items-center gap-2" onClick={imprimerPDF}>
-          <Printer size={18} /> Imprimer
+        <button
+          onClick={imprimerPDF}
+          className="ml-auto px-4 py-2 bg-[#472EAD] text-white rounded-xl shadow hover:shadow-lg"
+        >
+          <Printer size={16} /> Imprimer
         </button>
       </div>
 
-      {/* ======================================================
-          📦 TABLEAU STOCK COMPLET
-      ====================================================== */}
-      <div className="bg-white rounded-xl shadow border p-4 overflow-x-auto">
+      {/* TABLE */}
+      <div className="bg-white rounded-2xl shadow-md p-4 overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-[#EFEAFF] text-[#472EAD]">
+          <thead className="text-[#472EAD] bg-[#F5F3FF]">
             <tr>
               <th className="px-3 py-2 text-left">Produit</th>
-              <th className="px-3 py-2">État</th>
-              <th className="px-3 py-2 text-center">Stock Actuel</th>
-              <th className="px-3 py-2 text-center">Total réapprovisionné</th>
-              <th className="px-3 py-2 text-center">Nombre réappro.</th>
+              <th className="px-3 py-2 text-center">État</th>
+              <th className="px-3 py-2 text-center">Stock</th>
+              <th className="px-3 py-2 text-center">Entrées</th>
               <th className="px-3 py-2 text-center">Sorties</th>
-              <th className="px-3 py-2 text-center">Dernier réappro</th>
-              <th className="px-3 py-2 text-center">Stock total historique</th>
             </tr>
           </thead>
-
           <tbody>
             {filteredData.map((p) => {
-              const totalReappro = p.historiqueReappro.reduce((s, h) => s + h.ajout, 0);
-              const nbReappro = p.historiqueReappro.length;
-              const dernier = nbReappro ? p.historiqueReappro[nbReappro - 1] : null;
-              const stockHistoriqueTotal = p.quantite + p.sorties;
               const etat = getEtat(p);
+              const totalReappro = p.historiqueReappro.reduce((s, h) => s + h.ajout, 0);
 
               return (
-                <tr key={p.id} className="border-b">
+                <tr key={p.id} className="hover:bg-gray-50">
                   <td className="px-3 py-2">{p.produit}</td>
-
                   <td className="px-3 py-2 text-center">
-                    {etat === "rupture" && <span className="text-red-600 font-semibold"><AlertTriangle size={12}/> Rupture</span>}
-                    {etat === "faible" && <span className="text-orange-500 font-semibold">⚠ Stock faible</span>}
-                    {etat === "ok" && <span className="text-emerald-600 font-semibold"><CheckCircle size={12}/> OK</span>}
+                    {etat === "rupture" && <span className="text-red-600 flex justify-center gap-1"><AlertTriangle size={14}/>Rupture</span>}
+                    {etat === "faible" && <span className="text-orange-500">Stock faible</span>}
+                    {etat === "ok" && <span className="text-emerald-600 flex justify-center gap-1"><CheckCircle size={14}/>OK</span>}
                   </td>
-
                   <td className="px-3 py-2 text-center">{p.quantite}</td>
                   <td className="px-3 py-2 text-center">{totalReappro}</td>
-                  <td className="px-3 py-2 text-center">{nbReappro}</td>
                   <td className="px-3 py-2 text-center">{p.sorties}</td>
-
-                  <td className="px-3 py-2 text-center">
-                    {dernier ? (
-                      <>
-                        {dernier.date}
-                        <div className="text-xs text-gray-500">
-                          +{dernier.ajout} (avant {dernier.avant})
-                        </div>
-                      </>
-                    ) : (
-                      <span className="text-gray-400">Jamais</span>
-                    )}
-                  </td>
-
-                  <td className="px-3 py-2 text-center">{stockHistoriqueTotal}</td>
                 </tr>
               );
             })}
@@ -285,9 +260,7 @@ export default function Boutique() {
         </table>
       </div>
 
-      {/* ======================================================
-          📈 GRAPHIQUE D'ÉVOLUTION (SI PRODUIT CHOISI)
-      ====================================================== */}
+      {/* GRAPHIQUE */}
       {selectedProduitId && (
         <EvolutionStockGraph
           produit={stockBoutique.find((p) => p.id === Number(selectedProduitId))}

@@ -1,5 +1,6 @@
 // ==========================================================
 // 📦 InventaireDepot.jsx — Inventaire PRO Dépôt (CORRIGÉ)
+// DESIGN : SHADOW ONLY (SANS BORDURES)
 // ==========================================================
 
 import React, { useState, useMemo } from "react";
@@ -142,7 +143,7 @@ export default function InventaireDepot() {
     doc.save("Inventaire_Depot_LPD.pdf");
 
     // =======================
-    // 📚 HISTORIQUE (FORMAT SÛR)
+    // 📚 HISTORIQUE GLOBAL
     // =======================
     const historique =
       JSON.parse(localStorage.getItem("historiqueInventaire")) || [];
@@ -152,9 +153,9 @@ export default function InventaireDepot() {
       source: "Dépôt",
       date: new Date().toLocaleDateString(),
       periode: `${dateDebut} → ${dateFin}`,
-      produits: inventaire.length,          // ✅ nombre
-      quantiteTotale,                        // ✅ nombre
-      beneficeTotal,                         // ✅ nombre
+      produits: inventaire.length,
+      quantiteTotale,
+      beneficeTotal,
     });
 
     localStorage.setItem(
@@ -170,14 +171,14 @@ export default function InventaireDepot() {
       </h1>
 
       {/* FILTRES */}
-      <div className="bg-white p-4 rounded-xl shadow border flex gap-4 flex-wrap">
+      <div className="bg-white p-4 rounded-xl shadow flex gap-4 flex-wrap">
         <div>
           <label>Date début</label>
           <input
             type="date"
             value={dateDebut}
             onChange={(e) => setDateDebut(e.target.value)}
-            className="px-3 py-2 border rounded-lg"
+            className="px-3 py-2 rounded-lg bg-gray-50"
           />
         </div>
 
@@ -187,20 +188,20 @@ export default function InventaireDepot() {
             type="date"
             value={dateFin}
             onChange={(e) => setDateFin(e.target.value)}
-            className="px-3 py-2 border rounded-lg"
+            className="px-3 py-2 rounded-lg bg-gray-50"
           />
         </div>
 
         <button
           onClick={imprimerInventaire}
-          className="ml-auto px-4 py-2 bg-[#472EAD] text-white rounded-lg flex items-center gap-2"
+          className="ml-auto px-4 py-2 bg-[#472EAD] text-white rounded-lg flex items-center gap-2 shadow"
         >
           <Printer size={18} /> Imprimer inventaire
         </button>
       </div>
 
       {/* TABLE INVENTAIRE */}
-      <div className="bg-white p-4 rounded-xl shadow border">
+      <div className="bg-white p-4 rounded-xl shadow">
         <table className="w-full text-sm">
           <thead className="bg-[#EFEAFF] text-[#472EAD]">
             <tr>
@@ -211,7 +212,7 @@ export default function InventaireDepot() {
           </thead>
           <tbody>
             {inventaire.map((p) => (
-              <tr key={p.id} className="border-b">
+              <tr key={p.id} className="hover:bg-gray-50">
                 <td>{p.nom}</td>
                 <td className="text-center">{p.quantiteSortie}</td>
                 <td className="text-right font-semibold">
@@ -224,7 +225,7 @@ export default function InventaireDepot() {
       </div>
 
       {/* TOP PRODUITS */}
-      <div className="bg-white p-4 rounded-xl shadow border">
+      <div className="bg-white p-4 rounded-xl shadow">
         <h2 className="font-semibold text-[#472EAD] flex items-center gap-2">
           <TrendingUp /> Produits les plus sortis
         </h2>

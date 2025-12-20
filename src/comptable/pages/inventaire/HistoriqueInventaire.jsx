@@ -1,5 +1,6 @@
 // ==========================================================
 // 📚 HistoriqueInventaire.jsx — Historique Global Inventaires
+// DESIGN : SHADOW ONLY (SANS BORDURES)
 // ==========================================================
 
 import React, { useMemo, useState } from "react";
@@ -69,19 +70,19 @@ export default function HistoriqueInventaire() {
       </h1>
 
       {/* FILTRES */}
-      <div className="bg-white p-4 rounded-xl shadow border flex gap-4 flex-wrap items-center">
+      <div className="bg-white p-4 rounded-xl shadow flex gap-4 flex-wrap items-center">
         <Search className="text-[#472EAD]" />
 
         <input
           type="text"
           placeholder="Rechercher période ou date..."
-          className="px-3 py-2 border rounded-lg"
+          className="px-3 py-2 rounded-lg bg-gray-50"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
 
         <select
-          className="px-3 py-2 border rounded-lg"
+          className="px-3 py-2 rounded-lg bg-gray-50"
           value={source}
           onChange={(e) => setSource(e.target.value)}
         >
@@ -92,14 +93,14 @@ export default function HistoriqueInventaire() {
 
         <button
           onClick={imprimer}
-          className="ml-auto px-4 py-2 bg-[#472EAD] text-white rounded-lg flex items-center gap-2"
+          className="ml-auto px-4 py-2 bg-[#472EAD] text-white rounded-lg flex items-center gap-2 shadow"
         >
           <Printer size={18} /> Imprimer
         </button>
       </div>
 
       {/* TABLE */}
-      <div className="bg-white p-4 rounded-xl shadow border">
+      <div className="bg-white p-4 rounded-xl shadow">
         <table className="w-full text-sm">
           <thead className="bg-[#EFEAFF] text-[#472EAD]">
             <tr>
@@ -113,7 +114,7 @@ export default function HistoriqueInventaire() {
           </thead>
           <tbody>
             {dataFiltre.map((h) => (
-              <tr key={h.id} className="border-b">
+              <tr key={h.id} className="hover:bg-gray-50">
                 <td>{h.date}</td>
                 <td>{h.source}</td>
                 <td>{h.periode}</td>
