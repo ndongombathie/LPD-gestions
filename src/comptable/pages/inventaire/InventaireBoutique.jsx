@@ -1,243 +1,274 @@
-// ==========================================================
-// 📦 InventaireBoutique.jsx — Inventaire PRO Boutique (CORRIGÉ)
-// DESIGN : SHADOW ONLY (SANS BORDURES)
-// ==========================================================
-
-import React, { useState, useMemo } from "react";
-import { Printer, TrendingUp } from "lucide-react";
+import React, { useMemo, useState } from "react";
+import { Printer } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
-// =======================
-// 🔧 MOCK PRODUITS
-// =======================
+/* =========================================================
+   DONNÉES SIMULÉES (API PLUS TARD)
+========================================================= */
+
 const produits = [
   {
     id: 1,
-    nom: "Cahier 100 pages",
-    prixAchat: 200,
-    prixVente: 300,
-    ventes: [
-      { date: "2025-02-10", quantite: 20 },
-      { date: "2025-02-15", quantite: 15 },
+    nom: "Bic",
+    prixAchat: 50,
+    prixMin: 100,
+    seuilStock: 10,
+    reapprovisionnements: [
+      { date: "2025-01-01", quantite: 100 },
+      { date: "2025-01-10", quantite: 50 },
     ],
-  },
-  {
-    id: 2,
-    nom: "Bic Bleu",
-    prixAchat: 100,
-    prixVente: 150,
-    ventes: [
-      { date: "2025-02-12", quantite: 40 },
-      { date: "2025-02-16", quantite: 30 },
-    ],
-  },
-  {
-    id: 3,
-    nom: "Classeur A4",
-    prixAchat: 1500,
-    prixVente: 2000,
-    ventes: [{ date: "2025-02-11", quantite: 5 }],
   },
 ];
 
+const ventes = [
+  {
+    produitId: 1,
+    date: "2025-01-12",
+    quantite: 10,
+    prixVente: 120,
+    vendeur: "vendeur",
+  },
+  {
+    produitId: 1,
+    date: "2025-01-13",
+    quantite: 5,
+    prixVente: 80,
+    vendeur: "responsable", // autorisé
+  },
+];
+
+/* =========================================================
+   UTILS
+========================================================= */
+const fcfa = (v) =>
+  `${Number(v || 0)
+    .toString()
+    .replace(/\B(?=(\d{3})+(?!\d))/g, ".")} FCFA`;
+
+const formatDate = (d) => d.replace(/-/g, ".");
+
+/* =========================================================
+   COMPOSANT
+========================================================= */
 export default function InventaireBoutique() {
   const [dateDebut, setDateDebut] = useState("");
   const [dateFin, setDateFin] = useState("");
+  const [historique, setHistorique] = useState([]);
 
-  // =======================
-  // 🔍 INVENTAIRE PAR PÉRIODE
-  // =======================
-  const inventaire = useMemo(() => {
-    if (!dateDebut || !dateFin) return [];
-
-    return produits
-      .map((p) => {
-        const ventesPeriode = p.ventes.filter(
-          (v) => v.date >= dateDebut && v.date <= dateFin
-        );
-
-        const quantiteVendue = ventesPeriode.reduce(
-          (s, v) => s + v.quantite,
-          0
-        );
-
-        const benefice =
-          quantiteVendue * (p.prixVente - p.prixAchat);
-
-        return {
-          ...p,
-          quantiteVendue,
-          benefice,
-        };
-      })
-      .filter((p) => p.quantiteVendue > 0);
+  /* ================= FILTRAGE VENTES ================= */
+  const ventesFiltrees = useMemo(() => {
+    return ventes.filter((v) => {
+      if (!dateDebut && !dateFin) return true;
+      if (dateDebut && !dateFin) return v.date === dateDebut;
+      if (dateDebut && dateFin)
+        return v.date >= dateDebut && v.date <= dateFin;
+      return true;
+    });
   }, [dateDebut, dateFin]);
 
-  const beneficeTotal = inventaire.reduce(
-    (s, p) => s + p.benefice,
+  /* ================= CALCULS PRODUITS ================= */
+  const statsProduits = produits.map((p) => {
+    const totalAppro = p.reapprovisionnements.reduce(
+      (s, r) => s + r.quantite,
+      0
+    );
+
+    const ventesProduit = ventesFiltrees.filter(
+      (v) => v.produitId === p.id
+    );
+
+    const totalVendu = ventesProduit.reduce(
+      (s, v) => s + v.quantite,
+      0
+    );
+
+    const restant = totalAppro - totalVendu;
+
+    const totalVentes = ventesProduit.reduce(
+      (s, v) => s + v.quantite * v.prixVente,
+      0
+    );
+
+    const totalAchats = totalAppro * p.prixAchat;
+    const resultat = totalVentes - totalAchats;
+
+    return {
+      nom: p.nom,
+      totalAppro,
+      totalVendu,
+      restant,
+      nbReappro: p.reapprovisionnements.length,
+      totalVentes,
+      totalAchats,
+      resultat,
+      prixMin: p.prixMin,
+      seuilStock: p.seuilStock,
+    };
+  });
+
+  /* ================= TOTAUX ================= */
+  const totalVentesGlobal = statsProduits.reduce(
+    (s, p) => s + p.totalVentes,
     0
   );
-
-  const quantiteTotale = inventaire.reduce(
-    (s, p) => s + p.quantiteVendue,
+  const totalAchatsGlobal = statsProduits.reduce(
+    (s, p) => s + p.totalAchats,
     0
   );
+  const resultatGlobal = totalVentesGlobal - totalAchatsGlobal;
 
-  // =======================
-  // 🏆 TOP PRODUITS
-  // =======================
-  const topProduits = [...inventaire]
-    .sort((a, b) => b.quantiteVendue - a.quantiteVendue)
-    .slice(0, 5);
+  /* ================= ALERTES ================= */
+  const alertes = [];
 
-  // =======================
-  // 🖨 IMPRESSION + HISTORIQUE
-  // =======================
-  const imprimerInventaire = () => {
-    if (!inventaire.length) {
-      alert("Aucune donnée pour cette période.");
-      return;
+  statsProduits.forEach((p) => {
+    if (p.resultat < 0) {
+      alertes.push({
+        type: "danger",
+        message: `Perte sur ${p.nom} : ${fcfa(p.resultat)}`,
+      });
     }
+    if (p.restant <= p.seuilStock) {
+      alertes.push({
+        type: "warning",
+        message: `Stock critique : ${p.nom} (${p.restant} unités restantes)`,
+      });
+    }
+  });
 
+  ventesFiltrees.forEach((v) => {
+    const produit = produits.find((p) => p.id === v.produitId);
+    if (v.prixVente < produit.prixMin && v.vendeur === "vendeur") {
+      alertes.push({
+        type: "danger",
+        message: `Vente INTERDITE sous prix minimum (${produit.nom})`,
+      });
+    }
+    if (v.prixVente < produit.prixMin && v.vendeur === "responsable") {
+      alertes.push({
+        type: "info",
+        message: `Vente responsable sous prix minimum (${produit.nom})`,
+      });
+    }
+  });
+
+  /* ================= IMPRESSION PDF ================= */
+  const imprimerInventaire = () => {
     const doc = new jsPDF();
+    let y = 20;
+
+    const periode = `${dateDebut ? formatDate(dateDebut) : "Début"} → ${
+      dateFin ? formatDate(dateFin) : "Aujourd’hui"
+    }`;
 
     doc.setFontSize(14);
-    doc.text("Inventaire Boutique — LPD Manager", 14, 16);
-    doc.setFontSize(10);
-    doc.text(`Période : ${dateDebut} → ${dateFin}`, 14, 24);
+    doc.text("INVENTAIRE BOUTIQUE", 14, y);
+    y += 8;
+    doc.setFontSize(11);
+    doc.text(`Période : ${periode}`, 14, y);
+    y += 10;
 
     autoTable(doc, {
-      startY: 32,
-      head: [["Produit", "Quantité vendue", "Bénéfice"]],
-      body: inventaire.map((p) => [
+      startY: y,
+      head: [[
+        "Produit",
+        "Entrées",
+        "Vendus",
+        "Restant",
+        "Réappro",
+        "Total ventes",
+        "Résultat",
+      ]],
+      body: statsProduits.map((p) => [
         p.nom,
-        p.quantiteVendue,
-        `${p.benefice} FCFA`,
+        p.totalAppro,
+        p.totalVendu,
+        p.restant,
+        p.nbReappro,
+        fcfa(p.totalVentes),
+        fcfa(p.resultat),
       ]),
-      headStyles: { fillColor: [71, 46, 173] },
     });
 
-    let y = doc.lastAutoTable.finalY + 10;
-    doc.text(`BÉNÉFICE TOTAL : ${beneficeTotal} FCFA`, 14, y);
+    y = doc.lastAutoTable.finalY + 10;
 
-    y += 15;
-    doc.setFontSize(12);
-    doc.text("Produits les plus vendus :", 14, y);
+    doc.text(`Total ventes : ${fcfa(totalVentesGlobal)}`, 14, y);
+    doc.text(`Total achats : ${fcfa(totalAchatsGlobal)}`, 14, y + 6);
+    doc.text(`Résultat global : ${fcfa(resultatGlobal)}`, 14, y + 12);
 
-    autoTable(doc, {
-      startY: y + 5,
-      head: [["Rang", "Produit", "Quantité"]],
-      body: topProduits.map((p, i) => [
-        i + 1,
-        p.nom,
-        p.quantiteVendue,
-      ]),
-      headStyles: { fillColor: [245, 128, 32] },
-    });
+    doc.save("Inventaire_Boutique.pdf");
 
-    doc.save("Inventaire_Boutique_LPD.pdf");
-
-    // =======================
-    // 📚 HISTORIQUE GLOBAL
-    // =======================
-    const historique =
-      JSON.parse(localStorage.getItem("historiqueInventaire")) || [];
-
-    historique.push({
-      id: Date.now(),
-      date: new Date().toLocaleDateString(),
-      source: "Boutique",
-      periode: `${dateDebut} → ${dateFin}`,
-      produits: inventaire.length,
-      quantiteTotale,
-      beneficeTotal,
-    });
-
-    localStorage.setItem(
-      "historiqueInventaire",
-      JSON.stringify(historique)
-    );
+    setHistorique((h) => [
+      ...h,
+      {
+        date: new Date().toISOString(),
+        periode,
+        totalVentesGlobal,
+        resultatGlobal,
+      },
+    ]);
   };
 
+  /* ================= UI ================= */
   return (
-    <div className="p-6 space-y-6">
-      <h1 className="text-xl font-semibold text-[#472EAD]">
-        Inventaire Boutique
+    <div className="p-6 space-y-8">
+      <h1 className="text-2xl font-bold text-indigo-700">
+        Inventaire Boutique — Comptable
       </h1>
 
       {/* FILTRES */}
-      <div className="bg-white p-4 rounded-xl shadow flex gap-4 flex-wrap">
-        <div>
-          <label>Date début</label>
-          <input
-            type="date"
-            value={dateDebut}
-            onChange={(e) => setDateDebut(e.target.value)}
-            className="px-3 py-2 rounded-lg bg-gray-50"
-          />
-        </div>
-
-        <div>
-          <label>Date fin</label>
-          <input
-            type="date"
-            value={dateFin}
-            onChange={(e) => setDateFin(e.target.value)}
-            className="px-3 py-2 rounded-lg bg-gray-50"
-          />
-        </div>
-
-        <button
-          onClick={imprimerInventaire}
-          className="ml-auto px-4 py-2 bg-[#472EAD] text-white rounded-lg flex items-center gap-2 shadow"
-        >
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <input type="date" className="border px-3 py-2" value={dateDebut} onChange={(e) => setDateDebut(e.target.value)} />
+        <input type="date" className="border px-3 py-2" value={dateFin} onChange={(e) => setDateFin(e.target.value)} />
+        <button onClick={imprimerInventaire} className="bg-indigo-600 text-white px-4 py-2 flex items-center gap-2 justify-center">
           <Printer size={18} /> Imprimer inventaire
         </button>
       </div>
 
-      {/* TABLE */}
-      <div className="bg-white p-4 rounded-xl shadow">
-        <table className="w-full text-sm">
-          <thead className="bg-[#EFEAFF] text-[#472EAD]">
-            <tr>
-              <th>Produit</th>
-              <th className="text-center">Quantité vendue</th>
-              <th className="text-right">Bénéfice</th>
+      {/* ALERTES */}
+      <div className="space-y-2">
+        {alertes.map((a, i) => (
+          <div key={i} className={`p-3 rounded ${
+            a.type === "danger"
+              ? "bg-red-100 text-red-700"
+              : a.type === "warning"
+              ? "bg-yellow-100 text-yellow-700"
+              : "bg-blue-100 text-blue-700"
+          }`}>
+            {a.message}
+          </div>
+        ))}
+      </div>
+
+      {/* TABLEAU */}
+      <table className="w-full border-collapse">
+        <thead className="bg-gray-100">
+          <tr>
+            <th className="p-2">Produit</th>
+            <th className="p-2">Entrées</th>
+            <th className="p-2">Vendus</th>
+            <th className="p-2">Restant</th>
+            <th className="p-2">Réappro</th>
+            <th className="p-2">Total ventes</th>
+            <th className="p-2">Résultat</th>
+          </tr>
+        </thead>
+        <tbody>
+          {statsProduits.map((p, i) => (
+            <tr key={i}>
+              <td className="p-2">{p.nom}</td>
+              <td className="p-2 text-center">{p.totalAppro}</td>
+              <td className="p-2 text-center">{p.totalVendu}</td>
+              <td className="p-2 text-center">{p.restant}</td>
+              <td className="p-2 text-center">{p.nbReappro}</td>
+              <td className="p-2 text-right">{fcfa(p.totalVentes)}</td>
+              <td className={`p-2 text-right font-semibold ${p.resultat < 0 ? "text-red-600" : "text-green-600"}`}>
+                {fcfa(p.resultat)}
+              </td>
             </tr>
-          </thead>
-          <tbody>
-            {inventaire.map((p) => (
-              <tr key={p.id} className="hover:bg-gray-50">
-                <td>{p.nom}</td>
-                <td className="text-center">{p.quantiteVendue}</td>
-                <td className="text-right font-semibold">
-                  {p.benefice} FCFA
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* TOP */}
-      <div className="bg-white p-4 rounded-xl shadow">
-        <h2 className="font-semibold text-[#472EAD] flex items-center gap-2">
-          <TrendingUp /> Produits les plus vendus
-        </h2>
-
-        <ul className="mt-3 space-y-1">
-          {topProduits.map((p, i) => (
-            <li key={p.id}>
-              {i + 1}. {p.nom} — {p.quantiteVendue} ventes
-            </li>
           ))}
-        </ul>
-
-        <p className="mt-4 font-bold text-[#472EAD]">
-          Bénéfice total : {beneficeTotal} FCFA
-        </p>
-      </div>
+        </tbody>
+      </table>
     </div>
   );
 }
