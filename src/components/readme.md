@@ -1,4 +1,3 @@
-- Créer une commande client
-- Ajouter produits au panier
-- valider les commandes des clients
-- Annuler les commandes des clients
+npm install @fortawesome/fontawesome-svg-core
+npm install @fortawesome/react-fontawesome
+npm install @fortawesome/free-solid-svg-icons
