@@ -1,90 +1,207 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Card, { CardHeader } from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
-import { formatCurrency, formatDate, formatDateTime } from '../../utils/formatters';
-import { caissesJournalAPI } from '../../utils/api';
+import Badge from '../../components/ui/Badge';
+import { formatCurrency, formatDate } from '../../utils/formatters';
 
 const RapportCaissePage = () => {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [rapport, setRapport] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    fondOuverture: '',
-    totalEncaissements: '',
-    totalDecaissements: '',
-    soldeCloture: '',
+  const previousDateRef = useRef(selectedDate);
+  
+  // Données fictives - stockées par date
+  const initialRapport = {
+    fond_ouverture: 50000,
+    total_encaissements: 245000,
+    total_decaissements: 15000,
+    solde_cloture: 280000,
+    cloture: false,
+    ventes_par_moyen: {
+      especes: 120000,
+      carte: 80000,
+      wave: 25000,
+      om: 20000,
+    },
+    tickets_encaisses: [
+      {
+        id: 'ticket-1',
+        numero: 'TKT-2025-000001',
+        heure: '09:30',
+        vendeur: 'Amadou Diallo',
+        total_ttc: 118000,
+        moyen_paiement: 'especes',
+      },
+      {
+        id: 'ticket-2',
+        numero: 'TKT-2025-000002',
+        heure: '11:15',
+        vendeur: 'Fatou Ba',
+        total_ttc: 100300,
+        moyen_paiement: 'carte',
+      },
+      {
+        id: 'ticket-3',
+        numero: 'TKT-2025-000003',
+        heure: '14:45',
+        vendeur: 'Ibrahima Sall',
+        total_ttc: 26700,
+        moyen_paiement: 'wave',
+      },
+    ],
+    decaissements: [
+      {
+        id: 'dec-1',
+        heure: '10:00',
+        motif: 'Achat de matériel de bureau',
+        montant: 10000,
+      },
+      {
+        id: 'dec-2',
+        heure: '15:30',
+        motif: 'Frais de transport',
+        montant: 5000,
+      },
+    ],
+  };
+
+  // Initialiser les rapports par date
+  const [rapportsParDate, setRapportsParDate] = useState({
+    [selectedDate]: { ...initialRapport }
   });
-  const [isEditing, setIsEditing] = useState(false);
 
-  const fetchRapport = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await caissesJournalAPI.getByDate(selectedDate);
-      setRapport(data);
-      
-      // Pré-remplir le formulaire avec les données
-      setFormData({
-        fondOuverture: data.fond_ouverture?.toString() || '',
-        totalEncaissements: data.total_encaissements?.toString() || '',
-        totalDecaissements: data.total_decaissements?.toString() || '',
-        soldeCloture: data.solde_cloture?.toString() || '',
-      });
-    } catch (error) {
-      console.error('Erreur lors de la récupération du rapport:', error);
-      // Ne pas afficher d'alerte pour les erreurs d'authentification
-      if (error.response?.status !== 401) {
-        alert('Erreur lors du chargement du rapport. Veuillez réessayer.');
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedDate]);
+  // Récupérer le rapport pour la date sélectionnée
+  const rapport = rapportsParDate[selectedDate] || null;
 
+
+  // Vérifier si on est passé à une nouvelle journée et clôturer automatiquement le rapport de la veille
   useEffect(() => {
-    fetchRapport();
-  }, [fetchRapport]);
+    const dateActuelle = new Date().toISOString().split('T')[0];
+    const datePrecedente = previousDateRef.current;
 
+    // Si on change de date et qu'il y a un rapport non clôturé de la veille, le clôturer
+    if (datePrecedente && datePrecedente !== dateActuelle) {
+      setRapportsParDate(prev => {
+        const updated = { ...prev };
+        // Clôturer tous les rapports non clôturés des dates précédentes
+        Object.keys(updated).forEach(date => {
+          if (date !== dateActuelle && updated[date] && !updated[date].cloture) {
+            updated[date] = { ...updated[date], cloture: true };
+          }
+        });
+        return updated;
+      });
+    }
 
-  const handleClotureCaisse = async () => {
+    // Vérifier si on est dans une nouvelle journée (minuit passé)
+    const checkNewDay = () => {
+      const now = new Date().toISOString().split('T')[0];
+      if (now !== dateActuelle) {
+        // Nouvelle journée détectée, clôturer automatiquement le rapport de la veille
+        setRapportsParDate(prev => {
+          const updated = { ...prev };
+          Object.keys(updated).forEach(date => {
+            if (date !== now && updated[date] && !updated[date].cloture) {
+              updated[date] = { ...updated[date], cloture: true };
+            }
+          });
+          return updated;
+        });
+      }
+    };
+
+    // Vérifier toutes les minutes si on est passé à une nouvelle journée
+    const interval = setInterval(checkNewDay, 60000); // Vérifier toutes les minutes
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Gérer le changement de date
+  useEffect(() => {
+    const datePrecedente = previousDateRef.current;
+    const dateActuelle = new Date().toISOString().split('T')[0];
+    
+    // Si on change de date manuellement
+    if (datePrecedente && datePrecedente !== selectedDate) {
+      setRapportsParDate(prev => {
+        const updated = { ...prev };
+        
+        // Ne clôturer que si on passe d'une date passée à la date actuelle (ou future)
+        // Ne PAS clôturer si on consulte simplement un rapport passé
+        if (datePrecedente < dateActuelle && selectedDate >= dateActuelle) {
+          // On passe d'une date passée à la date actuelle, clôturer la date passée
+          if (updated[datePrecedente] && !updated[datePrecedente].cloture) {
+            updated[datePrecedente] = { ...updated[datePrecedente], cloture: true };
+          }
+        }
+        
+        // Créer un nouveau rapport pour la nouvelle date si elle n'existe pas
+        if (!updated[selectedDate]) {
+          // Trouver la date précédente la plus proche pour le fond d'ouverture
+          const datePrecedentePourFond = Object.keys(updated)
+            .filter(d => d < selectedDate)
+            .sort()
+            .pop();
+          
+          const soldeClotureVeille = datePrecedentePourFond 
+            ? (updated[datePrecedentePourFond]?.solde_cloture || 0)
+            : 0;
+            
+          updated[selectedDate] = {
+            fond_ouverture: soldeClotureVeille,
+            total_encaissements: 0,
+            total_decaissements: 0,
+            solde_cloture: soldeClotureVeille,
+            cloture: false,
+            ventes_par_moyen: {},
+            tickets_encaisses: [],
+            decaissements: [],
+          };
+        }
+        return updated;
+      });
+    }
+
+    // Créer un nouveau rapport pour la date actuelle si elle n'existe pas
+    if (!rapportsParDate[selectedDate]) {
+      const datePrecedente = Object.keys(rapportsParDate)
+        .filter(d => d < selectedDate)
+        .sort()
+        .pop();
+      
+      const soldeClotureVeille = datePrecedente 
+        ? (rapportsParDate[datePrecedente]?.solde_cloture || 0)
+        : 0;
+
+      setRapportsParDate(prev => ({
+        ...prev,
+        [selectedDate]: {
+          fond_ouverture: soldeClotureVeille,
+          total_encaissements: 0,
+          total_decaissements: 0,
+          solde_cloture: soldeClotureVeille,
+          cloture: false,
+          ventes_par_moyen: {},
+          tickets_encaisses: [],
+          decaissements: [],
+        }
+      }));
+    }
+
+    previousDateRef.current = selectedDate;
+  }, [selectedDate, rapportsParDate]);
+
+  const handleClotureCaisse = () => {
     if (!window.confirm('Êtes-vous sûr de vouloir clôturer la caisse pour cette journée?')) {
       return;
     }
 
-    try {
-      setLoading(true);
-      await caissesJournalAPI.cloture(selectedDate);
-      alert('Caisse clôturée avec succès');
-      fetchRapport();
-    } catch (error) {
-      console.error('Erreur lors de la clôture:', error);
-      const errorMessage = error.response?.data?.message || error.message || 'Une erreur est survenue';
-      alert('Erreur lors de la clôture: ' + errorMessage);
-    } finally {
-      setLoading(false);
-    }
+    setRapportsParDate(prev => ({
+      ...prev,
+      [selectedDate]: { ...prev[selectedDate], cloture: true }
+    }));
+    alert('Caisse clôturée avec succès');
   };
 
-  const handleSaveRapport = async () => {
-    try {
-      setLoading(true);
-      await caissesJournalAPI.update(selectedDate, {
-        fond_ouverture: parseInt(formData.fondOuverture) || 0,
-        total_encaissements: parseInt(formData.totalEncaissements) || 0,
-        total_decaissements: parseInt(formData.totalDecaissements) || 0,
-        solde_cloture: parseInt(formData.soldeCloture) || 0,
-      });
-      setIsEditing(false);
-      alert('Rapport mis à jour avec succès');
-      fetchRapport();
-    } catch (error) {
-      console.error('Erreur lors de la sauvegarde:', error);
-      const errorMessage = error.response?.data?.message || error.message || 'Une erreur est survenue';
-      alert('Erreur lors de la sauvegarde: ' + errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleExportPDF = () => {
     // TODO: Implémenter l'export PDF
@@ -105,11 +222,22 @@ const RapportCaissePage = () => {
       {/* En-tête */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-text-primary dark:text-white">
-            Rapport de caisse journalier
-          </h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold text-text-primary dark:text-white">
+              Rapport de caisse journalier
+            </h1>
+            {rapport && rapport.cloture && (
+              <Badge variant="success">Clôturé</Badge>
+            )}
+            {rapport && !rapport.cloture && (
+              <Badge variant="warning">En cours</Badge>
+            )}
+          </div>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
-            Suivi des encaissements et décaissements de la journée
+            {rapport && rapport.cloture 
+              ? `Rapport clôturé du ${formatDate(selectedDate)} - Consultation uniquement`
+              : `Suivi des encaissements et décaissements du ${formatDate(selectedDate)}`
+            }
           </p>
         </div>
         <div className="flex gap-3">
@@ -118,6 +246,7 @@ const RapportCaissePage = () => {
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
             className="w-auto"
+            title="Sélectionner une date pour consulter le rapport"
           />
           <Button variant="outline" onClick={handleExportPDF}>
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -133,12 +262,36 @@ const RapportCaissePage = () => {
         </div>
       </div>
 
-      {loading ? (
-        <div className="text-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600 dark:text-gray-400">Chargement du rapport...</p>
-        </div>
-      ) : !rapport ? (
+      {/* Liste des dates disponibles */}
+      {Object.keys(rapportsParDate).length > 0 && (
+        <Card>
+          <CardHeader title="Dates disponibles" />
+          <div className="flex flex-wrap gap-2">
+            {Object.keys(rapportsParDate)
+              .sort((a, b) => new Date(b) - new Date(a))
+              .map(date => (
+                <button
+                  key={date}
+                  onClick={() => setSelectedDate(date)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                    selectedDate === date
+                      ? 'bg-primary-600 text-white shadow-md'
+                      : rapportsParDate[date]?.cloture
+                      ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 hover:bg-green-200 dark:hover:bg-green-800'
+                      : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  {formatDate(date)}
+                  {rapportsParDate[date]?.cloture && (
+                    <span className="ml-1">✓</span>
+                  )}
+                </button>
+              ))}
+          </div>
+        </Card>
+      )}
+
+      {!rapport ? (
         <Card>
           <div className="text-center py-12">
             <p className="text-gray-500 dark:text-gray-400">Aucun rapport disponible pour cette date</p>
@@ -149,155 +302,70 @@ const RapportCaissePage = () => {
           {/* Formulaire de saisie du rapport */}
           <Card>
             <CardHeader 
-              title="Saisie du rapport journalier"
-              action={
-                !isEditing ? (
-                  <Button variant="outline" size="sm" onClick={() => {
-                    setIsEditing(true);
-                    setFormData({
-                      fondOuverture: (rapport.fond_ouverture || 0).toString(),
-                      totalEncaissements: (rapport.total_encaissements || 0).toString(),
-                      totalDecaissements: (rapport.total_decaissements || 0).toString(),
-                      soldeCloture: (rapport.solde_cloture || 0).toString(),
-                    });
-                  }}>
-                    Modifier
-                  </Button>
-                ) : (
-                  <div className="flex gap-2">
-                    <Button variant="secondary" size="sm" onClick={() => setIsEditing(false)}>
-                      Annuler
-                    </Button>
-                    <Button variant="primary" size="sm" onClick={handleSaveRapport}>
-                      Enregistrer
-                    </Button>
-                  </div>
-                )
-              }
+              title={`Rapport du ${formatDate(selectedDate)}`}
             />
             
-            {isEditing ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Input
-                  label="Fond d'ouverture (FCFA)"
-                  type="number"
-                  value={formData.fondOuverture}
-                  onChange={(e) => setFormData({ ...formData, fondOuverture: e.target.value })}
-                  placeholder="0"
-                />
-                <Input
-                  label="Total encaissements (FCFA)"
-                  type="number"
-                  value={formData.totalEncaissements}
-                  onChange={(e) => setFormData({ ...formData, totalEncaissements: e.target.value })}
-                  placeholder="0"
-                />
-                <Input
-                  label="Total décaissements (FCFA)"
-                  type="number"
-                  value={formData.totalDecaissements}
-                  onChange={(e) => setFormData({ ...formData, totalDecaissements: e.target.value })}
-                  placeholder="0"
-                />
-                <Input
-                  label="Solde de clôture (FCFA)"
-                  type="number"
-                  value={formData.soldeCloture}
-                  onChange={(e) => setFormData({ ...formData, soldeCloture: e.target.value })}
-                  placeholder="0"
-                  helperText={`Calculé: ${formatCurrency((parseFloat(formData.fondOuverture) || 0) + (parseFloat(formData.totalEncaissements) || 0) - (parseFloat(formData.totalDecaissements) || 0))}`}
-                />
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <Card className="border-l-4 border-l-primary-600">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Fond d'ouverture</p>
-                      <p className="text-2xl font-bold text-primary-600 dark:text-primary-400 mt-1">
-                        {formatCurrency(rapport.fond_ouverture || 0)}
-                      </p>
-                    </div>
-                    <div className="w-12 h-12 bg-primary-100 dark:bg-primary-900 rounded-full flex items-center justify-center">
-                      <svg className="w-6 h-6 text-primary-600 dark:text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    </div>
-                  </div>
-                </Card>
-                <Card className="border-l-4 border-l-green-500">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Total encaissements</p>
-                      <p className="text-2xl font-bold text-green-600 dark:text-green-400 mt-1">
-                        {formatCurrency(rapport.total_encaissements || 0)}
-                      </p>
-                    </div>
-                    <div className="w-12 h-12 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center">
-                      <svg className="w-6 h-6 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                      </svg>
-                    </div>
-                  </div>
-                </Card>
-                <Card className="border-l-4 border-l-red-500">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Total décaissements</p>
-                      <p className="text-2xl font-bold text-red-600 dark:text-red-400 mt-1">
-                        {formatCurrency(rapport.total_decaissements || 0)}
-                      </p>
-                    </div>
-                    <div className="w-12 h-12 bg-red-100 dark:bg-red-900 rounded-full flex items-center justify-center">
-                      <svg className="w-6 h-6 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
-                      </svg>
-                    </div>
-                  </div>
-                </Card>
-                <Card className="border-l-4 border-l-accent-500">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Solde de clôture</p>
-                      <p className="text-2xl font-bold text-accent-500 dark:text-accent-400 mt-1">
-                        {formatCurrency(rapport.solde_cloture || 0)}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        Calculé: {formatCurrency((rapport.fond_ouverture || 0) + (rapport.total_encaissements || 0) - (rapport.total_decaissements || 0))}
-                      </p>
-                    </div>
-                    <div className="w-12 h-12 bg-accent-100 dark:bg-accent-900 rounded-full flex items-center justify-center">
-                      <svg className="w-6 h-6 text-accent-500 dark:text-accent-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                      </svg>
-                    </div>
-                  </div>
-                </Card>
+            {rapport.cloture && (
+              <div className="mb-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                <div className="flex items-center gap-2">
+                  <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-sm font-medium text-green-800 dark:text-green-200">
+                    Ce rapport est clôturé. Il est en lecture seule et ne peut plus être modifié.
+                  </p>
+                </div>
               </div>
             )}
+            
+            {!rapport.cloture && (
+              <div className="mb-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                <p className="text-sm text-blue-800 dark:text-blue-200">
+                  <strong>Note :</strong> Les montants sont calculés automatiquement à partir des encaissements et décaissements de la journée. 
+                  Vous pouvez clôturer le rapport une fois tous les montants vérifiés.
+                </p>
+              </div>
+            )}
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="text-center p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Fond d'ouverture</p>
+                  <p className="text-2xl font-bold text-primary-600 dark:text-primary-400 mt-2">
+                    {formatCurrency(rapport.fond_ouverture || 0)}
+                  </p>
+                </div>
+                <div className="text-center p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Total encaissements</p>
+                  <p className="text-2xl font-bold text-green-600 dark:text-green-400 mt-2">
+                    {formatCurrency(rapport.total_encaissements || 0)}
+                  </p>
+                </div>
+                <div className="text-center p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Total décaissements</p>
+                  <p className="text-2xl font-bold text-red-600 dark:text-red-400 mt-2">
+                    {formatCurrency(rapport.total_decaissements || 0)}
+                  </p>
+                </div>
+                <div className="text-center p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Solde de clôture</p>
+                  <p className="text-2xl font-bold text-accent-500 dark:text-accent-400 mt-2">
+                    {formatCurrency(rapport.solde_cloture || 0)}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Calculé: {formatCurrency((rapport.fond_ouverture || 0) + (rapport.total_encaissements || 0) - (rapport.total_decaissements || 0))}
+                  </p>
+                </div>
+            </div>
           </Card>
 
           {/* Ventes par moyen de paiement */}
           <Card>
             <CardHeader title="Ventes par moyen de paiement" />
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-              {Object.entries(rapport.ventes_par_moyen || {}).map(([moyen, montant], index) => (
-                <div 
-                  key={moyen} 
-                  className={`text-center p-4 rounded-lg border-l-4 ${
-                    index === 0 ? 'border-l-primary-600 bg-primary-50 dark:bg-primary-900/20' :
-                    index === 1 ? 'border-l-accent-500 bg-accent-50 dark:bg-accent-900/20' :
-                    index === 2 ? 'border-l-green-500 bg-green-50 dark:bg-green-900/20' :
-                    'border-l-gray-400 bg-gray-50 dark:bg-gray-700'
-                  }`}
-                >
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{moyensPaiementLabels[moyen]}</p>
-                  <p className={`text-lg font-bold mt-1 ${
-                    index === 0 ? 'text-primary-600 dark:text-primary-400' :
-                    index === 1 ? 'text-accent-600 dark:text-accent-400' :
-                    index === 2 ? 'text-green-600 dark:text-green-400' :
-                    'text-gray-900 dark:text-white'
-                  }`}>
+              {Object.entries(rapport.ventes_par_moyen || {}).map(([moyen, montant]) => (
+                <div key={moyen} className="text-center p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">{moyensPaiementLabels[moyen]}</p>
+                  <p className="text-lg font-bold text-gray-900 dark:text-white mt-1">
                     {formatCurrency(montant)}
                   </p>
                 </div>

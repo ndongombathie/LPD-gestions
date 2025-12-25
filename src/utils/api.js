@@ -79,6 +79,15 @@ export const authAPI = {
   isAuthenticated: () => {
     return !!getToken();
   },
+
+  changePassword: async (currentPassword, newPassword, newPasswordConfirmation) => {
+    const response = await instance.post('/auth/change-password', {
+      current_password: currentPassword,
+      new_password: newPassword,
+      new_password_confirmation: newPasswordConfirmation,
+    });
+    return response.data;
+  },
 };
 
 // ===== COMMANDES =====

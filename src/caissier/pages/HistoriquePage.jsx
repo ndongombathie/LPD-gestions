@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Card, { CardHeader } from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
@@ -6,41 +6,90 @@ import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import { formatCurrency, formatDateTime } from '../../utils/formatters';
 import { printInvoice } from '../components/InvoicePrint';
-import { historiqueAPI } from '../../utils/api';
 
 const HistoriquePage = () => {
-  const [historique, setHistorique] = useState([]);
-  const [loading, setLoading] = useState(false);
+  // Données fictives
+  const historiqueFictif = [
+    {
+      id: 'encaissement_1',
+      type: 'encaissement',
+      date: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+      ticket: {
+        id: 'ticket-1',
+        numero: 'TKT-2025-000001',
+        date_ticket: new Date(Date.now() - 3600000).toISOString(),
+        vendeur_nom: 'Amadou Diallo',
+        total_ht: 100000,
+        tva: 18000,
+        total_ttc: 118000,
+        moyen_paiement: 'especes',
+        lignes: [
+          { produit: 'Produit A', quantite: 2, prix: 50000 },
+        ],
+      },
+      montant: 118000,
+    },
+    {
+      id: 'decaissement_1',
+      type: 'decaissement',
+      date: new Date(Date.now() - 7200000).toISOString(),
+      created_at: new Date(Date.now() - 7200000).toISOString(),
+      montant: 15000,
+      motif: 'Achat de matériel de bureau',
+      cree_par: 'Ibrahima Sall',
+      fait_par: 'Amadou Diallo',
+    },
+    {
+      id: 'encaissement_2',
+      type: 'encaissement',
+      date: new Date(Date.now() - 10800000).toISOString(),
+      created_at: new Date(Date.now() - 10800000).toISOString(),
+      ticket: {
+        id: 'ticket-2',
+        numero: 'TKT-2025-000002',
+        date_ticket: new Date(Date.now() - 10800000).toISOString(),
+        vendeur_nom: 'Fatou Ba',
+        total_ht: 85000,
+        tva: 15300,
+        total_ttc: 100300,
+        moyen_paiement: 'carte',
+        lignes: [
+          { produit: 'Produit B', quantite: 1, prix: 85000 },
+        ],
+      },
+      montant: 100300,
+    },
+  ];
+
   const [filters, setFilters] = useState({
-    type: 'tous', // 'tous', 'encaissements', 'decaissements'
+    type: 'tous',
     dateDebut: '',
     dateFin: '',
     recherche: '',
   });
 
-  useEffect(() => {
-    fetchHistorique();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.type, filters.dateDebut, filters.dateFin]); // Recharger quand les filtres changent
-
-  const fetchHistorique = async () => {
-    setLoading(true);
-    try {
-      const data = await historiqueAPI.get(filters);
-      setHistorique(data);
-    } catch (error) {
-      console.error('Erreur lors de la récupération de l\'historique:', error);
-      // Ne pas afficher d'alerte pour les erreurs d'authentification
-      if (error.response?.status !== 401) {
-        alert('Erreur lors du chargement de l\'historique. Veuillez réessayer.');
-      }
-    } finally {
-      setLoading(false);
+  // Filtrage côté client
+  const filteredHistorique = historiqueFictif.filter((item) => {
+    // Filtre par type
+    if (filters.type !== 'tous' && item.type !== filters.type) {
+      return false;
     }
-  };
-
-  // Filtrage côté client pour la recherche uniquement (les autres filtres sont gérés côté serveur)
-  const filteredHistorique = historique.filter((item) => {
+    
+    // Filtre par date
+    if (filters.dateDebut) {
+      const itemDate = new Date(item.date);
+      const dateDebut = new Date(filters.dateDebut);
+      if (itemDate < dateDebut) return false;
+    }
+    if (filters.dateFin) {
+      const itemDate = new Date(item.date);
+      const dateFin = new Date(filters.dateFin);
+      dateFin.setHours(23, 59, 59, 999);
+      if (itemDate > dateFin) return false;
+    }
+    
+    // Filtre par recherche
     if (filters.recherche) {
       const searchLower = filters.recherche.toLowerCase();
       if (item.type === 'encaissement' && item.ticket) {
@@ -108,11 +157,10 @@ const HistoriquePage = () => {
             onChange={(e) => setFilters({ ...filters, dateFin: e.target.value })}
           />
           <Input
-            label="Recherche (filtre local)"
+            label="Recherche"
             placeholder="N° ticket, vendeur, motif..."
             value={filters.recherche}
             onChange={(e) => setFilters({ ...filters, recherche: e.target.value })}
-            helperText="La recherche se fait localement sans recharger les données"
           />
         </div>
       </Card>
@@ -193,12 +241,7 @@ const HistoriquePage = () => {
           title="Historique des opérations"
           subtitle={`${filteredHistorique.length} opération(s) trouvée(s)`}
         />
-        {loading ? (
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600 dark:text-gray-400">Chargement de l'historique...</p>
-          </div>
-        ) : filteredHistorique.length === 0 ? (
+        {filteredHistorique.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-gray-500 dark:text-gray-400">Aucune opération trouvée</p>
           </div>
@@ -207,10 +250,10 @@ const HistoriquePage = () => {
             {filteredHistorique.map((item) => (
               <div
                 key={item.id}
-                className={`border-l-4 rounded-lg p-3 hover:shadow-xl transition-all duration-300 hover:scale-[1.01] ${
+                className={`border-l-4 rounded-lg p-3 hover:shadow-md transition-all ${
                   item.type === 'encaissement'
-                    ? 'border-l-primary-600 bg-gradient-to-r from-primary-50 via-green-50 to-white dark:from-primary-900/20 dark:via-green-900/20 dark:to-gray-800 shadow-md hover:border-primary-500'
-                    : 'border-l-red-500 bg-gradient-to-r from-red-50 via-red-50 to-white dark:from-red-900/20 dark:via-red-900/20 dark:to-gray-800 shadow-md hover:border-red-400'
+                    ? 'border-l-green-500 bg-gradient-to-r from-green-50 to-white dark:from-green-900/20 dark:to-gray-800'
+                    : 'border-l-red-500 bg-gradient-to-r from-red-50 to-white dark:from-red-900/20 dark:to-gray-800'
                 }`}
               >
                 <div className="flex items-center justify-between gap-4">
@@ -283,7 +326,7 @@ const HistoriquePage = () => {
                       variant="outline"
                       size="sm"
                       onClick={() => printInvoice(item.ticket)}
-                      className="flex-shrink-0 shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105"
+                      className="flex-shrink-0"
                     >
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
@@ -301,4 +344,3 @@ const HistoriquePage = () => {
 };
 
 export default HistoriquePage;
-

@@ -1,66 +1,104 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Card, { CardHeader } from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import Badge from '../../components/ui/Badge';
+import Select from '../../components/ui/Select';
 import { formatCurrency, formatDateTime } from '../../utils/formatters';
 import { printDecaissement } from '../components/DecaissementPrint';
-import { decaissementsAPI, authAPI } from '../../utils/api';
 
 const DecaissementsPage = () => {
-  const [decaissements, setDecaissements] = useState([]);
-  const [loading, setLoading] = useState(false);
+  // Données fictives
+  const [decaissements, setDecaissements] = useState([
+    {
+      id: 'dec-1',
+      montant: 15000,
+      motif: 'Achat de matériel de bureau',
+      statut: 'en_attente',
+      cree_par: 'Ibrahima Sall',
+      fait_par: null,
+      fait_le: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    {
+      id: 'dec-2',
+      montant: 10000,
+      motif: 'Frais de transport',
+      statut: 'en_attente',
+      cree_par: 'Fatou Ba',
+      fait_par: null,
+      fait_le: null,
+      created_at: new Date(Date.now() - 3600000).toISOString(),
+      updated_at: new Date(Date.now() - 3600000).toISOString(),
+    },
+    {
+      id: 'dec-3',
+      montant: 25000,
+      motif: 'Paiement fournisseur',
+      statut: 'fait',
+      cree_par: 'Amadou Diallo',
+      fait_par: 'Ibrahima Sall',
+      fait_le: new Date(Date.now() - 7200000).toISOString(),
+      created_at: new Date(Date.now() - 10800000).toISOString(),
+      updated_at: new Date(Date.now() - 7200000).toISOString(),
+    },
+  ]);
+
   const [selectedDecaissement, setSelectedDecaissement] = useState(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
-  const currentUser = authAPI.getCurrentUser();
+  const [isValidationModalOpen, setIsValidationModalOpen] = useState(false);
+  const [compteChoisi, setCompteChoisi] = useState('caisse');
 
-  useEffect(() => {
-    fetchDecaissements();
-    // Rafraîchir toutes les 5 secondes pour voir les nouveaux décaissements
-    const interval = setInterval(fetchDecaissements, 5000);
-    return () => clearInterval(interval);
-  }, []);
+  const comptes = [
+    { value: 'caisse', label: 'Caisse' },
+    { value: 'banque', label: 'Compte bancaire' },
+    { value: 'wave', label: 'Wave' },
+    { value: 'om', label: 'Orange Money' },
+    { value: 'autre', label: 'Autre' },
+  ];
 
-  const fetchDecaissements = async () => {
-    setLoading(true);
-    try {
-      const data = await decaissementsAPI.getAll();
-      setDecaissements(data);
-    } catch (error) {
-      console.error('Erreur lors de la récupération des décaissements:', error);
-      // Ne pas afficher d'alerte pour les erreurs d'authentification
-      if (error.response?.status !== 401) {
-        alert('Erreur lors du chargement des décaissements. Veuillez réessayer.');
-      }
-    } finally {
-      setLoading(false);
-    }
+  const handleValiderDecaissement = (decaissement) => {
+    setSelectedDecaissement(decaissement);
+    setCompteChoisi('caisse');
+    setIsValidationModalOpen(true);
   };
 
-  const handleValiderDecaissement = async (decaissement) => {
-    if (!window.confirm(`Confirmer le décaissement de ${formatCurrency(decaissement.montant)} ?`)) {
+  const handleConfirmDecaissement = () => {
+    if (!selectedDecaissement) return;
+
+    // Mise à jour de la liste
+    setDecaissements(prevDecaissements => 
+      prevDecaissements.map(d => 
+        d.id === selectedDecaissement.id 
+          ? {
+              ...d,
+              statut: 'fait',
+              fait_par: 'Caissier actuel',
+              fait_le: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              compte_utilise: compteChoisi,
+            }
+          : d
+      )
+    );
+
+    setIsValidationModalOpen(false);
+    setSelectedDecaissement(null);
+    alert('Décaissement effectué avec succès');
+  };
+
+  const handleAnnulerDecaissement = (decaissement) => {
+    if (!window.confirm(`Voulez-vous vraiment annuler ce décaissement de ${formatCurrency(decaissement.montant)} ?`)) {
       return;
     }
 
-    try {
-      setLoading(true);
-      const updated = await decaissementsAPI.valider(decaissement.id);
+    // Supprimer le décaissement de la liste
+    setDecaissements(prevDecaissements => 
+      prevDecaissements.filter(d => d.id !== decaissement.id)
+    );
 
-      // Mise à jour de la liste
-      setDecaissements(prevDecaissements => 
-        prevDecaissements.map(d => 
-          d.id === decaissement.id ? updated : d
-        )
-      );
-
-      alert('Décaissement effectué avec succès');
-    } catch (error) {
-      console.error('Erreur lors de la validation:', error);
-      const errorMessage = error.response?.data?.message || error.message || 'Une erreur est survenue';
-      alert('Erreur lors de la validation: ' + errorMessage);
-    } finally {
-      setLoading(false);
-    }
+    alert('Décaissement annulé');
   };
 
   const handleVoirDetails = (decaissement) => {
@@ -86,8 +124,8 @@ const DecaissementsPage = () => {
       </div>
 
       {/* Statistiques */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="border-l-4 border-l-red-500 hover:shadow-lg transition-shadow">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card className="border-l-4 border-l-red-500 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600 dark:text-gray-400">Total décaissements</p>
@@ -102,7 +140,7 @@ const DecaissementsPage = () => {
             </div>
           </div>
         </Card>
-        <Card className="border-l-4 border-l-accent-500 hover:shadow-lg transition-shadow">
+        <Card className="border-l-4 border-l-accent-500 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600 dark:text-gray-400">En attente</p>
@@ -117,21 +155,6 @@ const DecaissementsPage = () => {
             </div>
           </div>
         </Card>
-        <Card className="border-l-4 border-l-green-500 hover:shadow-lg transition-shadow">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Effectués</p>
-              <p className="text-2xl font-bold text-green-600 dark:text-green-400 mt-1">
-                {decaissements.filter(d => d.statut === 'fait').length}
-              </p>
-            </div>
-            <div className="w-12 h-12 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center">
-              <svg className="w-6 h-6 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-          </div>
-        </Card>
       </div>
 
       {/* Liste des décaissements */}
@@ -140,12 +163,7 @@ const DecaissementsPage = () => {
           title="Décaissements en attente"
           subtitle={`${decaissementsEnAttente.length} décaissement(s) à valider`}
         />
-        {loading ? (
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600 dark:text-gray-400">Chargement...</p>
-          </div>
-        ) : decaissementsEnAttente.length === 0 ? (
+        {decaissementsEnAttente.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-gray-500 dark:text-gray-400">Aucun décaissement en attente</p>
           </div>
@@ -191,13 +209,25 @@ const DecaissementsPage = () => {
                       {formatCurrency(dec.montant)}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-center" onClick={(e) => e.stopPropagation()}>
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={() => handleValiderDecaissement(dec)}
-                      >
-                        Valider
-                      </Button>
+                      <div className="flex items-center gap-2 justify-center">
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={() => handleValiderDecaissement(dec)}
+                        >
+                          Valider
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => handleAnnulerDecaissement(dec)}
+                        >
+                          <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                          Annuler
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -318,15 +348,26 @@ const DecaissementsPage = () => {
               </Button>
             )}
             {selectedDecaissement?.statut === 'en_attente' && (
-              <Button
-                variant="primary"
-                onClick={() => {
-                  handleValiderDecaissement(selectedDecaissement);
-                  setIsDetailModalOpen(false);
-                }}
-              >
-                Valider le décaissement
-              </Button>
+              <>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    handleAnnulerDecaissement(selectedDecaissement);
+                    setIsDetailModalOpen(false);
+                  }}
+                >
+                  Annuler
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    setIsDetailModalOpen(false);
+                    handleValiderDecaissement(selectedDecaissement);
+                  }}
+                >
+                  Valider le décaissement
+                </Button>
+              </>
             )}
           </>
         }
@@ -392,9 +433,85 @@ const DecaissementsPage = () => {
           </div>
         )}
       </Modal>
+
+      {/* Modal de validation du décaissement */}
+      <Modal
+        isOpen={isValidationModalOpen}
+        onClose={() => {
+          setIsValidationModalOpen(false);
+          setSelectedDecaissement(null);
+        }}
+        title="Valider le décaissement"
+        size="md"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setIsValidationModalOpen(false);
+                setSelectedDecaissement(null);
+              }}
+            >
+              Annuler
+            </Button>
+            <Button variant="primary" onClick={handleConfirmDecaissement}>
+              Confirmer le décaissement
+            </Button>
+          </>
+        }
+      >
+        {selectedDecaissement && (
+          <div className="space-y-4">
+            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+              <h4 className="font-semibold text-gray-900 dark:text-white mb-3">
+                Détails du décaissement
+              </h4>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">Montant:</span>
+                  <span className="font-bold text-red-600 dark:text-red-400">
+                    {formatCurrency(selectedDecaissement.montant)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">Motif:</span>
+                  <span className="font-medium text-gray-900 dark:text-white text-right">
+                    {selectedDecaissement.motif}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">Créé par:</span>
+                  <span className="font-medium text-gray-900 dark:text-white">
+                    {selectedDecaissement.cree_par}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">Date de création:</span>
+                  <span className="font-medium text-gray-900 dark:text-white">
+                    {formatDateTime(selectedDecaissement.created_at)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+              <p className="text-sm text-blue-800 dark:text-blue-200">
+                <strong>Note:</strong> Ce décaissement a été créé par le responsable. Veuillez choisir le compte à utiliser pour effectuer le décaissement.
+              </p>
+            </div>
+
+            <Select
+              label="Compte à utiliser"
+              options={comptes}
+              value={compteChoisi}
+              onChange={(e) => setCompteChoisi(e.target.value)}
+              required
+            />
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };
 
 export default DecaissementsPage;
-
