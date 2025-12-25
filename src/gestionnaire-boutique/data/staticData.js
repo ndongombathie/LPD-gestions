@@ -16,7 +16,7 @@ export const stats = {
 };
 
 export const recentActivities = [
-  { type: "success", text: "Nouvelle vente complétée", time: "Il y a 5 minutes" },
+  { type: "success", text: "Nouvelle demande complétée", time: "Il y a 5 minutes" },
   { type: "info", text: "Transfert de stock en cours", time: "Il y a 1 heure" },
   { type: "warning", text: "Stock faible détecté", time: "Il y a 2 heures" },
 ];

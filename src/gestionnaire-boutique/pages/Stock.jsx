@@ -1,11 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { Search, Eye, AlertTriangle, Filter, Trash2, Edit } from "lucide-react";
+import { Search, Eye, AlertTriangle, Filter, BarChart3 } from "lucide-react";
 import CardStat from "../components/CardStat";
 import DataTable from "../components/DataTable";
 import LoadingSpinner from "../components/LoadingSpinner";
 import EmptyState from "../components/EmptyState";
 import * as api from "../services/apiMock";
-
 
 const Stock = () => {
   const [recherche, setRecherche] = useState("");
@@ -16,7 +15,8 @@ const Stock = () => {
 
   // Stats
   const stats = {
-    total: stocks.length,
+    totalProduits: stocks.length,
+    totalQuantite: stocks.reduce((sum, s) => sum + (s.quantite * s.nbr_pieces), 0),
     disponible: stocks.filter(s => s.quantite > s.seuil).length,
     faible: stocks.filter(s => s.quantite > 0 && s.quantite <= s.seuil).length,
     epuisse: stocks.filter(s => s.quantite === 0).length,
@@ -42,29 +42,39 @@ const Stock = () => {
     return matchRecherche && matchCategorie;
   });
 
-  // Supprimer un produit (mock)
-  const supprimerProduit = async (id) => {
-    if (!window.confirm("Voulez-vous vraiment supprimer ce produit ?")) return;
-    const res = await api.deleteStock(id);
-    if (res && res.ok) setStocks((prev) => prev.filter(s => s.id !== id));
-  };
-
   const handleView = (row) => setProduitDetail(row);
 
   return (
     <div className="min-h-screen bg-gray-50">
-
-      <div className="px-6 space-y-6">
-        {/* En-tête et recherche */}
+      <div className="px-6 space-y-6 py-6">
+        {/* En-tête */}
         <div className="flex justify-between items-center flex-wrap gap-4">
-          <h2 className="text-2xl font-bold text-[#111827]">Gestion du Stock</h2>
-          <div className="flex items-center gap-4">
-            <div className="relative">
+          <div>
+            <h2 className="text-3xl font-bold text-[#111827] flex items-center gap-3">
+              <BarChart3 size={32} className="text-[#472EAD]" />
+              Gestion du Stock
+            </h2>
+            <p className="text-gray-600 mt-1">Vue d'ensemble et détails des stocks</p>
+          </div>
+        </div>
+
+        {/* Card Statistiques principales */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <CardStat title="Nombre de produits" value={stats.totalProduits} color="bg-[#472EAD]" />
+          <CardStat title="Quantité totale" value={stats.totalQuantite.toLocaleString("fr-FR")} color="bg-blue-600" subtitle="unités" />
+          <CardStat title="Disponibles" value={stats.disponible} color="bg-green-600" />
+          <CardStat title="Stock faible" value={stats.faible} color="bg-[#F58020]" />
+        </div>
+
+        {/* Recherche et filtres */}
+        <div className="bg-white rounded-lg shadow p-4">
+          <div className="flex justify-between items-center gap-4 flex-wrap">
+            <div className="relative flex-1 min-w-[250px]">
               <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
               <input
                 type="text"
                 placeholder="Rechercher un produit..."
-                className="w-64 pl-10 pr-3 py-2 border rounded-lg"
+                className="w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#472EAD]"
                 value={recherche}
                 onChange={(e) => setRecherche(e.target.value)}
               />
@@ -72,7 +82,7 @@ const Stock = () => {
             <div className="flex items-center gap-2">
               <Filter size={18} className="text-gray-500" />
               <select
-                className="border rounded-lg py-2 px-3 bg-white"
+                className="border rounded-lg py-2 px-3 bg-white focus:outline-none focus:ring-2 focus:ring-[#472EAD]"
                 value={categorieFiltre}
                 onChange={(e) => setCategorieFiltre(e.target.value)}
               >
@@ -84,14 +94,6 @@ const Stock = () => {
           </div>
         </div>
 
-        {/* Card Statistiques */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-          <CardStat title="Total produits" value={stats.total} color="bg-[#472EAD]" />
-          <CardStat title="Disponibles" value={stats.disponible} color="bg-green-600" />
-          <CardStat title="Faible stock" value={stats.faible} color="bg-[#F58020]" />
-          <CardStat title="Épuisés" value={stats.epuisse} color="bg-red-600" />
-        </div>
-
         {/* DataTable centralisée */}
         <div className="bg-white rounded-lg shadow p-4 overflow-auto">
           {loading ? (
@@ -101,26 +103,49 @@ const Stock = () => {
           ) : (
             <DataTable
               columns={[
-                { label: "Nom", key: "nom" },
+                { label: "Produit", key: "nom" },
                 { label: "Code", key: "code" },
                 { label: "Catégorie", key: "categorie" },
-                { label: "Quantité", key: "quantite", render: (v, row) => `${v} (x${row.nbr_pieces})` },
+                {
+                  label: "Quantité par unité",
+                  key: "quantite",
+                  render: (v, row) => `${v} x${row.nbr_pieces}`,
+                },
+                {
+                  label: "Total unités",
+                  key: "quantite",
+                  render: (v, row) => `${v * row.nbr_pieces}`,
+                },
                 { label: "Seuil", key: "seuil" },
-                { label: "Valeur stock", key: "valeur", render: (_, row) => `${row.quantite * row.nbr_pieces * row.prix_gros} FCFA` },
-                { label: "Statut", key: "statut", render: (_, row) => {
+                {
+                  label: "Valeur stock",
+                  key: "valeur",
+                  render: (_, row) => `${(row.quantite * row.nbr_pieces * row.prix_gros).toLocaleString("fr-FR")} FCFA`,
+                },
+                {
+                  label: "Statut",
+                  key: "statut",
+                  render: (_, row) => {
                     const quantiteTotale = row.quantite * row.nbr_pieces;
-                    return quantiteTotale <= row.seuil ? (
-                      <span className="flex items-center gap-2 text-[#F58020] font-medium"><AlertTriangle size={16} /> Faible</span>
-                    ) : (
-                      <span className="text-green-600 font-medium">OK</span>
-                    );
-                  }
+                    if (quantiteTotale === 0) {
+                      return <span className="flex items-center gap-2 text-red-600 font-semibold"><AlertTriangle size={16} /> Épuisé</span>;
+                    } else if (quantiteTotale <= row.seuil) {
+                      return <span className="flex items-center gap-2 text-[#F58020] font-semibold"><AlertTriangle size={16} /> Faible</span>;
+                    } else {
+                      return <span className="text-green-600 font-semibold">OK</span>;
+                    }
+                  },
                 },
               ]}
               data={stocksFiltres}
               actions={[
-                { title: 'Voir', icon: <Eye size={16} />, color: "text-blue-600", hoverBg: "bg-gray-100", onClick: handleView },
-                { title: 'Supprimer', icon: <Trash2 size={16} />, hoverBg: "bg-gray-100", color: "text-red-600", onClick: (row) => supprimerProduit(row.id) },
+                {
+                  title: "Détails",
+                  icon: <Eye size={16} />,
+                  color: "text-blue-600",
+                  hoverBg: "bg-blue-50",
+                  onClick: handleView,
+                },
               ]}
               onRowClick={(row) => setProduitDetail(row)}
             />
@@ -130,20 +155,55 @@ const Stock = () => {
         {/* Modal Détails */}
         {produitDetail && (
           <div className="fixed inset-0 z-200 bg-black/40 bg-opacity-10 flex justify-center items-center">
-            <div className="relative z-50 bg-white w-[600px] rounded-lg shadow-lg p-6 space-y-4">
+            <div className="relative z-50 bg-white w-[650px] rounded-lg shadow-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
               <h3 className="text-xl font-bold text-[#111827]">Détails du produit</h3>
               <div className="grid grid-cols-2 gap-4 text-sm">
-                <p><span className="font-medium">Nom :</span> {produitDetail.nom}</p>
-                <p><span className="font-medium">Code :</span> {produitDetail.code}</p>
-                <p><span className="font-medium">Catégorie :</span> {produitDetail.categorie}</p>
-                <p><span className="font-medium">Fournisseur :</span> {produitDetail.fournisseur}</p>
-                <p><span className="font-medium">Quantité en stock :</span> {produitDetail.quantite}</p>
-                <p><span className="font-medium">Nombre de pièces :</span> {produitDetail.nbr_pieces}</p>
-                <p><span className="font-medium">Quantité totale :</span> {produitDetail.quantite * produitDetail.nbr_pieces}</p>
-                <p><span className="font-medium">Seuil d’alerte :</span> {produitDetail.seuil}</p>
-                <p><span className="font-medium">Prix gros :</span> {produitDetail.prix_gros} FCFA</p>
-                <p><span className="font-medium">Prix détail :</span> {produitDetail.prix_detail} FCFA</p>
-                <p><span className="font-medium">Valeur du stock :</span> {produitDetail.quantite * produitDetail.nbr_pieces * produitDetail.prix_gros} FCFA</p>
+                <div className="border-b pb-3">
+                  <p className="text-gray-600 font-medium">Nom</p>
+                  <p className="text-[#111827] font-semibold mt-1">{produitDetail.nom}</p>
+                </div>
+                <div className="border-b pb-3">
+                  <p className="text-gray-600 font-medium">Code</p>
+                  <p className="text-[#111827] font-semibold mt-1">{produitDetail.code}</p>
+                </div>
+                <div className="border-b pb-3">
+                  <p className="text-gray-600 font-medium">Catégorie</p>
+                  <p className="text-[#111827] font-semibold mt-1">{produitDetail.categorie}</p>
+                </div>
+                <div className="border-b pb-3">
+                  <p className="text-gray-600 font-medium">Fournisseur</p>
+                  <p className="text-[#111827] font-semibold mt-1">{produitDetail.fournisseur}</p>
+                </div>
+                <div className="border-b pb-3">
+                  <p className="text-gray-600 font-medium">Quantité (unités)</p>
+                  <p className="text-[#111827] font-semibold mt-1">{produitDetail.quantite}</p>
+                </div>
+                <div className="border-b pb-3">
+                  <p className="text-gray-600 font-medium">Nombre de pièces</p>
+                  <p className="text-[#111827] font-semibold mt-1">{produitDetail.nbr_pieces}</p>
+                </div>
+                <div className="border-b pb-3">
+                  <p className="text-gray-600 font-medium">Quantité totale</p>
+                  <p className="text-[#111827] font-semibold mt-1">{produitDetail.quantite * produitDetail.nbr_pieces}</p>
+                </div>
+                <div className="border-b pb-3">
+                  <p className="text-gray-600 font-medium">Seuil d'alerte</p>
+                  <p className="text-[#111827] font-semibold mt-1">{produitDetail.seuil}</p>
+                </div>
+                <div className="border-b pb-3">
+                  <p className="text-gray-600 font-medium">Prix gros</p>
+                  <p className="text-[#111827] font-semibold mt-1">{produitDetail.prix_gros.toLocaleString("fr-FR")} FCFA</p>
+                </div>
+                <div className="border-b pb-3">
+                  <p className="text-gray-600 font-medium">Prix détail</p>
+                  <p className="text-[#111827] font-semibold mt-1">{produitDetail.prix_detail.toLocaleString("fr-FR")} FCFA</p>
+                </div>
+                <div className="col-span-2 border-b pb-3">
+                  <p className="text-gray-600 font-medium">Valeur du stock</p>
+                  <p className="text-[#472EAD] font-bold text-lg mt-1">
+                    {(produitDetail.quantite * produitDetail.nbr_pieces * produitDetail.prix_gros).toLocaleString("fr-FR")} FCFA
+                  </p>
+                </div>
               </div>
               <div className="flex justify-end pt-4">
                 <button
@@ -156,7 +216,6 @@ const Stock = () => {
             </div>
           </div>
         )}
-
       </div>
     </div>
   );

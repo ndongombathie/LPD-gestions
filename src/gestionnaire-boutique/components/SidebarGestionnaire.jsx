@@ -20,9 +20,10 @@ export default function SidebarGestionnaire() {
     { name: "Tableau de bord", icon: LayoutDashboard, path: "/gestionnaire/dashboard" },
     { name: "Produits", icon: Package, path: "/gestionnaire/produits" },
     { name: "Stock", icon: ClipboardList, path: "/gestionnaire/stock" },
-    { name: "Transferts", icon: RefreshCw, path: "/gestionnaire/transferts" },
     { name: "Alertes", icon: AlertTriangle, path: "/gestionnaire/alertes" },
     { name: "Rapports", icon: FileText, path: "/gestionnaire/rapports" },
+    { name: "Historiques", icon: RefreshCw, path: "/gestionnaire/historique" },
+
   ];
 
   return (

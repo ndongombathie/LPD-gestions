@@ -1,82 +1,91 @@
 import React, { useState, useEffect } from "react";
-import { FileText } from "lucide-react";
+import { FileText, TrendingUp, Package, AlertTriangle } from "lucide-react";
 import DataTable from "../components/DataTable";
 import jsPDF from "jspdf";
+import * as api from "../services/apiMock";
 
 const CardStat = ({ title, value, color, subtitle }) => (
-  <div className={`rounded-lg shadow p-4 text-center ${color} text-white`}>
-    <h3 className="text-sm">{title}</h3>
-    <p className="text-xl font-bold">{value}</p>
-    {subtitle && <p className="text-xs opacity-90 mt-1">{subtitle}</p>}
+  <div className={`rounded-lg shadow p-4 text-left ${color} text-white`}>
+    <h3 className="text-xs uppercase tracking-wide text-white/90">{title}</h3>
+    <p className="text-2xl font-bold leading-tight mt-1">{value}</p>
+    {subtitle && <p className="text-xs opacity-85 mt-1">{subtitle}</p>}
   </div>
 );
 
 const Rapports = () => {
   const [periode, setPeriode] = useState("7");
   const [typeRapport, setTypeRapport] = useState("produits");
+  const [stocks, setStocks] = useState([]);
+  const [transferts, setTransferts] = useState([]);
+  const [historique, setHistorique] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [rapport, setRapport] = useState(null);
 
-  const formatNumber = (n) => n?.toLocaleString?.() ?? n;
-  // helper for number formatting
+  const formatNumber = (n) => n?.toLocaleString?.("fr-FR") ?? n;
 
-  // Load initial report when component mounts
   useEffect(() => {
-    genererRapport();
+    let mounted = true;
+    setLoading(true);
+    Promise.all([api.fetchStocks(), api.fetchTransferts(), api.fetchHistorique()]).then(([s, t, h]) => {
+      if (!mounted) return;
+      setStocks(s || []);
+      setTransferts(t || []);
+      setHistorique(h || []);
+      setLoading(false);
+    });
+    return () => (mounted = false);
   }, []);
 
-  // Génère un rapport mocké et structure les données pour affichage
+  // Recompute report whenever data or type changes
+  useEffect(() => {
+    genererRapport();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stocks, transferts, historique, typeRapport, periode]);
+
   const genererRapport = () => {
-    // mock products and stock data
+    if (!stocks.length && !transferts.length) {
+      setRapport(null);
+      return;
+    }
 
-    // Detailed products list (mocked) — used for table + PDF export
-    const products = Array.from({ length: 18 }, (_, idx) => {
-      const sold = Math.floor(20 + Math.random() * 200);
-      const price = Math.floor(500 + Math.random() * 50000);
-      const cost = Math.floor(price * (0.6 + Math.random() * 0.2));
-      const revenue = sold * price;
-      const margin = revenue - sold * cost;
-      return {
-        id: idx + 1,
-        sku: `PR${(1000 + idx).toString().padStart(4, "0")}`,
-        name: [`Savon OMO`, `Riz 50kg`, `Huile 5L`, `Sucre 25kg`, `Lait UHT`][idx % 5] + ` ${idx + 1}`,
-        category: ["Hygiène", "Alimentation", "Électronique"][idx % 3],
-        sold,
-        price,
-        cost,
-        revenue,
-        margin,
-        stock: Math.floor(Math.random() * 150),
-        seuil: 10 + Math.floor(Math.random() * 30),
-      };
-    });
+    const totalProduits = stocks.length;
+    const quantiteTotale = stocks.reduce((sum, s) => sum + (s.quantite * s.nbr_pieces), 0);
+    const valeurStock = stocks.reduce((sum, s) => sum + (s.quantite * s.nbr_pieces * (s.prix_gros || 0)), 0);
+    const produitsSousSeuil = stocks.filter((s) => s.quantite <= s.seuil);
+    const produitsEpuises = stocks.filter((s) => s.quantite === 0);
 
-    const categoryDistribution = [
-      { category: "Hygiène", value: 45 },
-      { category: "Alimentation", value: 35 },
-      { category: "Électronique", value: 20 },
-    ];
+    const totalTransferts = transferts.length;
+    const transfertsEnAttente = transferts.filter((t) => t.statut === "en_attente");
+    const transfertsValides = totalTransferts - transfertsEnAttente.length; // complément logique
+    const quantiteAttente = transfertsEnAttente.reduce((sum, t) => sum + (t.quantite || 0), 0);
+    const quantiteValide = transferts
+      .filter((t) => t.statut === "validé")
+      .reduce((sum, t) => sum + (t.quantite || 0), 0);
+
+    // Distribution catégories
+    const catMap = stocks.reduce((acc, s) => {
+      acc[s.categorie] = (acc[s.categorie] || 0) + 1;
+      return acc;
+    }, {});
+    const categoryDistribution = Object.entries(catMap).map(([category, count]) => ({
+      category,
+      value: Math.round((count / Math.max(totalProduits, 1)) * 100),
+    }));
 
     setRapport({
-      products,
-      topProducts: products.slice(0, 5),
+      totalProduits,
+      quantiteTotale,
+      valeurStock,
+      produitsSousSeuil,
+      produitsEpuises,
       categoryDistribution,
-      stockFaible: products.filter((p) => p.stock <= p.seuil).map((p) => p.name),
-      totalDemandes: 15,
-      demandesEnAttente: 5,
-      demandesValidees: 7,
-      demandesRejetees: 3,
-      produitsEnStock: products.reduce((s, p) => s + p.stock, 0),
-      produitsFaible: products.filter((p) => p.stock <= p.seuil).length,
-      produitsEpuises: products.filter((p) => p.stock === 0).length,
-      totalProducts: products.length,
+      totalTransferts,
+      transfertsEnAttente,
+      transfertsValides,
+      quantiteAttente,
+      quantiteValide,
     });
   };
-
-  
-
-  // per-row download removed (single export only)
-
-  
 
   const exportFullPDF = () => {
     if (!rapport) return;
@@ -84,51 +93,114 @@ const Rapports = () => {
     const margin = 40;
     let y = 60;
     doc.setFontSize(18);
-    doc.text("Rapport Produits & Stock — LPD Gestiones", margin, y);
-    y += 24;
+    doc.text("Rapport dynamique — LPD Gestion", margin, y);
+    y += 22;
     doc.setFontSize(12);
-    doc.text(`Total produits: ${formatNumber(rapport.totalProducts)}`, margin, y);
+    doc.text(`Période: ${periode} jours`, margin, y);
+    y += 16;
+    doc.text(`Total produits: ${formatNumber(rapport.totalProduits)}`, margin, y);
     y += 14;
-    doc.text(`Produits en stock (total unités): ${formatNumber(rapport.produitsEnStock)}`, margin, y);
+    doc.text(`Quantité totale: ${formatNumber(rapport.quantiteTotale)}`, margin, y);
     y += 14;
-    doc.text(`Produits sous seuil: ${formatNumber(rapport.produitsFaible)}`, margin, y);
+    doc.text(`Valeur stock estimée: ${formatNumber(rapport.valeurStock)} FCFA`, margin, y);
+    y += 14;
+    doc.text(`Transferts reçus: ${rapport.totalTransferts} (en attente: ${rapport.transfertsEnAttente.length}, validés: ${rapport.transfertsValides})`, margin, y);
     y += 18;
 
-    // Table header
     doc.setFontSize(11);
-    doc.text("#", margin, y);
-    doc.text("SKU", margin + 30, y);
-    doc.text("Produit", margin + 100, y);
-    doc.text("Catégorie", margin + 300, y);
-    doc.text("Stock", margin + 420, y);
-    doc.text("Seuil", margin + 480, y);
+    doc.text("Produits sous seuil", margin, y);
     y += 12;
-
-    // Rows
-    const rows = rapport.products || [];
-    rows.forEach((p, i) => {
-      if (y > 740) {
-        doc.addPage();
-        y = 60;
-      }
-      doc.text(String(i + 1), margin, y);
-      doc.text(p.sku || "", margin + 30, y);
-      doc.text(p.name || "", margin + 100, y);
-      doc.text(p.category || "", margin + 300, y);
-      doc.text(String(p.stock || 0), margin + 420, y);
-      doc.text(String(p.seuil || 0), margin + 480, y);
-      y += 14;
+    rapport.produitsSousSeuil.slice(0, 25).forEach((p, idx) => {
+      if (y > 740) { doc.addPage(); y = 60; }
+      doc.text(`${idx + 1}. ${p.nom} (${p.quantite * p.nbr_pieces} unités)`, margin, y);
+      y += 12;
     });
 
-    doc.save("rapport-produits-stock.pdf");
+    doc.save("rapport-dynamique.pdf");
   };
 
+  const tableData = () => {
+    if (!rapport) return { rows: [], columns: [] };
+    if (typeRapport === "transferts") {
+      return {
+        rows: transferts.map((t) => ({
+          id: t.id,
+          produit: t.nom,
+          code: t.code,
+          statut: t.statut,
+          quantite: t.quantite,
+          source: t.source,
+          date: t.dateValidation || t.dateCreation,
+        })),
+        columns: [
+          { label: "Produit", key: "produit" },
+          { label: "Code", key: "code" },
+          { label: "Quantité", key: "quantite" },
+          { label: "Source", key: "source" },
+          {
+            label: "Statut",
+            key: "statut",
+            render: (s) => (
+              <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                s === "validé" ? "bg-green-100 text-green-700" : "bg-[#FFF4E6] text-[#F58020]"
+              }`}>
+                {s}
+              </span>
+            ),
+          },
+          {
+            label: "Date",
+            key: "date",
+            render: (d) => d ? new Date(d).toLocaleDateString("fr-FR") : "-",
+          },
+        ],
+      };
+    }
+
+    // défaut: produits / stock
+    return {
+      rows: stocks.map((p) => ({
+        id: p.id,
+        nom: p.nom,
+        code: p.code,
+        categorie: p.categorie,
+        stockUnite: p.quantite,
+        totalUnites: p.quantite * p.nbr_pieces,
+        seuil: p.seuil,
+        valeur: p.quantite * p.nbr_pieces * (p.prix_gros || 0),
+      })),
+      columns: [
+        { label: "Produit", key: "nom" },
+        { label: "Code", key: "code" },
+        { label: "Catégorie", key: "categorie" },
+        { label: "Quantité / unité", key: "stockUnite" },
+        { label: "Total unités", key: "totalUnites" },
+        { label: "Seuil", key: "seuil" },
+        { label: "Valeur stock", key: "valeur", render: (v) => `${formatNumber(v)} FCFA` },
+      ],
+    };
+  };
+
+  const { rows, columns } = tableData();
 
   return (
     <div className="min-h-screen bg-gray-50">
-
-      <div className="px-6 space-y-6">
-        <h2 className="text-2xl font-bold text-[#111827]">Rapports & Statistiques</h2>
+      <div className="px-6 space-y-6 py-6">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h2 className="text-3xl font-bold text-[#111827]">Rapports & Statistiques</h2>
+            <p className="text-gray-600 text-sm">Données dynamiques basées sur vos stocks et transferts</p>
+          </div>
+          {rapport && (
+            <button
+              onClick={exportFullPDF}
+              className="inline-flex items-center gap-2 bg-[#111827] hover:bg-black text-white px-4 py-2 rounded-md text-sm shadow"
+            >
+              <FileText size={14} />
+              Exporter PDF
+            </button>
+          )}
+        </div>
 
         {/* Sélection de période et type */}
         <div className="bg-white p-4 rounded-lg shadow-md flex flex-wrap items-center justify-between gap-4">
@@ -153,9 +225,8 @@ const Rapports = () => {
                 value={typeRapport}
                 onChange={(e) => setTypeRapport(e.target.value)}
               >
-                <option value="produits">Produits</option>
-                <option value="reapprovisionnement">Réapprovisionnement</option>
-                <option value="stock">Stock</option>
+                <option value="produits">Produits / Stock</option>
+                <option value="transferts">Transferts</option>
               </select>
             </div>
 
@@ -166,114 +237,96 @@ const Rapports = () => {
                 className="inline-flex items-center gap-2 bg-[#472EAD] hover:bg-[#3b2594] text-white px-4 py-2 rounded-md text-sm shadow"
               >
                 <FileText size={16} />
-                <span>Générer</span>
+                <span>Actualiser</span>
               </button>
             </div>
-          </div>
-
-          <div className="ml-auto">
-            {rapport && (
-              <button
-                onClick={() => exportFullPDF()}
-                className="inline-flex items-center gap-2 bg-gray-900 hover:bg-gray-800 text-white px-4 py-2 rounded-md text-sm shadow"
-              >
-                <FileText size={14} />
-                <span>Exporter PDF</span>
-              </button>
-            )}
           </div>
         </div>
 
         {/* Statistiques principales */}
+        {!rapport && !loading && (
+          <div className="bg-white p-4 rounded-lg shadow text-gray-600 text-sm">Aucune donnée disponible.</div>
+        )}
+
         {rapport && (
-          <div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-              <CardStat title="Total produits" value={formatNumber(rapport.totalProducts)} color="bg-[#472EAD]" />
-              <CardStat title="Total unités en stock" value={formatNumber(rapport.produitsEnStock)} color="bg-green-600" subtitle={`${formatNumber(rapport.produitsFaible)} sous seuil`} />
-              <CardStat title="Produits sous seuil" value={formatNumber(rapport.produitsFaible)} color="bg-[#F58020]" />
-              <CardStat title="Produits épuisés" value={formatNumber(rapport.produitsEpuises)} color="bg-red-600" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {typeRapport === "transferts" ? (
+              <>
+                <CardStat title="Transferts reçus" value={formatNumber(rapport.totalTransferts)} color="bg-[#472EAD]" subtitle={`${formatNumber(rapport.quantiteAttente + rapport.quantiteValide)} unités`} />
+                <CardStat title="En attente" value={formatNumber(rapport.transfertsEnAttente.length)} color="bg-[#F58020]" subtitle={`${formatNumber(rapport.quantiteAttente)} unités`} />
+                <CardStat title="Validés" value={formatNumber(rapport.transfertsValides)} color="bg-green-600" subtitle={`${formatNumber(rapport.quantiteValide)} unités`} />
+                <CardStat title="Historique" value={formatNumber(historique.length)} color="bg-gray-800" subtitle="entrées journalisées" />
+              </>
+            ) : (
+              <>
+                <CardStat title="Total produits" value={formatNumber(rapport.totalProduits)} color="bg-[#472EAD]" />
+                <CardStat title="Quantité totale" value={formatNumber(rapport.quantiteTotale)} color="bg-indigo-600" subtitle="unités" />
+                <CardStat title="Sous seuil" value={formatNumber(rapport.produitsSousSeuil.length)} color="bg-[#F58020]" subtitle="à surveiller" />
+                <CardStat title="Valeur stock" value={`${formatNumber(rapport.valeurStock)} FCFA`} color="bg-gray-800" subtitle="estimée (prix gros)" />
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Compléments */}
+        {rapport && typeRapport === "produits" && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-white p-4 rounded shadow">
+              <h4 className="font-semibold mb-2">Répartition par catégorie</h4>
+              <ul className="space-y-2 text-sm">
+                {rapport.categoryDistribution.map((c) => (
+                  <li key={c.category} className="flex justify-between items-center">
+                    <span>{c.category}</span>
+                    <span className="font-semibold">{c.value}%</span>
+                  </li>
+                ))}
+              </ul>
             </div>
 
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-white p-4 rounded shadow">
-                <h4 className="font-semibold mb-2">Top catégories</h4>
-                <ul className="space-y-2">
-                  {rapport.categoryDistribution.map((c) => (
-                    <li key={c.category} className="flex justify-between items-center">
-                      <div className="text-sm">{c.category}</div>
-                      <div className="text-sm font-bold">{c.value}%</div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div className="bg-white p-4 rounded shadow">
-                <h4 className="font-semibold mb-2">Alertes stocks</h4>
+            <div className="bg-white p-4 rounded shadow">
+              <h4 className="font-semibold mb-2">Alertes stock</h4>
+              {rapport.produitsSousSeuil.length === 0 ? (
+                <p className="text-sm text-green-600">Aucune alerte</p>
+              ) : (
                 <ul className="text-sm space-y-1">
-                  {rapport.stockFaible.map((p) => (
-                    <li key={p} className="flex items-center justify-between">
-                      <span>{p}</span>
-                      <span className="text-[#F58020] font-semibold">Reappro</span>
+                  {rapport.produitsSousSeuil.slice(0, 6).map((p) => (
+                    <li key={p.id} className="flex items-center justify-between">
+                      <span>{p.nom}</span>
+                      <span className="text-[#F58020] font-semibold">{p.quantite * p.nbr_pieces} u</span>
                     </li>
                   ))}
                 </ul>
-              </div>
+              )}
+            </div>
 
-              <div className="bg-white p-4 rounded shadow flex items-center justify-center">
-                <h4 className="font-semibold">Rapport Produits & Stock</h4>
-              </div>
+            <div className="bg-white p-4 rounded shadow flex flex-col justify-center">
+              <h4 className="font-semibold mb-2 flex items-center gap-2"><TrendingUp size={18} /> Synthèse</h4>
+              <p className="text-sm text-gray-700">{formatNumber(rapport.quantiteTotale)} unités en stock pour {rapport.totalProduits} produits.</p>
+              <p className="text-sm text-gray-700 mt-1">{formatNumber(rapport.produitsSousSeuil.length)} produit(s) à surveiller.</p>
             </div>
           </div>
         )}
 
-        {/* Tableau détaillé du rapport */}
+        {rapport && typeRapport === "transferts" && (
+          <div className="bg-white p-4 rounded shadow grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <h4 className="font-semibold mb-2 flex items-center gap-2"><Package size={18} /> Volumétrie</h4>
+              <p className="text-sm text-gray-700">Quantité en attente: <span className="font-semibold">{formatNumber(rapport.quantiteAttente)} u</span></p>
+              <p className="text-sm text-gray-700">Quantité validée: <span className="font-semibold">{formatNumber(rapport.quantiteValide)} u</span></p>
+            </div>
+            <div>
+              <h4 className="font-semibold mb-2 flex items-center gap-2"><AlertTriangle size={18} /> Points de contrôle</h4>
+              <p className="text-sm text-gray-700">En attente: {rapport.transfertsEnAttente.length} transfert(s)</p>
+              <p className="text-sm text-gray-700">Validés: {rapport.transfertsValides}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Tableau détaillé */}
         {rapport && (
           <div className="mt-6">
             <h3 className="text-lg font-semibold mb-3">Détails</h3>
-
-            <DataTable
-              data={
-                typeRapport === "produits"
-                  ? (rapport.products || []).map((p, i) => ({
-                      id: p.id,
-                      rank: i + 1,
-                      name: p.name,
-                      sku: p.sku,
-                      category: p.category,
-                      ventes: p.sold,
-                      ca: p.revenue,
-                      coût: p.cost,
-                      marge: p.margin,
-                      stock: p.stock,
-                      seuil: p.seuil,
-                    }))
-                  : typeRapport === "stock"
-                  ? (rapport.products || []).filter((p) => p.stock <= p.seuil).map((p) => ({ id: p.id, name: p.name, stock: p.stock, seuil: p.seuil }))
-                  : []
-              }
-              columns={
-                typeRapport === "produits"
-                  ? [
-                      { label: "#", key: "rank" },
-                      { label: "Produit", key: "name" },
-                      { label: "SKU", key: "sku" },
-                      { label: "Catégorie", key: "category" },
-                      { label: "Stock", key: "stock" },
-                      { label: "Seuil", key: "seuil" },
-                    ]
-                  : [
-                      { label: "#", key: "id" },
-                      { label: "Produit", key: "name" },
-                      { label: "Stock", key: "stock" },
-                      { label: "Seuil", key: "seuil" },
-                    ]
-              }
-              actions={
-                typeRapport === "produits"
-                  ? []
-                  : []
-              }
-            />
+            <DataTable data={rows} columns={columns} />
           </div>
         )}
       </div>

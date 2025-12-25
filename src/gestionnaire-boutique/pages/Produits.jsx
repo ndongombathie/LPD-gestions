@@ -1,363 +1,275 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Edit, Trash2, AlertTriangle, Search, CheckCircle2, AlertCircle } from "lucide-react";
-import Navbar from "../components/Navbar";
+import { Eye, Check, AlertCircle, CheckCircle2, AlertTriangle } from "lucide-react";
 import DataTable from "../components/DataTable";
 import LoadingSpinner from "../components/LoadingSpinner";
+import EmptyState from "../components/EmptyState";
 import * as api from "../services/apiMock";
 
 const Produits = () => {
-  const [produits, setProduits] = useState([]);
+  const [transferts, setTransferts] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  // Local toasts pour notifications (succès/erreur)
   const [toasts, setToasts] = useState([]);
+  
+  const [selectedTransfert, setSelectedTransfert] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [formData, setFormData] = useState({
+    code_barre: "",
+    prix_vente: "",
+    prix_gros: "",
+    prix_detail: "",
+  });
+
   const addToast = (type, title, message) => {
     const id = Date.now() + Math.random();
     setToasts((t) => [...t, { id, type, title, message }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3500);
-  };
-
-  const [recherche, setRecherche] = useState("");
-  const [editId, setEditId] = useState(null);
-  const [showModal, setShowModal] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(null);
-
-  const [formData, setFormData] = useState({
-    nom: "",
-    code: "",
-    code_barre: "",
-    categorie: "",
-    prix_vente: "",
-    prix_basique: "",
-    prix_seuil: "",
-    prix_gros: "",
-    prix_gros_basique: "",
-    prix_gros_seuil: "",
-    quantite: "",
-    nbr_paquets: "",
-  });
-
-  const produitsFiltres = produits.filter(
-    (p) =>
-      p.nom.toLowerCase().includes(recherche.toLowerCase()) ||
-      p.code.toLowerCase().includes(recherche.toLowerCase())
-  );
-
-  const ouvrirAjout = () => {
-    setFormData({
-      nom: "",
-      code: "",
-      code_barre: "",
-      categorie: "",
-      nbr_pieces: "",
-      prix_basique: "",
-      prix_seuil: "",
-      prix_gros: "",
-      prix_gros_basique: "",
-      prix_gros_seuil: "",
-      quantite: "",
-      nbr_paquets: "",
-    });
-    setEditId(null);
-    setShowModal(true);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4000);
   };
 
   useEffect(() => {
     let mounted = true;
     setLoading(true);
-    api.fetchProducts()
+    api.fetchTransferts()
       .then((res) => {
         if (!mounted) return;
-        setProduits(res || []);
+        setTransferts(res || []);
       })
       .catch((err) => {
         console.error(err);
-        addToast("error", "Erreur", "Impossible de charger les produits.");
+        addToast("error", "Erreur", "Impossible de charger les transferts.");
       })
       .finally(() => mounted && setLoading(false));
-
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, []);
 
-  const modifierProduit = (id) => {
-    const prod = produits.find((p) => p.id === id);
-    setFormData(prod);
-    setEditId(id);
+  const transfertsPending = transferts.filter((t) => t.statut === "en_attente");
+  const transfertsValidated = transferts.filter((t) => t.statut === "validé");
+
+  const openCompletionModal = (transfert) => {
+    setSelectedTransfert(transfert);
+    setFormData({
+      code_barre: "",
+      prix_vente: "",
+      prix_gros: "900",
+      prix_detail: "1000",
+    });
     setShowModal(true);
   };
 
-  const enregistrerProduit = () => {
-    // validations simples
-    if (!formData.nom || !formData.code) {
-      addToast("error", "Champs manquants", "Le nom et le code sont requis.");
-      return;
-    }
-
-    const quantiteNum = parseInt(formData.quantite || 0, 10);
-    if (Number.isNaN(quantiteNum) || quantiteNum < 0) {
-      addToast("error", "Quantité invalide", "Entrez un nombre valide pour la quantité.");
+  const completeTransfert = async () => {
+    if (!formData.code_barre || !formData.prix_vente) {
+      addToast("error", "Champs manquants", "Le code barre et les prix sont requis.");
       return;
     }
 
     const payload = {
-      nom: formData.nom,
-      code: formData.code,
-      code_barre: formData.code_barre || "",
-      categorie: formData.categorie || "",
+      code_barre: formData.code_barre,
       prix_vente: parseInt(formData.prix_vente || 0, 10),
-      quantite: quantiteNum,
-      prix_seuil: parseInt(formData.prix_seuil || 0, 10),
+      prix_gros: parseInt(formData.prix_gros || 0, 10),
+      prix_detail: parseInt(formData.prix_detail || 0, 10),
+      seuil: 5,
     };
 
     setLoading(true);
-
-    if (editId) {
-      api.updateProduct(editId, payload)
-        .then((updated) => {
-          setProduits((prev) => prev.map((p) => (p.id === editId ? updated || p : p)));
-          addToast("success", "Produit mis à jour", "Le produit a été modifié.");
-          setShowModal(false);
-        })
-        .catch((err) => {
-          console.error(err);
-          addToast("error", "Erreur", "Impossible de mettre à jour le produit.");
-        })
-        .finally(() => setLoading(false));
-    } else {
-      api.addProduct(payload)
-        .then((newProd) => {
-          setProduits((prev) => [newProd, ...prev]);
-          addToast("success", "Produit ajouté", "Nouveau produit ajouté à la liste.");
-          setShowModal(false);
-        })
-        .catch((err) => {
-          console.error(err);
-          addToast("error", "Erreur", "Impossible d'ajouter le produit.");
-        })
-        .finally(() => setLoading(false));
+    try {
+      const result = await api.validateTransfert(selectedTransfert.id, payload);
+      if (result.ok) {
+        // Update local state
+        setTransferts((prev) =>
+          prev.map((t) => (t.id === selectedTransfert.id ? { ...t, statut: "validé", dateValidation: new Date().toISOString() } : t))
+        );
+        addToast("success", "Produit complété", `${selectedTransfert.nom} a été validé et ajouté au stock.`);
+        setShowModal(false);
+        setSelectedTransfert(null);
+      } else {
+        addToast("error", "Erreur", result.error || "Impossible de valider le transfert.");
+      }
+    } catch (err) {
+      console.error(err);
+      addToast("error", "Erreur", "Une erreur est survenue.");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const supprimerProduit = () => {
-    setLoading(true);
-    api.deleteProduct(confirmDelete)
-      .then(() => {
-        setProduits((prev) => prev.filter((p) => p.id !== confirmDelete));
-        addToast("success", "Supprimé", "Produit supprimé.");
-        setConfirmDelete(null);
-      })
-      .catch((err) => {
-        console.error(err);
-        addToast("error", "Erreur", "Impossible de supprimer le produit.");
-      })
-      .finally(() => setLoading(false));
-  };
-
   return (
-  <div className="min-h-screen bg-gray-50 overflow-y-auto scrollbar-hide">
+    <div className="min-h-screen bg-gray-50 overflow-y-auto">
+      <div className="px-6 space-y-6 py-6">
+        <div className="flex justify-between items-center">
+          <h2 className="text-3xl font-bold text-[#111827]">Réception et Complétion des Produits</h2>
+        </div>
 
-    {/* Contenu principal défilable */}
-    <div className="px-6 space-y-6">
-      <div className="flex justify-between items-center flex-wrap gap-4">
-  <h2 className="text-2xl font-bold text-[#111827]">
-    Gestion des Produits
-  </h2>
+        {/* Transferts en attente */}
+        <div>
+          <div className="flex items-center gap-2 mb-4">
+            <AlertTriangle className="text-[#F58020]" size={24} />
+            <h3 className="text-xl font-semibold text-[#111827]">En attente de complétion ({transfertsPending.length})</h3>
+          </div>
+          <div className="bg-white rounded-lg shadow p-4 overflow-auto">
+            {loading ? (
+              <LoadingSpinner />
+            ) : transfertsPending.length === 0 ? (
+              <EmptyState message="Aucun transfert en attente" />
+            ) : (
+              <DataTable
+                columns={[
+                  { label: "Produit", key: "nom" },
+                  { label: "Code", key: "code" },
+                  { label: "Catégorie", key: "categorie" },
+                  { label: "Quantité reçue", key: "quantite" },
+                  { label: "Source", key: "source" },
+                  { label: "Date réception", key: "dateCreation", render: (d) => new Date(d).toLocaleDateString("fr-FR") },
+                ]}
+                data={transfertsPending}
+                actions={[
+                  {
+                    title: "Compléter",
+                    icon: <Check size={16} />,
+                    color: "text-green-600",
+                    hoverBg: "bg-green-50",
+                    onClick: openCompletionModal,
+                  },
+                ]}
+              />
+            )}
+          </div>
+        </div>
 
-  <div className="flex items-center gap-4">
-    {/* Barre de recherche */}
-    <div className="relative">
-      <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
-      <input
-        type="text"
-        placeholder="Rechercher..."
-        className="pl-10 pr-3 py-2 border rounded-lg"
-        value={recherche}
-        onChange={(e) => setRecherche(e.target.value)}
-      />
-    </div>
+        {/* Transferts validés */}
+        <div>
+          <div className="flex items-center gap-2 mb-4">
+            <CheckCircle2 className="text-green-600" size={24} />
+            <h3 className="text-xl font-semibold text-[#111827]">Complétés et validés ({transfertsValidated.length})</h3>
+          </div>
+          <div className="bg-white rounded-lg shadow p-4 overflow-auto">
+            {transfertsValidated.length === 0 ? (
+              <EmptyState message="Aucun produit complété" />
+            ) : (
+              <DataTable
+                columns={[
+                  { label: "Produit", key: "nom" },
+                  { label: "Code", key: "code" },
+                  { label: "Catégorie", key: "categorie" },
+                  { label: "Quantité", key: "quantite" },
+                  { label: "Date validation", key: "dateValidation", render: (d) => new Date(d).toLocaleDateString("fr-FR") },
+                ]}
+                data={transfertsValidated}
+                actions={[
+                  {
+                    title: "Voir détails",
+                    icon: <Eye size={16} />,
+                    color: "text-blue-600",
+                    hoverBg: "bg-blue-50",
+                    onClick: (row) => {},
+                  },
+                ]}
+              />
+            )}
+          </div>
+        </div>
 
-    {/* Filtre par catégorie */}
-    <div className="relative">
-      <label htmlFor="categorieFilter" className="sr-only">Filtrer par catégorie</label>
-      <select
-        id="categorieFilter"
-        className="border rounded-lg py-2 px-3 pr-10 appearance-none"
-        value={formData.categorie}
-        onChange={(e) => setFormData({ ...formData, categorie: e.target.value })}
-      >
-        <option value="">Toutes les catégories</option>
-        <option value="Hygiène">Hygiène</option>
-        <option value="Alimentation">Alimentation</option>
-        <option value="Électronique">Électronique</option>
-
-      </select>
-      <svg
-        className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-gray-400"
-        xmlns="http://www.w3.org/2000/svg"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-      >
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-      </svg>
-    </div>
-
-    {/* Bouton Nouveau Produit */}
-    <button
-      onClick={ouvrirAjout}
-      className="bg-[#472EAD] text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-[#3b2594]"
-    >
-      <Plus size={18} /> Nouveau Produit
-    </button>
-  </div>
-</div>
-
-
-      {/* Tableau produits (DataTable réutilisable) */}
-      <div className="bg-white rounded-lg shadow p-4 overflow-x-auto scrollbar-hide">
-        {loading ? (
-          <LoadingSpinner />
-        ) : (
-          <DataTable
-            data={produitsFiltres}
-            columns={[
-              { label: "Nom", key: "nom" },
-              { label: "Code", key: "code" },
-              { label: "Catégorie", key: "categorie" },
-              {
-                label: "Prix vente",
-                key: "prix_vente",
-                render: (val) => `${val} FCFA`,
-              },
-              {
-                label: "Quantité",
-                key: "quantite",
-                render: (val, row) => (
-                  <div className="flex items-center gap-2">
-                    <span>{val}</span>
-                    {val <= row.prix_seuil && (
-                      <AlertTriangle className="text-[#F58020]" size={16} />
-                    )}
-                  </div>
-                ),
-              },
-            ]}
-            actions={[
-              {
-                title: "Modifier",
-                icon: <Edit size={16} />,
-                onClick: (row) => modifierProduit(row.id),
-                hoverBg: "bg-gray-100",
-                color: "text-blue-600",
-              },
-              {
-                title: "Supprimer",
-                icon: <Trash2 size={16} />,
-                onClick: (row) => setConfirmDelete(row.id),
-                hoverBg: "bg-gray-100",
-                color: "text-red-600",
-              },
-            ]}
-          />
-        )}
-      </div>
-
-      {/* Toasts locaux */}
-      <div className="fixed top-4 right-4 z-9999 space-y-3">
-        {toasts.map((t) => {
-          const border = t.type === "success" ? "border-l-4 border-emerald-500" : "border-l-4 border-rose-500";
-          const Icon = t.type === "success" ? CheckCircle2 : AlertCircle;
-          return (
-            <div key={t.id} className={`${border} bg-white text-gray-900 px-4 py-3 rounded-lg shadow-md w-80 flex gap-3 items-start`}>
-              <div className="mt-0.5"><Icon size={18} className={t.type === 'success' ? 'text-emerald-500' : 'text-rose-500'} /></div>
-              <div className="flex-1">
-                <div className="font-semibold text-sm">{t.title}</div>
-                {t.message && <div className="text-xs opacity-90 mt-0.5">{t.message}</div>}
+        {/* Modal de complétion */}
+        {showModal && selectedTransfert && (
+          <div className="fixed inset-0 z-200 bg-black/40 bg-opacity-10 flex items-center justify-center">
+            <div className="relative z-50 bg-white p-6 rounded-lg w-[600px] shadow-xl space-y-6 max-h-[90vh] overflow-y-auto">
+              <h3 className="text-xl font-bold text-[#111827]">Compléter le produit</h3>
+              
+              {/* Infos pré-remplies du transfert */}
+              <div className="bg-gray-50 rounded p-4 space-y-2 border-l-4 border-[#472EAD]">
+                <p><span className="font-semibold">Produit:</span> {selectedTransfert.nom}</p>
+                <p><span className="font-semibold">Code:</span> {selectedTransfert.code}</p>
+                <p><span className="font-semibold">Catégorie:</span> {selectedTransfert.categorie}</p>
+                <p><span className="font-semibold">Quantité reçue:</span> {selectedTransfert.quantite} unités</p>
+                <p><span className="font-semibold">Source:</span> {selectedTransfert.source}</p>
               </div>
-            </div>
-          );
-        })}
-      </div>
 
-      {/* Modals (inchangés) */}
-      {showModal && (
-        <div className="fixed inset-0 z-200 bg-black/40 bg-opacity-10 flex items-center justify-center">
-          <div className="relative z-50 bg-white p-6 rounded-lg w-[700px] shadow-xl space-y-6">
-            <h3 className="text-xl font-bold text-[#111827]">
-              {editId ? "Modifier le produit" : "Ajouter un produit"}
-            </h3>
-            <div className="grid grid-cols-2 gap-4">
-              {Object.entries({
-                nom: "Nom",
-                code_barre: "Code barre",
-                categorie: "Catégorie",
-                quantite: "Quantités",
-                nbr_pieces: "Nombre de pièces",
-                prix_seuil_detail: "Prix Seuil (Détail)",
-                prix_seuil_gros: "Prix Seuil (Gros)",
-                prix_seuil: "Prix normal en détail (FCFA)",
-                prix_gros: "Prix normal en gros (FCFA)",
-              }).map(([key, label]) => (
-                <div key={key} className="flex flex-col">
-                  <label className="text-sm font-medium text-[#111827] mb-1">
-                    {label}
-                  </label>
+              {/* Formulaire de complétion */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-[#111827] mb-1">Code Barre *</label>
                   <input
                     type="text"
-                    className="border p-2 rounded focus:outline-none focus:ring-2 focus:ring-[#472EAD]"
-                    value={formData[key]}
-                    onChange={(e) =>
-                      setFormData({ ...formData, [key]: e.target.value })
-                    }
+                    className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-[#472EAD]"
+                    value={formData.code_barre}
+                    onChange={(e) => setFormData({ ...formData, code_barre: e.target.value })}
+                    placeholder="Ex: 123456789"
                   />
                 </div>
-              ))}
-            </div>
-            <div className="flex justify-end gap-3 pt-4">
-              <button
-                onClick={() => setShowModal(false)}
-                className="px-4 py-2 rounded border"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={enregistrerProduit}
-                className="px-4 py-2 rounded bg-[#472EAD] text-white"
-              >
-                {editId ? "Enregistrer" : "Ajouter"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {confirmDelete && (
-        <div className="fixed inset-0 z-200 bg-black/40 bg-opacity-10 flex items-center justify-center">
-          <div className="relative z-50 bg-white p-6 rounded-lg shadow-lg text-center space-y-4">
-            <AlertTriangle className="text-[#F58020] mx-auto" size={40} />
-            <p>Voulez-vous vraiment supprimer ce produit ?</p>
-            <div className="flex justify-center gap-4">
-              <button
-                onClick={() => setConfirmDelete(null)}
-                className="px-4 py-2 border rounded"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={supprimerProduit}
-                className="px-4 py-2 bg-red-600 text-white rounded"
-              >
-                Supprimer
-              </button>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-[#111827] mb-1">Prix de vente (FCFA) *</label>
+                    <input
+                      type="number"
+                      className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-[#472EAD]"
+                      value={formData.prix_vente}
+                      onChange={(e) => setFormData({ ...formData, prix_vente: e.target.value })}
+                      placeholder="1000"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-[#111827] mb-1">Prix gros (FCFA)</label>
+                    <input
+                      type="number"
+                      className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-[#472EAD]"
+                      value={formData.prix_gros}
+                      onChange={(e) => setFormData({ ...formData, prix_gros: e.target.value })}
+                      placeholder="900"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-[#111827] mb-1">Prix détail (FCFA)</label>
+                    <input
+                      type="number"
+                      className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-[#472EAD]"
+                      value={formData.prix_detail}
+                      onChange={(e) => setFormData({ ...formData, prix_detail: e.target.value })}
+                      placeholder="1000"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
+                <button
+                  onClick={() => {
+                    setShowModal(false);
+                    setSelectedTransfert(null);
+                  }}
+                  className="px-4 py-2 border rounded hover:bg-gray-50"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={completeTransfert}
+                  disabled={loading}
+                  className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                >
+                  Valider et ajouter au stock
+                </button>
+              </div>
             </div>
           </div>
+        )}
+
+        {/* Toasts */}
+        <div className="fixed top-4 right-4 z-9999 space-y-3">
+          {toasts.map((t) => {
+            const border = t.type === "success" ? "border-l-4 border-emerald-500" : "border-l-4 border-rose-500";
+            const Icon = t.type === "success" ? CheckCircle2 : AlertCircle;
+            return (
+              <div key={t.id} className={`${border} bg-white text-gray-900 px-4 py-3 rounded-lg shadow-md w-80 flex gap-3 items-start`}>
+                <Icon size={18} className={t.type === 'success' ? 'text-emerald-500' : 'text-rose-500'} />
+                <div className="flex-1">
+                  <div className="font-semibold text-sm">{t.title}</div>
+                  {t.message && <div className="text-xs opacity-90 mt-0.5">{t.message}</div>}
+                </div>
+              </div>
+            );
+          })}
         </div>
-      )}
+      </div>
     </div>
-  </div>
-);
+  );
 };
 
 export default Produits;
