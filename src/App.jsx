@@ -1,17 +1,16 @@
-// App.jsx
-import React from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import Connexion from "./authentification/login/Connexion";          // adapte le chemin
-import VendeurInterface from "./vendeur/VendeurInterface"; // adapte le chemin
+import React from 'react';
+import VendeurInterface from './components/VendeurInterface';
+import Connexion from './components/Connexion';
+import './App.css';
 
-export default function App() {
+
+function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Connexion />} />
-        <Route path="/login" element={<Connexion />} />
-        <Route path="/vendeur" element={<VendeurInterface />} />
-      </Routes>
-    </Router>
+    <div className="App">
+      <VendeurInterface />
+      {/* <Connexion /> */}
+    </div>
   );
 }
+
+export default App;
