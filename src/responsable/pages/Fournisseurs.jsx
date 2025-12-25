@@ -1,6 +1,6 @@
 // ==========================================================
 // 🚚 Fournisseurs.jsx — Interface Responsable (LPD Manager)
-// Version PRO harmonisée avec Utilisateurs & ClientsSpéciaux + Toasts intégrés
+// Version PRO harmonisée + API Laravel (/api/fournisseurs)
 // ==========================================================
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -16,9 +16,13 @@ import {
   CheckCircle2,
   AlertCircle,
   X,
+  Eye,
+  Phone,
+  Package,
 } from "lucide-react";
 import FormModal from "../components/FormModal.jsx";
 import DataTable from "../components/DataTable.jsx";
+import { instance } from "../../utils/axios"; // 🔗 Axios connecté à Laravel
 
 const cls = (...a) => a.filter(Boolean).join(" ");
 
@@ -36,10 +40,10 @@ function Toasts({ toasts, remove }) {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 20 }}
             className={cls(
-              "min-w-[280px] max-w-[360px] rounded-xl border shadow-lg px-4 py-3 flex items-start gap-3",
+              "min-w-[280px] max-w-[360px] rounded-xl border shadow-lg px-4 py-3 flex items-start gap-3 backdrop-blur-sm",
               t.type === "success"
-                ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-                : "bg-rose-50 border-rose-200 text-rose-800"
+                ? "bg-emerald-50/95 border-emerald-200 text-emerald-800"
+                : "bg-rose-50/95 border-rose-200 text-rose-800"
             )}
           >
             <div className="pt-0.5">
@@ -52,7 +56,9 @@ function Toasts({ toasts, remove }) {
             <div className="flex-1">
               <div className="font-semibold text-sm">{t.title}</div>
               {t.message && (
-                <div className="text-xs mt-0.5 opacity-90">{t.message}</div>
+                <div className="text-xs mt-0.5 opacity-90">
+                  {t.message}
+                </div>
               )}
             </div>
             <button
@@ -115,10 +121,10 @@ function FournisseurForm({ initial, onSubmit, onCancel, submitting }) {
   };
 
   const base = (err) =>
-    `mt-1 w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 transition ${
+    `mt-1 w-full rounded-xl border px-3 py-2.5 text-sm bg-white focus:ring-2 transition shadow-sm ${
       err
         ? "border-rose-500 focus:ring-rose-200"
-        : "border-black focus:ring-[#472EAD]/30 focus:border-[#472EAD]"
+        : "border-gray-300 focus:ring-[#472EAD]/30 focus:border-[#472EAD]"
     }`;
 
   return (
@@ -136,7 +142,9 @@ function FournisseurForm({ initial, onSubmit, onCancel, submitting }) {
             className={base(errors.nom)}
             required
           />
-          {errors.nom && <p className="text-xs text-rose-600 mt-1">{errors.nom}</p>}
+          {errors.nom && (
+            <p className="text-xs text-rose-600 mt-1">{errors.nom}</p>
+          )}
         </div>
 
         {/* Contact */}
@@ -154,7 +162,9 @@ function FournisseurForm({ initial, onSubmit, onCancel, submitting }) {
             className={base(errors.contact)}
             required
           />
-          {errors.contact && <p className="text-xs text-rose-600 mt-1">{errors.contact}</p>}
+          {errors.contact && (
+            <p className="text-xs text-rose-600 mt-1">{errors.contact}</p>
+          )}
         </div>
 
         {/* Adresse */}
@@ -169,7 +179,9 @@ function FournisseurForm({ initial, onSubmit, onCancel, submitting }) {
             className={base(errors.adresse)}
             required
           />
-          {errors.adresse && <p className="text-xs text-rose-600 mt-1">{errors.adresse}</p>}
+          {errors.adresse && (
+            <p className="text-xs text-rose-600 mt-1">{errors.adresse}</p>
+          )}
         </div>
 
         {/* Type de produits */}
@@ -185,7 +197,9 @@ function FournisseurForm({ initial, onSubmit, onCancel, submitting }) {
             required
           />
           {errors.typeProduit && (
-            <p className="text-xs text-rose-600 mt-1">{errors.typeProduit}</p>
+            <p className="text-xs text-rose-600 mt-1">
+              {errors.typeProduit}
+            </p>
           )}
         </div>
 
@@ -201,7 +215,9 @@ function FournisseurForm({ initial, onSubmit, onCancel, submitting }) {
             className={base(errors.derniereLivraison)}
           />
           {errors.derniereLivraison && (
-            <p className="text-xs text-rose-600 mt-1">{errors.derniereLivraison}</p>
+            <p className="text-xs text-rose-600 mt-1">
+              {errors.derniereLivraison}
+            </p>
           )}
         </div>
       </div>
@@ -211,7 +227,7 @@ function FournisseurForm({ initial, onSubmit, onCancel, submitting }) {
         <button
           type="button"
           onClick={onCancel}
-          className="px-4 py-2 rounded-lg border border-black text-sm hover:bg-gray-50"
+          className="px-4 py-2.5 rounded-lg border border-gray-300 bg-white text-sm hover:bg-gray-50 shadow-sm"
         >
           Annuler
         </button>
@@ -219,11 +235,15 @@ function FournisseurForm({ initial, onSubmit, onCancel, submitting }) {
           type="submit"
           disabled={submitting}
           className={cls(
-            "px-4 py-2 rounded-lg text-sm text-white bg-[#472EAD] hover:opacity-95",
+            "px-4 py-2.5 rounded-lg text-sm text-white bg-gradient-to-r from-[#472EAD] to-[#6A4DF5] hover:shadow-md hover:scale-[1.01] active:scale-[0.98] transition",
             submitting && "opacity-70 cursor-not-allowed"
           )}
         >
-          {submitting ? "Enregistrement..." : initial ? "Mettre à jour" : "Enregistrer"}
+          {submitting
+            ? "Enregistrement..."
+            : initial
+            ? "Mettre à jour"
+            : "Enregistrer"}
         </button>
       </div>
     </form>
@@ -242,220 +262,530 @@ export default function Fournisseurs() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [toasts, setToasts] = useState([]);
+  const [selectedFournisseur, setSelectedFournisseur] = useState(null);
+
+  const removeToast = (id) =>
+    setToasts((t) => t.filter((x) => x.id !== id));
 
   const toast = (type, title, message) => {
     const id = Date.now();
     setToasts((t) => [...t, { id, type, title, message }]);
     setTimeout(() => removeToast(id), 4000);
   };
-  const removeToast = (id) => setToasts((t) => t.filter((x) => x.id !== id));
 
+  // 🔗 Chargement depuis l'API Laravel
   useEffect(() => {
-    const simulated = [
-      {
-        id: 1,
-        nom: "SEN DISTRIBUTION",
-        contact: "774567890",
-        adresse: "Dakar Plateau",
-        typeProduit: "Papeterie & Scolaire",
-        derniereLivraison: "2025-10-12",
-      },
-      {
-        id: 2,
-        nom: "Imprisol SARL",
-        contact: "789876543",
-        adresse: "Thiès",
-        typeProduit: "Imprimés & Papier A4",
-        derniereLivraison: "",
-      },
-      {
-        id: 3,
-        nom: "Fournil Office",
-        contact: "761234567",
-        adresse: "Mbour",
-        typeProduit: "Stylos et Marqueurs",
-        derniereLivraison: "2025-09-22",
-      },
-    ];
-    setTimeout(() => {
-      setFournisseurs(simulated);
-      setLoading(false);
-    }, 600);
+    const fetchFournisseurs = async () => {
+      try {
+        setLoading(true);
+        const { data } = await instance.get("/fournisseurs");
+        const raw = Array.isArray(data) ? data : data.data || [];
+
+        const normalized = raw.map((f) => ({
+          id: f.id,
+          nom: f.nom || "",
+          contact: f.contact || "",
+          adresse: f.adresse || "",
+          typeProduit: f.type_produit || "",
+          derniereLivraison: f.derniere_livraison || "",
+          totalAchats: f.total_achats ?? 0,
+        }));
+
+        setFournisseurs(normalized);
+      } catch (err) {
+        console.error("Erreur chargement fournisseurs :", err);
+        toast(
+          "error",
+          "Erreur",
+          "Impossible de charger la liste des fournisseurs."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchFournisseurs();
   }, []);
 
-  // ✅ correction : définition de filtered
+  // Stats rapides
+  const stats = useMemo(() => {
+    const total = fournisseurs.length;
+    const avecLivraison = fournisseurs.filter(
+      (f) => !!f.derniereLivraison
+    ).length;
+    return { total, avecLivraison };
+  }, [fournisseurs]);
+
+  // Filtre recherche
   const filtered = useMemo(() => {
     const q = searchTerm.toLowerCase();
-    return fournisseurs.filter(
-      (f) =>
-        f.nom.toLowerCase().includes(q) ||
-        f.contact.toLowerCase().includes(q) ||
-        f.adresse.toLowerCase().includes(q) ||
-        f.typeProduit.toLowerCase().includes(q)
-    );
+    return fournisseurs.filter((f) => {
+      const nom = (f.nom || "").toLowerCase();
+      const contact = String(f.contact || "").toLowerCase();
+      const adresse = (f.adresse || "").toLowerCase();
+      const typeProd = (f.typeProduit || "").toLowerCase();
+      return (
+        nom.includes(q) ||
+        contact.includes(q) ||
+        adresse.includes(q) ||
+        typeProd.includes(q)
+      );
+    });
   }, [fournisseurs, searchTerm]);
 
-  const handleAdd = (form) => {
-    setSubmitting(true);
-    setFournisseurs((p) => [{ id: Date.now(), ...form }, ...p]);
-    toast("success", "Fournisseur ajouté", `${form.nom} a été ajouté avec succès.`);
-    setSubmitting(false);
-    setOpenAdd(false);
+  // ➕ Ajout (POST /api/fournisseurs)
+  const handleAdd = async (form) => {
+    try {
+      setSubmitting(true);
+
+      const payload = {
+        nom: form.nom,
+        contact: form.contact,
+        adresse: form.adresse,
+        type_produit: form.typeProduit,
+        derniere_livraison: form.derniereLivraison || null,
+      };
+
+      const { data } = await instance.post("/fournisseurs", payload);
+
+      const newF = {
+        id: data.id,
+        nom: data.nom || "",
+        contact: data.contact || "",
+        adresse: data.adresse || "",
+        typeProduit: data.type_produit || "",
+        derniereLivraison: data.derniere_livraison || "",
+        totalAchats: data.total_achats ?? 0,
+      };
+
+      setFournisseurs((prev) => [newF, ...prev]);
+      toast(
+        "success",
+        "Fournisseur ajouté",
+        `${newF.nom} a été ajouté avec succès.`
+      );
+      setOpenAdd(false);
+    } catch (err) {
+      console.error("Erreur ajout fournisseur :", err);
+      toast(
+        "error",
+        "Erreur",
+        "Impossible d’ajouter le fournisseur."
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleEdit = (form) => {
-    setSubmitting(true);
-    setFournisseurs((p) => p.map((f) => (f.id === editTarget.id ? { ...f, ...form } : f)));
-    toast("success", "Fournisseur modifié", `${form.nom} a été mis à jour.`);
-    setSubmitting(false);
-    setEditTarget(null);
+  // ✏️ Modification (PUT /api/fournisseurs/{id})
+  const handleEdit = async (form) => {
+    if (!editTarget) return;
+    try {
+      setSubmitting(true);
+
+      const payload = {
+        nom: form.nom,
+        contact: form.contact,
+        adresse: form.adresse,
+        type_produit: form.typeProduit,
+        derniere_livraison: form.derniereLivraison || null,
+      };
+
+      const { data } = await instance.put(
+        `/fournisseurs/${editTarget.id}`,
+        payload
+      );
+
+      const updated = {
+        id: data.id,
+        nom: data.nom || "",
+        contact: data.contact || "",
+        adresse: data.adresse || "",
+        typeProduit: data.type_produit || "",
+        derniereLivraison: data.derniere_livraison || "",
+        totalAchats: data.total_achats ?? editTarget.totalAchats ?? 0,
+      };
+
+      setFournisseurs((prev) =>
+        prev.map((f) => (f.id === editTarget.id ? updated : f))
+      );
+
+      toast(
+        "success",
+        "Fournisseur modifié",
+        `${updated.nom} a été mis à jour.`
+      );
+      setEditTarget(null);
+    } catch (err) {
+      console.error("Erreur modification fournisseur :", err);
+      toast(
+        "error",
+        "Erreur",
+        "Impossible de modifier le fournisseur."
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleDelete = () => {
-    setSubmitting(true);
-    setFournisseurs((p) => p.filter((f) => f.id !== deleteTarget.id));
-    toast("success", "Fournisseur supprimé", `${deleteTarget.nom} a été supprimé.`);
-    setSubmitting(false);
-    setDeleteTarget(null);
+  // 🗑️ Suppression (DELETE /api/fournisseurs/{id})
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      setSubmitting(true);
+      await instance.delete(`/fournisseurs/${deleteTarget.id}`);
+
+      setFournisseurs((prev) =>
+        prev.filter((f) => f.id !== deleteTarget.id)
+      );
+
+      toast(
+        "success",
+        "Fournisseur supprimé",
+        `${deleteTarget.nom} a été supprimé.`
+      );
+      setDeleteTarget(null);
+    } catch (err) {
+      console.error("Erreur suppression fournisseur :", err);
+      toast(
+        "error",
+        "Erreur",
+        "Impossible de supprimer le fournisseur."
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
+  // Loader harmonisé
   if (loading)
     return (
-      <div className="flex items-center justify-center h-[70vh]">
-        <Loader2 className="w-10 h-10 text-[#472EAD] animate-spin" />
+      <div className="flex items-center justify-center min-h-[70vh] bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white">
+        <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-white/80 border border-[#E4E0FF] shadow-sm">
+          <Loader2 className="w-5 h-5 text-[#472EAD] animate-spin" />
+          <span className="text-sm font-medium text-[#472EAD]">
+            Chargement des fournisseurs...
+          </span>
+        </div>
       </div>
     );
 
   return (
-    <div className="p-6">
-      {/* HEADER */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-[#472EAD]">Gestion des fournisseurs</h1>
-          <p className="text-sm text-gray-500">
-            Liste, ajout, modification et suppression des fournisseurs.
-          </p>
-        </div>
-        <button
-          onClick={() => setOpenAdd(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-[#472EAD] text-white rounded-lg shadow hover:scale-[1.03] transition"
-        >
-          <UserPlus size={16} /> Nouveau fournisseur
-        </button>
-      </div>
-
-      {/* RECHERCHE */}
-      <div className="relative flex-1 mb-5">
-        <Search className="absolute left-3 top-2.5 text-gray-400 w-4 h-4" />
-        <input
-          type="text"
-          placeholder="Rechercher par nom, contact, adresse ou type de produit..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full pl-9 pr-3 py-2 border border-black rounded-lg text-sm focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD]"
-        />
-      </div>
-
-      {/* TABLEAU */}
-      <DataTable
-        columns={[
-          { label: "Nom", key: "nom" },
-          { label: "Contact", key: "contact" },
-          {
-            label: "Adresse",
-            key: "adresse",
-            render: (val) => (
-              <span className="flex items-center gap-1">
-                <MapPin size={14} className="text-[#F58020]" /> {val}
-              </span>
-            ),
-          },
-          { label: "Type de produits", key: "typeProduit" },
-          {
-            label: "Dernière livraison",
-            key: "derniereLivraison",
-            render: (val) =>
-              val ? (
-                <span className="flex items-center gap-1">
-                  <CalendarDays size={14} className="text-[#472EAD]" />
-                  {new Date(val).toLocaleDateString("fr-FR", {
-                    day: "2-digit",
-                    month: "short",
-                    year: "numeric",
-                  })}
+    <>
+      <div className="min-h-screen w-full bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white px-4 sm:px-6 lg:px-10 py-6 sm:py-8 overflow-y-auto">
+        <div className="max-w-6xl mx-auto space-y-7">
+          {/* HEADER */}
+          <motion.header
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45 }}
+            className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+          >
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/70 border border-[#E4E0FF] shadow-xs">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#F58020]" />
+                <span className="text-[11px] font-semibold tracking-wide text-[#472EAD] uppercase">
+                  Module Fournisseurs — Responsable
                 </span>
-              ) : (
-                <span className="text-gray-400 italic">Pas encore livré</span>
-              ),
-          },
-        ]}
-        data={filtered}
-        actions={[
-          {
-            title: "Modifier",
-            icon: <Edit2 size={16} />,
-            color: "text-[#472EAD]",
-            hoverBg: "bg-[#F7F5FF]",
-            onClick: (row) => setEditTarget(row),
-          },
-          {
-            title: "Supprimer",
-            icon: <Trash2 size={16} />,
-            color: "text-rose-600",
-            hoverBg: "bg-rose-50",
-            onClick: (row) => setDeleteTarget(row),
-          },
-        ]}
-      />
+              </div>
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#2F1F7A]">
+                  Gestion des fournisseurs
+                </h1>
+                <p className="mt-1 text-sm text-gray-500">
+                  Suivi des partenaires d’approvisionnement : ajout,
+                  modification et suppression des fournisseurs.
+                </p>
+              </div>
+              <p className="text-[11px] text-gray-400">
+                {stats.total} fournisseur
+                {stats.total > 1 && "s"} • {stats.avecLivraison} avec
+                livraison renseignée
+              </p>
+            </div>
 
-      {/* MODALES */}
-      <FormModal open={openAdd} onClose={() => setOpenAdd(false)} title="Nouveau fournisseur">
-        <FournisseurForm onSubmit={handleAdd} onCancel={() => setOpenAdd(false)} submitting={submitting} />
-      </FormModal>
+            <button
+              onClick={() => setOpenAdd(true)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-[#472EAD] text-white rounded-lg shadow-md hover:bg-[#5A3CF5] hover:shadow-lg text-xs sm:text-sm transition"
+            >
+              <UserPlus size={18} />
+              Nouveau fournisseur
+            </button>
+          </motion.header>
 
-      <FormModal
-        open={!!editTarget}
-        onClose={() => setEditTarget(null)}
-        title={`Modifier : ${editTarget?.nom}`}
-      >
-        {editTarget && (
-          <FournisseurForm
-            initial={editTarget}
-            onSubmit={handleEdit}
-            onCancel={() => setEditTarget(null)}
-            submitting={submitting}
-          />
-        )}
-      </FormModal>
+          {/* RECHERCHE & TABLEAU */}
+          <section className="bg-white/90 border border-[#E4E0FF] rounded-2xl shadow-[0_18px_45px_rgba(15,23,42,0.06)] px-4 sm:px-5 py-4 space-y-4">
+            {/* Recherche */}
+            <div className="relative mb-1">
+              <Search className="absolute left-3 top-2.5 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="Rechercher par nom, contact, adresse ou type de produit..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-xl text-sm bg-white/80 shadow-sm focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD] placeholder:text-gray-400"
+              />
+            </div>
 
-      <FormModal
-        open={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        title="Confirmer la suppression"
-        width="max-w-md"
-      >
-        <p className="text-sm text-gray-600 mb-4">
-          Voulez-vous vraiment supprimer{" "}
-          <span className="font-semibold">{deleteTarget?.nom}</span> ?
-        </p>
-        <div className="flex justify-end gap-3">
-          <button
-            onClick={() => setDeleteTarget(null)}
-            className="px-4 py-2 border border-black rounded-lg text-sm"
+            {/* Tableau */}
+            <DataTable
+              columns={[
+                { label: "Nom", key: "nom" },
+                { label: "Contact", key: "contact" },
+                {
+                  label: "Adresse",
+                  key: "adresse",
+                  render: (val) => (
+                    <span className="flex items-center gap-1 text-sm">
+                      <MapPin size={14} className="text-[#F58020]" /> {val}
+                    </span>
+                  ),
+                },
+                { label: "Type de produits", key: "typeProduit" },
+                {
+                  label: "Dernière livraison",
+                  key: "derniereLivraison",
+                  render: (val) =>
+                    val ? (
+                      <span className="flex items-center gap-1 text-sm">
+                        <CalendarDays
+                          size={14}
+                          className="text-[#472EAD]"
+                        />
+                        {new Date(val).toLocaleDateString("fr-FR", {
+                          day: "2-digit",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400 italic text-xs">
+                        Pas encore livré
+                      </span>
+                    ),
+                },
+              ]}
+              data={filtered}
+              actions={[
+                {
+                  title: "Voir la fiche",
+                  icon: <Eye size={16} />,
+                  color: "text-sky-600",
+                  hoverBg: "bg-sky-50",
+                  onClick: (row) => setSelectedFournisseur(row),
+                },
+                {
+                  title: "Modifier",
+                  icon: <Edit2 size={16} />,
+                  color: "text-[#472EAD]",
+                  hoverBg: "bg-[#F7F5FF]",
+                  onClick: (row) => setEditTarget(row),
+                },
+                {
+                  title: "Supprimer",
+                  icon: <Trash2 size={16} />,
+                  color: "text-rose-600",
+                  hoverBg: "bg-rose-50",
+                  onClick: (row) => setDeleteTarget(row),
+                },
+              ]}
+            />
+          </section>
+
+          {/* MODALES CRUD */}
+          <FormModal
+            open={openAdd}
+            onClose={() => setOpenAdd(false)}
+            title="Nouveau fournisseur"
           >
-            Annuler
-          </button>
-          <button
-            onClick={handleDelete}
-            className="px-4 py-2 rounded-lg text-sm text-white bg-rose-600 hover:bg-rose-700"
+            <FournisseurForm
+              onSubmit={handleAdd}
+              onCancel={() => setOpenAdd(false)}
+              submitting={submitting}
+            />
+          </FormModal>
+
+          <FormModal
+            open={!!editTarget}
+            onClose={() => setEditTarget(null)}
+            title={editTarget ? `Modifier : ${editTarget.nom}` : "Modifier"}
           >
-            Supprimer
-          </button>
+            {editTarget && (
+              <FournisseurForm
+                initial={editTarget}
+                onSubmit={handleEdit}
+                onCancel={() => setEditTarget(null)}
+                submitting={submitting}
+              />
+            )}
+          </FormModal>
+
+          <FormModal
+            open={!!deleteTarget}
+            onClose={() => setDeleteTarget(null)}
+            title="Confirmer la suppression"
+            width="max-w-md"
+          >
+            <p className="text-sm text-gray-600 mb-4">
+              Voulez-vous vraiment supprimer{" "}
+              <span className="font-semibold">
+                {deleteTarget?.nom}
+              </span>{" "}
+              de la liste des fournisseurs ?
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="px-4 py-2.5 border border-gray-300 rounded-lg text-sm bg-white hover:bg-gray-50"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleDelete}
+                className="px-4 py-2.5 rounded-lg text-sm text-white bg-rose-600 hover:bg-rose-700 shadow-sm"
+              >
+                Supprimer
+              </button>
+            </div>
+          </FormModal>
+
+          {/* TOASTS */}
+          <Toasts toasts={toasts} remove={removeToast} />
         </div>
-      </FormModal>
+      </div>
 
-      {/* TOASTS */}
-      <Toasts toasts={toasts} remove={removeToast} />
-    </div>
+      {/* SLIDE-OVER FICHE FOURNISSEUR */}
+      <AnimatePresence>
+        {selectedFournisseur && (
+          <motion.div
+            className="fixed inset-0 z-40 flex justify-end bg-black/20 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setSelectedFournisseur(null)}
+          >
+            <motion.div
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", stiffness: 260, damping: 26 }}
+              className="h-full w-full max-w-md bg-white shadow-2xl border-l border-[#E4E0FF] flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="px-5 py-4 border-b border-[#ECE9FF] bg-gradient-to-r from-white via-[#F9F7FF] to-white flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5">
+                    <div className="h-9 w-9 rounded-full bg-[#F58020]/10 flex items-center justify-center">
+                      <Package className="w-5 h-5 text-[#F58020]" />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="inline-flex items-center gap-2 px-2 py-1 rounded-full bg-[#F7F5FF] border border-[#E4E0FF] mb-1.5">
+                      <span className="h-1.5 w-1.5 rounded-full bg-[#F58020]" />
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-[#472EAD]">
+                        Fiche fournisseur
+                      </span>
+                    </div>
+                    <h3 className="text-sm font-semibold text-[#2F1F7A] leading-snug">
+                      {selectedFournisseur.nom}
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Type de produits :{" "}
+                      <span className="font-semibold text-[#472EAD]">
+                        {selectedFournisseur.typeProduit}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedFournisseur(null)}
+                  className="p-1.5 rounded-full hover:bg-gray-100 text-gray-500 hover:text-gray-800 transition"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Contenu */}
+              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+                {/* Adresse */}
+                <div className="rounded-xl border border-gray-100 bg-[#F9FAFF] px-3 py-2.5 text-xs flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-[#F58020]" />
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wide text-gray-400">
+                      Adresse
+                    </p>
+                    <p className="font-semibold text-gray-800">
+                      {selectedFournisseur.adresse}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Contact + Produits */}
+                <div className="grid grid-cols-1 gap-3">
+                  <div className="rounded-xl border border-gray-100 bg-white px-3 py-2.5 text-xs flex items-center gap-2">
+                    <Phone className="w-4 h-4 text-[#472EAD]" />
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide text-gray-400">
+                        Contact
+                      </p>
+                      <p className="font-semibold text-gray-800">
+                        {selectedFournisseur.contact}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-gray-100 bg-white px-3 py-2.5 text-xs flex items-center gap-2">
+                    <Package className="w-4 h-4 text-[#472EAD]" />
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide text-gray-400">
+                        Type de produits
+                      </p>
+                      <p className="font-semibold text-gray-800">
+                        {selectedFournisseur.typeProduit}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-gray-100 bg-white px-3 py-2.5 text-xs flex items-center gap-2">
+                    <CalendarDays className="w-4 h-4 text-[#472EAD]" />
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide text-gray-400">
+                        Dernière livraison
+                      </p>
+                      <p className="font-semibold text-gray-800">
+                        {selectedFournisseur.derniereLivraison
+                          ? new Date(
+                              selectedFournisseur.derniereLivraison
+                            ).toLocaleDateString("fr-FR", {
+                              day: "2-digit",
+                              month: "long",
+                              year: "numeric",
+                            })
+                          : "Aucune livraison renseignée"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="px-5 py-3 border-t border-[#ECE9FF] bg-white flex items-center justify-between">
+                <p className="text-[11px] text-gray-400">
+                  Fiche informative — les modifications se font depuis le module
+                  principal.
+                </p>
+                <button
+                  onClick={() => setSelectedFournisseur(null)}
+                  className="text-xs font-medium text-[#472EAD] hover:text-[#2F1F7A] px-3 py-1.5 rounded-lg hover:bg-[#F5F3FF] transition"
+                >
+                  Fermer
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }

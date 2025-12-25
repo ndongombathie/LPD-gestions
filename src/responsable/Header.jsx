@@ -1,6 +1,6 @@
-// ==========================================================
-// 🧠 Header.jsx — Version 100% Fonctionnelle (LPD Manager)
-// Connecté Laravel + Sanctum : profil, logout, update, password + Raccourcis
+// ========================================================== 
+// 🧠 Header.jsx — LPD Manager (Responsable)
+// Connecté Laravel + Sanctum : profil, logout, update, password + Raccourcis + Notifications API
 // ==========================================================
 
 import React, { useState, useRef, useEffect } from "react";
@@ -28,6 +28,10 @@ import {
   FileText,
   Clock,
   Banknote,
+  // Icônes pour les types de notifications
+  AlertTriangle,
+  XCircle,
+  Info,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { instance } from "../utils/axios";
@@ -64,6 +68,34 @@ const SHORTCUT_ITEMS = [
   { name: "Décaissements", path: "/responsable/decaissements", icon: Banknote },
   { name: "Journal d’activités", path: "/responsable/journal-activites", icon: Clock },
 ];
+
+// 🔔 Mapping des modules de notif → label + icône (côté panneau)
+const MODULE_MAP = {
+  stock: { label: "Stock & ruptures", icon: ClipboardList },
+  rapports: { label: "Rapports & statistiques", icon: FileText },
+  decaissements: { label: "Décaissements", icon: Banknote },
+  commandes: { label: "Commandes", icon: ShoppingCart },
+  fournisseurs: { label: "Fournisseurs", icon: Truck },
+  clients: { label: "Clients spéciaux", icon: Users },
+};
+
+// 🔗 Mapping route → module de notification (pour marquer “lu” quand on ouvre la page)
+const PATH_MODULE_MAP = {
+  "/responsable/inventaire": "stock",
+  "/responsable/rapports": "rapports",
+  "/responsable/decaissements": "decaissements",
+  "/responsable/commandes": "commandes",
+  "/responsable/fournisseurs": "fournisseurs",
+  "/responsable/clients-speciaux": "clients",
+};
+
+const getModuleFromPath = (path) => {
+  // on matche par "startsWith" pour gérer les sous-routes (ex: /responsable/commandes/12)
+  for (const [routePrefix, module] of Object.entries(PATH_MODULE_MAP)) {
+    if (path.startsWith(routePrefix)) return module;
+  }
+  return null;
+};
 
 // ==========================================================
 // 🔔 Toast system
@@ -176,7 +208,9 @@ function PasswordModal({ open, onClose, onSuccess, addToast }) {
         <form onSubmit={submit} className="space-y-3">
           {/* Ancien mot de passe */}
           <div>
-            <label className="block text-sm font-medium text-gray-600">Ancien mot de passe</label>
+            <label className="block text-sm font-medium text-gray-600">
+              Ancien mot de passe
+            </label>
             <div className="relative">
               <input
                 type={showOld ? "text" : "password"}
@@ -196,7 +230,9 @@ function PasswordModal({ open, onClose, onSuccess, addToast }) {
 
           {/* Nouveau mot de passe */}
           <div>
-            <label className="block text-sm font-medium text-gray-600">Nouveau mot de passe</label>
+            <label className="block text-sm font-medium text-gray-600">
+              Nouveau mot de passe
+            </label>
             <div className="relative">
               <input
                 type={showNew ? "text" : "password"}
@@ -414,12 +450,11 @@ export default function Header() {
   // Data
   const [user, setUser] = useState(null);
   const [toasts, setToasts] = useState([]);
-  const [notifications, setNotifications] = useState(
-    loadJSON("lpd_notifications", [
-      { id: 1, type: "stock", text: "3 produits presque en rupture", read: false },
-      { id: 2, type: "rapport", text: "Nouveau rapport disponible", read: false },
-    ])
-  );
+
+  // 🔔 Notifications venant de l'API
+  const [notifications, setNotifications] = useState([]); // items[]
+  const [unreadTotal, setUnreadTotal] = useState(0); // nombre total non lues
+  const [moduleCounts, setModuleCounts] = useState({}); // per_module
 
   // 🆕 Dernières pages visitées (raccourcis)
   const [recentPaths, setRecentPaths] = useState(() => {
@@ -432,8 +467,6 @@ export default function Header() {
       "/responsable/rapports",
     ];
   });
-
-  const unreadCount = notifications.filter((n) => !n.read).length;
 
   const addToast = (type, title, message) => {
     const id = Date.now();
@@ -451,7 +484,7 @@ export default function Header() {
 
     setRecentPaths((prev) => {
       const without = prev.filter((p) => p !== path);
-      const updated = [path, ...without].slice(0, 4); // 4 derniers seulement
+      const updated = [path, ...without].slice(0, 4);
       saveJSON(RECENTS_KEY, updated);
       return updated;
     });
@@ -485,7 +518,71 @@ export default function Header() {
       }
     };
     loadUser();
-  }, []);
+  }, [navigate]);
+
+  // ==========================================================
+  // 🔔 Charger les notifications depuis l'API
+  // ==========================================================
+
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchNotifications = async () => {
+      try {
+        const { data } = await instance.get("/notifications");
+        setNotifications(data.items || []);
+        setUnreadTotal(data.unread_total || 0);
+        setModuleCounts(data.per_module || {});
+      } catch (err) {
+        console.error("Erreur chargement notifications :", err);
+      }
+    };
+
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 60000); // refresh toutes les 60s
+    return () => clearInterval(interval);
+  }, [user]);
+
+  // ==========================================================
+  // ✅ Quand on ouvre une page → marquer son module comme lu
+  // ==========================================================
+
+  useEffect(() => {
+    if (!user) return;
+
+    const module = getModuleFromPath(location.pathname);
+    if (!module) return;
+
+    const unreadForModule = moduleCounts?.[module]?.unread || 0;
+    if (unreadForModule === 0) return;
+
+    const markModuleAsRead = async () => {
+      try {
+        await instance.post("/notifications/mark-module", { module });
+
+        // Mettre à jour l'état local : toutes les notifs de ce module passent en "read: true"
+        setNotifications((prev) =>
+          prev.map((n) =>
+            n.module === module ? { ...n, read: true } : n
+          )
+        );
+
+        setModuleCounts((prev) => {
+          const copy = { ...prev };
+          if (copy[module]) {
+            copy[module] = { ...copy[module], unread: 0 };
+          }
+          return copy;
+        });
+
+        setUnreadTotal((prev) => Math.max(prev - unreadForModule, 0));
+      } catch (err) {
+        console.error("Erreur mark-module :", err);
+      }
+    };
+
+    markModuleAsRead();
+  }, [location.pathname, user, moduleCounts]);
 
   // Fermer menus au clic extérieur
   useEffect(() => {
@@ -516,21 +613,13 @@ export default function Header() {
   };
 
   // ==========================================================
-  // 🔔 Notifications
+  // 🔔 Notifications — ouverture (NE MARQUE PLUS RIEN comme lu)
   // ==========================================================
 
-  const toggleNotif = () => {
+  const handleToggleNotif = () => {
     setShowNotif((v) => !v);
     setShowMenu(false);
     setShowQuick(false);
-
-    if (!showNotif) {
-      setTimeout(() => {
-        setNotifications((prev) =>
-          prev.map((n) => ({ ...n, read: true }))
-        );
-      }, 400);
-    }
   };
 
   if (!user) return null;
@@ -541,12 +630,12 @@ export default function Header() {
 
   return (
     <>
-      <header className="relative z-20 w-full" ref={menuRef}>
+      <header className="sticky top-0 z-20 w-full bg-white" ref={menuRef} >
+
         <div className="h-[6px] w-full bg-gradient-to-r from-[#472EAD] via-[#472EAD] to-[#F58020]" />
 
         <div className="bg-white h-16 shadow-sm border-b">
           <div className="max-w-7xl mx-auto h-full px-4 flex items-center justify-between">
-
             {/* LOGO & TITRE */}
             <div className="flex items-center gap-3">
               <div className="flex items-center">
@@ -568,20 +657,19 @@ export default function Header() {
             </div>
 
             {/* ACTIONS */}
-            <div className="flex items-center gap-4">
-
-              {/* 🆕 RACCOURCIS */}
-              <div className="relative hidden sm:block">
+            <div className="flex items-center gap-3 sm:gap-4">
+              {/* 🆕 RACCOURCIS — maintenant visible aussi sur mobile */}
+              <div className="relative">
                 <button
                   onClick={() => {
                     setShowQuick((v) => !v);
                     setShowNotif(false);
                     setShowMenu(false);
                   }}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-[#F7F5FF] hover:text-[#472EAD] transition"
+                  className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 rounded-lg border border-gray-200 text-xs sm:text-sm text-gray-700 hover:bg-[#F7F5FF] hover:text-[#472EAD] transition"
                 >
                   <LayoutGrid size={18} className="text-[#472EAD]" />
-                  <span>Raccourcis</span>
+                  <span className="hidden sm:inline">Raccourcis</span>
                 </button>
 
                 {showQuick && (
@@ -618,38 +706,154 @@ export default function Header() {
               {/* NOTIFS */}
               <div className="relative">
                 <button
-                  onClick={toggleNotif}
+                  onClick={handleToggleNotif}
                   className="p-2 rounded-lg hover:bg-gray-100 relative"
                 >
                   <Bell className="w-5 h-5 text-[#472EAD]" />
 
-                  {unreadCount > 0 && (
-                    <span className="absolute -top-1 -right-1 text-[10px] font-bold bg-[#F58020] text-white px-1.5 py-[2px] rounded-full shadow">
-                      {unreadCount}
+                  {unreadTotal > 0 && (
+                    <span className="absolute -top-1 -right-1 text-[10px] font-bold bg-red-500 text-white px-1.5 py-[2px] rounded-full shadow">
+                      {unreadTotal}
                     </span>
                   )}
                 </button>
 
                 {showNotif && (
-                  <div className="absolute right-0 mt-2 w-72 bg-white border rounded-lg shadow-lg p-2">
-                    <p className="text-xs font-semibold px-2 py-1 text-gray-500">Notifications</p>
-
-                    <ul className="max-h-64 overflow-auto divide-y">
-                      {notifications.length ? (
-                        notifications.map((n) => (
-                          <li
-                            key={n.id}
-                            className="px-3 py-2 hover:bg-gray-50 flex gap-2 items-start cursor-pointer"
-                          >
-                            <span>{n.type === "stock" ? "⚠️" : "📄"}</span>
-                            <span className={n.read ? "text-gray-500" : "font-medium"}>
-                              {n.text}
-                            </span>
-                          </li>
-                        ))
+                  <div className="absolute right-0 mt-2 w-80 bg-white border rounded-xl shadow-lg p-3 z-40">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-semibold text-gray-600 flex items-center gap-1">
+                        <Bell className="w-3 h-3 text-[#472EAD]" />
+                        Notifications
+                      </p>
+                      {unreadTotal === 0 ? (
+                        <span className="text-[10px] text-emerald-600">
+                          Tout est lu
+                        </span>
                       ) : (
-                        <li className="px-3 py-6 text-center text-gray-400">
-                          Aucune notification
+                        <span className="text-[10px] text-red-500">
+                          {unreadTotal} non lue(s)
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Résumé par module / page */}
+                    {Object.keys(moduleCounts).length > 0 && (
+                      <div className="border-b border-gray-100 pb-2 mb-2">
+                        <p className="text-[11px] font-semibold text-gray-500 px-1 mb-1">
+                          Par page
+                        </p>
+                        <div className="flex flex-col gap-1">
+                          {Object.entries(moduleCounts).map(([module, counts]) => {
+                            const meta = MODULE_MAP[module] || {
+                              label: module,
+                              icon: Clock,
+                            };
+                            const Icon = meta.icon;
+                            // on essaie de trouver une notif avec url pour cette page
+                            const firstNotif = notifications.find(
+                              (n) => n.module === module && n.url
+                            );
+                            return (
+                              <button
+                                key={module}
+                                onClick={() => {
+                                  if (firstNotif?.url) {
+                                    navigate(firstNotif.url);
+                                    setShowNotif(false);
+                                  }
+                                }}
+                                className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-gray-50 text-left"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <Icon className="w-3.5 h-3.5 text-[#472EAD]" />
+                                  <span className="text-[11px] text-gray-700">
+                                    {meta.label}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[10px] text-gray-400">
+                                    {counts.total}
+                                  </span>
+                                  {counts.unread > 0 && (
+                                    <span className="text-[10px] bg-red-500 text-white px-1.5 py-[1px] rounded-full">
+                                      +{counts.unread}
+                                    </span>
+                                  )}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Liste des dernières notifications */}
+                    <ul className="max-h-64 overflow-auto space-y-1">
+                      {notifications.length ? (
+                        notifications.slice(0, 10).map((n) => {
+                          const isUnread = !n.read;
+
+                          // Mapping type → icône + couleur
+                          let Icon = FileText;
+                          let iconClasses = "text-gray-400";
+
+                          if (n.type === "warning") {
+                            Icon = AlertTriangle;
+                            iconClasses = "text-amber-500";
+                          } else if (n.type === "error") {
+                            Icon = XCircle;
+                            iconClasses = "text-red-500";
+                          } else if (n.type === "success") {
+                            Icon = CheckCircle2;
+                            iconClasses = "text-emerald-500";
+                          } else {
+                            Icon = Info;
+                            iconClasses = "text-blue-500";
+                          }
+
+                          return (
+                            <li key={n.id}>
+                              <button
+                                onClick={() => {
+                                  if (n.url) {
+                                    navigate(n.url);
+                                  }
+                                  setShowNotif(false);
+                                }}
+                                className={`w-full text-left flex items-start gap-2 px-2 py-2 rounded-md hover:bg-gray-50 ${
+                                  isUnread ? "bg-[#F7F5FF]" : ""
+                                }`}
+                              >
+                                <div className="mt-0.5 flex h-7 w-7 items-center justify-center rounded-full bg-gray-50">
+                                  <Icon className={`w-4 h-4 ${iconClasses}`} />
+                                </div>
+
+                                <div className="flex-1">
+                                  <div className="text-xs font-semibold text-gray-800">
+                                    {n.title}
+                                  </div>
+                                  {n.message && (
+                                    <div className="text-[11px] text-gray-500 line-clamp-2">
+                                      {n.message}
+                                    </div>
+                                  )}
+                                  {n.created_at && (
+                                    <div className="text-[10px] text-gray-400 mt-0.5">
+                                      {new Date(n.created_at).toLocaleString("fr-FR")}
+                                    </div>
+                                  )}
+                                </div>
+
+                                {isUnread && (
+                                  <span className="w-2 h-2 rounded-full bg-red-500 mt-1" />
+                                )}
+                              </button>
+                            </li>
+                          );
+                        })
+                      ) : (
+                        <li className="px-3 py-6 text-center text-gray-400 text-xs">
+                          Aucune notification pour le moment.
                         </li>
                       )}
                     </ul>
@@ -690,7 +894,8 @@ export default function Header() {
                 {showMenu && (
                   <div className="absolute right-0 mt-2 w-48 bg-white border shadow-lg rounded-lg p-2">
                     <ul className="text-sm">
-                      <li
+                      {/* Profil (si tu veux l'activer, enlève les commentaires) */}
+                      {/* <li
                         onClick={() => {
                           setShowProfileModal(true);
                           setShowMenu(false);
@@ -698,7 +903,7 @@ export default function Header() {
                         className="px-3 py-2 hover:bg-gray-50 cursor-pointer flex gap-2 items-center"
                       >
                         <User size={14} /> Mon Profil
-                      </li>
+                      </li> */}
 
                       <li
                         onClick={() => {

@@ -1,729 +1,888 @@
 // ==========================================================
 // 📦 Inventaire.jsx — Interface Responsable (LPD Manager)
-// Version PRO harmonisée (Dashboard/Fournisseurs/Utilisateurs)
-// KPI dynamiques + Toasts + Charts + Modale + Export PDF
+// Inventaire Boutique Colobane : écarts, pertes, gains, synthèse
+// - Comptage périodique (données simulées)
+// - Filtres : période, catégorie, fournisseur, type d’écart, recherche
+// - KPI financiers en bloc structuré (théorique, réel, pertes, gains…)
+// - Graphiques : évolution valeurs & répartition des écarts
+// - Export PDF + bouton "Générer les ajustements" (simulation)
 // ==========================================================
 
-import React, { useEffect, useMemo, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import React, { useMemo, useState } from "react";
+import { motion } from "framer-motion";
 import {
   Filter,
-  PlusCircle,
-  Scale,
-  FileDown,
-  PackageSearch,
-  RefreshCw,
-  Calendar,
-  Package,
-  ClipboardCheck,
+  CalendarDays,
+  Search,
+  Layers,
+  BarChart3,
+  ArrowDownRight,
+  ArrowUpRight,
   AlertTriangle,
-  CheckCircle2,
-  AlertCircle,
-  X,
+  Percent,
+  FileDown,
+  PackageOpen,
 } from "lucide-react";
-import { instance } from "../../utils/axios";
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  Legend,
-  PieChart,
-  Pie,
-  Cell,
-  AreaChart,
-  Area,
-} from "recharts";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
+import { toast } from "sonner";
 
-// === Components réutilisables ===
-import KpiCard from "../components/KpiCard.jsx";
-import FormModal from "../components/FormModal.jsx";
+import ChartBox from "../components/ChartBox";
 
-// ————————————————————————————————————————————————
-// Utils / style
-// ————————————————————————————————————————————————
-const cls = (...a) => a.filter(Boolean).join(" ");
-const formatFCFA = (n) =>
-  new Intl.NumberFormat("fr-FR", { style: "currency", currency: "XOF" }).format(Number(n || 0));
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
-// Couleurs charts
-const COLORS = ["#472EAD", "#F58020", "#10B981", "#EF4444", "#3B82F6", "#F59E0B"];
+// ==========================================================
+// 🧩 Helpers
+// ==========================================================
+const formatFCFA = (n) =>
+  new Intl.NumberFormat("fr-FR", {
+    style: "currency",
+    currency: "XOF",
+  }).format(Number(n || 0));
 
-// ————————————————————————————————————————————————
-// ✅ Toasts (local au fichier pour éviter une dépendance)
-// ————————————————————————————————————————————————
-function Toasts({ toasts, remove }) {
-  return (
-    <div className="fixed top-4 right-4 z-[120] space-y-2">
-      <AnimatePresence>
-        {toasts.map((t) => (
-          <motion.div
-            key={t.id}
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 20 }}
-            className={cls(
-              "min-w-[280px] max-w-[360px] rounded-xl border shadow-lg px-4 py-3 flex items-start gap-3",
-              t.type === "success"
-                ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-                : "bg-rose-50 border-rose-200 text-rose-800"
-            )}
-          >
-            <div className="pt-0.5">
-              {t.type === "success" ? (
-                <CheckCircle2 className="w-5 h-5" />
-              ) : (
-                <AlertCircle className="w-5 h-5" />
-              )}
-            </div>
-            <div className="flex-1">
-              <div className="font-semibold text-sm">{t.title}</div>
-              {t.message && <div className="text-xs mt-0.5 opacity-90">{t.message}</div>}
-            </div>
-            <button className="opacity-60 hover:opacity-100" onClick={() => remove(t.id)}>
-              <X className="w-4 h-4" />
-            </button>
-          </motion.div>
-        ))}
-      </AnimatePresence>
-    </div>
-  );
-}
+const formatPercent = (value) => {
+  if (!isFinite(value) || isNaN(value)) return "0,0 %";
+  const v = value * 100;
+  return `${v.toFixed(1).replace(".", ",")} %`;
+};
 
-// ————————————————————————————————————————————————
-// 💼 Modale de comptage / ajustement (FormModal)
-// ————————————————————————————————————————————————
-function AjustementModal({ open, onClose, onSubmit, submitting }) {
-  const [form, setForm] = useState({
-    produit: "",
-    categorie: "",
-    fournisseur: "",
-    stockTheorique: "",
-    stockReel: "",
-    motif: "",
-    prixUnitaire: "",
-    date: todayISO(),
+// ==========================================================
+// 🧪 Données simulées d’inventaire — Boutique Colobane
+// Chaque ligne représente un produit contrôlé lors d’un inventaire
+// ==========================================================
+const INVENTAIRE_EXEMPLE = [
+  {
+    id: 1,
+    date: "2025-11-01",
+    reference: "PROD-0001",
+    produit: "Ramette A4 80g",
+    categorie: "Papeterie",
+    fournisseur: "PAPDISK",
+    qteTheorique: 120,
+    qteReelle: 110,
+    prixUnitaire: 2500,
+    commentaire: "Écart négatif probablement dû à des ventes non comptabilisées",
+  },
+  {
+    id: 2,
+    date: "2025-11-01",
+    reference: "PROD-0002",
+    produit: "Stylo bille bleu",
+    categorie: "Papeterie",
+    fournisseur: "Office Pro",
+    qteTheorique: 300,
+    qteReelle: 305,
+    prixUnitaire: 200,
+    commentaire: "Surplus constaté après recomptage",
+  },
+  {
+    id: 3,
+    date: "2025-11-02",
+    reference: "PROD-0003",
+    produit: "Classeur A4 à levier",
+    categorie: "Papeterie",
+    fournisseur: "PAPDISK",
+    qteTheorique: 60,
+    qteReelle: 52,
+    prixUnitaire: 1500,
+    commentaire: "Casse / pertes en rayon",
+  },
+  {
+    id: 4,
+    date: "2025-11-02",
+    reference: "PROD-0004",
+    produit: "Surligneur jaune",
+    categorie: "Papeterie",
+    fournisseur: "Office Pro",
+    qteTheorique: 80,
+    qteReelle: 80,
+    prixUnitaire: 600,
+    commentaire: "Aucun écart constaté",
+  },
+  {
+    id: 5,
+    date: "2025-11-03",
+    reference: "PROD-0005",
+    produit: "Calculatrice scientifique",
+    categorie: "Informatique",
+    fournisseur: "Tech Import",
+    qteTheorique: 25,
+    qteReelle: 23,
+    prixUnitaire: 15000,
+    commentaire: "Manque 2 pièces (erreur de réception ou vol)",
+  },
+  {
+    id: 6,
+    date: "2025-11-03",
+    reference: "PROD-0006",
+    produit: "Clé USB 32 Go",
+    categorie: "Informatique",
+    fournisseur: "Tech Import",
+    qteTheorique: 40,
+    qteReelle: 43,
+    prixUnitaire: 8000,
+    commentaire: "Surplus suite à une réception non saisie",
+  },
+  {
+    id: 7,
+    date: "2025-11-04",
+    reference: "PROD-0007",
+    produit: "Agenda 2026",
+    categorie: "Papeterie",
+    fournisseur: "PAPDISK",
+    qteTheorique: 50,
+    qteReelle: 49,
+    prixUnitaire: 3500,
+    commentaire: "Un exemplaire abîmé retiré de la vente",
+  },
+  {
+    id: 8,
+    date: "2025-11-04",
+    reference: "PROD-0008",
+    produit: "Carnet spirale petit format",
+    categorie: "Papeterie",
+    fournisseur: "Office Pro",
+    qteTheorique: 150,
+    qteReelle: 150,
+    prixUnitaire: 1200,
+    commentaire: "Stock parfaitement cohérent",
+  },
+];
+
+// ==========================================================
+// 🧮 Calcul des stats à partir des lignes filtrées
+// ==========================================================
+function computeStats(lignes) {
+  if (!lignes.length) {
+    return {
+      totalArticles: 0,
+      totalTheo: 0,
+      totalReel: 0,
+      pertes: 0,
+      gains: 0,
+      ecartGlobal: 0,
+      tauxEcart: 0,
+    };
+  }
+
+  let totalTheo = 0;
+  let totalReel = 0;
+  let pertes = 0;
+  let gains = 0;
+
+  lignes.forEach((l) => {
+    const theo = Number(l.qteTheorique || 0) * Number(l.prixUnitaire || 0);
+    const reel = Number(l.qteReelle || 0) * Number(l.prixUnitaire || 0);
+    const ecart = reel - theo;
+
+    totalTheo += theo;
+    totalReel += reel;
+
+    if (ecart < 0) {
+      pertes += Math.abs(ecart);
+    } else if (ecart > 0) {
+      gains += ecart;
+    }
   });
 
-  useEffect(() => {
-    if (open) setForm((f) => ({ ...f, date: todayISO() }));
-  }, [open]);
+  const ecartGlobal = totalReel - totalTheo;
+  const tauxEcart = totalTheo ? ecartGlobal / totalTheo : 0;
 
-  const update = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  return {
+    totalArticles: lignes.length,
+    totalTheo,
+    totalReel,
+    pertes,
+    gains,
+    ecartGlobal,
+    tauxEcart,
+  };
+}
 
-  const ecart = useMemo(() => {
-    const t = Number(form.stockTheorique || 0);
-    const r = Number(form.stockReel || 0);
-    return r - t;
-  }, [form.stockTheorique, form.stockReel]);
+// Regroupement par date pour le graphique d’évolution
+function buildEvolutionData(lignes) {
+  const map = new Map();
 
-  const valeurEcart = useMemo(() => {
-    const e = Number(ecart || 0);
-    const pu = Number(form.prixUnitaire || 0);
-    return e * pu;
-  }, [ecart, form.prixUnitaire]);
+  lignes.forEach((l) => {
+    const key = l.date;
+    const exist = map.get(key) || { name: key, theorique: 0, reel: 0 };
+    const theo = Number(l.qteTheorique || 0) * Number(l.prixUnitaire || 0);
+    const reel = Number(l.qteReelle || 0) * Number(l.prixUnitaire || 0);
+    exist.theorique += theo;
+    exist.reel += reel;
+    map.set(key, exist);
+  });
 
-  return (
-    <FormModal open={open} onClose={onClose} title="Nouveau comptage & ajustement">
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          onSubmit({ ...form, ecart, valeurEcart });
-        }}
-        className="space-y-4"
-      >
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {[
-            ["Produit", "produit", "Ex: Cahier 200p", true],
-            ["Catégorie", "categorie", "Ex: Papeterie", false],
-            ["Fournisseur", "fournisseur", "Ex: SEN Distribution", false],
-            ["Prix unitaire (XOF)", "prixUnitaire", "Ex: 1500", false, "number"],
-            ["Stock théorique", "stockTheorique", "Ex: 300", true, "number"],
-            ["Stock réel (comptage)", "stockReel", "Ex: 320", true, "number"],
-          ].map(([label, key, ph, req, type]) => (
-            <div key={key}>
-              <label className="block text-sm font-medium">{label}</label>
-              <input
-                type={type || "text"}
-                min={type === "number" ? "0" : undefined}
-                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                placeholder={ph}
-                value={form[key]}
-                onChange={(e) => update(key, e.target.value)}
-                required={req}
-              />
-            </div>
-          ))}
-          <div>
-            <label className="block text-sm font-medium">Date du comptage</label>
-            <input
-              type="date"
-              max={todayISO()}
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              value={form.date}
-              onChange={(e) => update("date", e.target.value)}
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium">Motif / Observation</label>
-            <input
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              placeholder="Ex: Casse, vol, erreur de saisie…"
-              value={form.motif}
-              onChange={(e) => update("motif", e.target.value)}
-            />
-          </div>
-        </div>
-
-        {/* Résumé écart */}
-        <div className="bg-[#F7F5FF] border border-[#E9E6FF] rounded-xl p-3 text-sm flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-2">
-            <Scale className="w-4 h-4 text-[#472EAD]" />
-            <span>
-              Écart :{" "}
-              <b className={ecart === 0 ? "text-gray-700" : ecart > 0 ? "text-emerald-600" : "text-rose-600"}>
-                {ecart > 0 ? `+${ecart}` : ecart}
-              </b>
-            </span>
-          </div>
-          <div>
-            Valeur de l’écart :{" "}
-            <b
-              className={
-                valeurEcart === 0 ? "text-gray-700" : valeurEcart > 0 ? "text-emerald-600" : "text-rose-600"
-              }
-            >
-              {formatFCFA(valeurEcart)}
-            </b>
-          </div>
-        </div>
-
-        <div className="flex justify-end gap-3 pt-2">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-sm border border-gray-300 rounded-lg">
-            Annuler
-          </button>
-          <button
-            type="submit"
-            disabled={submitting}
-            className={cls(
-              "px-4 py-2 text-sm text-white rounded-lg bg-[#472EAD] hover:bg-[#3d26a5]",
-              submitting && "opacity-70 cursor-not-allowed"
-            )}
-          >
-            {submitting ? "Enregistrement…" : "Enregistrer l’ajustement"}
-          </button>
-        </div>
-      </form>
-    </FormModal>
+  return Array.from(map.values()).sort((a, b) =>
+    a.name < b.name ? -1 : 1
   );
 }
 
-// ————————————————————————————————————————————————
-// 📊 Page principale Inventaire
-// ————————————————————————————————————————————————
+// Répartition des écarts par catégorie
+function buildCategorieData(lignes) {
+  const map = new Map();
+
+  lignes.forEach((l) => {
+    const cat = l.categorie || "Autres";
+    const theo = Number(l.qteTheorique || 0) * Number(l.prixUnitaire || 0);
+    const reel = Number(l.qteReelle || 0) * Number(l.prixUnitaire || 0);
+    const ecart = reel - theo;
+    const abs = Math.abs(ecart);
+    const exist = map.get(cat) || { name: cat, value: 0 };
+    exist.value += abs;
+    map.set(cat, exist);
+  });
+
+  return Array.from(map.values()).sort((a, b) => b.value - a.value);
+}
+
+// ==========================================================
+// 💰 Composant principal
+// ==========================================================
 export default function Inventaire() {
-  // Filtres
   const [dateDebut, setDateDebut] = useState(() => {
     const d = new Date();
-    d.setDate(d.getDate() - 30);
+    d.setDate(d.getDate() - 7);
     return d.toISOString().slice(0, 10);
   });
   const [dateFin, setDateFin] = useState(todayISO());
-  const [cat, setCat] = useState("Toutes");
-  const [fourn, setFourn] = useState("Tous");
 
-  // Données
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [openAjust, setOpenAjust] = useState(false);
-  const [toasts, setToasts] = useState([]);
+  const [categorie, setCategorie] = useState("Toutes");
+  const [fournisseur, setFournisseur] = useState("Tous");
+  const [typeEcart, setTypeEcart] = useState("Tous"); // "Tous" | "Perte" | "Gain" | "Sans écart"
+  const [recherche, setRecherche] = useState("");
 
-  // KPI + tableaux + charts
-  const [stats, setStats] = useState({
-    stockTheo: 0,
-    stockReel: 0,
-    totalEcarts: 0,
-    valeurEcarts: 0,
-  });
+  // Options dynamiques basées sur les données simulées
+  const categorieOptions = useMemo(
+    () => [
+      "Toutes",
+      ...Array.from(new Set(INVENTAIRE_EXEMPLE.map((l) => l.categorie))),
+    ],
+    []
+  );
+  const fournisseurOptions = useMemo(
+    () => [
+      "Tous",
+      ...Array.from(new Set(INVENTAIRE_EXEMPLE.map((l) => l.fournisseur))),
+    ],
+    []
+  );
 
-  const [ajustements, setAjustements] = useState([]); // journal des ajustements
-  const [ecartsParCategorie, setEcartsParCategorie] = useState([]); // chart bar
-  const [repartitionPosNeg, setRepartitionPosNeg] = useState([]); // chart pie
-  const [evolutionValeur, setEvolutionValeur] = useState([]); // chart area
+  // 🔎 Filtrage des lignes
+  const lignesFiltrees = useMemo(() => {
+    const start = new Date(dateDebut);
+    const end = new Date(dateFin);
+    end.setHours(23, 59, 59, 999);
+    const q = (recherche || "").toLowerCase();
 
-  const toast = (type, title, message) => {
-    const id = Date.now();
-    setToasts((t) => [...t, { id, type, title, message }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4000);
-  };
-  const removeToast = (id) => setToasts((t) => t.filter((x) => x.id !== id));
+    return INVENTAIRE_EXEMPLE.filter((l) => {
+      const d = new Date(l.date);
+      if (isNaN(d.getTime())) return false;
+      if (d < start || d > end) return false;
 
-  // ————————————————————————
-  // Chargement (simulation + hooks API prêts)
-  // ————————————————————————
-  const loadData = async () => {
-    try {
-      setLoading(true);
+      if (categorie !== "Toutes" && l.categorie !== categorie) return false;
+      if (fournisseur !== "Tous" && l.fournisseur !== fournisseur)
+        return false;
 
-      // 🔗 Quand le backend est prêt, décommente et ajuste :
-      // const { data: kpi } = await instance.get("/inventaire/kpi", { params: { from: dateDebut, to: dateFin, cat, fourn }});
-      // const { data: aj }  = await instance.get("/inventaire/ajustements", { params: { from: dateDebut, to: dateFin, cat, fourn }});
-      // const { data: ec }  = await instance.get("/inventaire/ecarts-par-categorie", { params: { from: dateDebut, to: dateFin }});
-      // const { data: rep } = await instance.get("/inventaire/repartition-ecarts", { params: { from: dateDebut, to: dateFin }});
-      // const { data: evo } = await instance.get("/inventaire/evolution-valeur-ecarts", { params: { from: dateDebut, to: dateFin }});
+      const ecartQte = Number(l.qteReelle || 0) - Number(l.qteTheorique || 0);
+      if (typeEcart === "Perte" && !(ecartQte < 0)) return false;
+      if (typeEcart === "Gain" && !(ecartQte > 0)) return false;
+      if (typeEcart === "Sans écart" && ecartQte !== 0) return false;
 
-      // ——— Simulation locale pour démo UI ———
-      const kpi = { stockTheo: 12470, stockReel: 12310, totalEcarts: -160, valeurEcarts: -125000 };
-      const aj = [
-        {
-          id: 1,
-          date: "2025-10-06",
-          produit: "Cahier 200p",
-          categorie: "Papeterie",
-          fournisseur: "SEN Distribution",
-          theorique: 320,
-          reel: 300,
-          ecart: -20,
-          valeur: -14000,
-          motif: "Casse",
-          user: "Responsable",
-        },
-        {
-          id: 2,
-          date: "2025-10-08",
-          produit: "Stylo bleu x50",
-          categorie: "Fournitures",
-          fournisseur: "Fournil Office",
-          theorique: 120,
-          reel: 140,
-          ecart: +20,
-          valeur: +3000,
-          motif: "Erreur stock",
-          user: "Responsable",
-        },
-        {
-          id: 3,
-          date: "2025-10-12",
-          produit: "Ramette A4",
-          categorie: "Papier",
-          fournisseur: "Imprisol",
-          theorique: 80,
-          reel: 60,
-          ecart: -20,
-          valeur: -60000,
-          motif: "Vol supposé",
-          user: "Responsable",
-        },
-      ];
-      const ecCat = [
-        { categorie: "Papeterie", ecart: -20 },
-        { categorie: "Fournitures", ecart: 20 },
-        { categorie: "Papier", ecart: -20 },
-      ];
-      const rep = [
-        { name: "Écarts positifs", value: 1 },
-        { name: "Écarts négatifs", value: 2 },
-      ];
-      const evol = [
-        { date: "S-4", valeur: -15000 },
-        { date: "S-3", valeur: -20000 },
-        { date: "S-2", valeur: -25000 },
-        { date: "S-1", valeur: -30000 },
-        { date: "Cette semaine", valeur: -35000 },
-      ];
+      if (q) {
+        const blob = [
+          l.produit,
+          l.reference,
+          l.categorie,
+          l.fournisseur,
+          l.commentaire,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        if (!blob.includes(q)) return false;
+      }
 
-      // set via backend quand dispo
-      setStats(kpi);
-      setAjustements(aj);
-      setEcartsParCategorie(ecCat);
-      setRepartitionPosNeg(rep);
-      setEvolutionValeur(evol);
-    } catch (e) {
-      console.error("Inventaire load error:", e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateDebut, dateFin, cat, fourn]);
-
-  // ————————————————————————
-  // Création d’un ajustement
-  // ————————————————————————
-  const handleAjustement = async (payload) => {
-    try {
-      setSubmitting(true);
-
-      // 🔗 Backend :
-      // await instance.post("/inventaire/ajustements", payload);
-
-      const next = {
-        id: Date.now(),
-        date: payload.date,
-        produit: payload.produit,
-        categorie: payload.categorie || "N/A",
-        fournisseur: payload.fournisseur || "N/A",
-        theorique: Number(payload.stockTheorique),
-        reel: Number(payload.stockReel),
-        ecart: Number(payload.ecart),
-        valeur: Number(payload.valeurEcart || 0),
-        motif: payload.motif || "",
-        user: "Responsable",
-      };
-
-      setAjustements((prev) => [next, ...prev]);
-
-      // recalcul KPI (simple agrégat)
-      setStats((s) => ({
-        ...s,
-        totalEcarts: s.totalEcarts + next.ecart,
-        valeurEcarts: s.valeurEcarts + next.valeur,
-      }));
-
-      setOpenAjust(false);
-      toast("success", "Ajustement enregistré", `${next.produit} — ${formatFCFA(next.valeur)}`);
-    } catch (e) {
-      console.error("Ajustement error:", e);
-      toast("error", "Erreur", "Impossible d’enregistrer l’ajustement.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  // ————————————————————————
-  // Export PDF (KPI + tableau ajustements)
-  // ————————————————————————
-  const handleExportPDF = () => {
-    const doc = new jsPDF();
-    doc.text("Inventaire — Bilan & Ajustements", 14, 16);
-    doc.setFontSize(10);
-    doc.text(`Période: ${dateDebut} → ${dateFin}`, 14, 22);
-    if (cat !== "Toutes") doc.text(`Catégorie: ${cat}`, 14, 27);
-    if (fourn !== "Tous") doc.text(`Fournisseur: ${fourn}`, 14, 32);
-
-    // KPI
-    doc.setFontSize(12);
-    doc.text("KPI", 14, 42);
-    doc.setFontSize(10);
-    doc.autoTable({
-      startY: 45,
-      head: [["Stock théorique", "Stock réel", "Écarts (Qté)", "Valeur des écarts"]],
-      body: [[stats.stockTheo, stats.stockReel, stats.totalEcarts, formatFCFA(stats.valeurEcarts)]],
-      theme: "grid",
-      styles: { fontSize: 9 },
-      headStyles: { fillColor: [71, 46, 173] },
+      return true;
     });
+  }, [dateDebut, dateFin, categorie, fournisseur, typeEcart, recherche]);
 
-    // Journal ajustements
-    const rows = ajustements.map((a) => [
-      a.date,
-      a.produit,
-      a.categorie,
-      a.fournisseur,
-      a.theorique,
-      a.reel,
-      a.ecart,
-      formatFCFA(a.valeur),
-      a.motif,
-      a.user,
-    ]);
+  const stats = useMemo(
+    () => computeStats(lignesFiltrees),
+    [lignesFiltrees]
+  );
 
-    const y = doc.lastAutoTable.finalY + 10;
-    doc.text("Journal des ajustements", 14, y);
+  const evolutionData = useMemo(
+    () => buildEvolutionData(lignesFiltrees),
+    [lignesFiltrees]
+  );
+  const categorieData = useMemo(
+    () => buildCategorieData(lignesFiltrees),
+    [lignesFiltrees]
+  );
+
+  const typeEcartData = useMemo(() => {
+    const pertes = stats.pertes;
+    const gains = stats.gains;
+    const sansEcart =
+      Math.max(stats.totalTheo, stats.totalReel) - pertes - gains;
+
+    return [
+      { name: "Pertes", value: Math.max(pertes, 0) },
+      { name: "Gains", value: Math.max(gains, 0) },
+      { name: "Sans écart", value: Math.max(sansEcart, 0) },
+    ];
+  }, [stats.pertes, stats.gains, stats.totalTheo, stats.totalReel]);
+
+  // ========================================================
+  // 📤 Export PDF
+  // ========================================================
+  const exportPDF = () => {
+    const doc = new jsPDF();
+    doc.text(
+      "Inventaire — Boutique Colobane (Librairie Papeterie Daradji)",
+      14,
+      16
+    );
+    doc.setFontSize(10);
+    doc.text(`Période : ${dateDebut} → ${dateFin}`, 14, 22);
+    doc.text(
+      `Filtres : Catégorie=${categorie} • Fournisseur=${fournisseur} • Type d’écart=${typeEcart}`,
+      14,
+      27
+    );
+    doc.text(
+      `Lignes d’inventaire : ${lignesFiltrees.length}`,
+      14,
+      32
+    );
+
     doc.autoTable({
-      startY: y + 3,
-      head: [["Date", "Produit", "Catégorie", "Fournisseur", "Théo", "Réel", "Écart", "Valeur", "Motif", "User"]],
-      body: rows,
+      startY: 38,
+      head: [
+        [
+          "Date",
+          "Réf.",
+          "Produit",
+          "Catégorie",
+          "Fournisseur",
+          "Qté théor.",
+          "Qté réelle",
+          "Écart",
+          "Valeur écart",
+        ],
+      ],
+      body: lignesFiltrees.map((l) => {
+        const ecartQte = Number(l.qteReelle || 0) - Number(l.qteTheorique || 0);
+        const ecartValeur = ecartQte * Number(l.prixUnitaire || 0);
+        return [
+          l.date,
+          l.reference,
+          l.produit,
+          l.categorie,
+          l.fournisseur,
+          l.qteTheorique,
+          l.qteReelle,
+          ecartQte,
+          formatFCFA(ecartValeur),
+        ];
+      }),
       styles: { fontSize: 8 },
       headStyles: { fillColor: [71, 46, 173] },
     });
 
-    doc.save(`Inventaire_${dateDebut}_au_${dateFin}.pdf`);
+    doc.save(`Inventaire_Colobane_${dateDebut}_au_${dateFin}.pdf`);
+    toast.success("Export PDF inventaire généré avec succès.");
   };
 
-  // ————————————————————————
-  // Filtres (front)
-  // ————————————————————————
-  const categories = ["Toutes", "Papeterie", "Fournitures", "Papier"];
-  const fournisseurs = ["Tous", "SEN Distribution", "Fournil Office", "Imprisol"];
+  // Simule la génération d’ajustements (futur endpoint)
+  const handleGenerateAdjustments = () => {
+    if (!lignesFiltrees.length) {
+      toast.error(
+        "Aucune ligne d’inventaire pour générer des ajustements sur cette période."
+      );
+      return;
+    }
 
-  const filteredAjustements = useMemo(() => {
-    return ajustements.filter((a) => {
-      const okDate = (!dateDebut || a.date >= dateDebut) && (!dateFin || a.date <= dateFin);
-      const okCat = cat === "Toutes" || a.categorie === cat;
-      const okF = fourn === "Tous" || a.fournisseur === fourn;
-      return okDate && okCat && okF;
-    });
-  }, [ajustements, dateDebut, dateFin, cat, fourn]);
+    // Ici, plus tard : appel API pour créer les écritures d’ajustement
+    // await instance.post("/inventaire/ajustements", { lignes: lignesFiltrees });
 
-  // ——————————————————————————
-  // 🧭 UI
-  // ——————————————————————————
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-[70vh] text-[#472EAD]">
-        <RefreshCw className="w-6 h-6 animate-spin mr-2" />
-        Chargement des données d’inventaire…
-      </div>
+    toast.success(
+      "Simulation : ajustements de stock générés (journal d’inventaire à implémenter côté API)."
     );
-  }
+  };
+
+  const totalEcartArticle = (ligne) =>
+    Number(ligne.qteReelle || 0) - Number(ligne.qteTheorique || 0);
 
   return (
-    <>
-      {/* Header & actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-[#472EAD]">Inventaire & Bilan des stocks</h1>
-          <p className="text-sm text-gray-500">
-            Comptage, écarts, ajustements journalisés, bénéfices/pertes & graphiques.
-          </p>
-        </div>
+    <div className="min-h-screen w-full bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white px-4 sm:px-6 lg:px-10 py-6 sm:py-8 overflow-y-auto">
+      <div className="max-w-6xl mx-auto space-y-7">
+        {/* HEADER */}
+        <motion.header
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45 }}
+          className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+        >
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/70 border border-[#E4E0FF] shadow-xs">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+              <span className="text-[11px] font-semibold tracking-wide text-[#472EAD] uppercase">
+                Module Inventaire — Responsable
+              </span>
+            </div>
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#2F1F7A]">
+                Inventaire & écarts de stock — Boutique Colobane
+              </h1>
+              <p className="mt-1 text-sm text-gray-500">
+                Comptage physique, analyse des écarts et synthèse financière
+                pour la boutique de Colobane.
+              </p>
+            </div>
+            <p className="text-[11px] text-gray-400">
+              Période du{" "}
+              <span className="font-semibold">{dateDebut}</span> au{" "}
+              <span className="font-semibold">{dateFin}</span> •{" "}
+              {lignesFiltrees.length} ligne
+              {lignesFiltrees.length > 1 && "s"} d’inventaire affichée
+              {lignesFiltrees.length > 1 && "s"}
+            </p>
+          </div>
 
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setOpenAjust(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-[#472EAD] text-white rounded-lg shadow hover:scale-[1.02] transition"
-          >
-            <PlusCircle size={18} /> Nouveau comptage
-          </button>
-          <button
-            onClick={handleExportPDF}
-            className="flex items-center gap-2 px-4 py-2 bg-white text-[#472EAD] border border-[#E3E0FF] rounded-lg hover:bg-[#F7F5FF]"
-          >
-            <FileDown size={18} /> Export PDF
-          </button>
-        </div>
-      </div>
+          <div className="flex flex-col sm:flex-row items-end gap-3">
+            <button
+              onClick={handleGenerateAdjustments}
+              className="inline-flex items-center gap-2 bg-[#472EAD] text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-[#5A3CF5] shadow-md transition"
+            >
+              <PackageOpen className="w-4 h-4" />
+              Générer les ajustements
+            </button>
+            <button
+              onClick={exportPDF}
+              className="inline-flex items-center gap-2 bg-[#472EAD] text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-[#5A3CF5] shadow-md transition"
+            >
+              <FileDown className="w-4 h-4" />
+              Exporter PDF
+            </button>
+          </div>
+        </motion.header>
 
-      {/* Filtres */}
-      <div className="rounded-xl border border-gray-200 bg-white p-4 mb-6">
-        <div className="flex items-center gap-2 text-[#472EAD] font-semibold mb-3">
-          <Filter size={16} /> Filtres
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
-          <div className="col-span-2">
-            <label className="block text-xs text-gray-500 mb-1">Période</label>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="relative">
-                <Calendar className="w-4 h-4 text-gray-400 absolute left-2 top-3" />
-                <input
-                  type="date"
-                  value={dateDebut}
-                  max={dateFin}
-                  onChange={(e) => setDateDebut(e.target.value)}
-                  className="pl-7 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                />
+        {/* FILTRES + KPI */}
+        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-2">
+          {/* Filtres */}
+          <div className="lg:col-span-1 bg-white/90 rounded-2xl border border-[#E4E0FF] shadow-[0_18px_45px_rgba(15,23,42,0.06)] p-4 sm:p-5 space-y-4">
+            <div className="flex items-center gap-2 text-[#472EAD] font-semibold text-sm">
+              <Filter size={16} />
+              Filtres inventaire
+            </div>
+
+            <div className="space-y-3">
+              {/* Période */}
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">
+                  Période de comptage
+                </label>
+                <div className="grid grid-cols-[auto,1fr] gap-2 items-center">
+                  <CalendarDays className="w-4 h-4 text-gray-400" />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="date"
+                      value={dateDebut}
+                      max={dateFin}
+                      onChange={(e) => setDateDebut(e.target.value)}
+                      className="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs bg-white shadow-sm focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD]"
+                    />
+                    <input
+                      type="date"
+                      value={dateFin}
+                      min={dateDebut}
+                      onChange={(e) => setDateFin(e.target.value)}
+                      className="w-full border border-gray-300 rounded-xl px-3 py-2 text-xs bg-white shadow-sm focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD]"
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="relative">
-                <Calendar className="w-4 h-4 text-gray-400 absolute left-2 top-3" />
-                <input
-                  type="date"
-                  value={dateFin}
-                  min={dateDebut}
-                  max={todayISO()}
-                  onChange={(e) => setDateFin(e.target.value)}
-                  className="pl-7 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                />
+
+              {/* Catégorie */}
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">
+                  Catégorie
+                </label>
+                <select
+                  value={categorie}
+                  onChange={(e) => setCategorie(e.target.value)}
+                  className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm bg-white shadow-sm focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD]"
+                >
+                  {categorieOptions.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Fournisseur */}
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">
+                  Fournisseur
+                </label>
+                <select
+                  value={fournisseur}
+                  onChange={(e) => setFournisseur(e.target.value)}
+                  className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm bg-white shadow-sm focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD]"
+                >
+                  {fournisseurOptions.map((f) => (
+                    <option key={f} value={f}>
+                      {f}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Type d’écart */}
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">
+                  Type d’écart
+                </label>
+                <select
+                  value={typeEcart}
+                  onChange={(e) => setTypeEcart(e.target.value)}
+                  className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm bg-white shadow-sm focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD]"
+                >
+                  <option value="Tous">Tous</option>
+                  <option value="Perte">Perte (écart négatif)</option>
+                  <option value="Gain">Gain (écart positif)</option>
+                  <option value="Sans écart">Sans écart</option>
+                </select>
+              </div>
+
+              {/* Recherche */}
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">
+                  Recherche produit / référence
+                </label>
+                <div className="relative">
+                  <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
+                  <input
+                    value={recherche}
+                    onChange={(e) => setRecherche(e.target.value)}
+                    placeholder="Nom produit, référence, commentaire…"
+                    className="pl-9 w-full border border-gray-300 rounded-xl px-3 py-2 text-sm bg-white shadow-sm focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD] placeholder:text-gray-400"
+                  />
+                </div>
               </div>
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Catégorie</label>
-            <select
-              value={cat}
-              onChange={(e) => setCat(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            >
-              {categories.map((c) => (
-                <option key={c}>{c}</option>
-              ))}
-            </select>
+          {/* KPI en bloc structuré */}
+          <div className="lg:col-span-2">
+            <div className="bg-white/90 rounded-2xl border border-[#E4E0FF] shadow-[0_18px_45px_rgba(15,23,42,0.06)] p-4 sm:p-5 space-y-4">
+              <div className="flex items-center justify-between mb-1">
+                <h2 className="text-sm font-semibold text-[#2F1F7A]">
+                  Synthèse financière de l’inventaire — Boutique Colobane
+                </h2>
+                <span className="text-[11px] text-gray-400">
+                  Basée sur les lignes d’inventaire filtrées
+                </span>
+              </div>
+
+              <div className="divide-y divide-gray-100">
+                {/* Valeur stock théorique */}
+                <div className="py-3 flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-2">
+                    <span className="mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
+                      <Layers className="w-4 h-4" />
+                    </span>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-700">
+                        Valeur stock théorique
+                      </p>
+                      <p className="text-[11px] text-gray-400">
+                        Calculée depuis les quantités système (avant comptage
+                        physique)
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm sm:text-base font-bold text-indigo-700 font-mono">
+                      {formatFCFA(stats.totalTheo)}
+                    </p>
+                    <p className="text-[11px] text-gray-400">
+                      {stats.totalArticles} article
+                      {stats.totalArticles > 1 && "s"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Valeur stock réel */}
+                <div className="py-3 flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-2">
+                    <span className="mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                      <BarChart3 className="w-4 h-4" />
+                    </span>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-700">
+                        Valeur stock réel
+                      </p>
+                      <p className="text-[11px] text-gray-400">
+                        Résultat du comptage physique réalisé en boutique
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm sm:text-base font-bold text-emerald-700 font-mono">
+                      {formatFCFA(stats.totalReel)}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Pertes inventaire */}
+                <div className="py-3 flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-2">
+                    <span className="mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-full bg-rose-50 text-rose-600">
+                      <ArrowDownRight className="w-4 h-4" />
+                    </span>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-700">
+                        Pertes inventaire
+                      </p>
+                      <p className="text-[11px] text-gray-400">
+                        Vols, casse, erreurs ou écarts négatifs constatés
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm sm:text-base font-bold text-rose-700 font-mono">
+                      {formatFCFA(stats.pertes)}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Gains / Surplus */}
+                <div className="py-3 flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-2">
+                    <span className="mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-full bg-amber-50 text-amber-600">
+                      <ArrowUpRight className="w-4 h-4" />
+                    </span>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-700">
+                        Gains / Surplus
+                      </p>
+                      <p className="text-[11px] text-gray-400">
+                        Surplus détectés (écarts positifs, régularisations)
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm sm:text-base font-bold text-amber-700 font-mono">
+                      {formatFCFA(stats.gains)}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Écart global */}
+                <div className="py-3 flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-2">
+                    <span className="mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-50 text-slate-700">
+                      <AlertTriangle className="w-4 h-4" />
+                    </span>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-700">
+                        Écart global (réel − théorique)
+                      </p>
+                      <p className="text-[11px] text-gray-400">
+                        Différence totale entre la valeur théorique et la
+                        valeur réelle
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p
+                      className={`text-sm sm:text-base font-bold font-mono ${
+                        stats.ecartGlobal < 0
+                          ? "text-rose-700"
+                          : stats.ecartGlobal > 0
+                          ? "text-emerald-700"
+                          : "text-slate-600"
+                      }`}
+                    >
+                      {formatFCFA(stats.ecartGlobal)}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Taux d’écart */}
+                <div className="py-3 flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-2">
+                    <span className="mt-0.5 inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-50 text-slate-700">
+                      <Percent className="w-4 h-4" />
+                    </span>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-700">
+                        Taux d’écart
+                      </p>
+                      <p className="text-[11px] text-gray-400">
+                        Écart global rapporté à la valeur théorique du stock
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm sm:text-base font-bold text-slate-700 font-mono">
+                      {formatPercent(stats.tauxEcart)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
+        </section>
 
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Fournisseur</label>
-            <select
-              value={fourn}
-              onChange={(e) => setFourn(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            >
-              {fournisseurs.map((f) => (
-                <option key={f}>{f}</option>
-              ))}
-            </select>
-          </div>
+        {/* GRAPHIQUES */}
+        <section className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+          <ChartBox
+            title="Évolution de la valeur de stock (théorique vs réel)"
+            icon={<BarChart3 size={18} />}
+            data={evolutionData}
+            dataKey1="theorique"
+            dataKey2="reel"
+            type="line"
+          />
 
-          <div className="flex items-end">
-            <button
-              onClick={loadData}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 text-sm"
-            >
-              <PackageSearch size={16} /> Actualiser
-            </button>
-          </div>
-        </div>
-      </div>
+          <ChartBox
+            title="Répartition des écarts par catégorie"
+            icon={<Layers size={18} />}
+            data={categorieData}
+            dataKey1="value"
+            type="pie"
+          />
+        </section>
 
-      {/* KPI */}
-      <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
-        <KpiCard
-          label="Stock théorique"
-          value={stats.stockTheo}
-          icon={<Package size={20} />}
-          gradient="from-[#472EAD] to-[#7A5BF5]"
-          trend="Stable"
-          trendValue={0}
-        />
-        <KpiCard
-          label="Stock réel"
-          value={stats.stockReel}
-          icon={<ClipboardCheck size={20} />}
-          gradient="from-[#10B981] to-[#34D399]"
-          trend="Variation"
-          trendValue={(((stats.stockReel - stats.stockTheo) / (stats.stockTheo || 1)) * 100).toFixed(2)}
-        />
-        <KpiCard
-          label="Écart (Qté)"
-          value={stats.totalEcarts}
-          icon={<AlertTriangle size={20} />}
-          gradient="from-[#F58020] to-[#FF995A]"
-          trend="vs période"
-          trendValue={-2.5}
-        />
-        <KpiCard
-          label="Valeur des écarts"
-          value={formatFCFA(stats.valeurEcarts)}
-          icon={<Scale size={20} />}
-          gradient="from-[#EF4444] to-[#FB7185]"
-          trend="Évolution"
-          trendValue={-8.5}
-        />
-      </section>
+        {/* Pie type d’écart */}
+        <section className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+          <ChartBox
+            title="Répartition des écarts (pertes / gains / sans écart)"
+            icon={<AlertTriangle size={18} />}
+            data={typeEcartData}
+            dataKey1="value"
+            type="pie"
+          />
+        </section>
 
-      {/* Graphiques */}
-      <section className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-6">
-        {/* Bar: écarts par catégorie */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
-          <h3 className="text-[#472EAD] font-semibold mb-3">Écarts par catégorie</h3>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={ecartsParCategorie}>
-                <XAxis dataKey="categorie" stroke="#888" />
-                <YAxis stroke="#888" />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="ecart" fill="#472EAD" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Pie: répartition positifs/négatifs */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
-          <h3 className="text-[#472EAD] font-semibold mb-3">Répartition des écarts</h3>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={repartitionPosNeg} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90}>
-                  {repartitionPosNeg.map((e, i) => (
-                    <Cell key={`pie-${i}`} fill={COLORS[i % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </section>
-
-      {/* Area: évolution valeur écarts */}
-      <section className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm mb-6">
-        <h3 className="text-[#472EAD] font-semibold mb-3">Évolution de la valeur des écarts</h3>
-        <div className="h-72">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={evolutionValeur}>
-              <defs>
-                <linearGradient id="val" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#472EAD" stopOpacity={0.8} />
-                  <stop offset="95%" stopColor="#472EAD" stopOpacity={0.1} />
-                </linearGradient>
-              </defs>
-              <XAxis dataKey="date" stroke="#888" />
-              <YAxis stroke="#888" />
-              <Tooltip />
-              <Area type="monotone" dataKey="valeur" stroke="#472EAD" fillOpacity={1} fill="url(#val)" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </section>
-
-      {/* Journal des ajustements */}
-      <section className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-[#472EAD] font-semibold">Journal des ajustements</h3>
-        </div>
-
-        <div className="overflow-x-auto rounded-lg border border-gray-100">
-          <table className="min-w-full text-sm">
-            <thead className="bg-[#F7F5FF] text-[#472EAD] uppercase text-xs font-semibold">
+        {/* TABLEAU DÉTAILLÉ */}
+        <section className="bg-white/95 border border-[#E4E0FF] rounded-2xl shadow-[0_12px_30px_rgba(15,23,42,0.06)] p-4 sm:p-5 overflow-x-auto">
+          <h3 className="text-sm sm:text-base font-semibold text-[#2F1F7A] mb-3">
+            Détail des lignes d’inventaire — Colobane
+          </h3>
+          <table className="min-w-full text-xs sm:text-sm">
+            <thead className="bg-[#F7F5FF] text-[#472EAD] uppercase text-[11px] font-semibold">
               <tr>
-                <th className="px-4 py-3 text-left">Date</th>
-                <th className="px-4 py-3 text-left">Produit</th>
-                <th className="px-4 py-3 text-left">Catégorie</th>
-                <th className="px-4 py-3 text-left">Fournisseur</th>
-                <th className="px-4 py-3 text-right">Théo</th>
-                <th className="px-4 py-3 text-right">Réel</th>
-                <th className="px-4 py-3 text-right">Écart</th>
-                <th className="px-4 py-3 text-right">Valeur</th>
-                <th className="px-4 py-3 text-left">Motif</th>
-                <th className="px-4 py-3 text-left">User</th>
+                <th className="px-4 py-3 text-left border-b border-[#E4E0FF]">
+                  Date
+                </th>
+                <th className="px-4 py-3 text-left border-b border-[#E4E0FF]">
+                  Réf.
+                </th>
+                <th className="px-4 py-3 text-left border-b border-[#E4E0FF]">
+                  Produit
+                </th>
+                <th className="px-4 py-3 text-left border-b border-[#E4E0FF]">
+                  Catégorie
+                </th>
+                <th className="px-4 py-3 text-left border-b border-[#E4E0FF]">
+                  Fournisseur
+                </th>
+                <th className="px-4 py-3 text-right border-b border-[#E4E0FF]">
+                  Qté théorique
+                </th>
+                <th className="px-4 py-3 text-right border-b border-[#E4E0FF]">
+                  Qté réelle
+                </th>
+                <th className="px-4 py-3 text-right border-b border-[#E4E0FF]">
+                  Écart
+                </th>
+                <th className="px-4 py-3 text-right border-b border-[#E4E0FF]">
+                  Valeur écart
+                </th>
+                <th className="px-4 py-3 text-left border-b border-[#E4E0FF]">
+                  Commentaire
+                </th>
               </tr>
             </thead>
             <tbody>
-              {filteredAjustements.length ? (
-                filteredAjustements.map((a) => (
-                  <tr key={a.id} className="border-t border-gray-100 hover:bg-[#F9F9FF]">
-                    <td className="px-4 py-2">{a.date}</td>
-                    <td className="px-4 py-2 font-medium text-gray-800">{a.produit}</td>
-                    <td className="px-4 py-2">{a.categorie}</td>
-                    <td className="px-4 py-2">{a.fournisseur}</td>
-                    <td className="px-4 py-2 text-right">{a.theorique}</td>
-                    <td className="px-4 py-2 text-right">{a.reel}</td>
-                    <td className={cls("px-4 py-2 text-right", a.ecart >= 0 ? "text-emerald-600" : "text-rose-600")}>
-                      {a.ecart > 0 ? `+${a.ecart}` : a.ecart}
-                    </td>
-                    <td className={cls("px-4 py-2 text-right", a.valeur >= 0 ? "text-emerald-600" : "text-rose-600")}>
-                      {formatFCFA(a.valeur)}
-                    </td>
-                    <td className="px-4 py-2">{a.motif || "-"}</td>
-                    <td className="px-4 py-2">{a.user}</td>
-                  </tr>
-                ))
+              {lignesFiltrees.length ? (
+                lignesFiltrees.map((l) => {
+                  const ecartQte = totalEcartArticle(l);
+                  const ecartValeur =
+                    ecartQte * Number(l.prixUnitaire || 0);
+
+                  const ecartClass =
+                    ecartQte < 0
+                      ? "text-rose-600"
+                      : ecartQte > 0
+                      ? "text-emerald-600"
+                      : "text-slate-600";
+
+                  return (
+                    <tr
+                      key={l.id}
+                      className="border-b border-gray-100 hover:bg-[#F9F9FF] transition-colors"
+                    >
+                      <td className="px-4 py-2.5 whitespace-nowrap">
+                        {l.date}
+                      </td>
+                      <td className="px-4 py-2.5 whitespace-nowrap">
+                        {l.reference}
+                      </td>
+                      <td className="px-4 py-2.5 whitespace-nowrap">
+                        {l.produit}
+                      </td>
+                      <td className="px-4 py-2.5 whitespace-nowrap">
+                        {l.categorie}
+                      </td>
+                      <td className="px-4 py-2.5 whitespace-nowrap">
+                        {l.fournisseur}
+                      </td>
+                      <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                        {l.qteTheorique}
+                      </td>
+                      <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                        {l.qteReelle}
+                      </td>
+                      <td
+                        className={`px-4 py-2.5 text-right whitespace-nowrap font-medium ${ecartClass}`}
+                      >
+                        {ecartQte}
+                      </td>
+                      <td
+                        className={`px-4 py-2.5 text-right whitespace-nowrap font-medium ${ecartClass}`}
+                      >
+                        {formatFCFA(ecartValeur)}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <span className="text-[11px] text-gray-600">
+                          {l.commentaire}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
               ) : (
                 <tr>
-                  <td colSpan="10" className="px-4 py-6 text-center text-gray-400">
-                    Aucun ajustement pour cette période / ces filtres.
+                  <td
+                    colSpan={10}
+                    className="text-center text-gray-400 py-6 text-xs sm:text-sm"
+                  >
+                    Aucune ligne d’inventaire trouvée pour cette période et ces
+                    filtres.
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
-        </div>
-      </section>
-
-      {/* Modale d’ajustement & Toasts */}
-      <AjustementModal open={openAjust} onClose={() => setOpenAjust(false)} onSubmit={handleAjustement} submitting={submitting} />
-      <Toasts toasts={toasts} remove={removeToast} />
-    </>
+        </section>
+      </div>
+    </div>
   );
 }

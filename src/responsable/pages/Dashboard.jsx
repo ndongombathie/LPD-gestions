@@ -11,7 +11,6 @@ import {
   DollarSign,
   AlertCircle,
   FileDown,
-  Activity,
   CheckCircle,
   XCircle,
 } from "lucide-react";
@@ -103,151 +102,149 @@ export default function Dashboard() {
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.8 }}
-      className="min-h-screen w-full px-6 py-8 bg-gradient-to-br from-[#F9F9FB] via-[#F5F3FF] to-[#FFF9F6] overflow-y-auto"
-    >
-      {/* === HEADER === */}
-      <motion.header
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-        className="mb-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+    <div className="min-h-screen w-full bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white px-4 sm:px-6 lg:px-10 py-6 sm:py-8 overflow-y-auto">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.8 }}
+        className="max-w-6xl mx-auto space-y-8"
       >
-        <div>
-          <h1 className="text-3xl font-extrabold text-[#472EAD] drop-shadow-sm">
-            Tableau de bord du Responsable
-          </h1>
-          <p className="text-sm text-gray-500">
-            Vue consolidée des performances, stocks et activités récentes.
-          </p>
-        </div>
-
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.97 }}
-          onClick={handleExportPDF}
-          className="flex items-center gap-2 bg-[#472EAD] hover:bg-[#5A3CF5] text-white px-5 py-2.5 rounded-lg shadow-md hover:shadow-lg transition-all duration-300"
+        {/* === HEADER === */}
+        <motion.header
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
         >
-          <FileDown size={18} />
-          Exporter le rapport PDF
-        </motion.button>
-      </motion.header>
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/70 border border-[#E4E0FF] shadow-xs">
+              <span className="h-1.5 w-1.5 rounded-full bg-sky-500" />
+              <span className="text-[11px] font-semibold tracking-wide text-[#472EAD] uppercase">
+                Module Tableau de bord — Responsable
+              </span>
+            </div>
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-[#2F1F7A] tracking-tight">
+                Tableau de bord du Responsable
+              </h1>
+              <p className="text-sm text-gray-500 mt-1">
+                Vue consolidée des performances, stocks et activités récentes.
+              </p>
+            </div>
+          </div>
 
-      {/* === KPI CARDS === */}
-      <motion.section
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.7 }}
-        className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-8"
-      >
-        {stats.map((s, i) => (
-          <Card
-            key={i}
-            label={s.label}
-            value={s.value}
-            icon={s.icon}
-            trend={s.trend}
-            gradient={s.gradient}
+          <div className="flex gap-3">
+
+          </div>
+        </motion.header>
+
+        {/* === KPI CARDS (2x2 pour alignement) === */}
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.7 }}
+          className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-2 gap-6"
+        >
+          {stats.map((s, i) => (
+            <Card
+              key={i}
+              label={s.label}
+              value={s.value}
+              icon={s.icon}
+              trend={s.trend}
+              gradient={s.gradient}
+            />
+          ))}
+        </motion.section>
+
+        {/* === ALERTES CRITIQUES === */}
+        <motion.section
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          className="grid grid-cols-1 sm:grid-cols-3 gap-4"
+        >
+          <div className="flex items-center gap-2 bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl">
+            <XCircle size={18} /> <span>3 produits en rupture</span>
+          </div>
+          <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 px-4 py-3 rounded-xl">
+            <AlertCircle size={18} /> <span>5 produits sous le seuil</span>
+          </div>
+          <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-xl">
+            <CheckCircle size={18} /> <span>Stock global stable</span>
+          </div>
+        </motion.section>
+
+        {/* === GRAPHIQUES PRINCIPAUX === */}
+        <motion.section
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.9 }}
+          className="grid grid-cols-1 xl:grid-cols-2 gap-8"
+        >
+          <ChartBox
+            title="Évolution des ventes et revenus"
+            icon={<TrendingUp size={18} />}
+            data={salesData}
+            dataKey1="ventes"
+            dataKey2="revenus"
+            type="line"
           />
-        ))}
-      </motion.section>
 
-      {/* === ALERTES CRITIQUES === */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-        className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-12"
-      >
-        <div className="flex items-center gap-2 bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl">
-          <XCircle size={18} /> <span>3 produits en rupture</span>
-        </div>
-        <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 px-4 py-3 rounded-xl">
-          <AlertCircle size={18} /> <span>5 produits sous le seuil</span>
-        </div>
-        <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-xl">
-          <CheckCircle size={18} /> <span>Stock global stable</span>
-        </div>
+          <ChartBox
+            title="Répartition du stock global"
+            icon={<Package size={18} />}
+            data={stockData}
+            dataKey1="value"
+            type="pie"
+          />
+        </motion.section>
+
+        {/* === COURBE DES BÉNÉFICES === */}
+        <motion.section
+          initial={{ opacity: 0, y: 40 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 1 }}
+        >
+          <ChartBox
+            title="Progression mensuelle des bénéfices"
+            icon={<DollarSign size={18} />}
+            data={salesData}
+            dataKey1="revenus"
+            type="area"
+          />
+        </motion.section>
+
+        {/* === TOP 5 PRODUITS BEST-SELLERS === */}
+        <motion.section
+          initial={{ opacity: 0, y: 40 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 1 }}
+        >
+          <TopProductsWidget data={topProducts} />
+        </motion.section>
+
+        {/* === ACTIVITÉS RÉCENTES === */}
+        <motion.section
+          initial={{ opacity: 0, y: 40 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 1.1 }}
+        >
+          <TableWidget
+            title="Activités récentes"
+            color="#472EAD"
+            columns={[
+              { label: "Action", key: "action" },
+              { label: "Utilisateur", key: "user" },
+              { label: "Horodatage", key: "time" },
+            ]}
+            data={activities}
+          />
+        </motion.section>
+
+        {/* === FOOTER === */}
+
       </motion.div>
-
-      {/* === GRAPHIQUES PRINCIPAUX === */}
-      <motion.section
-        initial={{ opacity: 0, y: 30 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.9 }}
-        className="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-12"
-      >
-        <ChartBox
-          title="Évolution des ventes et revenus"
-          icon={<TrendingUp size={18} />}
-          data={salesData}
-          dataKey1="ventes"
-          dataKey2="revenus"
-          type="line"
-        />
-
-        <ChartBox
-          title="Répartition du stock global"
-          icon={<Package size={18} />}
-          data={stockData}
-          dataKey1="value"
-          type="pie"
-        />
-      </motion.section>
-
-      {/* === COURBE DES BÉNÉFICES === */}
-      <motion.div
-        initial={{ opacity: 0, y: 40 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 1 }}
-        className="mb-12"
-      >
-        <ChartBox
-          title="Progression mensuelle des bénéfices"
-          icon={<DollarSign size={18} />}
-          data={salesData}
-          dataKey1="revenus"
-          type="area"
-        />
-      </motion.div>
-
-      {/* === TOP 5 PRODUITS BEST-SELLERS === */}
-      <motion.div
-        initial={{ opacity: 0, y: 40 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 1 }}
-        className="mb-12"
-      >
-        <TopProductsWidget data={topProducts} />
-      </motion.div>
-
-      {/* === ACTIVITÉS RÉCENTES === */}
-      <motion.div
-        initial={{ opacity: 0, y: 40 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 1.1 }}
-        className="mb-10"
-      >
-        <TableWidget
-          title="Activités récentes"
-          color="#472EAD"
-          columns={[
-            { label: "Action", key: "action" },
-            { label: "Utilisateur", key: "user" },
-            { label: "Horodatage", key: "time" },
-          ]}
-          data={activities}
-        />
-      </motion.div>
-
-      {/* === FOOTER === */}
-      <footer className="text-center text-xs text-gray-500 mt-10 pb-6">
-        © 2025{" "}
-        <span className="text-[#472EAD] font-semibold">LPD Consulting</span> — Interface Responsable v3.0
-      </footer>
-    </motion.div>
+    </div>
   );
 }
