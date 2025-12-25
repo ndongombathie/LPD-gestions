@@ -1,11 +1,18 @@
-/** @type {import('tailwindcss').Config} */
+// tailwind.config.js
 export default {
   content: [
     "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
+    "./src/**/*.{js,jsx}",
   ],
   theme: {
-    extend: {},
+    extend: {
+      colors: {
+        appPurple: "#4b1c7b",
+        appSidebar: "#4B0082", // violet foncé
+        appOrange: "#f7881f",
+        appBlue: "#dbeafe", // bleu clair hover
+      },
+    },
   },
   plugins: [],
-}
+};
