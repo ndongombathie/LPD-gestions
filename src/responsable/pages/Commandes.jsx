@@ -1,4 +1,4 @@
-// ========================================================== 
+// ==========================================================
 // 🛒 Commandes.jsx — Interface Responsable (LPD Manager)
 // Branché sur l’API Laravel (clients, produits, commandes)
 // ==========================================================
@@ -18,9 +18,9 @@ import {
   Eye,
   Search,
   Loader2,
-  Pencil,      // 👈 ajouter ceci
-  Check,       // 👈 et ceci
-  XCircle,     // 👈 et ceci
+  Pencil, // 👈 ajouter ceci
+  Check, // 👈 et ceci
+  XCircle, // 👈 et ceci
 } from "lucide-react";
 import jsPDF from "jspdf";
 import { QRCodeCanvas as QRCode } from "qrcode.react";
@@ -210,128 +210,123 @@ function QrCommandeModal({ open, onClose, commande, qrPayload }) {
 
   if (!open || !commande || !qrPayload) return null;
 
-const handlePrint = () => {
-  try {
-    const canvas = qrWrapperRef.current?.querySelector("canvas");
-    if (!canvas) {
+  const handlePrint = () => {
+    try {
+      const canvas = qrWrapperRef.current?.querySelector("canvas");
+      if (!canvas) {
+        window.print();
+        return;
+      }
+
+      const dataUrl = canvas.toDataURL("image/png");
+
+      // 📏 VRAI FORMAT TICKET (80 mm de large)
+      const doc = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: [80, 130], // largeur ticket, hauteur ~13 cm
+      });
+
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const centerX = pageWidth / 2;
+
+      // ================= HEADER VIOLET =================
+      const headerHeight = 36;
+      doc.setFillColor(71, 46, 173);
+      doc.setDrawColor(71, 46, 173);
+      doc.rect(0, 0, pageWidth, headerHeight, "F");
+
+      // --- Logo "ellipse" + LPD ---
+      const logoEllipseY = 10; // un peu en haut du header
+      doc.setFillColor(71, 46, 173);
+      doc.setDrawColor(255, 255, 255);
+      doc.ellipse(centerX, logoEllipseY, 16, 10, "F");
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.setTextColor(245, 128, 32);
+      const logoText = "LPD";
+      const logoTextWidth = doc.getTextWidth(logoText);
+      doc.text(logoText, centerX - logoTextWidth / 2, logoEllipseY + 4);
+
+      // --- Texte sous le logo ---
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(255, 255, 255);
+      const title1 = "LIBRAIRIE PAPETERIE DARADJI";
+      doc.text(title1, centerX, 22, { align: "center" });
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(229, 231, 235);
+      // 🔹 ICI : on enlève "Ticket commande" et on garde uniquement la réf
+      const title2 = `#${commande.numero}`;
+      doc.text(title2, centerX, 28.5, { align: "center" });
+
+      // ================= QR CODE =================
+      const qrSize = 40; // mm
+      const qrX = (pageWidth - qrSize) / 2;
+      const qrY = headerHeight + 6;
+      doc.addImage(dataUrl, "PNG", qrX, qrY, qrSize, qrSize);
+
+      // ================= INFOS COMMANDE =================
+      const infoStartY = qrY + qrSize + 8;
+      const leftX = 8;
+
+      // Badge "Client spécial" à droite
+      const badgeText = "Client spécial";
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      const badgeTextWidth = doc.getTextWidth(badgeText);
+      const badgeWidth = badgeTextWidth + 10;
+      const badgeHeight = 8;
+      const badgeX = pageWidth - badgeWidth - 8;
+      const badgeY = infoStartY - 5;
+
+      doc.setFillColor(254, 249, 195);
+      doc.setDrawColor(234, 179, 8);
+      doc.roundedRect(badgeX, badgeY, badgeWidth, badgeHeight, 4, 4, "FD");
+
+      doc.setTextColor(202, 138, 4);
+      doc.text(badgeText, badgeX + 5, badgeY + 5);
+
+      // Texte à gauche
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(17, 24, 39);
+      doc.text(
+        `Client : ${commande.clientNom || "Client spécial"}`,
+        leftX,
+        infoStartY
+      );
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      // 💡 Montant TTC volontairement retiré du ticket
+      doc.text(`Date : ${commande.dateCommande}`, leftX, infoStartY + 5);
+
+      // ================= TEXTE D'AIDE BAS DE TICKET =================
+      const aideY = pageHeight - 12;
+      doc.setFontSize(8);
+      doc.setTextColor(107, 114, 128);
+      const aideText =
+        "Présentez ce QR code à la caisse pour retrouver la commande.";
+      doc.text(aideText, centerX, aideY, { align: "center" });
+
+      const noteY = aideY + 5;
+      doc.setFontSize(7);
+      doc.setTextColor(202, 138, 4);
+      const noteText = "Ticket spécial LPD — Client privilégié";
+      doc.text(noteText, centerX, noteY, { align: "center" });
+
+      // ================= SAUVEGARDE =================
+      doc.save(`Ticket_commande_${commande.numero}.pdf`);
+    } catch (e) {
+      console.error(e);
       window.print();
-      return;
     }
-
-    const dataUrl = canvas.toDataURL("image/png");
-
-    // 📏 VRAI FORMAT TICKET (80 mm de large)
-    const doc = new jsPDF({
-      orientation: "portrait",
-      unit: "mm",
-      format: [80, 130], // largeur ticket, hauteur ~13 cm
-    });
-
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-    const centerX = pageWidth / 2;
-
-    // ================= HEADER VIOLET =================
-    const headerHeight = 36;
-    doc.setFillColor(71, 46, 173);
-    doc.setDrawColor(71, 46, 173);
-    doc.rect(0, 0, pageWidth, headerHeight, "F");
-
-    // --- Logo "ellipse" + LPD ---
-    const logoEllipseY = 10; // un peu en haut du header
-    doc.setFillColor(71, 46, 173);
-    doc.setDrawColor(255, 255, 255);
-    doc.ellipse(centerX, logoEllipseY, 16, 10, "F");
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.setTextColor(245, 128, 32);
-    const logoText = "LPD";
-    const logoTextWidth = doc.getTextWidth(logoText);
-    doc.text(logoText, centerX - logoTextWidth / 2, logoEllipseY + 4);
-
-    // --- Texte sous le logo ---
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.setTextColor(255, 255, 255);
-    const title1 = "LIBRAIRIE PAPETERIE DARADJI";
-    doc.text(title1, centerX, 22, { align: "center" });
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(229, 231, 235);
-    // 🔹 ICI : on enlève "Ticket commande" et on garde uniquement la réf
-    const title2 = `#${commande.numero}`;
-    doc.text(title2, centerX, 28.5, { align: "center" });
-
-    // ================= QR CODE =================
-    const qrSize = 40; // mm
-    const qrX = (pageWidth - qrSize) / 2;
-    const qrY = headerHeight + 6;
-    doc.addImage(dataUrl, "PNG", qrX, qrY, qrSize, qrSize);
-
-    // ================= INFOS COMMANDE =================
-    const infoStartY = qrY + qrSize + 8;
-    const leftX = 8;
-
-    // Badge "Client spécial" à droite
-    const badgeText = "Client spécial";
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
-    const badgeTextWidth = doc.getTextWidth(badgeText);
-    const badgeWidth = badgeTextWidth + 10;
-    const badgeHeight = 8;
-    const badgeX = pageWidth - badgeWidth - 8;
-    const badgeY = infoStartY - 5;
-
-    doc.setFillColor(254, 249, 195);
-    doc.setDrawColor(234, 179, 8);
-    doc.roundedRect(badgeX, badgeY, badgeWidth, badgeHeight, 4, 4, "FD");
-
-    doc.setTextColor(202, 138, 4);
-    doc.text(badgeText, badgeX + 5, badgeY + 5);
-
-    // Texte à gauche
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.setTextColor(17, 24, 39);
-    doc.text(
-      `Client : ${commande.clientNom || "Client spécial"}`,
-      leftX,
-      infoStartY
-    );
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    // 💡 Montant TTC volontairement retiré du ticket
-    doc.text(
-      `Date : ${commande.dateCommande}`,
-      leftX,
-      infoStartY + 5
-    );
-
-    // ================= TEXTE D'AIDE BAS DE TICKET =================
-    const aideY = pageHeight - 12;
-    doc.setFontSize(8);
-    doc.setTextColor(107, 114, 128);
-    const aideText =
-      "Présentez ce QR code à la caisse pour retrouver la commande.";
-    doc.text(aideText, centerX, aideY, { align: "center" });
-
-    const noteY = aideY + 5;
-    doc.setFontSize(7);
-    doc.setTextColor(202, 138, 4);
-    const noteText = "Ticket spécial LPD — Client privilégié";
-    doc.text(noteText, centerX, noteY, { align: "center" });
-
-    // ================= SAUVEGARDE =================
-    doc.save(`Ticket_commande_${commande.numero}.pdf`);
-  } catch (e) {
-    console.error(e);
-    window.print();
-  }
-};
-
+  };
 
   return (
     <div className="fixed inset-0 z-[115] bg-black/40 backdrop-blur-sm flex items-center justify-center px-3">
@@ -437,7 +432,7 @@ const handlePrint = () => {
               onClick={onClose}
               className="px-3 py-2 rounded-lg border border-gray-300 bg-white text-xs sm:text-sm text-gray-700 hover:bg-gray-50"
             >
-              Fermer 
+              Fermer
             </button>
             <button
               type="button"
@@ -564,9 +559,7 @@ function FactureModal({ open, onClose, commande }) {
               </span>
             </div>
             <div className="flex justify-between mb-1">
-              <span className="text-gray-600">
-                TVA ({tauxTVAPourcent}%)
-              </span>
+              <span className="text-gray-600">TVA ({tauxTVAPourcent}%)</span>
               <span className="font-semibold">
                 {formatFCFA(commande.totalTVA)}
               </span>
@@ -756,10 +749,10 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
     () => lignes.reduce((sum, l) => sum + Number(l.totalHT || 0), 0),
     [lignes]
   );
-  const totalTVA = useMemo(
-    () => (applyTVA ? totalHT * 0.18 : 0),
-    [totalHT, applyTVA]
-  );
+  const totalTVA = useMemo(() => (applyTVA ? totalHT * 0.18 : 0), [
+    totalHT,
+    applyTVA,
+  ]);
   const totalTTC = useMemo(() => totalHT + totalTVA, [totalHT, totalTVA]);
 
   const resetLigne = () => {
@@ -926,8 +919,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
     }
 
     const unitsPerCarton = produitSelectionne?.unitesParCarton || 1;
-    const quantiteUnites =
-      ligneMode === "gros" ? qteNum * unitsPerCarton : qteNum;
+    const quantiteUnites = ligneMode === "gros" ? qteNum * unitsPerCarton : qteNum;
 
     const totalHTLigne = qteNum * prixNum;
     const totalTTCLigne = applyTVA ? totalHTLigne * 1.18 : totalHTLigne;
@@ -958,7 +950,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
     applyProduitSelection(p);
   };
 
-    // 🔧 Édition d'une ligne (qte + prix uniquement)
+  // 🔧 Édition d'une ligne (qte + prix uniquement)
   const [editingId, setEditingId] = useState(null);
   const [editingQte, setEditingQte] = useState("");
   const [editingPrix, setEditingPrix] = useState("");
@@ -994,9 +986,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
     }
 
     // 🔍 Retrouver le produit pour refaire les vérifications de stock
-    const produit = catalogue.find(
-      (p) => String(p.id) === String(ligne.produitId)
-    );
+    const produit = catalogue.find((p) => String(p.id) === String(ligne.produitId));
 
     if (produit) {
       const unitsPerCarton = produit.unitesParCarton || 1;
@@ -1054,7 +1044,6 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
     setEditingQte("");
     setEditingPrix("");
   };
-
 
   // ✅ Soumission du formulaire : on construit un brouillon et on délègue au parent
   const handleSubmit = (e) => {
@@ -1124,9 +1113,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
         </h2>
         <p className="text-xs text-gray-500 mb-2">
           Préparez la commande en gros ici. Elle sera ensuite{" "}
-          <span className="font-semibold text-[#472EAD]">
-            envoyée à la caisse
-          </span>{" "}
+          <span className="font-semibold text-[#472EAD]">envoyée à la caisse</span>{" "}
           pour encaissement (acomptes / soldes).
         </p>
 
@@ -1158,8 +1145,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
             </button>
             {clientActuel && (
               <div className="mt-1 text-[11px] text-gray-500">
-                Code client :{" "}
-                <span className="font-semibold">{clientActuel.code}</span>
+                Code client : <span className="font-semibold">{clientActuel.code}</span>
               </div>
             )}
           </div>
@@ -1269,9 +1255,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
                       className="w-full px-3 py-2 flex items-center justify-between hover:bg-[#F7F5FF]"
                     >
                       <div className="text-left">
-                        <div className="font-medium text-gray-800">
-                          {p.libelle}
-                        </div>
+                        <div className="font-medium text-gray-800">{p.libelle}</div>
                         <div className="text-[10px] text-gray-500">
                           {(p.ref || "—") +
                             " • Détail: " +
@@ -1290,19 +1274,14 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
 
               <p className="mt-1 text-[10px] text-gray-500">
                 Placez le curseur dans ce champ puis{" "}
-                <span className="font-semibold">
-                  scannez le code-barres
-                </span>{" "}
-                ou tapez directement le libellé / les chiffres du code.
+                <span className="font-semibold">scannez le code-barres</span> ou
+                tapez directement le libellé / les chiffres du code.
               </p>
             </div>
 
             <div>
               <label className="block text-xs text-gray-500 mb-1">
-                Quantité{" "}
-                {ligneMode === "gros"
-                  ? "(cartons/boîtes)"
-                  : "(unités)"}
+                Quantité {ligneMode === "gros" ? "(cartons/boîtes)" : "(unités)"}
               </label>
               <input
                 ref={qteInputRef}
@@ -1311,9 +1290,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
                 value={ligneQte}
                 onChange={(e) => setLigneQte(e.target.value)}
                 className={baseInput}
-                placeholder={
-                  ligneMode === "gros" ? "Ex: 3 cartons" : "Ex: 24 unités"
-                }
+                placeholder={ligneMode === "gros" ? "Ex: 3 cartons" : "Ex: 24 unités"}
               />
               {ligneMode === "gros" &&
                 produitSelectionne &&
@@ -1418,12 +1395,8 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
                         )}
                       </td>
 
-                      <td className="px-3 py-2 text-right">
-                        {formatFCFA(l.totalHT)}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        {formatFCFA(l.totalTTC)}
-                      </td>
+                      <td className="px-3 py-2 text-right">{formatFCFA(l.totalHT)}</td>
+                      <td className="px-3 py-2 text-right">{formatFCFA(l.totalTTC)}</td>
 
                       {/* Actions */}
                       <td className="px-3 py-2 text-center">
@@ -1472,10 +1445,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
                 })
               ) : (
                 <tr>
-                  <td
-                    colSpan={7}
-                    className="px-3 py-4 text-center text-gray-400 text-xs"
-                  >
+                  <td colSpan={7} className="px-3 py-4 text-center text-gray-400 text-xs">
                     Aucune ligne ajoutée pour le moment.
                   </td>
                 </tr>
@@ -1511,18 +1481,12 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
                 <span className="font-semibold">{formatFCFA(totalHT)}</span>
               </div>
               <div className="flex justify-between mb-1">
-                <span className="text-gray-600">
-                  TVA ({applyTVA ? "18" : "0"}%)
-                </span>
+                <span className="text-gray-600">TVA ({applyTVA ? "18" : "0"}%)</span>
                 <span className="font-semibold">{formatFCFA(totalTVA)}</span>
               </div>
               <div className="flex justify-between border-t pt-1 mt-1">
-                <span className="font-semibold text-[#472EAD]">
-                  Total TTC
-                </span>
-                <span className="font-bold text-[#472EAD]">
-                  {formatFCFA(totalTTC)}
-                </span>
+                <span className="font-semibold text-[#472EAD]">Total TTC</span>
+                <span className="font-bold text-[#472EAD]">{formatFCFA(totalTTC)}</span>
               </div>
             </div>
 
@@ -1556,9 +1520,9 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
         onSelect={handleSelectProduitFromModal}
         getLabel={(p) => p.libelle}
         getSubLabel={(p) =>
-          `${p.ref || "—"} • Détail: ${formatFCFA(
-            p.prixDetail
-          )} • Gros: ${p.prixGros ? formatFCFA(p.prixGros) : "--"}`
+          `${p.ref || "—"} • Détail: ${formatFCFA(p.prixDetail)} • Gros: ${
+            p.prixGros ? formatFCFA(p.prixGros) : "--"
+          }`
         }
       />
     </>
@@ -1674,9 +1638,7 @@ function normalizeCommande(cmd) {
     const pu = Number(l.prix_unitaire || l.prix || l.price || 0);
     const modeVente = l.mode_vente || l.modeVente || l.mode || "detail";
 
-    const totalHTLigne = Number(
-      l.total_ht || l.totalHT || (qte && pu ? qte * pu : 0)
-    );
+    const totalHTLigne = Number(l.total_ht || l.totalHT || (qte && pu ? qte * pu : 0));
     const totalTTCLigne = Number(
       l.total_ttc || l.totalTTC || l.total || totalHTLigne * 1.18 || 0
     );
@@ -1684,9 +1646,7 @@ function normalizeCommande(cmd) {
     const quantiteUnites = Number(
       l.quantite_unites ||
         l.quantiteUnites ||
-        (modeVente === "gros"
-          ? qte * (l.unites_par_carton || 1)
-          : qte)
+        (modeVente === "gros" ? qte * (l.unites_par_carton || 1) : qte)
     );
 
     return {
@@ -1704,12 +1664,8 @@ function normalizeCommande(cmd) {
   });
 
   // 3) Totaux
-  let totalHT = Number(
-    cmd.total_ht ?? cmd.totalHT ?? cmd.montant_ht ?? 0
-  );
-  let totalTTC = Number(
-    cmd.total_ttc ?? cmd.totalTTC ?? cmd.montant_total ?? cmd.total ?? 0
-  );
+  let totalHT = Number(cmd.total_ht ?? cmd.totalHT ?? cmd.montant_ht ?? 0);
+  let totalTTC = Number(cmd.total_ttc ?? cmd.totalTTC ?? cmd.montant_total ?? cmd.total ?? 0);
 
   if ((!totalHT || Number.isNaN(totalHT)) && lignes.length) {
     totalHT = lignes.reduce(
@@ -1725,17 +1681,13 @@ function normalizeCommande(cmd) {
     );
   }
 
-  let totalTVA = Number(
-    cmd.total_tva ?? cmd.totalTVA ?? cmd.montant_tva ?? (totalTTC - totalHT)
-  );
+  let totalTVA = Number(cmd.total_tva ?? cmd.totalTVA ?? cmd.montant_tva ?? (totalTTC - totalHT));
   if (Number.isNaN(totalTVA)) {
     totalTVA = totalTTC - totalHT;
   }
 
   // 4) Paiements
-  const montantPaye = Number(
-    cmd.montant_paye || cmd.montantPaye || cmd.total_paye || 0
-  );
+  const montantPaye = Number(cmd.montant_paye || cmd.montantPaye || cmd.total_paye || 0);
   const resteAPayer = Number(
     cmd.reste_a_payer ||
       cmd.resteAPayer ||
@@ -1751,8 +1703,7 @@ function normalizeCommande(cmd) {
     soldee: "Soldée",
     annulee: "Annulée",
   };
-  const statutLabel =
-    cmd.statut_label || cmd.statutLabel || statutLabelMap[statut] || statut;
+  const statutLabel = cmd.statut_label || cmd.statutLabel || statutLabelMap[statut] || statut;
 
   return {
     id: cmd.id,
@@ -1801,6 +1752,13 @@ export default function Commandes() {
   const [openFacture, setOpenFacture] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
+  // ✅ AJOUT (avisage) : filtres + période + pagination (Option A)
+  const [filterStatut, setFilterStatut] = useState("tous");
+  const [filterStartDate, setFilterStartDate] = useState("");
+  const [filterEndDate, setFilterEndDate] = useState("");
+  const [pageSize, setPageSize] = useState(10);
+  const [page, setPage] = useState(1);
+
   // map id client -> nom client pour compléter ce que le backend n’envoie pas
   const [clientsMap, setClientsMap] = useState({});
   // Pour le QR code de la dernière commande créée
@@ -1809,9 +1767,7 @@ export default function Commandes() {
 
   const qrPayload = useMemo(
     () =>
-      lastCreatedCommande
-        ? buildQrPayloadFromCommande(lastCreatedCommande)
-        : "",
+      lastCreatedCommande ? buildQrPayloadFromCommande(lastCreatedCommande) : "",
     [lastCreatedCommande]
   );
 
@@ -1828,9 +1784,7 @@ export default function Commandes() {
       setLoading(true);
 
       const res = await axios.get("/commandes");
-      const payload = Array.isArray(res.data?.data)
-        ? res.data.data
-        : res.data;
+      const payload = Array.isArray(res.data?.data) ? res.data.data : res.data;
 
       const normalized = (payload || []).map(normalizeCommande);
       setCommandes(normalized);
@@ -1859,9 +1813,7 @@ export default function Commandes() {
           params: { type_client: "special" },
         });
 
-        const clientsPayload = Array.isArray(res.data?.data)
-          ? res.data.data
-          : res.data;
+        const clientsPayload = Array.isArray(res.data?.data) ? res.data.data : res.data;
 
         const map = {};
         (clientsPayload || []).forEach((c) => {
@@ -1977,9 +1929,7 @@ export default function Commandes() {
       toast(
         "success",
         "Commande envoyée à la caisse",
-        `${normalized.clientNom || "Client"} — ${formatFCFA(
-          normalized.totalTTC
-        )}`
+        `${normalized.clientNom || "Client"} — ${formatFCFA(normalized.totalTTC)}`
       );
     } catch (error) {
       console.error("Erreur création commande :", error);
@@ -2072,29 +2022,84 @@ export default function Commandes() {
     toast("success", "Export PDF", "Fichier téléchargé avec succès.");
   };
 
+  // ✅ AVISAGE (exact logique Decaissements) : filtres + recherche + pagination
   const commandesFiltrees = useMemo(() => {
     let list = commandes;
 
+    // 1) filtre "contexte client" (inchangé)
     if (clientIdFromState) {
-      list = list.filter(
-        (c) => String(c.clientId) === String(clientIdFromState)
-      );
+      list = list.filter((c) => String(c.clientId) === String(clientIdFromState));
     } else if (clientNameFromState) {
       list = list.filter((c) => c.clientNom === clientNameFromState);
     }
 
-    const q = (searchTerm || "").toLowerCase();
+    // 2) filtre statut
+    if (filterStatut !== "tous") {
+      list = list.filter((c) => c.statut === filterStatut);
+    }
+
+    // 3) filtre période (sur dateCommande)
+    list = list.filter((c) => {
+      const dateStr = String(c.dateCommande || "");
+      if (filterStartDate && dateStr < filterStartDate) return false;
+      if (filterEndDate && dateStr > filterEndDate) return false;
+      return true;
+    });
+
+    // 4) recherche (numero + client + statut + lignes)
+    const q = (searchTerm || "").trim().toLowerCase();
     if (q) {
-      list = list.filter(
-        (c) =>
-          c.numero.toLowerCase().includes(q) ||
-          (c.clientNom || "").toLowerCase().includes(q) ||
-          c.statutLabel.toLowerCase().includes(q)
-      );
+      list = list.filter((c) => {
+        const numero = String(c.numero || "").toLowerCase();
+        const clientNom = String(c.clientNom || "").toLowerCase();
+        const statutLabel = String(c.statutLabel || "").toLowerCase();
+        const lignesText = (c.lignes || [])
+          .map((l) => `${l.libelle || ""} ${l.ref || ""}`)
+          .join(" ")
+          .toLowerCase();
+
+        return `${numero} ${clientNom} ${statutLabel} ${lignesText}`.includes(q);
+      });
     }
 
     return list;
-  }, [commandes, clientIdFromState, clientNameFromState, searchTerm]);
+  }, [
+    commandes,
+    clientIdFromState,
+    clientNameFromState,
+    filterStatut,
+    filterStartDate,
+    filterEndDate,
+    searchTerm,
+  ]);
+
+  // reset page quand filtres/recherche/changement contexte changent
+  useEffect(() => {
+    setPage(1);
+  }, [
+    filterStatut,
+    filterStartDate,
+    filterEndDate,
+    searchTerm,
+    clientIdFromState,
+    clientNameFromState,
+    pageSize,
+  ]);
+
+  const totalFiltered = commandesFiltrees.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize));
+  const safePage = Math.min(page, totalPages);
+
+  const startIndex = (safePage - 1) * pageSize;
+  const endIndex = startIndex + pageSize;
+
+  const commandesPage = useMemo(
+    () => commandesFiltrees.slice(startIndex, endIndex),
+    [commandesFiltrees, startIndex, endIndex]
+  );
+
+  const rangeFrom = totalFiltered ? startIndex + 1 : 0;
+  const rangeTo = Math.min(endIndex, totalFiltered);
 
   if (loading)
     return (
@@ -2152,7 +2157,6 @@ export default function Commandes() {
                 <RefreshCw size={16} />
                 Actualiser
               </button>
-
             </div>
           </motion.header>
 
@@ -2221,18 +2225,109 @@ export default function Commandes() {
             toast={toast}
           />
 
-          {/* TABLE DES COMMANDES + RECHERCHE */}
+          {/* TABLE DES COMMANDES + FILTRES/RECHERCHE/LIMITE/PAGINATION */}
           <section className="bg-white/95 border border-[#E4E0FF] rounded-2xl shadow-[0_12px_30px_rgba(15,23,42,0.06)] px-3 sm:px-4 py-3 sm:py-4 space-y-3">
-            {/* RECHERCHE */}
-            <div className="relative">
-              <Search className="absolute left-3 top-2.5 text-gray-400 w-4 h-4" />
-              <input
-                type="text"
-                placeholder="Rechercher une commande par numéro, client ou statut..."
-                value={searchTerm || ""}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-xl text-sm bg-white shadow-sm focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD] placeholder:text-gray-400"
-              />
+            {/* FILTRES + RECHERCHE + LIMITE (avisage) */}
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+                {/* Filtre statut (pills) */}
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <span className="text-gray-500 font-medium">Filtrer par statut :</span>
+                  <div className="inline-flex rounded-full bg-[#F7F5FF] border border-[#E4E0FF] p-0.5">
+                    {[
+                      { id: "tous", label: "Tous" },
+                      { id: "en_attente_caisse", label: "En attente" },
+                      { id: "partiellement_payee", label: "Partiel" },
+                      { id: "soldee", label: "Soldées" },
+                      { id: "annulee", label: "Annulées" },
+                    ].map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setFilterStatut(opt.id)}
+                        className={cls(
+                          "px-3 py-1 rounded-full transition",
+                          filterStatut === opt.id
+                            ? "bg-white text-[#472EAD] font-semibold shadow-sm"
+                            : "text-gray-500 hover:text-gray-700"
+                        )}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Période + limite */}
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3 text-xs">
+                  <div className="flex items-center gap-1">
+                    <span className="text-gray-500 font-medium">Période :</span>
+                    <input
+                      type="date"
+                      value={filterStartDate}
+                      onChange={(e) => setFilterStartDate(e.target.value)}
+                      className="border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:border-[#472EAD] focus:ring-1 focus:ring-[#472EAD] bg-white"
+                    />
+                    <span className="text-gray-400">→</span>
+                    <input
+                      type="date"
+                      value={filterEndDate}
+                      onChange={(e) => setFilterEndDate(e.target.value)}
+                      className="border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:border-[#472EAD] focus:ring-1 focus:ring-[#472EAD] bg-white"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-500 font-medium">Lignes :</span>
+                    <select
+                      value={pageSize}
+                      onChange={(e) => setPageSize(Number(e.target.value))}
+                      className="border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none focus:border-[#472EAD] focus:ring-1 focus:ring-[#472EAD]"
+                    >
+                      {[10, 20, 50, 100].map((n) => (
+                        <option key={n} value={n}>
+                          {n} / page
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* RECHERCHE */}
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 text-gray-400 w-4 h-4" />
+                <input
+                  type="text"
+                  placeholder="Rechercher une commande (numéro, client, statut, ligne produit...)"
+                  value={searchTerm || ""}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-10 py-2 border border-gray-300 rounded-xl text-sm bg-white shadow-sm focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD] placeholder:text-gray-400"
+                />
+                {searchTerm ? (
+                  <button
+                    type="button"
+                    onClick={() => setSearchTerm("")}
+                    className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+                    title="Effacer"
+                  >
+                    ✕
+                  </button>
+                ) : null}
+              </div>
+
+              {/* Résumé affichage */}
+              <div className="flex items-center justify-between text-[11px] text-gray-500">
+                <span>
+                  Affichage : <span className="font-semibold">{rangeFrom}</span>–
+                  <span className="font-semibold">{rangeTo}</span> sur{" "}
+                  <span className="font-semibold">{totalFiltered}</span>
+                </span>
+                <span>
+                  Page <span className="font-semibold">{safePage}</span> /{" "}
+                  <span className="font-semibold">{totalPages}</span>
+                </span>
+              </div>
             </div>
 
             {/* TABLEAU */}
@@ -2251,8 +2346,8 @@ export default function Commandes() {
                   </tr>
                 </thead>
                 <tbody>
-                  {commandesFiltrees.length ? (
-                    commandesFiltrees.map((c) => (
+                  {commandesPage.length ? (
+                    commandesPage.map((c) => (
                       <tr
                         key={c.id}
                         className="border-b border-gray-100 hover:bg-[#F9F9FF]"
@@ -2291,23 +2386,57 @@ export default function Commandes() {
                             >
                               <Eye size={16} />
                             </button>
-
                           </div>
                         </td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td
-                        colSpan={8}
-                        className="text-center text-gray-400 py-6 text-sm"
-                      >
-                        Aucune commande enregistrée.
+                      <td colSpan={8} className="text-center text-gray-400 py-6 text-sm">
+                        {commandes.length
+                          ? "Aucune commande ne correspond aux filtres."
+                          : "Aucune commande enregistrée."}
                       </td>
                     </tr>
                   )}
                 </tbody>
               </table>
+            </div>
+
+            {/* Pagination */}
+            <div className="flex items-center justify-between pt-2">
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={safePage <= 1}
+                className={cls(
+                  "px-3 py-1.5 rounded-lg border text-xs",
+                  safePage <= 1
+                    ? "border-gray-200 text-gray-300 cursor-not-allowed bg-gray-50"
+                    : "border-gray-300 text-gray-700 bg-white hover:bg-gray-50"
+                )}
+              >
+                ← Précédent
+              </button>
+
+              <div className="text-[11px] text-gray-500">
+                Page <span className="font-semibold">{safePage}</span> /{" "}
+                <span className="font-semibold">{totalPages}</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={safePage >= totalPages}
+                className={cls(
+                  "px-3 py-1.5 rounded-lg border text-xs",
+                  safePage >= totalPages
+                    ? "border-gray-200 text-gray-300 cursor-not-allowed bg-gray-50"
+                    : "border-gray-300 text-gray-700 bg-white hover:bg-gray-50"
+                )}
+              >
+                Suivant →
+              </button>
             </div>
           </section>
 
