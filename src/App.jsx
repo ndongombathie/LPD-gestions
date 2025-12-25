@@ -8,7 +8,7 @@ import AppResponsable from "./responsable/AppResponsable.jsx";
 import VendeurInterface from "./components/VendeurInterface.jsx";
 
 // ✅ Choisis le module à afficher
-const MODULE = "components"; // "comptable" | "responsable" (tu peux ajouter d'autres plus tard)
+const MODULE = "comptable"; // "comptable" | "responsable" (tu peux ajouter d'autres plus tard)
 
 export default function App() {
   if (MODULE === "comptable") return <ComptableApp />;
