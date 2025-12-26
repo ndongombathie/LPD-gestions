@@ -3,7 +3,7 @@ import ComptableApp from './comptable/ComptableApp.jsx';
 import AppResponsable from "./responsable/AppResponsable.jsx";
 import AppCaissier from "./caissier/AppCaissier.jsx";
 export default function App() {
-  const MODULE = "responsable";
+  const MODULE = "caissier";
 
   if (MODULE === "comptable") return <ComptableApp />;
   if (MODULE === "responsable") return <AppResponsable />;
