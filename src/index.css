@@ -1,9 +1,6 @@
-/* ==========================================================
-🎨 STYLES GLOBAUX — INTERFACE LPD RESPONSABLE
-Compatible TailwindCSS v4 (Vite + PostCSS)
-========================================================== */
-
-/* Import de Tailwind v4 */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 @import "tailwindcss";
 
 /* ----------------------------------------------------------
@@ -130,4 +127,24 @@ Compatible TailwindCSS v4 (Vite + PostCSS)
 }
 ::-webkit-scrollbar-thumb:hover {
   background-color: #a68bff;
+}
+
+
+
+@layer base {
+  body {
+    font-feature-settings: "rlig" 1, "calt" 1;
+    background-color: #F3F4F6;
+  }
+}
+
+@layer utilities {
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
