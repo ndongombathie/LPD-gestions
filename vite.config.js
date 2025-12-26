@@ -6,5 +6,9 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    
   ],
+  css: {
+    postcss: "./postcss.config.js",
+  },
 })

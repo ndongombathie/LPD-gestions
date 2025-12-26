@@ -1,3 +1,4 @@
+
 // ==========================================================
 // 🎨 Configuration TailwindCSS — Interface LPD Responsable
 // Compatible Tailwind v4 + Vite
@@ -75,6 +76,10 @@ export default {
         strong: '0 4px 12px rgba(0, 0, 0, 0.15)',
 
       },
+      appPurple: "#4b1c7b",
+      appSidebar: "#4B0082", // violet foncé
+      appOrange: "#f7881f",
+      appBlue: "#dbeafe", // bleu clair hover
     },
   },
 
