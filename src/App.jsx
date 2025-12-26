@@ -1,20 +1,60 @@
 // ==========================================================
-// ⚙️ App.jsx — Entrée principale (multi-modules)
+// ⚙️ App.jsx — Entrée principale (multi-modules sécurisé)
 // ==========================================================
-import React from "react";
 
-import ComptableApp from "./comptable/ComptableApp.jsx";
-import AppResponsable from "./responsable/AppResponsable.jsx";
-import VendeurInterface from "./components/VendeurInterface.jsx";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
-// ✅ Choisis le module à afficher
-const MODULE = "comptable"; // "comptable" | "responsable" (tu peux ajouter d'autres plus tard)
+import Connexion from "./authentification/login/Connexion";
+
+import ComptableApp from "./comptable/ComptableApp";
+import AppResponsable from "./responsable/AppResponsable";
+import VendeurInterface from "./vendeur/VendeurInterface";
+
+import ProtectedRoute from "./routes/ProtectedRoute";
 
 export default function App() {
-  if (MODULE === "comptable") return <ComptableApp />;
-  if (MODULE === "responsable") return <AppResponsable />;
-  if (MODULE === "components") return <VendeurInterface />;
+  return (
+    <BrowserRouter>
+      <Routes>
 
-  // fallback
-  return <ComptableApp />;
+        {/* 🔐 Connexion */}
+        <Route path="/login" element={<Connexion />} />
+
+        {/* 🧑‍💼 Vendeur */}
+        <Route
+          path="/vendeur/*"
+          element={
+            <ProtectedRoute allowedRoles={["vendeur"]}>
+              <VendeurInterface />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* 💰 Comptable */}
+        <Route
+          path="/comptable/*"
+          element={
+            <ProtectedRoute allowedRoles={["comptable"]}>
+              <ComptableApp />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* 🧠 Responsable */}
+        <Route
+          path="/responsable/*"
+          element={
+            <ProtectedRoute allowedRoles={["responsable"]}>
+              <AppResponsable />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* 🔁 Route par défaut */}
+        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+
+      </Routes>
+    </BrowserRouter>
+  );
 }

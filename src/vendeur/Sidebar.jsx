@@ -8,7 +8,7 @@ import {
   faStore,
   faBars
 } from '@fortawesome/free-solid-svg-icons';
-import './Sidebar.css';
+import './css/Sidebar.css';
 
 const Sidebar = ({ sectionActive, setSectionActive, user }) => {
   // Logo en base64

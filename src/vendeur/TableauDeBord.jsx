@@ -13,7 +13,7 @@ import {
   faMinus,
   faSync
 } from '@fortawesome/free-solid-svg-icons';
-import './TableauDeBord.css';
+import './css/TableauDeBord.css';
 
 const TableauDeBord = () => {
   const [stats, setStats] = useState({

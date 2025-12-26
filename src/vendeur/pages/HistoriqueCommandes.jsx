@@ -27,7 +27,7 @@ import {
   faCalculator,
   faList
 } from '@fortawesome/free-solid-svg-icons';
-import './HistoriqueCommandes.css';
+import '../css/HistoriqueCommandes.css';
 
 const HistoriqueCommandes = ({ commandes = [], sellerName = null }) => {
   const [filtreStatut, setFiltreStatut] = useState('tous');
