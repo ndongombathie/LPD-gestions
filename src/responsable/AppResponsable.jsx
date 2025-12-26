@@ -39,9 +39,9 @@ export default function AppResponsable() {
         <Route
           path="/responsable"
           element={
-            <PrivateRoute>
+            // <PrivateRoute>
               <LayoutResponsable />
-            </PrivateRoute>
+            // </PrivateRoute>
           }
         >
           <Route index element={<Dashboard />} />
@@ -60,7 +60,7 @@ export default function AppResponsable() {
         </Route>
 
         {/* Redirection par défaut */}
-        <Route path="/" element={<Navigate to="/login" replace />} />
+        {/* <Route path="/" element={<Navigate to="/login" replace />} /> */}
       </Routes>
     </BrowserRouter>
   );
