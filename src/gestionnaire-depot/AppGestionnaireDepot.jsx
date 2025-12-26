@@ -6,7 +6,7 @@ export default function AppGestionnaireDepot() {
     <BrowserRouter>
       <Routes>
         {/* Redirection vers /depot */}
-        <Route path="/" element={<Navigate to="/depot" replace />} />
+        {/* <Route path="/" element={<Navigate to="/depot" replace />} /> */}
 
         {/* Module gestionnaire de dépôt */}
         <Route path="/depot/*" element={<DepotRoutes />} />
