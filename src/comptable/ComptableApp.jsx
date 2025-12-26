@@ -63,9 +63,9 @@ export default function ComptableApp() {
         <Route
           path="/comptable"
           element={
-            <PrivateRoute>
+            // <PrivateRoute>
               <LayoutComptable />
-            </PrivateRoute>
+            // </PrivateRoute>
           }
         >
           {/* Dashboard */}
@@ -121,11 +121,11 @@ export default function ComptableApp() {
           <Route
             path="*"
             element={<Navigate to="/comptable/dashboard" replace />}
-          />
+          /> 
         </Route>
 
         {/* Redirection racine */}
-        <Route path="/" element={<Navigate to="/login" replace />} />
+        {/* <Route path="/" element={<Navigate to="/login" replace />} /> */}
 
       </Routes>
     </BrowserRouter>

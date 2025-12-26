@@ -32,7 +32,7 @@ export default function AppGestionnaireBoutique() {
         </Route>
 
         {/* Redirect root → dashboard */}
-        <Route path="/" element={<Navigate to="/gestionnaire/dashboard" replace />} />
+        {/* <Route path="/" element={<Navigate to="/gestionnaire/dashboard" replace />} /> */}
       </Routes>
     </BrowserRouter>
   );
