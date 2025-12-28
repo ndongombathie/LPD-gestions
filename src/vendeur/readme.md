@@ -1,4 +1,0 @@
-- Créer une commande client
-- Ajouter produits au panier
-- valider les commandes des clients
-- Annuler les commandes des clients

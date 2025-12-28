@@ -2,7 +2,6 @@ import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import './App.css'
 import CaissierRoutes from './caissier'
-import GestionnaireRoutes from './gestionnaire'
 
 function App() {
   return (
@@ -13,9 +12,6 @@ function App() {
 
         {/* Module Caissier */}
         <Route path="/caissier/*" element={<CaissierRoutes />} />
-
-        {/* Module Gestionnaire (Responsable) */}
-        <Route path="/gestionnaire/*" element={<GestionnaireRoutes />} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/caissier/caisse" replace />} />
