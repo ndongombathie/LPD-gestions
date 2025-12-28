@@ -1,13 +1,75 @@
-/* NouvelleCommande.css - Version optimisée */
+/* NouvelleCommande.css - Version optimisée + entête entreprise */
+
 .nouvelle-commande {
   padding: 1.2rem;
   min-height: calc(100vh - 80px);
   background-color: #f5f6fa;
+  box-sizing: border-box;
 }
 
 .commande-entete {
   margin-bottom: 1.2rem;
 }
+
+/* ---------- ENTÊTE ENTREPRISE ---------- */
+.entreprise-entete {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.8rem;
+  gap: 1rem;
+}
+
+.entreprise-logo-bloc {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.entreprise-logo {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  background: #fff;
+  padding: 6px;
+}
+
+.entreprise-texte {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.entreprise-nom {
+  font-weight: 800;
+  color: #2c3e50;
+  font-size: 1.05rem;
+}
+
+.entreprise-slogan {
+  font-size: 0.78rem;
+  color: #6c757d;
+}
+
+/* date/heure bloc */
+.entreprise-date-heure {
+  text-align: right;
+  font-size: 0.85rem;
+  color: #34495e;
+}
+
+.entreprise-date {
+  font-weight: 600;
+}
+
+.entreprise-heure {
+  font-size: 0.82rem;
+  color: #7f8c8d;
+}
+
+/* ---------- FIN ENTÊTE ENTREPRISE ---------- */
 
 .commande-entete h2 {
   font-size: 1.5rem;
@@ -35,6 +97,7 @@
   grid-template-columns: 1fr 420px;
   gap: 1.2rem;
   height: calc(100vh - 150px);
+  box-sizing: border-box;
 }
 
 /* Section produits */
@@ -44,6 +107,7 @@
   padding: 1.2rem;
   box-shadow: 0 3px 12px rgba(0, 0, 0, 0.06);
   overflow-y: auto;
+  box-sizing: border-box;
 }
 
 .section-type-vente-global,
@@ -106,29 +170,6 @@
 .bouton-type-vente:hover:not(.actif) {
   border-color: #667eea;
   background: #f8f9ff;
-}
-
-.bouton-icone {
-  font-size: 0.85rem;
-}
-
-.info-type-vente-global {
-  background: #e3f2fd;
-  border: 1px solid #bbdefb;
-  border-radius: 6px;
-  padding: 0.6rem;
-  font-size: 0.75rem;
-}
-
-.info-type-vente-global p {
-  margin-bottom: 0.3rem;
-  font-weight: 600;
-  color: #1976d2;
-}
-
-.info-type-vente-global small {
-  color: #546e7a;
-  font-size: 0.7rem;
 }
 
 /* Code barre */
@@ -297,12 +338,6 @@
   gap: 0.3rem;
 }
 
-.info-icone {
-  font-size: 0.65rem;
-  color: #6c757d;
-  min-width: 12px;
-}
-
 /* Prix par type */
 .prix-par-type {
   margin: 0.6rem 0;
@@ -327,11 +362,6 @@
   gap: 0.3rem;
   margin-bottom: 0.1rem;
   font-size: 0.75rem;
-}
-
-.type-icone {
-  font-size: 0.7rem;
-  color: #472EAD;
 }
 
 .prix-valeur {
@@ -374,10 +404,6 @@
   align-items: center;
   gap: 0.3rem;
   justify-content: center;
-  font-size: 0.75rem;
-}
-
-.bouton-ajouter-icone {
   font-size: 0.75rem;
 }
 
@@ -431,11 +457,6 @@
   gap: 0.5rem;
 }
 
-.panier-icone {
-  color: #472EAD;
-  font-size: 0.9rem;
-}
-
 .panier-statut {
   background: #667eea;
   color: white;
@@ -449,22 +470,6 @@
   text-align: center;
   padding: 1.5rem;
   color: #7f8c8d;
-}
-
-.panier-vide-icone {
-  font-size: 2.5rem;
-  margin-bottom: 0.6rem;
-  opacity: 0.5;
-  color: #bdc3c7;
-}
-
-.panier-vide p {
-  font-size: 0.9rem;
-  margin-bottom: 0.3rem;
-}
-
-.panier-vide small {
-  font-size: 0.7rem;
 }
 
 /* Contrôle TVA */
@@ -674,10 +679,6 @@
   color: white;
 }
 
-.action-icone {
-  font-size: 0.65rem;
-}
-
 /* Affichage prix */
 .affichage-prix {
   margin: 0.6rem 0;
@@ -729,141 +730,6 @@
   font-weight: 700;
   border: none;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-  font-size: 0.7rem;
-}
-
-.bouton-quantite:hover:not(:disabled) {
-  background: #5a6fd8;
-  transform: scale(1.05);
-}
-
-.bouton-quantite:disabled {
-  background: #bdc3c7;
-  cursor: not-allowed;
-}
-
-.quantite {
-  font-weight: 700;
-  color: #2c3e50;
-  min-width: 22px;
-  text-align: center;
-  cursor: pointer;
-  padding: 0.1rem 0.3rem;
-  border-radius: 3px;
-  transition: background-color 0.2s ease;
-  font-size: 0.8rem;
-}
-
-.quantite:hover {
-  background: #e9ecef;
-}
-
-/* Édition quantité */
-.edition-quantite {
-  background: #e3f2fd;
-  border: 2px solid #bbdefb;
-  border-radius: 6px;
-  padding: 0.6rem;
-  margin: 0.6rem 0;
-  font-size: 0.75rem;
-}
-
-.controle-quantite-edition {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-}
-
-.input-quantite-edition {
-  width: 60px;
-  padding: 0.3rem;
-  border: 1px solid #1976d2;
-  border-radius: 4px;
-  font-weight: 600;
-  text-align: center;
-  font-size: 0.8rem;
-}
-
-.actions-edition-quantite {
-  display: flex;
-  gap: 0.3rem;
-}
-
-.bouton-confirmer-quantite,
-.bouton-annuler-quantite {
-  background: #27ae60;
-  color: white;
-  width: 26px;
-  height: 26px;
-  border-radius: 4px;
-  font-size: 0.8rem;
-  border: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-}
-
-.bouton-annuler-quantite {
-  background: #e74c3c;
-}
-
-.bouton-confirmer-quantite:hover {
-  background: #219653;
-  transform: scale(1.05);
-}
-
-.bouton-annuler-quantite:hover {
-  background: #c0392b;
-  transform: scale(1.05);
-}
-
-.actions-prix {
-  display: flex;
-  gap: 0.3rem;
-}
-
-.bouton-modifier-prix,
-.bouton-reinitialiser-prix,
-.bouton-supprimer {
-  background: #f39c12;
-  color: white;
-  width: 26px;
-  height: 26px;
-  border-radius: 4px;
-  font-size: 0.8rem;
-  border: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-}
-
-.bouton-reinitialiser-prix {
-  background: #3498db;
-}
-
-.bouton-supprimer {
-  background: #e74c3c;
-}
-
-.bouton-modifier-prix:hover:not(:disabled),
-.bouton-reinitialiser-prix:hover:not(:disabled),
-.bouton-supprimer:hover:not(:disabled) {
-  transform: scale(1.05);
-}
-
-.bouton-modifier-prix:disabled,
-.bouton-reinitialiser-prix:disabled,
-.bouton-supprimer:disabled {
-  background: #bdc3c7;
-  cursor: not-allowed;
 }
 
 /* Résumé commande */
@@ -883,11 +749,6 @@
   display: flex;
   align-items: center;
   gap: 0.3rem;
-}
-
-.resume-icone {
-  color: #472EAD;
-  font-size: 0.8rem;
 }
 
 .ligne-total,
@@ -923,7 +784,6 @@
   font-weight: 700;
   border: none;
   cursor: pointer;
-  transition: all 0.3s ease;
   display: flex;
   align-items: center;
   gap: 0.4rem;
@@ -935,143 +795,12 @@
   color: white;
 }
 
-.bouton-valider:hover:not(:disabled) {
-  background: linear-gradient(135deg, #219653, #27ae60);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(39, 174, 96, 0.4);
-}
-
 .bouton-annuler {
   background: linear-gradient(135deg, #e74c3c, #c0392b);
   color: white;
 }
 
-.bouton-annuler:hover:not(:disabled) {
-  background: linear-gradient(135deg, #c0392b, #a93226);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(231, 76, 60, 0.4);
-}
-
-.bouton-valider:disabled,
-.bouton-annuler:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
-}
-
-/* Responsive */
-@media (max-width: 1200px) {
-  .commande-conteneur {
-    grid-template-columns: 1fr;
-    height: auto;
-  }
-  
-  .section-droite {
-    flex-direction: row;
-  }
-  
-  .section-client {
-    flex: 1;
-  }
-  
-  .section-panier {
-    flex: 2;
-  }
-}
-
-@media (max-width: 992px) {
-  .section-droite {
-    flex-direction: column;
-  }
-}
-
-@media (max-width: 768px) {
-  .nouvelle-commande {
-    padding: 1rem;
-  }
-  
-  .commande-entete h2 {
-    font-size: 1.3rem;
-  }
-  
-  .commande-conteneur {
-    gap: 1rem;
-  }
-  
-  .grille-produits {
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 0.8rem;
-  }
-  
-  .selecteur-type-vente {
-    flex-direction: column;
-  }
-  
-  .controle-code-barre {
-    flex-direction: column;
-  }
-  
-  .actions-produit {
-    flex-direction: column;
-  }
-  
-  .item-actions {
-    flex-direction: column;
-    gap: 0.6rem;
-    align-items: stretch;
-  }
-  
-  .controle-quantite {
-    justify-content: center;
-  }
-  
-  .actions-prix {
-    justify-content: center;
-  }
-}
-
-@media (max-width: 480px) {
-  .commande-entete h2 {
-    font-size: 1.1rem;
-  }
-  
-  .entete-icone {
-    font-size: 1rem;
-  }
-  
-  .section-produits,
-  .section-client,
-  .section-panier {
-    padding: 0.8rem;
-  }
-  
-  .carte-produit {
-    padding: 0.8rem;
-  }
-  
-  .item-panier {
-    padding: 0.8rem;
-  }
-  
-  .bouton-valider,
-  .bouton-annuler {
-    padding: 0.6rem;
-    font-size: 0.8rem;
-  }
-  
-  .panier-entete {
-    flex-direction: column;
-    gap: 0.6rem;
-    align-items: flex-start;
-  }
-  
-  .panier-statut {
-    align-self: flex-start;
-  }
-}
-
-/* ---------- TICKET QR CODE ---------- */
-
+/* TICKET QR CODE styles */
 .ticket-overlay {
   position: fixed;
   inset: 0;
@@ -1126,18 +855,15 @@
   color: #fff;
 }
 
-/* ---------- MODE IMPRESSION : uniquement le QR code ---------- */
+/* Impression : uniquement le QR code */
 @media print {
   body * {
     visibility: hidden !important;
   }
-
-  /* On ne montre que le bloc du QR code */
   .ticket-qrcode-print,
   .ticket-qrcode-print * {
     visibility: visible !important;
   }
-
   .ticket-qrcode-print {
     position: fixed;
     inset: 0;
@@ -1146,10 +872,69 @@
     justify-content: center;
     align-items: center;
   }
-
-  /* On cache le texte et les boutons */
   .ticket-texte-ecran,
   .ticket-actions {
     display: none !important;
   }
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+  .commande-conteneur {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+  .entreprise-entete {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  .section-droite {
+    flex-direction: row;
+  }
+  .section-client {
+    flex: 1;
+  }
+  .section-panier {
+    flex: 2;
+  }
+}
+
+@media (max-width: 992px) {
+  .section-droite {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 768px) {
+  .nouvelle-commande {
+    padding: 1rem;
+  }
+  .grille-produits {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 0.8rem;
+  }
+  .selecteur-type-vente {
+    flex-direction: column;
+  }
+  .controle-code-barre {
+    flex-direction: column;
+  }
+  .actions-produit {
+    flex-direction: column;
+  }
+  .item-actions {
+    flex-direction: column;
+    gap: 0.6rem;
+    align-items: stretch;
+  }
+}
+
+@media (max-width: 480px) {
+  .entreprise-logo { width: 48px; height: 48px; }
+  .commande-entete h2 { font-size: 1.1rem; }
+  .section-produits, .section-client, .section-panier { padding: 0.8rem; }
+  .carte-produit { padding: 0.8rem; }
+  .item-panier { padding: 0.8rem; }
+  .bouton-valider, .bouton-annuler { padding: 0.6rem; font-size: 0.8rem; }
 }

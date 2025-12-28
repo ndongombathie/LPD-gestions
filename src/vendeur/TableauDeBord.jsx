@@ -1,229 +1,225 @@
-import React, { useState, useEffect } from 'react';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+// ==========================================================
+// 📊 TableauDeBord.jsx — Vendeur PREMIUM (LPD Manager)
+// Design moderne + logique EXISTANTE conservée
+// ==========================================================
+
+import React, { useEffect, useState } from "react";
 import {
-  faChartLine,
-  faShoppingCart,
-  faDollarSign,
-  faBox,
-  faFire,
-  faCalendarDay,
-  faClock,
-  faArrowUp,
-  faArrowDown,
-  faMinus,
-  faSync
-} from '@fortawesome/free-solid-svg-icons';
-import './TableauDeBord.css';
+  TrendingUp,
+  ShoppingCart,
+  DollarSign,
+  Package,
+  Flame,
+  ArrowUp,
+  ArrowDown,
+  Minus,
+  Calendar,
+  Clock,
+  Loader2,
+} from "lucide-react";
+import { motion } from "framer-motion";
 
 const TableauDeBord = () => {
+  /* =============================
+     LOGIQUE EXISTANTE (INCHANGÉE)
+  ============================= */
   const [stats, setStats] = useState({
     ventesAujourdhui: 0,
     commandesTraitees: 0,
-    produitsVendus: 0
+    produitsVendus: 0,
   });
 
   const [produitsPopulaires, setProduitsPopulaires] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const chargerDonnees = () => {
-      setLoading(true);
-      
-      // Simulation de chargement de données
-      setTimeout(() => {
-        setStats({
-          ventesAujourdhui: 125420,
-          commandesTraitees: 24,
-          produitsVendus: 42
-        });
+    setLoading(true);
 
-        setProduitsPopulaires([
-          {
-            id: 1,
-            nom: 'Sac à Main Cuir Noir',
-            reference: 'SAC-CUIR-001',
-            ventes: 28,
-            revenu: 420000,
-            tendance: 'up'
-          },
-          {
-            id: 2,
-            nom: 'Chemise Homme Blanche',
-            reference: 'CHM-BLANC-001',
-            ventes: 19,
-            revenu: 285000,
-            tendance: 'up'
-          },
-          {
-            id: 3,
-            nom: 'Parfum Luxury 100ml',
-            reference: 'PARF-LUX-001',
-            ventes: 15,
-            revenu: 675000,
-            tendance: 'stable'
-          },
-          {
-            id: 4,
-            nom: 'Montre Sport Étanche',
-            reference: 'MONT-SPORT-002',
-            ventes: 12,
-            revenu: 360000,
-            tendance: 'down'
-          }
-        ]);
+    setTimeout(() => {
+      setStats({
+        ventesAujourdhui: 125420,
+        commandesTraitees: 24,
+        produitsVendus: 42,
+      });
 
-        setLoading(false);
-      }, 100);
-    };
+      setProduitsPopulaires([
+        {
+          id: 1,
+          nom: "Sac à Main Cuir Noir",
+          reference: "SAC-CUIR-001",
+          ventes: 28,
+          revenu: 420000,
+          tendance: "up",
+        },
+        {
+          id: 2,
+          nom: "Chemise Homme Blanche",
+          reference: "CHM-BLANC-001",
+          ventes: 19,
+          revenu: 285000,
+          tendance: "up",
+        },
+        {
+          id: 3,
+          nom: "Parfum Luxury 100ml",
+          reference: "PARF-LUX-001",
+          ventes: 15,
+          revenu: 675000,
+          tendance: "stable",
+        },
+        {
+          id: 4,
+          nom: "Montre Sport Étanche",
+          reference: "MONT-SPORT-002",
+          ventes: 12,
+          revenu: 360000,
+          tendance: "down",
+        },
+      ]);
 
-    chargerDonnees();
+      setLoading(false);
+    }, 800);
 
-    // Mise à jour en temps réel
     const interval = setInterval(() => {
-      setStats(prev => ({
+      setStats((prev) => ({
         ...prev,
         ventesAujourdhui: prev.ventesAujourdhui + Math.floor(Math.random() * 500),
-        commandesTraitees: prev.commandesTraitees + 1
+        commandesTraitees: prev.commandesTraitees + 1,
       }));
     }, 30000);
 
     return () => clearInterval(interval);
   }, []);
 
+  /* =============================
+     HELPERS
+  ============================= */
   const getTendanceIcon = (tendance) => {
-    switch (tendance) {
-      case 'up': 
-        return <FontAwesomeIcon icon={faArrowUp} />;
-      case 'down': 
-        return <FontAwesomeIcon icon={faArrowDown} />;
-      default: 
-        return <FontAwesomeIcon icon={faMinus} />;
-    }
+    if (tendance === "up") return <ArrowUp className="text-emerald-500" />;
+    if (tendance === "down") return <ArrowDown className="text-rose-500" />;
+    return <Minus className="text-gray-400" />;
   };
 
-  const getTendanceClass = (tendance) => {
-    return `tendance-${tendance}`;
-  };
-
+  /* =============================
+     LOADING
+  ============================= */
   if (loading) {
     return (
-      <div className="tableau-de-bord loading">
-        <div className="loading-spinner">
-          <FontAwesomeIcon icon={faSync} spin />
-          <p>Chargement des données...</p>
-        </div>
+      <div className="flex items-center justify-center min-h-[300px]">
+        <Loader2 className="animate-spin text-[#472EAD]" size={36} />
       </div>
     );
   }
 
+  /* =============================
+     RENDER PREMIUM
+  ============================= */
   return (
-    <div className="tableau-de-bord">
-      {/* En-tête */}
-      <div className="dashboard-header">
-        <div className="header-content">
-          <div className="header-title">
-            <FontAwesomeIcon icon={faChartLine} className="header-icon" />
-            <h1>Tableau de Bord</h1>
-          </div>
-          <p className="header-description">Aperçu de votre activité</p>
-        </div>
-        
-        <div className="header-info">
-          <div className="time-display">
-            <div className="current-date">
-              <FontAwesomeIcon icon={faCalendarDay} />
-              <span>
-                {new Date().toLocaleDateString('fr-FR')}
-              </span>
-            </div>
-            <div className="current-time">
-              <FontAwesomeIcon icon={faClock} />
-              <span>
-                {new Date().toLocaleTimeString('fr-FR', { 
-                  hour: '2-digit', 
-                  minute: '2-digit' 
-                })}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Cartes de statistiques - 3 cartes */}
-      <div className="stats-grid">
-        <div className="stat-card revenue-card">
-          <div className="card-icon">
-            <FontAwesomeIcon icon={faDollarSign} />
-          </div>
-          <div className="card-content">
-            <h3>Ventes du Jour</h3>
-            <div className="card-value">{stats.ventesAujourdhui.toLocaleString()} FCFA</div>
-            <div className="card-trend positive">
-              <FontAwesomeIcon icon={faArrowUp} />
-              <span>+12.5%</span>
-            </div>
-          </div>
+    <div className="space-y-10">
+      {/* ===== HEADER ===== */}
+      <motion.div
+        initial={{ opacity: 0, y: -15 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex flex-col sm:flex-row sm:justify-between gap-4"
+      >
+        <div>
+          <h1 className="text-2xl font-extrabold text-[#2F1F7A] flex items-center gap-2">
+            <TrendingUp /> Tableau de bord vendeur
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Aperçu de votre activité en temps réel
+          </p>
         </div>
 
-        <div className="stat-card orders-card">
-          <div className="card-icon">
-            <FontAwesomeIcon icon={faShoppingCart} />
-          </div>
-          <div className="card-content">
-            <h3>Commandes</h3>
-            <div className="card-value">{stats.commandesTraitees}</div>
-            <div className="card-subtitle">Aujourd'hui</div>
-          </div>
+        <div className="flex gap-4 text-sm text-gray-600">
+          <span className="flex items-center gap-1">
+            <Calendar size={16} />
+            {new Date().toLocaleDateString("fr-FR")}
+          </span>
+          <span className="flex items-center gap-1">
+            <Clock size={16} />
+            {new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+          </span>
+        </div>
+      </motion.div>
+
+      {/* ===== KPI CARDS ===== */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="grid grid-cols-1 sm:grid-cols-3 gap-6"
+      >
+        <KpiCard
+          label="Ventes du jour"
+          value={`${stats.ventesAujourdhui.toLocaleString()} FCFA`}
+          icon={<DollarSign />}
+          gradient="from-[#472EAD] to-[#7A5BF5]"
+        />
+        <KpiCard
+          label="Commandes traitées"
+          value={stats.commandesTraitees}
+          icon={<ShoppingCart />}
+          gradient="from-[#F58020] to-[#FF9F66]"
+        />
+        <KpiCard
+          label="Produits vendus"
+          value={stats.produitsVendus}
+          icon={<Package />}
+          gradient="from-[#10B981] to-[#34D399]"
+        />
+      </motion.div>
+
+      {/* ===== PRODUITS POPULAIRES ===== */}
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-white/70 backdrop-blur-xl border border-[#E4E0FF] rounded-2xl p-6 shadow-sm"
+      >
+        <div className="flex items-center gap-2 mb-4">
+          <Flame className="text-orange-500" />
+          <h2 className="text-lg font-bold text-[#2F1F7A]">
+            Produits populaires
+          </h2>
         </div>
 
-        <div className="stat-card products-card">
-          <div className="card-icon">
-            <FontAwesomeIcon icon={faBox} />
-          </div>
-          <div className="card-content">
-            <h3>Produits Vendus</h3>
-            <div className="card-value">{stats.produitsVendus}</div>
-            <div className="card-subtitle">Unités</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Produits populaires */}
-      <div className="popular-products-section">
-        <div className="section-header">
-          <div className="section-title">
-            <FontAwesomeIcon icon={faFire} className="section-icon" />
-            <h2>Produits Populaires</h2>
-          </div>
-          <span className="section-subtitle">Top des ventes du mois</span>
-        </div>
-        
-        <div className="products-list">
-          {produitsPopulaires.map(produit => (
-            <div key={produit.id} className="product-item">
-              <div className="product-main-info">
-                <div className="product-name">{produit.nom}</div>
-                <div className="product-sku">{produit.reference}</div>
+        <div className="space-y-3">
+          {produitsPopulaires.map((p) => (
+            <div
+              key={p.id}
+              className="flex items-center justify-between p-3 rounded-xl hover:bg-[#F7F5FF] transition"
+            >
+              <div>
+                <p className="font-semibold text-gray-800">{p.nom}</p>
+                <p className="text-xs text-gray-500">{p.reference}</p>
               </div>
-              
-              <div className="product-stats">
-                <div className="sales-count">
-                  <strong>{produit.ventes}</strong> ventes
-                </div>
-                <div className="revenue-amount">
-                  {produit.revenu.toLocaleString()} FCFA
-                </div>
+
+              <div className="text-right">
+                <p className="text-sm font-medium">
+                  {p.revenu.toLocaleString()} FCFA
+                </p>
+                <p className="text-xs text-gray-500">{p.ventes} ventes</p>
               </div>
-              
-              <div className={`product-trend ${getTendanceClass(produit.tendance)}`}>
-                {getTendanceIcon(produit.tendance)}
-              </div>
+
+              {getTendanceIcon(p.tendance)}
             </div>
           ))}
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 };
+
+/* =============================
+   SOUS-COMPONENT
+============================= */
+const KpiCard = ({ label, value, icon, gradient }) => (
+  <div
+    className={`relative overflow-hidden rounded-2xl p-5 text-white bg-gradient-to-br ${gradient}`}
+  >
+    <div className="absolute top-4 right-4 opacity-20">{icon}</div>
+    <p className="text-sm opacity-90">{label}</p>
+    <p className="text-2xl font-extrabold mt-1">{value}</p>
+  </div>
+);
 
 export default TableauDeBord;

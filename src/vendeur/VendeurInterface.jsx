@@ -1,18 +1,14 @@
-import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-
-import Header from "./Header";
-import Sidebar from "./Sidebar";
-import TableauDeBord from "./TableauDeBord";
-import NouvelleCommande from "./NouvelleCommande";
-import HistoriqueCommandes from "./HistoriqueCommandes";
-import Footer from "./Footer";
-import "./VendeurInterface.css";
+import React, { useState, useEffect } from 'react';
+import Header from './Header';
+import Sidebar from './Sidebar';
+import TableauDeBord from './TableauDeBord';
+import NouvelleCommande from './pages/NouvelleCommande';
+import HistoriqueCommandes from './pages/HistoriqueCommandes';
+import Footer from './Footer'; // Import du footer
+import './css/VendeurInterface.css';
 
 const VendeurInterface = () => {
-  const navigate = useNavigate();
-
-  const [sectionActive, setSectionActive] = useState("tableau-de-bord");
+  const [sectionActive, setSectionActive] = useState('tableau-de-bord');
   const [panier, setPanier] = useState([]);
   const [produits, setProduits] = useState([]);
   const [historiqueCommandes, setHistoriqueCommandes] = useState([]);
@@ -23,56 +19,28 @@ const VendeurInterface = () => {
     role: "Vendeur",
     store: "Boutique Principale",
     telephone: "+221 77 123 45 67",
-    photo: null,
+    photo: null
   });
 
-  // Vérifier l'authentification + charger les données au montage
+  // Simuler la récupération des produits depuis l'API du gestionnaire de stock
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      // Pas de token => redirection vers la page de login
-      navigate("/login");
-      return;
-    }
-
     chargerProduitsDepuisStock();
     chargerHistoriqueCommandes();
     chargerDonneesUtilisateur();
-  }, [navigate]);
+  }, []);
 
   const chargerDonneesUtilisateur = async () => {
     try {
-      // 1️⃣ Essayer de charger les données depuis 'lpd_user'
-      const savedUser = localStorage.getItem("lpd_user");
+      // Charger depuis le localStorage si disponible
+      const savedUser = localStorage.getItem('lpd_user');
       if (savedUser) {
         const userData = JSON.parse(savedUser);
-        console.log("Utilisateur chargé depuis localStorage (lpd_user):", userData);
+        console.log('Utilisateur chargé depuis localStorage:', userData);
         setCurrentUser(userData);
         return;
       }
 
-      // 2️⃣ Sinon, essayer depuis 'user' (clé générique)
-      const genericUser = localStorage.getItem("user");
-      if (genericUser) {
-        const parsed = JSON.parse(genericUser);
-        const userData = {
-          id: parsed.id,
-          name: parsed.name || parsed.nom || "Vendeur LPD",
-          email: parsed.email,
-          role: parsed.role || "Vendeur",
-          store: parsed.store || "Boutique Principale",
-          telephone: parsed.telephone || "+221 77 000 00 00",
-          photo: parsed.photo || null,
-          last_login: new Date().toISOString(),
-        };
-
-        console.log("Utilisateur construit depuis 'user':", userData);
-        setCurrentUser(userData);
-        localStorage.setItem("lpd_user", JSON.stringify(userData));
-        return;
-      }
-
-      // 3️⃣ Sinon, fallback : données par défaut
+      // Sinon, utiliser les données par défaut
       const userData = {
         id: 1,
         name: "Loup Zou",
@@ -81,25 +49,32 @@ const VendeurInterface = () => {
         store: "Boutique Principale",
         telephone: "+221 77 176 87 73",
         photo: null,
-        last_login: new Date().toISOString(),
+        last_login: new Date().toISOString()
       };
       setCurrentUser(userData);
-      localStorage.setItem("lpd_user", JSON.stringify(userData));
+      
+      // Sauvegarder dans le localStorage
+      localStorage.setItem('lpd_user', JSON.stringify(userData));
+      
     } catch (error) {
-      console.error("Erreur chargement données utilisateur:", error);
+      console.error('Erreur chargement données utilisateur:', error);
     }
   };
 
   // Fonction pour mettre à jour les informations utilisateur
   const handleUpdateUser = (updatedUser) => {
-    console.log("Mise à jour utilisateur reçue dans VendeurInterface:", updatedUser);
-
+    console.log('Mise à jour utilisateur reçue dans VendeurInterface:', updatedUser);
+    
     try {
+      // Mettre à jour l'état local
       setCurrentUser(updatedUser);
-      localStorage.setItem("lpd_user", JSON.stringify(updatedUser));
-      console.log("✅ Utilisateur mis à jour avec succès dans VendeurInterface");
+      
+      // Sauvegarder dans le localStorage
+      localStorage.setItem('lpd_user', JSON.stringify(updatedUser));
+      
+      console.log('✅ Utilisateur mis à jour avec succès dans VendeurInterface');
     } catch (error) {
-      console.error("❌ Erreur mise à jour utilisateur:", error);
+      console.error('❌ Erreur mise à jour utilisateur:', error);
     }
   };
 
@@ -119,7 +94,7 @@ const VendeurInterface = () => {
           stock: 15,
           seuil_alerte: 5,
           categorie: "Etudes",
-          tva: 18,
+          tva: 18
         },
         {
           id: 2,
@@ -133,7 +108,7 @@ const VendeurInterface = () => {
           stock: 50,
           seuil_alerte: 35,
           categorie: "Alimentaires",
-          tva: 18,
+          tva: 18
         },
         {
           id: 3,
@@ -147,7 +122,7 @@ const VendeurInterface = () => {
           stock: 25,
           seuil_alerte: 10,
           categorie: "Etudes",
-          tva: 18,
+          tva: 18
         },
         {
           id: 4,
@@ -161,7 +136,7 @@ const VendeurInterface = () => {
           stock: 100,
           seuil_alerte: 20,
           categorie: "Etudes",
-          tva: 18,
+          tva: 18
         },
         {
           id: 5,
@@ -175,7 +150,7 @@ const VendeurInterface = () => {
           stock: 10,
           seuil_alerte: 2,
           categorie: "Outils",
-          tva: 18,
+          tva: 18
         },
         {
           id: 6,
@@ -189,12 +164,12 @@ const VendeurInterface = () => {
           stock: 10,
           seuil_alerte: 2,
           categorie: "Alimentaires",
-          tva: 18,
+          tva: 18
         },
       ];
       setProduits(produitsSimules);
     } catch (error) {
-      console.error("Erreur chargement produits:", error);
+      console.error('Erreur chargement produits:', error);
     }
   };
 
@@ -204,131 +179,98 @@ const VendeurInterface = () => {
       const commandesSimulees = [
         {
           id: 1,
-          numero_commande: "CMD-2024-001",
-          client_nom: "Marie Diop",
-          client_telephone: "77 123 45 67",
+          numero_commande: 'CMD-2024-001',
+          client_nom: 'Marie Diop',
+          client_telephone: '77 123 45 67',
           total_ht: 40000,
           total_ttc: 47200,
           tva: 7200,
-          statut: "complétée",
-          type_vente: "détail",
-          created_at: "2024-01-15T10:30:00",
+          statut: 'complétée',
+          type_vente: 'détail',
+          created_at: '2024-01-15T10:30:00',
           produits: [
-            {
-              nom: "Sac à Main Cuir Noir",
-              quantite: 1,
-              prix_unitaire: 25000,
-              prix_vente: 25000,
-            },
-            {
-              nom: "Chemise Homme Blanche",
-              quantite: 1,
-              prix_unitaire: 15000,
-              prix_vente: 15000,
-            },
-          ],
+            { nom: 'Sac à Main Cuir Noir', quantite: 1, prix_unitaire: 25000, prix_vente: 25000 },
+            { nom: 'Chemise Homme Blanche', quantite: 1, prix_unitaire: 15000, prix_vente: 15000 }
+          ]
         },
         {
           id: 2,
-          numero_commande: "CMD-2024-002",
-          client_nom: "Abdoulaye Sow",
-          client_telephone: "76 234 56 78",
+          numero_commande: 'CMD-2024-002',
+          client_nom: 'Abdoulaye Sow',
+          client_telephone: '76 234 56 78',
           total_ht: 15000,
           total_ttc: 17700,
           tva: 2700,
-          statut: "en attente",
-          type_vente: "détail",
-          created_at: "2024-01-15T14:20:00",
+          statut: 'en attente',
+          type_vente: 'détail',
+          created_at: '2024-01-15T14:20:00',
           produits: [
-            {
-              nom: "Cahier 200 pages",
-              quantite: 2,
-              prix_unitaire: 1200,
-              prix_vente: 2400,
-            },
-            {
-              nom: "Stylo Bic Bleu",
-              quantite: 5,
-              prix_unitaire: 150,
-              prix_vente: 750,
-            },
-            {
-              nom: "Bloc Note",
-              quantite: 3,
-              prix_unitaire: 350,
-              prix_vente: 1050,
-            },
-          ],
+            { nom: 'Cahier 200 pages', quantite: 2, prix_unitaire: 1200, prix_vente: 2400 },
+            { nom: 'Stylo Bic Bleu', quantite: 5, prix_unitaire: 150, prix_vente: 750 },
+            { nom: 'Bloc Note', quantite: 3, prix_unitaire: 350, prix_vente: 1050 }
+          ]
         },
         {
           id: 3,
-          numero_commande: "CMD-2024-003",
-          client_nom: "Entreprise SARL",
-          client_telephone: "33 864 25 00",
+          numero_commande: 'CMD-2024-003',
+          client_nom: 'Entreprise SARL',
+          client_telephone: '33 864 25 00',
           total_ht: 125000,
           total_ttc: 147500,
           tva: 22500,
-          statut: "complétée",
-          type_vente: "gros",
-          created_at: "2024-01-14T09:15:00",
+          statut: 'complétée',
+          type_vente: 'gros',
+          created_at: '2024-01-14T09:15:00',
           produits: [
-            {
-              nom: "Bouteille d'eau 1.5L",
-              quantite: 50,
-              prix_unitaire: 375,
-              prix_vente: 18750,
-            },
-            {
-              nom: "Kirene",
-              quantite: 30,
-              prix_unitaire: 380,
-              prix_vente: 11400,
-            },
-          ],
-        },
+            { nom: 'Bouteille d\'eau 1.5L', quantite: 50, prix_unitaire: 375, prix_vente: 18750 },
+            { nom: 'Kirene', quantite: 30, prix_unitaire: 380, prix_vente: 11400 }
+          ]
+        }
       ];
       setHistoriqueCommandes(commandesSimulees);
     } catch (error) {
-      console.error("Erreur chargement historique:", error);
+      console.error('Erreur chargement historique:', error);
     }
   };
 
   const gererCommandeValidee = async (nouvelleCommande) => {
     try {
-      console.log("📨 Envoi commande au caissier:", nouvelleCommande);
+      // Simulation d'envoi vers le microservice caisse
+      console.log('📨 Envoi commande au caissier:', nouvelleCommande);
 
-      setHistoriqueCommandes((prev) => [nouvelleCommande, ...prev]);
+      // Ajouter à l'historique local
+      setHistoriqueCommandes(prev => [nouvelleCommande, ...prev]);
+
+      // Vider le panier
       setPanier([]);
 
-      alert(
-        `✅ Commande ${nouvelleCommande.numero_commande} envoyée au caissier avec succès !`
-      );
+      alert(`✅ Commande ${nouvelleCommande.numero_commande} envoyée au caissier avec succès !`);
+
     } catch (error) {
-      console.error("Erreur envoi commande:", error);
-      alert("❌ Erreur lors de l'envoi de la commande au caissier");
+      console.error('Erreur envoi commande:', error);
+      alert('❌ Erreur lors de l\'envoi de la commande au caissier');
     }
   };
 
-  // Déconnexion
+  // Fonction pour gérer la déconnexion
   const handleLogout = () => {
-    if (window.confirm("Êtes-vous sûr de vouloir vous déconnecter ?")) {
-      console.log("Déconnexion en cours...");
+    if (window.confirm('Êtes-vous sûr de vouloir vous déconnecter ?')) {
+      console.log('Déconnexion en cours...');
       setIsLoggedIn(false);
-
-      // Nettoyage du stockage
-      localStorage.removeItem("token");
-      // Si tu veux aussi supprimer les infos utilisateur :
-      // localStorage.removeItem("lpd_user");
-      // localStorage.removeItem("user");
-
+      
+      // Nettoyer le localStorage si nécessaire
+      // localStorage.removeItem('lpd_user');
+      
+      // Simulation de redirection après déconnexion
       setTimeout(() => {
-        alert("Vous avez été déconnecté avec succès");
-        navigate("/login");
-      }, 300);
+        alert('Vous avez été déconnecté avec succès');
+        // Ici vous redirigeriez vers la page de login
+        // window.location.href = '/login';
+      }, 1000);
     }
   };
 
-  // Si on gère encore un état local de connexion
+  // Si l'utilisateur n'est pas connecté, afficher la page de login
   if (!isLoggedIn) {
     return (
       <div className="login-page">
@@ -336,12 +278,9 @@ const VendeurInterface = () => {
           <h1>LPD Manager</h1>
           <p>Interface Vendeur</p>
           <p className="login-message">Vous avez été déconnecté</p>
-          <button
+          <button 
             className="btn-login"
-            onClick={() => {
-              setIsLoggedIn(true);
-              navigate("/login");
-            }}
+            onClick={() => setIsLoggedIn(true)}
           >
             Se reconnecter
           </button>
@@ -369,15 +308,15 @@ const VendeurInterface = () => {
         />
 
         <main className="vendeur-contenu-principal">
-          {sectionActive === "tableau-de-bord" && (
-            <TableauDeBord
+          {sectionActive === 'tableau-de-bord' && (
+            <TableauDeBord 
               user={currentUser}
               commandes={historiqueCommandes}
               produits={produits}
             />
           )}
-
-          {sectionActive === "nouvelle-commande" && (
+          
+          {sectionActive === 'nouvelle-commande' && (
             <NouvelleCommande
               panier={panier}
               setPanier={setPanier}
@@ -387,12 +326,16 @@ const VendeurInterface = () => {
             />
           )}
 
-          {sectionActive === "historique-commandes" && (
-            <HistoriqueCommandes commandes={historiqueCommandes} user={currentUser} />
+          {sectionActive === 'historique-commandes' && (
+            <HistoriqueCommandes
+              commandes={historiqueCommandes}
+              user={currentUser}
+            />
           )}
         </main>
       </div>
 
+      {/* Footer en position fixed */}
       <Footer />
     </div>
   );

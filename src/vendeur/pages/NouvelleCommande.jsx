@@ -29,7 +29,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 
 import { QRCodeCanvas } from 'qrcode.react'; // 🔹 AJOUT POUR LE QR CODE
-import './NouvelleCommande.css';
+import '../css/NouvelleCommande.css';
 
 // 🔹 sellerName ajouté pour récupérer le nom du vendeur réel
 const NouvelleCommande = ({ panier, setPanier, produits, onCommandeValidee, sellerName = null }) => {
