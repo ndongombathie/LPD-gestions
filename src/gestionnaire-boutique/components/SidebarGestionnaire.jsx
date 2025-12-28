@@ -17,12 +17,12 @@ export default function SidebarGestionnaire() {
   const location = useLocation();
 
   const menuItems = [
-    { name: "Tableau de bord", icon: LayoutDashboard, path: "/gestionnaire/dashboard" },
-    { name: "Produits", icon: Package, path: "/gestionnaire/produits" },
-    { name: "Stock", icon: ClipboardList, path: "/gestionnaire/stock" },
-    { name: "Alertes", icon: AlertTriangle, path: "/gestionnaire/alertes" },
-    { name: "Rapports", icon: FileText, path: "/gestionnaire/rapports" },
-    { name: "Historiques", icon: RefreshCw, path: "/gestionnaire/historique" },
+    { name: "Tableau de bord", icon: LayoutDashboard, path: "/gestionnaire-boutique/dashboard" },
+    { name: "Produits", icon: Package, path: "/gestionnaire-boutique/produits" },
+    { name: "Stock", icon: ClipboardList, path: "/gestionnaire-boutique/stock" },
+    { name: "Alertes", icon: AlertTriangle, path: "/gestionnaire-boutique/alertes" },
+    { name: "Rapports", icon: FileText, path: "/gestionnaire-boutique/rapports" },
+    { name: "Historiques", icon: RefreshCw, path: "/gestionnaire-boutique/historique" },
 
   ];
 

@@ -30,7 +30,7 @@ import {
   Banknote,
 } from "lucide-react";
 // framer-motion removed to avoid optional peer dep on react/jsx-runtime in dev
-// import { instance } from "../utils/axios";
+import { instance } from "../../utils/axios.jsx";
 
 // ==========================================================
 // 🧩 Utils
@@ -52,17 +52,40 @@ const saveJSON = (k, v) => localStorage.setItem(k, JSON.stringify(v));
 
 const RECENTS_KEY = "lpd_recent_paths";
 
+// Normalise la structure utilisateur pour garantir prenom/nom même si l'API renvoie seulement `name`
+const normalizeUser = (u) => {
+  try {
+    if (!u || typeof u !== "object") {
+      return { prenom: "", nom: "", email: "", role: "Gestionnaire", photo: null };
+    }
+    const name = u.name || "";
+    const [first, ...rest] = name.split(" ").filter(Boolean);
+    const prenom = u.prenom ?? first ?? "";
+    const nom = u.nom ?? (rest.join(" ") || "");
+    return {
+      ...u,
+      prenom,
+      nom,
+      email: u.email || "",
+      role: u.role || "Gestionnaire",
+      photo: u.photo || null,
+    };
+  } catch {
+    return { prenom: "", nom: "", email: "", role: "Gestionnaire", photo: null };
+  }
+};
+
 // 🔗 Pages éligibles aux raccourcis (mêmes infos que la Sidebar)
 const SHORTCUT_ITEMS = [
-  { name: "Tableau de bord", path: "/gestionnaire/dashboard", icon: LayoutDashboard },
-  { name: "Utilisateurs", path: "/gestionnaire/utilisateurs", icon: Users },
-  { name: "Fournisseurs", path: "/gestionnaire/fournisseurs", icon: Truck },
-  { name: "Clients spéciaux", path: "/gestionnaire/clients-speciaux", icon: ClipboardList },
-  { name: "Commandes", path: "/gestionnaire/commandes", icon: ShoppingCart },
-  { name: "Inventaire", path: "/gestionnaire/inventaire", icon: BarChart2 },
-  { name: "Rapports", path: "/gestionnaire/rapports", icon: FileText },
-  { name: "Décaissements", path: "/gestionnaire/decaissements", icon: Banknote },
-  { name: "Journal d’activités", path: "/gestionnaire/journal-activites", icon: Clock },
+  { name: "Tableau de bord", path: "/gestionnaire-boutique/dashboard", icon: LayoutDashboard },
+  { name: "Utilisateurs", path: "/gestionnaire-boutique/utilisateurs", icon: Users },
+  { name: "Fournisseurs", path: "/gestionnaire-boutique/fournisseurs", icon: Truck },
+  { name: "Clients spéciaux", path: "/gestionnaire-boutique/clients-speciaux", icon: ClipboardList },
+  { name: "Commandes", path: "/gestionnaire-boutique/commandes", icon: ShoppingCart },
+  { name: "Inventaire", path: "/gestionnaire-boutique/inventaire", icon: BarChart2 },
+  { name: "Rapports", path: "/gestionnaire-boutique/rapports", icon: FileText },
+  { name: "Décaissements", path: "/gestionnaire-boutique/decaissements", icon: Banknote },
+  { name: "Journal d’activités", path: "/gestionnaire-boutique/journal-activites", icon: Clock },
 ];
 
 // ==========================================================
@@ -130,19 +153,14 @@ function PasswordModal({ open, onClose, onSuccess, addToast }) {
     setLoading(true);
 
     try {
-      const inst = globalThis['instance'];
-      if (inst && typeof inst.put === 'function') {
-        await inst.put("/auth/change-password", {
-          old_password: oldPwd,
-          new_password: newPwd,
-          new_password_confirmation: confirmPwd,
-        });
+      await instance.put("/auth/change-password", {
+        old_password: oldPwd,
+        new_password: newPwd,
+        new_password_confirmation: confirmPwd,
+      });
 
-        addToast("success", "Mot de passe modifié", "Vos identifiants ont été mis à jour.");
-        onSuccess();
-      } else {
-        addToast("error", "API non configurée", "Aucun client HTTP disponible.");
-      }
+      addToast("success", "Mot de passe modifié", "Vos identifiants ont été mis à jour.");
+      onSuccess();
     } catch (err) {
       const msg = err?.response?.data?.message || "Impossible de changer le mot de passe.";
       addToast("error", "Erreur", msg);
@@ -274,20 +292,13 @@ function ProfileModal({ open, onClose, user, onUpdate, addToast }) {
 
   const handleSave = async () => {
     try {
-      const inst = globalThis['instance'];
-      if (inst && typeof inst.put === 'function') {
-        const res = await inst.put("/mon-profil", {
-          prenom,
-          nom,
-          photo: preview,
-        });
+      const res = await instance.put("/mon-profil", {
+        prenom,
+        nom,
+        photo: preview,
+      });
 
-        onUpdate(res.data);
-      } else {
-        // Pas d'API : simuler update local
-        const updated = { ...user, prenom, nom, photo: preview };
-        onUpdate(updated);
-      }
+      onUpdate(res.data);
 
       addToast("success", "Profil mis à jour", "Modification enregistrée.");
       onClose();
@@ -411,7 +422,7 @@ export default function Header() {
   const [showProfileModal, setShowProfileModal] = useState(false);
 
   // Data
-  const defaultUser = loadJSON("lpd_current_user", {
+  const defaultUser = loadJSON("user", {
     prenom: "Admin",
     nom: "LPD",
     email: "admin@local",
@@ -484,24 +495,26 @@ export default function Header() {
     const loadUser = async () => {
       // Si `instance` (axios) est disponible sur globalThis, on l'utilise ; sinon on charge un utilisateur mock depuis localStorage
       try {
-        const inst = globalThis['instance'];
-        if (inst && typeof inst.get === 'function') {
-          const { data } = await inst.get("/mon-profil");
-          setUser(data);
-          localStorage.setItem("lpd_current_user", JSON.stringify(data));
-        } else {
-          const saved = localStorage.getItem("lpd_current_user");
-          if (saved) {
-            setUser(JSON.parse(saved));
-          } else {
+        const { data } = await instance.get("/mon-profil");
+        const normalized = normalizeUser(data);
+        setUser(normalized);
+        localStorage.setItem("user", JSON.stringify(normalized));
+      } catch (err) {
+        // Fallback sur localStorage si l'API n'est pas dispo
+        const saved = localStorage.getItem("user");
+        if (saved) {
+          try {
+            setUser(normalizeUser(JSON.parse(saved)));
+          } catch {
             const mock = { prenom: "Admin", nom: "LPD", email: "admin@local", role: "Gestionnaire", photo: null };
             setUser(mock);
-            localStorage.setItem("lpd_current_user", JSON.stringify(mock));
+            localStorage.setItem("user", JSON.stringify(mock));
           }
+        } else {
+          const mock = { prenom: "Admin", nom: "LPD", email: "admin@local", role: "Gestionnaire", photo: null };
+          setUser(mock);
+          localStorage.setItem("user", JSON.stringify(mock));
         }
-      } catch (err) {
-        console.error("Erreur profil :", err);
-        navigate("/login");
       }
     };
     loadUser();
@@ -526,16 +539,13 @@ export default function Header() {
 
   const handleLogout = async () => {
     try {
-      const inst = globalThis['instance'];
-      if (inst && typeof inst.post === 'function') {
-        await inst.post("/auth/logout");
-      }
+      await instance.post("/auth/logout");
     } catch (err) {
-      console.warn('Logout request failed (no instance?):', err);
+      console.warn('Logout request failed:', err);
     }
 
     localStorage.removeItem("token");
-    localStorage.removeItem("lpd_current_user");
+    localStorage.removeItem("user");
 
     navigate("/login");
   };
@@ -758,8 +768,9 @@ export default function Header() {
         onClose={() => setShowProfileModal(false)}
         user={user}
         onUpdate={(updatedUser) => {
-          setUser(updatedUser);
-          localStorage.setItem("lpd_current_user", JSON.stringify(updatedUser));
+          const normalized = normalizeUser(updatedUser);
+          setUser(normalized);
+          localStorage.setItem("user", JSON.stringify(normalized));
         }}
         addToast={addToast}
       />

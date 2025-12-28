@@ -16,7 +16,7 @@ export default function AppGestionnaireBoutique() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/gestionnaire" element={<LayoutGestionnaire />}>
+        <Route path="/gestionnaire-boutique" element={<LayoutGestionnaire />}>
           <Route index element={<Dashboard />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="produits" element={<Produits />} />

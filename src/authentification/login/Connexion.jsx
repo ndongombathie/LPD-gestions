@@ -13,11 +13,18 @@ const normalizeRole = (role) => {
 
   const r = role.toString().toLowerCase();
 
+  // Rôles principaux
   if (r.includes("respons")) return "responsable";
   if (r.includes("compt")) return "comptable";
-  if (r.includes("gest")) return "gestionnaire";
-  if (r.includes("vend")) return "vendeur";
   if (r.includes("cais")) return "caissier";
+  if (r.includes("vend")) return "vendeur";
+
+  // Variantes gestionnaire boutique/dépôt (underscore ou tiret)
+  if (r.includes("gestionnaire_boutique") || (r.includes("gest") && r.includes("bout"))) return "gestionnaire-boutique";
+  if (r.includes("gestionnaire_depot") || r.includes("gestionnaire-depot") || (r.includes("gest") && r.includes("depot"))) return "gestionnaire-depot";
+
+  // Administrateur
+  if (r === "admin") return "admin";
 
   return r;
 };
@@ -29,12 +36,17 @@ const redirectByRole = (role = "") => {
       return "/responsable/dashboard";
     case "comptable":
       return "/comptable/dashboard";
-    case "gestionnaire":
-      return "/gestionnaire";
+    case "gestionnaire-boutique":
+      return "/gestionnaire-boutique/dashboard";
+    case "gestionnaire-depot":
+      return "/depot/dashboard";
     case "vendeur":
       return "/vendeur";
     case "caissier":
-      return "/caissier";
+      return "/caissier/dashboard";
+    case "admin":
+      // Par défaut, on redirige l'admin vers le dashboard responsable
+      return "/responsable/dashboard";
     default:
       return "/login";
   }
@@ -60,9 +72,11 @@ export default function Connexion() {
     setLoading(true);
 
     try {
-      // 🔹 APPEL API → CHEMIN CORRIGÉ : /api/auth/login
+      const trimmedEmail = email.trim();
+
+      // 🔹 APPEL API NORMAL → /api/auth/login
       const { data } = await instance.post("auth/login", {
-        email: email.trim(),
+        email: trimmedEmail,
         password,
       });
 
