@@ -1,0 +1,420 @@
+/* TableauDeBord.css */
+.tableau-de-bord {
+  padding: 15px;
+  background: #f8f9fa;
+  min-height: 100vh;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+/* État de chargement */
+.tableau-de-bord.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 300px;
+}
+
+.loading-spinner {
+  text-align: center;
+  color: #6c757d;
+}
+
+.loading-spinner svg {
+  font-size: 1.5rem;
+  margin-bottom: 0.8rem;
+  color: #007bff;
+}
+
+.loading-spinner p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #6c757d;
+}
+
+/* En-tête */
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.header-content {
+  flex: 1;
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 5px;
+}
+
+.header-title h1 {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.header-icon {
+  color: #3498db;
+  font-size: 1.4rem;
+}
+
+.header-description {
+  margin: 0;
+  color: #7f8c8d;
+  font-size: 0.9rem;
+}
+
+.header-info {
+  text-align: right;
+}
+
+.time-display {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.current-date,
+.current-time {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #2c3e50;
+  font-weight: 500;
+  font-size: 0.85rem;
+}
+
+.current-date svg,
+.current-time svg {
+  color: #3498db;
+  width: 14px;
+}
+
+/* Grille des statistiques */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 15px;
+  margin-bottom: 25px;
+}
+
+.stat-card {
+  background: white;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e9ecef;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #3498db, #2ecc71);
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.card-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+.revenue-card .card-icon {
+  background: #e8f6f3;
+  color: #1abc9c;
+}
+
+.orders-card .card-icon {
+  background: #e8f4fd;
+  color: #3498db;
+}
+
+.products-card .card-icon {
+  background: #f4ecf7;
+  color: #9b59b6;
+}
+
+.card-content {
+  flex: 1;
+}
+
+.card-content h3 {
+  margin: 0 0 8px 0;
+  color: #7f8c8d;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.card-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #2c3e50;
+  margin-bottom: 5px;
+  line-height: 1;
+}
+
+.card-subtitle {
+  color: #95a5a6;
+  font-size: 0.75rem;
+  font-weight: 500;
+  margin-bottom: 5px;
+}
+
+.card-trend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.card-trend.positive {
+  color: #27ae60;
+}
+
+.card-trend svg {
+  font-size: 0.7rem;
+}
+
+/* Section produits populaires */
+.popular-products-section {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e9ecef;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-title h2 {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.section-icon {
+  color: #e74c3c;
+  font-size: 1.1rem;
+}
+
+.section-subtitle {
+  color: #7f8c8d;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.products-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.product-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+  transition: all 0.2s ease;
+}
+
+.product-item:hover {
+  background: #e9ecef;
+  border-color: #dee2e6;
+}
+
+.product-main-info {
+  flex: 1;
+}
+
+.product-name {
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 3px;
+  font-size: 0.95rem;
+}
+
+.product-sku {
+  color: #7f8c8d;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.product-stats {
+  text-align: right;
+  margin-right: 15px;
+}
+
+.sales-count {
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 3px;
+  font-size: 0.85rem;
+}
+
+.revenue-amount {
+  color: #27ae60;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.product-trend {
+  font-size: 0.9rem;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+}
+
+.tendance-up {
+  color: #27ae60;
+  background: #d5f4e6;
+}
+
+.tendance-down {
+  color: #e74c3c;
+  background: #fadbd8;
+}
+
+.tendance-stable {
+  color: #f39c12;
+  background: #fdebd0;
+}
+
+/* Design responsive */
+@media (max-width: 1024px) {
+  .stats-grid {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .tableau-de-bord {
+    padding: 12px;
+  }
+
+  .dashboard-header {
+    flex-direction: column;
+    text-align: center;
+    gap: 12px;
+  }
+
+  .header-info {
+    text-align: center;
+    width: 100%;
+  }
+
+  .time-display {
+    flex-direction: row;
+    justify-content: center;
+    gap: 15px;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .stat-card {
+    padding: 18px;
+  }
+
+  .popular-products-section {
+    padding: 18px;
+  }
+
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .product-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .product-stats {
+    text-align: left;
+    margin-right: 0;
+    display: flex;
+    gap: 15px;
+  }
+}
+
+@media (max-width: 480px) {
+  .header-title h1 {
+    font-size: 1.3rem;
+  }
+
+  .card-value {
+    font-size: 1.4rem;
+  }
+
+  .card-icon {
+    width: 45px;
+    height: 45px;
+    font-size: 1.1rem;
+  }
+
+  .product-stats {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .time-display {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .current-date,
+  .current-time {
+    font-size: 0.8rem;
+  }
+}
