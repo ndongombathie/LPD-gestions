@@ -6,6 +6,8 @@ import NouvelleCommande from './pages/NouvelleCommande';
 import HistoriqueCommandes from './pages/HistoriqueCommandes';
 import Footer from './Footer'; // Import du footer
 import './css/VendeurInterface.css';
+import { useNavigate } from 'react-router-dom';
+import { authAPI } from '../utils/api';
 
 const VendeurInterface = () => {
   const [sectionActive, setSectionActive] = useState('tableau-de-bord');
@@ -13,14 +15,8 @@ const VendeurInterface = () => {
   const [produits, setProduits] = useState([]);
   const [historiqueCommandes, setHistoriqueCommandes] = useState([]);
   const [isLoggedIn, setIsLoggedIn] = useState(true);
-  const [currentUser, setCurrentUser] = useState({
-    name: "Loup Zou",
-    email: "loup.zou@lpd.com",
-    role: "Vendeur",
-    store: "Boutique Principale",
-    telephone: "+221 77 123 45 67",
-    photo: null
-  });
+  const [currentUser, setCurrentUser] = useState(null);
+  const navigate = useNavigate();
 
   // Simuler la récupération des produits depuis l'API du gestionnaire de stock
   useEffect(() => {
@@ -31,48 +27,95 @@ const VendeurInterface = () => {
 
   const chargerDonneesUtilisateur = async () => {
     try {
-      // Charger depuis le localStorage si disponible
-      const savedUser = localStorage.getItem('lpd_user');
-      if (savedUser) {
-        const userData = JSON.parse(savedUser);
-        console.log('Utilisateur chargé depuis localStorage:', userData);
-        setCurrentUser(userData);
+      // Récupérer depuis le localStorage (format de l'API Laravel)
+      const userStr = localStorage.getItem('user');
+      
+      if (userStr) {
+        const apiUser = JSON.parse(userStr);
+        console.log('✅ Utilisateur chargé depuis localStorage:', apiUser);
+        
+        // Mapper les données API vers le format utilisé dans l'interface
+        const mappedUser = {
+          id: apiUser.id,
+          prenom: apiUser.prenom || '',
+          nom: apiUser.nom || '',
+          name: `${apiUser.prenom || ''} ${apiUser.nom || ''}`.trim(),
+          email: apiUser.email || '',
+          role: apiUser.role || 'vendeur',
+          telephone: apiUser.telephone || '',
+          adresse: apiUser.adresse || '',
+          numero_cni: apiUser.numero_cni || '',
+          boutique_id: apiUser.boutique_id || '',
+          store: apiUser.boutique_id || 'Boutique Principale',
+          photo: apiUser.photo || null,
+          is_online: apiUser.is_online || false,
+          last_seen_at: apiUser.last_seen_at,
+          created_at: apiUser.created_at,
+        };
+        
+        setCurrentUser(mappedUser);
         return;
       }
 
-      // Sinon, utiliser les données par défaut
-      const userData = {
-        id: 1,
-        name: "Loup Zou",
-        email: "loup.zou@lpd.com",
-        role: "Vendeur",
-        store: "Boutique Principale",
-        telephone: "+221 77 176 87 73",
+      // Fallback si aucune donnée dans le localStorage
+      console.warn('⚠️ Aucune donnée utilisateur trouvée dans localStorage');
+      const defaultUser = {
+        id: null,
+        name: "Utilisateur",
+        prenom: "Utilisateur",
+        nom: "",
+        email: "user@lpd.com",
+        role: "vendeur",
+        store: "Boutique",
+        telephone: "",
         photo: null,
-        last_login: new Date().toISOString()
       };
-      setCurrentUser(userData);
-      
-      // Sauvegarder dans le localStorage
-      localStorage.setItem('lpd_user', JSON.stringify(userData));
+      setCurrentUser(defaultUser);
       
     } catch (error) {
-      console.error('Erreur chargement données utilisateur:', error);
+      console.error('❌ Erreur chargement données utilisateur:', error);
+      setCurrentUser({
+        id: null,
+        name: "Utilisateur",
+        prenom: "Utilisateur",
+        nom: "",
+        email: "user@lpd.com",
+        role: "vendeur",
+        store: "Boutique",
+        telephone: "",
+        photo: null,
+      });
     }
   };
 
   // Fonction pour mettre à jour les informations utilisateur
   const handleUpdateUser = (updatedUser) => {
-    console.log('Mise à jour utilisateur reçue dans VendeurInterface:', updatedUser);
+    console.log('🔄 Mise à jour utilisateur:', updatedUser);
     
     try {
       // Mettre à jour l'état local
       setCurrentUser(updatedUser);
       
-      // Sauvegarder dans le localStorage
-      localStorage.setItem('lpd_user', JSON.stringify(updatedUser));
+      // Récupérer les données actuelles du localStorage
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const apiUser = JSON.parse(userStr);
+        
+        // Mettre à jour uniquement les champs modifiables
+        const updatedApiUser = {
+          ...apiUser,
+          prenom: updatedUser.prenom || updatedUser.name?.split(' ')[0] || apiUser.prenom,
+          nom: updatedUser.nom || updatedUser.name?.split(' ').slice(1).join(' ') || apiUser.nom,
+          email: updatedUser.email || apiUser.email,
+          telephone: updatedUser.telephone || apiUser.telephone,
+          adresse: updatedUser.adresse || apiUser.adresse,
+          photo: updatedUser.photo !== undefined ? updatedUser.photo : apiUser.photo,
+        };
+        
+        localStorage.setItem('user', JSON.stringify(updatedApiUser));
+        console.log('✅ Données utilisateur mises à jour dans localStorage');
+      }
       
-      console.log('✅ Utilisateur mis à jour avec succès dans VendeurInterface');
     } catch (error) {
       console.error('❌ Erreur mise à jour utilisateur:', error);
     }
@@ -253,41 +296,19 @@ const VendeurInterface = () => {
   };
 
   // Fonction pour gérer la déconnexion
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if (window.confirm('Êtes-vous sûr de vouloir vous déconnecter ?')) {
-      console.log('Déconnexion en cours...');
-      setIsLoggedIn(false);
-      
-      // Nettoyer le localStorage si nécessaire
-      // localStorage.removeItem('lpd_user');
-      
-      // Simulation de redirection après déconnexion
-      setTimeout(() => {
-        alert('Vous avez été déconnecté avec succès');
-        // Ici vous redirigeriez vers la page de login
-        // window.location.href = '/login';
-      }, 1000);
+      try {
+        await authAPI.logout();
+      } catch (error) {
+        console.error('Erreur lors de la déconnexion:', error);
+      }
+      setPanier([]);
+      navigate('/login');
     }
   };
 
-  // Si l'utilisateur n'est pas connecté, afficher la page de login
-  if (!isLoggedIn) {
-    return (
-      <div className="login-page">
-        <div className="login-container">
-          <h1>LPD Manager</h1>
-          <p>Interface Vendeur</p>
-          <p className="login-message">Vous avez été déconnecté</p>
-          <button 
-            className="btn-login"
-            onClick={() => setIsLoggedIn(true)}
-          >
-            Se reconnecter
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // Redirection vers /login gérée par ProtectedRoute lorsque le token est absent
 
   return (
     <div className="vendeur-interface">

@@ -6,6 +6,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { instance } from "../../utils/axios";
+import { Toaster, toast } from "sonner";
 
 // ----------- Normalisation des rôles ----------
 const normalizeRole = (role) => {
@@ -66,6 +67,7 @@ export default function Connexion() {
     setMessage("");
 
     if (!email || !password) {
+      toast.error("Champs manquants", { description: "Veuillez remplir tous les champs." });
       return setMessage("⚠️ Veuillez remplir tous les champs.");
     }
 
@@ -82,6 +84,7 @@ export default function Connexion() {
 
       if (!data?.token || !data?.user) {
         setLoading(false);
+        toast.error("Réponse inattendue", { description: "Le serveur n'a pas retourné les bonnes données." });
         return setMessage("❌ Réponse inattendue du serveur.");
       }
 
@@ -95,6 +98,9 @@ export default function Connexion() {
       const userToStore = { ...data.user, role: normalizedRole };
       localStorage.setItem("user", JSON.stringify(userToStore));
 
+      toast.success("Connexion réussie", {
+        description: `Bienvenue ${userToStore?.prenom ?? ""} ${userToStore?.nom ?? ""}`.trim(),
+      });
       setMessage("✅ Connexion réussie !");
 
       // 🔹 Redirection selon rôle
@@ -107,6 +113,7 @@ export default function Connexion() {
         error?.response?.data?.error ||
         "❌ Identifiants incorrects.";
 
+      toast.error("Échec de connexion", { description: msg });
       setMessage(msg);
     } finally {
       setLoading(false);
@@ -114,8 +121,9 @@ export default function Connexion() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-500 to-orange-500 p-4">
-      <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-2xl p-8 w-full max-w-md text-center border border-white/20">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#7C4DFF] via-[#8E24AA] to-[#F58020] p-4">
+      <Toaster richColors position="top-right" />
+      <div className="bg-white/15 backdrop-blur-xl rounded-3xl shadow-2xl px-8 py-10 w-full max-w-md text-center border border-white/30">
 
         {/* === Logo === */}
         <div className="flex flex-col items-center justify-center mb-4">
@@ -140,7 +148,7 @@ export default function Connexion() {
           </p>
         </div>
 
-        <h1 className="text-2xl font-extrabold text-white mb-6">
+        <h1 className="text-2xl sm:text-3xl font-extrabold text-white mb-6">
           Connexion au tableau de bord
         </h1>
 
@@ -153,7 +161,7 @@ export default function Connexion() {
             placeholder="Adresse e-mail"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full px-4 py-3 rounded-lg bg-white/20 text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-white"
+            className="w-full px-4 py-3 my-4 rounded-xl bg-white/20 text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-white/80 focus:bg-white/25 transition"
             required
           />
 
@@ -164,13 +172,13 @@ export default function Connexion() {
               placeholder="Mot de passe"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 rounded-lg bg-white/20 text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-white"
+              className="w-full px-4 py-3 my-4 rounded-xl bg-white/20 text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-white/80 focus:bg-white/25 transition"
               required
             />
 
             <button
               type="button"
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-blue"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-white/90 hover:text-white"
               onClick={() => setShowPwd(!showPwd)}
             >
               {showPwd ? <EyeOff size={20} /> : <Eye size={20} />}
@@ -181,19 +189,19 @@ export default function Connexion() {
           <button
             type="submit"
             disabled={loading}
-            className={`w-full py-3 rounded-lg font-bold text-white transition-all duration-500 shadow-lg ${
+            className={`w-full py-3 rounded-xl font-bold text-white transition-all duration-500 shadow-lg ${
               loading
                 ? "opacity-80 cursor-not-allowed bg-gray-400"
-                : "bg-gradient-to-r from-blue-600 via-blue-500 to-orange-500 hover:from-orange-500 hover:to-blue-600 hover:shadow-2xl"
+                : "bg-gradient-to-r from-[#3D5AFE] via-[#5E35B1] to-[#F58020] hover:from-[#F58020] hover:to-[#3D5AFE] hover:shadow-2xl"
             }`}
           >
             {loading ? "Connexion..." : "Se connecter"}
           </button>
         </form>
 
-        {message && <p className="mt-4 text-white font-semibold">{message}</p>}
+        {message && <p className="mt-4 text-white/90 font-semibold">{message}</p>}
 
-        <p className="mt-6 text-white/80 text-sm">
+        <p className="mt-8 text-white/80 text-xs">
           © 2025 <span className="font-semibold">LPD Entreprise</span> — Tous droits réservés.
         </p>
       </div>

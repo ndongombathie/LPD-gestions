@@ -33,8 +33,9 @@ import {
   XCircle,
   Info,
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
 import { instance } from "../utils/axios";
+import { authAPI } from "../utils/api";
 
 // ==========================================================
 // 🧩 Utils
@@ -170,12 +171,7 @@ function PasswordModal({ open, onClose, onSuccess, addToast }) {
     setLoading(true);
 
     try {
-      await instance.put("/auth/change-password", {
-        old_password: oldPwd,
-        new_password: newPwd,
-        new_password_confirmation: confirmPwd,
-      });
-
+      await authAPI.changePassword(oldPwd, newPwd, confirmPwd);
       addToast("success", "Mot de passe modifié", "Vos identifiants ont été mis à jour.");
       onSuccess();
     } catch (err) {
@@ -608,6 +604,7 @@ export default function Header() {
 
     localStorage.removeItem("token");
     localStorage.removeItem("lpd_current_user");
+    
 
     navigate("/login");
   };

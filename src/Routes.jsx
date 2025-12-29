@@ -72,6 +72,9 @@ import DecaissementsPageCaissier from "./caissier/pages/DecaissementsPage";
 import HistoriquePageCaissier from "./caissier/pages/HistoriquePage";
 import RapportCaissePage from "./caissier/pages/RapportCaissePage";
 
+// =================== VENDEUR ===================
+import VendeurInterface from "./vendeur/VendeurInterface";
+
 // ==========================================================
 // 📋 Configuration des routes
 // ==========================================================
@@ -147,7 +150,7 @@ export default function AppRoutes() {
       <Route
         path="/gestionnaire-boutique"
         element={
-          <ProtectedRoute allowedRoles={["gestionnaire-boutique"]}>
+          <ProtectedRoute allowedRoles={["gestionnaire_boutique"]}>
             <LayoutGestionnaire />
           </ProtectedRoute>
         }
@@ -167,7 +170,7 @@ export default function AppRoutes() {
       <Route
         path="/depot"
         element={
-          <ProtectedRoute allowedRoles={["gestionnaire-depot"]}>
+          <ProtectedRoute allowedRoles={["gestionnaire_depot"]}>
             <DepotLayout />
           </ProtectedRoute>
         }
@@ -197,6 +200,19 @@ export default function AppRoutes() {
         <Route path="historique" element={<HistoriquePageCaissier />} />
         <Route path="rapport" element={<RapportCaissePage />} />
         <Route path="*" element={<Navigate to="/caissier/dashboard" replace />} />
+      </Route>
+
+      {/* =================== Vendeur =================== */}
+      <Route
+        path="/vendeur"
+        element={
+          <ProtectedRoute allowedRoles={["vendeur"]}>
+            <VendeurInterface />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<Navigate to="/*" replace />} />
+        <Route path="*" element={<Navigate to="/vendeur" replace />} />
       </Route>
 
       {/* =================== REDIRECTION PAR DÉFAUT =================== */}

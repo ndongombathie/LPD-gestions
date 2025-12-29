@@ -45,7 +45,7 @@ const CaissierLayout = () => {
   const handleLogout = async () => {
     if (window.confirm('Êtes-vous sûr de vouloir vous déconnecter ?')) {
       await authAPI.logout();
-      navigate('/');
+      navigate('/login');
       window.location.reload(); // Recharger pour nettoyer l'état
     }
   };
