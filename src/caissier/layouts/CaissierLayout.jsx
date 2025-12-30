@@ -1,409 +1,615 @@
-import React, { useEffect, useState } from 'react'
-import { NavLink, useNavigate, Outlet } from 'react-router-dom'
-import { authAPI } from '../../utils/api'
-import Modal from '../../components/ui/Modal'
-import Input from '../../components/ui/Input'
-import Button from '../../components/ui/Button'
+// ==========================================================
+// 🧭 CaissierLayout.jsx — Interface Caissier (LPD Manager)
+// Design harmonisé avec les autres interfaces
+// ==========================================================
+
+import React, { useState, useEffect, useRef } from 'react'
+import { NavLink, useLocation, useNavigate, Outlet } from 'react-router-dom'
+import {
+  LayoutDashboard,
+  Wallet,
+  ArrowDownCircle,
+  History,
+  FileText,
+  Bell,
+  LayoutGrid,
+  ChevronDown,
+  LogOut,
+  Key,
+  X,
+  Eye,
+  EyeOff,
+} from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { instance } from '../../utils/axios'
 import NotificationsDropdown from '../components/NotificationsDropdown'
 import ShortcutsMenu from '../components/ShortcutsMenu'
-import { instance } from '../../utils/axios'
 
-const navItemClass = ({ isActive }) => `
-  flex items-center gap-3 px-4 py-2 rounded-lg transition-all duration-200 font-medium
-  ${isActive
-    ? 'bg-primary-600 text-white shadow-md'
-    : 'text-gray-700 hover:bg-primary-50 hover:text-primary-700 dark:text-gray-300 dark:hover:bg-gray-700'}
-`
+// ==========================================================
+// 🔧 Utils
+// ==========================================================
+const getInitials = (prenom = "", nom = "") =>
+  (`${prenom?.[0] || ""}${nom?.[0] || ""}` || "C").toUpperCase()
 
-const CaissierLayout = () => {
-  const navigate = useNavigate();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
-  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
-  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-  const [passwordData, setPasswordData] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: '',
-  });
-  const [passwordError, setPasswordError] = useState('');
-  const [isChangingPassword, setIsChangingPassword] = useState(false);
-  const [userInfo, setUserInfo] = useState(() => authAPI.getCurrentUser());
-  const [profileData, setProfileData] = useState({
-    prenom: (authAPI.getCurrentUser()?.prenom) || '',
-    nom: (authAPI.getCurrentUser()?.nom) || '',
-  });
+// ==========================================================
+// 🔐 Modal — Changer mot de passe
+// ==========================================================
+function PasswordModal({ open, onClose, addToast }) {
+  const [oldPwd, setOldPwd] = useState("")
+  const [newPwd, setNewPwd] = useState("")
+  const [confirmPwd, setConfirmPwd] = useState("")
+  const [showOld, setShowOld] = useState(false)
+  const [showNew, setShowNew] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
+  const [loading, setLoading] = useState(false)
 
-  // Forcer le mode clair au chargement
-  useEffect(() => {
-    document.documentElement.classList.remove('dark');
-    document.body.classList.remove('dark');
-  }, []);
+  if (!open) return null
 
-  const handleLogout = async () => {
-    if (window.confirm('Êtes-vous sûr de vouloir vous déconnecter ?')) {
-      await authAPI.logout();
-      navigate('/');
-      window.location.reload(); // Recharger pour nettoyer l'état
-    }
-  };
+  const submit = async (e) => {
+    e.preventDefault()
 
-  const handleChangePassword = async () => {
-    setPasswordError('');
-
-    // Validation
-    if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
-      setPasswordError('Veuillez remplir tous les champs');
-      return;
+    if (!oldPwd || !newPwd || !confirmPwd) {
+      addToast("error", "Champs manquants", "Veuillez remplir tous les champs.")
+      return
     }
 
-    if (passwordData.newPassword.length < 6) {
-      setPasswordError('Le nouveau mot de passe doit contenir au moins 6 caractères');
-      return;
+    if (newPwd.length < 6) {
+      addToast("error", "Mot de passe trop court", "Minimum 6 caractères.")
+      return
     }
 
-    if (passwordData.newPassword !== passwordData.confirmPassword) {
-      setPasswordError('Les mots de passe ne correspondent pas');
-      return;
+    if (newPwd !== confirmPwd) {
+      addToast("error", "Erreur", "Les mots de passe ne correspondent pas.")
+      return
     }
 
-    setIsChangingPassword(true);
+    setLoading(true)
 
     try {
-      await authAPI.changePassword(
-        passwordData.currentPassword,
-        passwordData.newPassword,
-        passwordData.confirmPassword
-      );
-      alert('Mot de passe modifié avec succès');
-      setIsChangePasswordModalOpen(false);
-      setPasswordData({
-        currentPassword: '',
-        newPassword: '',
-        confirmPassword: '',
-      });
-    } catch (error) {
-      const errorMessage = error.response?.data?.message || error.response?.data?.errors?.current_password?.[0] || 'Erreur lors du changement de mot de passe';
-      setPasswordError(errorMessage);
+      await instance.put("/auth/change-password", {
+        old_password: oldPwd,
+        new_password: newPwd,
+        new_password_confirmation: confirmPwd,
+      })
+
+      addToast("success", "Mot de passe modifié", "Vos identifiants ont été mis à jour.")
+      onClose()
+      setOldPwd("")
+      setNewPwd("")
+      setConfirmPwd("")
+    } catch (err) {
+      const msg = err?.response?.data?.message || "Impossible de changer le mot de passe."
+      addToast("error", "Erreur", msg)
     } finally {
-      setIsChangingPassword(false);
+      setLoading(false)
     }
-  };
-
-  const handleSaveProfile = async () => {
-    try {
-      const payload = { prenom: profileData.prenom, nom: profileData.nom };
-      await instance.put('/mon-profil', payload);
-      const updated = { ...(userInfo || {}), ...payload };
-      localStorage.setItem('user', JSON.stringify(updated));
-      setUserInfo(updated);
-      setIsProfileModalOpen(false);
-    } catch  {
-      alert('Erreur lors de la mise à jour du profil');
-    }
-  };
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="flex h-screen">
-        {/* Sidebar */}
-        <aside className={`
-          w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 
-          hidden md:flex md:flex-col fixed md:static inset-y-0 z-30
-          ${isMobileMenuOpen ? 'flex' : 'hidden'}
-        `}>
-          <div className="px-6 py-5 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-primary-600 to-primary-700">
-            <h1 className="text-xl font-bold text-white">LPD Caisse</h1>
-            <p className="text-xs text-primary-100 mt-1">Interface Caissier</p>
+    <div className="fixed inset-0 z-[200] bg-black/40 flex items-center justify-center">
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="bg-white w-[95%] sm:w-[420px] rounded-2xl shadow-2xl p-5"
+      >
+        <div className="flex justify-between items-center border-b pb-2 mb-4">
+          <h2 className="text-lg font-semibold text-[#472EAD] flex items-center gap-2">
+            <Key className="w-5 h-5" /> Changer le mot de passe
+          </h2>
+          <button onClick={onClose}>
+            <X size={18} className="text-gray-500" />
+          </button>
+        </div>
+
+        <form onSubmit={submit} className="space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-600">
+              Ancien mot de passe
+            </label>
+            <div className="relative">
+              <input
+                type={showOld ? "text" : "password"}
+                className="w-full border rounded-lg px-3 py-2 mt-1 pr-10"
+                value={oldPwd}
+                onChange={(e) => setOldPwd(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => setShowOld((v) => !v)}
+                className="absolute right-2 top-1/2 -translate-y-1/2"
+              >
+                {showOld ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </div>
 
-          <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-            <NavLink to="/caissier/dashboard" className={navItemClass} onClick={() => setIsMobileMenuOpen(false)}>
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-              </svg>
-              Tableau de bord
-            </NavLink>
+          <div>
+            <label className="block text-sm font-medium text-gray-600">
+              Nouveau mot de passe
+            </label>
+            <div className="relative">
+              <input
+                type={showNew ? "text" : "password"}
+                className="w-full border rounded-lg px-3 py-2 mt-1 pr-10"
+                value={newPwd}
+                onChange={(e) => setNewPwd(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => setShowNew((v) => !v)}
+                className="absolute right-2 top-1/2 -translate-y-1/2"
+              >
+                {showNew ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+          </div>
 
-            <NavLink to="/caissier/caisse" className={navItemClass} onClick={() => setIsMobileMenuOpen(false)}>
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-              Caisse
-            </NavLink>
+          <div>
+            <label className="block text-sm font-medium text-gray-600">
+              Confirmer le mot de passe
+            </label>
+            <div className="relative">
+              <input
+                type={showConfirm ? "text" : "password"}
+                className="w-full border rounded-lg px-3 py-2 mt-1 pr-10"
+                value={confirmPwd}
+                onChange={(e) => setConfirmPwd(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirm((v) => !v)}
+                className="absolute right-2 top-1/2 -translate-y-1/2"
+              >
+                {showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+          </div>
 
-            <NavLink to="/caissier/decaissements" className={navItemClass} onClick={() => setIsMobileMenuOpen(false)}>
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Décaissements
-            </NavLink>
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 border rounded-lg"
+            >
+              Annuler
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-4 py-2 text-white rounded-lg bg-[#472EAD]"
+            >
+              {loading ? "Chargement..." : "Confirmer"}
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </div>
+  )
+}
 
-            <NavLink to="/caissier/historique" className={navItemClass} onClick={() => setIsMobileMenuOpen(false)}>
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Historique
-            </NavLink>
+// ==========================================================
+// 🔔 Toast system
+// ==========================================================
+function Toasts({ toasts, remove }) {
+  return (
+    <div className="fixed top-4 right-4 z-[999] space-y-2">
+      <AnimatePresence>
+        {toasts.map((t) => (
+          <motion.div
+            key={t.id}
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            transition={{ duration: 0.25 }}
+            className={`flex items-start gap-3 px-4 py-3 rounded-xl shadow-md border ${
+              t.type === "success"
+                ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                : "bg-rose-50 border-rose-200 text-rose-800"
+            }`}
+          >
+            <div>
+              <div className="font-semibold text-sm">{t.title}</div>
+              {t.message && <div className="text-xs opacity-90 mt-0.5">{t.message}</div>}
+            </div>
+            <button
+              onClick={() => remove(t.id)}
+              className="ml-3 text-gray-500 hover:text-gray-800"
+            >
+              <X size={14} />
+            </button>
+          </motion.div>
+        ))}
+      </AnimatePresence>
+    </div>
+  )
+}
 
-            <NavLink to="/caissier/rapport" className={navItemClass} onClick={() => setIsMobileMenuOpen(false)}>
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              Rapport
-            </NavLink>
+// ==========================================================
+// 🧭 LAYOUT PRINCIPAL
+// ==========================================================
+export default function CaissierLayout() {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const menuRef = useRef()
+
+  // UI
+  const [showMenu, setShowMenu] = useState(false)
+  const [showNotif, setShowNotif] = useState(false)
+  const [showQuick, setShowQuick] = useState(false)
+  const [showPwdModal, setShowPwdModal] = useState(false)
+  const [toasts, setToasts] = useState([])
+
+  // Data
+  const [user, setUser] = useState(null)
+
+  // Menu items
+  const menuItems = [
+    { name: "Tableau de bord", icon: LayoutDashboard, path: "/caissier/dashboard" },
+    { name: "Caisse", icon: Wallet, path: "/caissier/caisse" },
+    { name: "Décaissements", icon: ArrowDownCircle, path: "/caissier/decaissements" },
+    { name: "Historique", icon: History, path: "/caissier/historique" },
+    { name: "Rapport", icon: FileText, path: "/caissier/rapport" },
+  ]
+
+  const addToast = (type, title, message) => {
+    const id = Date.now()
+    setToasts((prev) => [...prev, { id, type, title, message }])
+    setTimeout(() => removeToast(id), 3500)
+  }
+
+  const removeToast = (id) =>
+    setToasts((prev) => prev.filter((t) => t.id !== id))
+
+  // Charger utilisateur
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const { data } = await instance.get("/mon-profil")
+        setUser(data)
+        localStorage.setItem("lpd_current_user", JSON.stringify(data))
+      } catch (err) {
+        console.error("Erreur profil :", err)
+        navigate("/login")
+      }
+    }
+    loadUser()
+  }, [navigate])
+
+  // Fermer menus au clic extérieur
+  useEffect(() => {
+    const handler = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setShowMenu(false)
+        setShowNotif(false)
+        setShowQuick(false)
+      }
+    }
+    document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
+  }, [])
+
+  // Déconnexion
+  const handleLogout = async () => {
+    try {
+      await instance.post("/auth/logout")
+    } catch {}
+
+    localStorage.removeItem("token")
+    localStorage.removeItem("lpd_current_user")
+
+    navigate("/login")
+  }
+
+  // Si pas d'utilisateur, ne rien afficher (sera redirigé par ProtectedRoute)
+  if (!user) return null
+
+  const displayUser = user
+
+  return (
+    <>
+      <div className="flex bg-lpd-light text-lpd-text min-h-screen">
+        {/* === Sidebar === */}
+        <aside className="hidden md:flex fixed left-0 top-0 h-screen w-64 bg-white border-r border-gray-200 shadow-md flex-col z-40">
+          {/* Logo LPD */}
+          <div className="h-20 flex flex-col items-center justify-center border-b border-gray-200 bg-gradient-to-r from-[#472EAD] to-[#4e33c9] text-white shadow-md">
+            <div className="flex flex-col items-center justify-center -mt-1">
+              <div className="flex items-center justify-center mb-1">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="60"
+                  height="38"
+                  viewBox="0 0 200 120"
+                  fill="none"
+                >
+                  <ellipse cx="100" cy="60" rx="90" ry="45" fill="#472EAD" />
+                  <text
+                    x="50%"
+                    y="66%"
+                    textAnchor="middle"
+                    fill="#F58020"
+                    fontFamily="Arial Black, sans-serif"
+                    fontSize="60"
+                    fontWeight="900"
+                    dy=".1em"
+                  >
+                    LPD
+                  </text>
+                </svg>
+              </div>
+              <p className="text-[11px] uppercase tracking-wider text-white/80 font-medium">
+                Librairie Papeterie Daradji
+              </p>
+            </div>
+          </div>
+
+          {/* Menu principal */}
+          <nav className="flex-1 overflow-y-auto py-5 px-3 scrollbar-thin scrollbar-thumb-[#472EAD]/30 scrollbar-track-transparent">
+            <ul className="space-y-1 relative">
+              {menuItems.map((item) => {
+                const isActive = location.pathname === item.path
+                const Icon = item.icon
+                return (
+                  <li key={item.path} className="relative">
+                    {isActive && (
+                      <motion.div
+                        layoutId="activeIndicator"
+                        className="absolute left-0 top-0 w-1 h-full rounded-r-full bg-[#F58020]"
+                        transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                      />
+                    )}
+
+                    <NavLink
+                      to={item.path}
+                      className={({ isActive }) =>
+                        `relative flex items-center gap-3 px-4 py-2.5 rounded-md text-[15px] font-medium transition-all duration-200 ${
+                          isActive
+                            ? "bg-[#472EAD] text-white shadow-md"
+                            : "text-gray-700 hover:bg-[#F7F5FF] hover:text-[#472EAD]"
+                        }`
+                      }
+                    >
+                      <motion.div
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.95 }}
+                        transition={{ type: "spring", stiffness: 400, damping: 20 }}
+                        className="flex items-center justify-center"
+                      >
+                        <Icon
+                          size={18}
+                          className={`transition-colors duration-300 ${
+                            isActive ? "text-white" : "text-[#472EAD]"
+                          }`}
+                        />
+                      </motion.div>
+
+                      <span
+                        className={`transition-colors duration-200 ${
+                          isActive ? "text-white" : "text-[#472EAD]"
+                        }`}
+                      >
+                        {item.name}
+                      </span>
+
+                      <motion.div
+                        className="absolute inset-0 rounded-md bg-[#472EAD]/5 opacity-0"
+                        whileHover={{ opacity: 1 }}
+                        transition={{ duration: 0.3 }}
+                      />
+                    </NavLink>
+                  </li>
+                )
+              })}
+            </ul>
           </nav>
-
-          <div className="p-4 border-t border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400">
-            © {new Date().getFullYear()} LPD Gestions
-          </div>
         </aside>
 
-        {/* Main content area */}
-        <div className="flex-1 flex flex-col overflow-hidden md:ml-0">
+        {/* === Contenu principal === */}
+        <div className="flex flex-col flex-1 md:ml-64 relative z-10">
           {/* Header */}
-          <header className="bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-            <div className="flex items-center justify-between px-4 py-3 md:px-6">
-              <button
-                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                className="md:hidden p-2 rounded-md text-gray-600 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-              >
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </button>
-              
-              <div className="flex-1 md:ml-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-lg font-bold text-orange-500">LPD</span>
-                  <span className="text-lg font-semibold text-gray-700 dark:text-gray-300">Caisse</span>
-                  <span className="text-gray-400 dark:text-gray-500">|</span>
-                  <span className="text-lg font-semibold text-gray-700 dark:text-gray-300">Interface Caissier</span>
-                </div>
-                <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
-                  Gestion des encaissements et décaissements quotidiens
-                </p>
-              </div>
+          <header className="sticky top-0 z-20 w-full bg-white" ref={menuRef}>
+            <div className="h-[6px] w-full bg-gradient-to-r from-[#472EAD] via-[#472EAD] to-[#F58020]" />
 
-              <div className="flex items-center gap-3">
-                {/* Icône Raccourcis */}
-                <div className="relative">
-                  <button
-                    onClick={() => {
-                      setIsShortcutsOpen(!isShortcutsOpen);
-                      setIsNotificationsOpen(false);
-                    }}
-                    className="p-2 rounded-md text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                    title="Raccourcis"
-                  >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                    </svg>
-                  </button>
-                  <ShortcutsMenu
-                    isOpen={isShortcutsOpen}
-                    onClose={() => setIsShortcutsOpen(false)}
-                  />
+            <div className="bg-white h-16 shadow-sm border-b">
+              <div className="max-w-7xl mx-auto h-full px-3 sm:px-4 lg:px-6 flex items-center justify-between">
+                {/* LOGO & TITRE */}
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center">
+                    <span className="text-[#472EAD] font-extrabold text-xl">LP</span>
+                    <span className="text-[#F58020] font-extrabold text-xl">D</span>
+                  </div>
+
+                  <div>
+                    <h1 className="text-base font-semibold text-[#472EAD]">
+                      LPD Manager
+                      <span className="text-gray-500 font-normal text-sm">
+                        {" "} | Interface Caissier
+                      </span>
+                    </h1>
+                    <p className="hidden sm:block text-xs text-gray-400">
+                      Gestion des encaissements et décaissements quotidiens
+                    </p>
+                  </div>
                 </div>
 
-                {/* Icône Notifications */}
-                <div className="relative">
-                  <button
-                    onClick={() => {
-                      setIsNotificationsOpen(!isNotificationsOpen);
-                      setIsShortcutsOpen(false);
-                    }}
-                    className="p-2 rounded-md text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors relative"
-                    title="Notifications"
-                  >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                    </svg>
-                  </button>
-                  <NotificationsDropdown
-                    isOpen={isNotificationsOpen}
-                    onClose={() => setIsNotificationsOpen(false)}
-                  />
-                </div>
+                {/* ACTIONS */}
+                <div className="flex items-center gap-3 sm:gap-4">
+                  {/* RACCOURCIS */}
+                  <div className="relative">
+                    <button
+                      onClick={() => {
+                        setShowQuick((v) => !v)
+                        setShowNotif(false)
+                        setShowMenu(false)
+                      }}
+                      className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 rounded-lg border border-gray-200 text-xs sm:text-sm text-gray-700 hover:bg-[#F7F5FF] hover:text-[#472EAD] transition"
+                    >
+                      <LayoutGrid size={18} className="text-[#472EAD]" />
+                      <span className="hidden sm:inline">Raccourcis</span>
+                    </button>
 
-                {/* Avatar utilisateur */}
-                <div className="relative">
-                  <button
-                    onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                    className="flex items-center gap-2 px-2 py-1 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                  >
-                    <div className="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center text-white text-sm font-semibold">{userInfo ? `${userInfo.prenom?.[0] || ''}${userInfo.nom?.[0] || ''}`.toUpperCase() || 'C' : 'C'}</div>
-                    <div className="hidden md:block text-left">
-                      <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{userInfo ? `${userInfo.prenom || ''} ${userInfo.nom || ''}`.trim() || userInfo.email || 'Utilisateur' : 'Caissier'}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Caissier</p>
-                    </div>
-                  </button>
+                    {showQuick && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.18 }}
+                        className="absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-lg shadow-lg p-2 z-30"
+                      >
+                        <p className="text-xs font-semibold text-gray-500 px-2 py-1">
+                          Accès rapide
+                        </p>
+                        <ul className="text-sm text-gray-700">
+                          {menuItems.map((item) => {
+                            const Icon = item.icon
+                            return (
+                              <li
+                                key={item.path}
+                                onClick={() => {
+                                  navigate(item.path)
+                                  setShowQuick(false)
+                                }}
+                                className="flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer hover:bg-[#F7F5FF]"
+                              >
+                                <Icon size={16} className="text-[#472EAD]" />
+                                <span>{item.name}</span>
+                              </li>
+                            )
+                          })}
+                        </ul>
+                      </motion.div>
+                    )}
+                  </div>
 
-                  {isUserMenuOpen && (
-                    <>
-                      <div
-                        className="fixed inset-0 z-10"
-                        onClick={() => setIsUserMenuOpen(false)}
-                      />
-                      <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-20">
-                        <div className="py-1">
-                          <button
-                            onClick={() => {
-                              setProfileData({ prenom: userInfo?.prenom || '', nom: userInfo?.nom || '' });
-                              setIsProfileModalOpen(true);
-                              setIsUserMenuOpen(false);
-                            }}
-                            className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-                          >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5.121 17.804A4 4 0 018 16h8a4 4 0 012.879 1.804M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                            Mon profil
-                          </button>
-                          <button
-                            onClick={() => {
-                              setIsChangePasswordModalOpen(true);
-                              setIsUserMenuOpen(false);
-                            }}
-                            className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-                          >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                            </svg>
-                            Changer le mot de passe
-                          </button>
-                          <button
-                            onClick={handleLogout}
-                            className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-                          >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                            </svg>
-                            Déconnexion
-                          </button>
-                        </div>
+                  {/* NOTIFS */}
+                  <div className="relative">
+                    <button
+                      onClick={() => {
+                        setShowNotif((v) => !v)
+                        setShowQuick(false)
+                        setShowMenu(false)
+                      }}
+                      className="p-2 rounded-lg hover:bg-gray-100 relative"
+                    >
+                      <Bell className="w-5 h-5 text-[#472EAD]" />
+                    </button>
+
+                    {showNotif && (
+                      <div className="absolute right-0 mt-2 w-80 bg-white border rounded-xl shadow-lg p-3 z-40">
+                        <NotificationsDropdown
+                          isOpen={showNotif}
+                          onClose={() => setShowNotif(false)}
+                        />
                       </div>
-                    </>
-                  )}
+                    )}
+                  </div>
+
+                  {/* PROFIL */}
+                  <div className="relative">
+                    <button
+                      onClick={() => {
+                        setShowMenu((v) => !v)
+                        setShowNotif(false)
+                        setShowQuick(false)
+                      }}
+                      className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-full border bg-white hover:bg-gray-50"
+                    >
+                      <div className="w-8 h-8 rounded-full bg-[#472EAD] text-white flex items-center justify-center overflow-hidden">
+                        {displayUser.photo ? (
+                          <img src={displayUser.photo} className="w-full h-full object-cover" />
+                        ) : (
+                          <span>{getInitials(displayUser.prenom, displayUser.nom)}</span>
+                        )}
+                      </div>
+
+                      <div className="hidden sm:flex flex-col text-left">
+                        <span className="text-xs font-semibold">
+                          {displayUser.prenom} {displayUser.nom}
+                        </span>
+                        <span className="text-[10px] text-gray-500">
+                          {displayUser.role}
+                        </span>
+                      </div>
+
+                      <ChevronDown size={14} className="text-gray-500" />
+                    </button>
+
+                    {showMenu && (
+                      <AnimatePresence>
+                        <motion.div
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 8 }}
+                          className="absolute right-0 mt-2 w-48 bg-white border shadow-lg rounded-lg p-2 z-30"
+                        >
+                          <ul className="text-sm">
+                            <li
+                              onClick={() => {
+                                setShowPwdModal(true)
+                                setShowMenu(false)
+                              }}
+                              className="px-3 py-2 hover:bg-gray-50 cursor-pointer flex gap-2 items-center"
+                            >
+                              <Key size={14} /> Changer mot de passe
+                            </li>
+
+                            <li
+                              onClick={handleLogout}
+                              className="px-3 py-2 hover:bg-gray-50 cursor-pointer flex gap-2 items-center text-[#F58020]"
+                            >
+                              <LogOut size={14} /> Déconnexion
+                            </li>
+                          </ul>
+                        </motion.div>
+                      </AnimatePresence>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
           </header>
 
-          {/* Content */}
-          <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
-            <Outlet />
+          {/* Contenu principal */}
+          <main className="flex-1 overflow-y-auto bg-gradient-to-b from-white to-lpd-light px-3 sm:px-4 lg:px-6 xl:px-8 py-4 sm:py-6 transition-all duration-300 ease-in-out relative z-0">
+            <div className="max-w-7xl mx-auto relative z-10 fade-in">
+              <Outlet />
+              
+              {/* Footer intégré dans le contenu */}
+              <footer className="mt-8 pt-6 border-t border-lpd-border/80 bg-transparent">
+                <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] sm:text-xs text-gray-500">
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-lpd-accent" />
+                    <span>
+                      © {new Date().getFullYear()}{" "}
+                      <span className="font-semibold text-lpd-header">
+                        SSD Consulting
+                      </span>
+                      {" · "}
+                      <span className="text-gray-400">Tous droits réservés.</span>
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-[11px] sm:text-xs">
+                    <span className="hidden sm:inline-block h-3 w-px bg-gray-200" />
+                    <span className="text-gray-400">LPD Manager</span>
+                    <span className="text-gray-300">•</span>
+                    <span>Interface Caissier</span>
+                    <span className="text-gray-300">•</span>
+                    <span className="font-semibold text-lpd-accent">v1.0.0</span>
+                  </div>
+                </div>
+              </footer>
+            </div>
           </main>
         </div>
-
-        {/* Mobile menu overlay */}
-        {isMobileMenuOpen && (
-          <div
-            className="fixed inset-0 bg-black bg-opacity-50 z-20 md:hidden"
-            onClick={() => setIsMobileMenuOpen(false)}
-          />
-        )}
-
-        {/* Modal de changement de mot de passe */}
-        <Modal
-          isOpen={isChangePasswordModalOpen}
-          onClose={() => {
-            setIsChangePasswordModalOpen(false);
-            setPasswordData({
-              currentPassword: '',
-              newPassword: '',
-              confirmPassword: '',
-            });
-            setPasswordError('');
-          }}
-          title="Changer le mot de passe"
-          size="md"
-          footer={
-            <>
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setIsChangePasswordModalOpen(false);
-                  setPasswordData({
-                    currentPassword: '',
-                    newPassword: '',
-                    confirmPassword: '',
-                  });
-                  setPasswordError('');
-                }}
-                disabled={isChangingPassword}
-              >
-                Annuler
-              </Button>
-              <Button
-                variant="primary"
-                onClick={handleChangePassword}
-                disabled={isChangingPassword}
-              >
-                {isChangingPassword ? 'Modification...' : 'Modifier le mot de passe'}
-              </Button>
-            </>
-          }
-        >
-          <div className="space-y-4">
-            {passwordError && (
-              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
-                <p className="text-sm text-red-800 dark:text-red-200">{passwordError}</p>
-              </div>
-            )}
-
-            <Input
-              label="Mot de passe actuel"
-              type="password"
-              value={passwordData.currentPassword}
-              onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
-              placeholder="Entrez votre mot de passe actuel"
-              required
-            />
-
-            <Input
-              label="Nouveau mot de passe"
-              type="password"
-              value={passwordData.newPassword}
-              onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-              placeholder="Entrez votre nouveau mot de passe"
-              helperText="Le mot de passe doit contenir au moins 6 caractères"
-              required
-            />
-
-            <Input
-              label="Confirmer le nouveau mot de passe"
-              type="password"
-              value={passwordData.confirmPassword}
-              onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-              placeholder="Confirmez votre nouveau mot de passe"
-              required
-            />
-          </div>
-        </Modal>
-
-        {/* Modal Profil */}
-        <Modal
-          isOpen={isProfileModalOpen}
-          onClose={() => setIsProfileModalOpen(false)}
-          title="Mon profil"
-          size="md"
-          footer={
-            <>
-              <Button variant="secondary" onClick={() => setIsProfileModalOpen(false)}>Annuler</Button>
-              <Button variant="primary" onClick={handleSaveProfile}>Enregistrer</Button>
-            </>
-          }
-        >
-          <div className="space-y-4">
-            <Input label="Prénom" value={profileData.prenom} onChange={(e) => setProfileData({ ...profileData, prenom: e.target.value })} />
-            <Input label="Nom" value={profileData.nom} onChange={(e) => setProfileData({ ...profileData, nom: e.target.value })} />
-            <Input label="Email" value={userInfo?.email || ''} disabled />
-          </div>
-        </Modal>
       </div>
-    </div>
+
+      {/* Modales */}
+      <PasswordModal
+        open={showPwdModal}
+        onClose={() => setShowPwdModal(false)}
+        addToast={addToast}
+      />
+
+      <Toasts toasts={toasts} remove={removeToast} />
+    </>
   )
 }
-
-export default CaissierLayout

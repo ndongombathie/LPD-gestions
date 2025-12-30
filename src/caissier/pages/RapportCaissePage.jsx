@@ -223,7 +223,7 @@ const RapportCaissePage = () => {
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold text-text-primary dark:text-white">
+            <h1 className="text-3xl font-bold text-[#472EAD]text-white">
               Rapport de caisse journalier
             </h1>
             {rapport && rapport.cloture && (
@@ -233,7 +233,7 @@ const RapportCaissePage = () => {
               <Badge variant="warning">En cours</Badge>
             )}
           </div>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
+          <p className="text-gray-600 mt-1">
             {rapport && rapport.cloture 
               ? `Rapport clôturé du ${formatDate(selectedDate)} - Consultation uniquement`
               : `Suivi des encaissements et décaissements du ${formatDate(selectedDate)}`
@@ -248,14 +248,22 @@ const RapportCaissePage = () => {
             className="w-auto"
             title="Sélectionner une date pour consulter le rapport"
           />
-          <Button variant="outline" onClick={handleExportPDF}>
+          <Button 
+            variant="outline" 
+            onClick={handleExportPDF}
+            className="border-2 border-[#472EAD] text-[#472EAD] hover:bg-[#F7F5FF] font-semibold"
+          >
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
             Exporter PDF
           </Button>
           {rapport && !rapport.cloture && (
-            <Button variant="danger" onClick={handleClotureCaisse}>
+            <Button 
+              variant="danger" 
+              onClick={handleClotureCaisse}
+              className="bg-red-600 hover:bg-red-700 text-white font-semibold shadow-md"
+            >
               Clôturer la caisse
             </Button>
           )}
@@ -275,10 +283,10 @@ const RapportCaissePage = () => {
                   onClick={() => setSelectedDate(date)}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
                     selectedDate === date
-                      ? 'bg-primary-600 text-white shadow-md'
+                      ? 'bg-[#472EAD] text-white shadow-md'
                       : rapportsParDate[date]?.cloture
-                      ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 hover:bg-green-200 dark:hover:bg-green-800'
-                      : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                      ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
                   {formatDate(date)}
@@ -294,7 +302,7 @@ const RapportCaissePage = () => {
       {!rapport ? (
         <Card>
           <div className="text-center py-12">
-            <p className="text-gray-500 dark:text-gray-400">Aucun rapport disponible pour cette date</p>
+            <p className="text-gray-500">Aucun rapport disponible pour cette date</p>
           </div>
         </Card>
       ) : (
@@ -306,12 +314,12 @@ const RapportCaissePage = () => {
             />
             
             {rapport.cloture && (
-              <div className="mb-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+              <div className="mb-4 bg-green-50 border border-green-200 rounded-lg p-4">
                 <div className="flex items-center gap-2">
-                  <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-5 h-5 text-green-600text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <p className="text-sm font-medium text-green-800 dark:text-green-200">
+                  <p className="text-sm font-medium text-green-800text-green-200">
                     Ce rapport est clôturé. Il est en lecture seule et ne peut plus être modifié.
                   </p>
                 </div>
@@ -319,8 +327,8 @@ const RapportCaissePage = () => {
             )}
             
             {!rapport.cloture && (
-              <div className="mb-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
-                <p className="text-sm text-blue-800 dark:text-blue-200">
+              <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-sm text-blue-800text-blue-200">
                   <strong>Note :</strong> Les montants sont calculés automatiquement à partir des encaissements et décaissements de la journée. 
                   Vous pouvez clôturer le rapport une fois tous les montants vérifiés.
                 </p>
@@ -328,30 +336,30 @@ const RapportCaissePage = () => {
             )}
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div className="text-center p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Fond d'ouverture</p>
-                  <p className="text-2xl font-bold text-primary-600 dark:text-primary-400 mt-2">
+                <div className="text-center p-4 bg-gray-50 rounded-lg">
+                  <p className="text-sm text-gray-600">Fond d'ouverture</p>
+                  <p className="text-2xl font-bold text-[#472EAD]text-primary-400 mt-2">
                     {formatCurrency(rapport.fond_ouverture || 0)}
                   </p>
                 </div>
-                <div className="text-center p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Total encaissements</p>
-                  <p className="text-2xl font-bold text-green-600 dark:text-green-400 mt-2">
+                <div className="text-center p-4 bg-gray-50 rounded-lg">
+                  <p className="text-sm text-gray-600">Total encaissements</p>
+                  <p className="text-2xl font-bold text-green-600text-green-400 mt-2">
                     {formatCurrency(rapport.total_encaissements || 0)}
                   </p>
                 </div>
-                <div className="text-center p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Total décaissements</p>
-                  <p className="text-2xl font-bold text-red-600 dark:text-red-400 mt-2">
+                <div className="text-center p-4 bg-gray-50 rounded-lg">
+                  <p className="text-sm text-gray-600">Total décaissements</p>
+                  <p className="text-2xl font-bold text-red-600text-red-400 mt-2">
                     {formatCurrency(rapport.total_decaissements || 0)}
                   </p>
                 </div>
-                <div className="text-center p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Solde de clôture</p>
-                  <p className="text-2xl font-bold text-accent-500 dark:text-accent-400 mt-2">
+                <div className="text-center p-4 bg-gray-50 rounded-lg">
+                  <p className="text-sm text-gray-600">Solde de clôture</p>
+                  <p className="text-2xl font-bold text-[#F58020]text-accent-400 mt-2">
                     {formatCurrency(rapport.solde_cloture || 0)}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  <p className="text-xs text-gray-500 mt-1">
                     Calculé: {formatCurrency((rapport.fond_ouverture || 0) + (rapport.total_encaissements || 0) - (rapport.total_decaissements || 0))}
                   </p>
                 </div>
@@ -363,9 +371,9 @@ const RapportCaissePage = () => {
             <CardHeader title="Ventes par moyen de paiement" />
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
               {Object.entries(rapport.ventes_par_moyen || {}).map(([moyen, montant]) => (
-                <div key={moyen} className="text-center p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                  <p className="text-sm text-gray-600 dark:text-gray-400">{moyensPaiementLabels[moyen]}</p>
-                  <p className="text-lg font-bold text-gray-900 dark:text-white mt-1">
+                <div key={moyen} className="text-center p-4 bg-gray-50 rounded-lg">
+                  <p className="text-sm text-gray-600">{moyensPaiementLabels[moyen]}</p>
+                  <p className="text-lg font-bold text-gray-900 mt-1">
                     {formatCurrency(montant)}
                   </p>
                 </div>
@@ -382,50 +390,50 @@ const RapportCaissePage = () => {
             {rapport.tickets_encaisses && rapport.tickets_encaisses.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="bg-gray-50 dark:bg-gray-700">
+                  <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500text-gray-300 uppercase tracking-wider">
                         N° Ticket
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500text-gray-300 uppercase tracking-wider">
                         Heure
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500text-gray-300 uppercase tracking-wider">
                         Vendeur
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500text-gray-300 uppercase tracking-wider">
                         Moyen de paiement
                       </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500text-gray-300 uppercase tracking-wider">
                         Montant
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                  <tbody className="bg-white divide-y divide-gray-200">
                     {rapport.tickets_encaisses.map((ticket) => (
-                      <tr key={ticket.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                      <tr key={ticket.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
                           {ticket.numero}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
                           {ticket.heure}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
                           {ticket.vendeur}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
                           {moyensPaiementLabels[ticket.moyen_paiement]}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-semibold text-gray-900 dark:text-white">
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-semibold text-gray-900">
                           {formatCurrency(ticket.total_ttc)}
                         </td>
                       </tr>
                     ))}
-                    <tr className="bg-gray-50 dark:bg-gray-700 font-bold">
-                      <td colSpan="4" className="px-4 py-3 text-right text-sm text-gray-900 dark:text-white">
+                    <tr className="bg-gray-50 font-bold">
+                      <td colSpan="4" className="px-4 py-3 text-right text-sm text-gray-900">
                         Total:
                       </td>
-                      <td className="px-4 py-3 text-right text-sm text-primary-600 dark:text-primary-400">
+                      <td className="px-4 py-3 text-right text-sm text-[#472EAD]text-primary-400">
                         {formatCurrency(
                           rapport.tickets_encaisses.reduce((sum, t) => sum + t.total_ttc, 0)
                         )}
@@ -436,7 +444,7 @@ const RapportCaissePage = () => {
               </div>
             ) : (
               <div className="text-center py-8">
-                <p className="text-gray-500 dark:text-gray-400">Aucun ticket encaissé</p>
+                <p className="text-gray-500">Aucun ticket encaissé</p>
               </div>
             )}
           </Card>
@@ -450,38 +458,38 @@ const RapportCaissePage = () => {
             {rapport.decaissements && rapport.decaissements.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="bg-gray-50 dark:bg-gray-700">
+                  <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500text-gray-300 uppercase tracking-wider">
                         Heure
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500text-gray-300 uppercase tracking-wider">
                         Motif
                       </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500text-gray-300 uppercase tracking-wider">
                         Montant
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                  <tbody className="bg-white divide-y divide-gray-200">
                     {rapport.decaissements.map((dec) => (
-                      <tr key={dec.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
+                      <tr key={dec.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
                           {dec.heure}
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+                        <td className="px-4 py-3 text-sm text-gray-600">
                           {dec.motif}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-semibold text-red-600 dark:text-red-400">
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-semibold text-red-600text-red-400">
                           {formatCurrency(dec.montant)}
                         </td>
                       </tr>
                     ))}
-                    <tr className="bg-gray-50 dark:bg-gray-700 font-bold">
-                      <td colSpan="2" className="px-4 py-3 text-right text-sm text-gray-900 dark:text-white">
+                    <tr className="bg-gray-50 font-bold">
+                      <td colSpan="2" className="px-4 py-3 text-right text-sm text-gray-900">
                         Total:
                       </td>
-                      <td className="px-4 py-3 text-right text-sm text-red-600 dark:text-red-400">
+                      <td className="px-4 py-3 text-right text-sm text-red-600text-red-400">
                         {formatCurrency(
                           rapport.decaissements.reduce((sum, d) => sum + d.montant, 0)
                         )}
@@ -492,7 +500,7 @@ const RapportCaissePage = () => {
               </div>
             ) : (
               <div className="text-center py-8">
-                <p className="text-gray-500 dark:text-gray-400">Aucun décaissement</p>
+                <p className="text-gray-500">Aucun décaissement</p>
               </div>
             )}
           </Card>

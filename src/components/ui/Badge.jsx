@@ -6,13 +6,13 @@ const Badge = ({
   className = '',
 }) => {
   const variantClasses = {
-    default: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
-    primary: 'bg-primary-100 text-primary-800 dark:bg-primary-900 dark:text-primary-200',
-    success: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-    warning: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-    danger: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-    info: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-    accent: 'bg-accent-100 text-accent-800 dark:bg-accent-900 dark:text-accent-200',
+    default: 'bg-gray-100 text-gray-800 border border-gray-300',
+    primary: 'bg-[#F7F5FF] text-[#472EAD] border border-[#E4E0FF] font-semibold',
+    success: 'bg-green-100 text-green-800 border border-green-300 font-semibold',
+    warning: 'bg-yellow-100 text-yellow-800 border border-yellow-300 font-semibold',
+    danger: 'bg-red-100 text-red-800 border border-red-300 font-semibold',
+    info: 'bg-blue-100 text-blue-800 border border-blue-300 font-semibold',
+    accent: 'bg-[#FFF7ED] text-[#F58020] border border-[#FED7AA] font-semibold',
   };
 
   return (
