@@ -1,10 +1,3 @@
-## 1️⃣ Authentification & Session
-
-| Méthode | Endpoint | Description |
-|----------|-----------|-------------|
-| **POST** | `/api/auth/login` | Authentifie un utilisateur et renvoie un token |
-| **GET** | `/api/mon-profil` | Récupère le profil complet du user connecté |
-| **PUT** | `/api/mon-profil` | Met à jour prénom, nom et photo |
 
 ## 2️⃣ Module Header — Profil, Notifications & Sécurité
 
@@ -34,3 +27,10 @@
 | **GET** | `/api/fournisseurs/{fournisseur}` | Détails d’un fournisseur |
 | **PUT** | `/api/fournisseurs/{fournisseur}` | Met à jour un fournisseur |
 | **DELETE** | `/api/fournisseurs/{fournisseur}` | Supprime un fournisseur |
+
+
+# afficher l'historique des ventes
+GET|HEAD        api/historique-ventes  | la liste des ventes effectuer par un vendeur
+# afficher la liste des clients
+GET|HEAD        api/clients | la liste des clients filtrer par client special
+GET|HEAD        api/clients/{client}/paiements-tranches | historique des paiements par tranche d'un client

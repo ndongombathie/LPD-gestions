@@ -93,3 +93,9 @@ Utiliser ces couleurs dans les composants principaux :
 * Rapport stock (produits en dessous du seuil, valeur de stock = quantité × prix_achat/prix_gros)
 * Historique mouvements (filtres : date, type, produit, source/destination)
 * Export CSV / PDF
+
+
+# affiche la liste des produits transferes par le gestionnaire de depots
+GET|HEAD        api/produits-transfer 
+# mise a jour des champs (prix de vente detail,prix de vente en gros,......) 
+GET|HEAD         api/valider-produits-transfer
