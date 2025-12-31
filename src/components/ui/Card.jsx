@@ -17,7 +17,8 @@ export const Card = ({
 
   return (
     <div
-      className={`bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow duration-200 ${paddingClasses[padding]} ${hoverClass} ${className}`}
+      className={`bg-white rounded-lg shadow-md border border-gray-200 hover:shadow-lg transition-shadow duration-200 ${paddingClasses[padding]} ${hoverClass} ${className}`}
+      style={{ position: 'relative', visibility: 'visible', opacity: 1 }}
     >
       {children}
     </div>
@@ -33,9 +34,9 @@ export const CardHeader = ({
   return (
     <div className={`flex items-start justify-between mb-4 ${className}`}>
       <div>
-        <h3 className="text-xl font-semibold text-gray-900 dark:text-white">{title}</h3>
+        <h3 className="text-xl font-semibold text-gray-900">{title}</h3>
         {subtitle && (
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{subtitle}</p>
+          <p className="text-sm text-gray-500 mt-1">{subtitle}</p>
         )}
       </div>
       {action && <div className="ml-4">{action}</div>}
