@@ -21,8 +21,8 @@ const normalizeRole = (role) => {
   if (r.includes("vend")) return "vendeur";
 
   // Variantes gestionnaire boutique/dépôt (underscore ou tiret)
-  if (r.includes("gestionnaire_boutique") || (r.includes("gest") && r.includes("bout"))) return "gestionnaire-boutique";
-  if (r.includes("gestionnaire_depot") || r.includes("gestionnaire-depot") || (r.includes("gest") && r.includes("depot"))) return "gestionnaire-depot";
+  if (r.includes("gestionnaire_boutique") || (r.includes("gest") && r.includes("bout"))) return "gestionnaire_boutique";
+  if (r.includes("gestionnaire_depot") || r.includes("gestionnaire-depot") || (r.includes("gest") && r.includes("depot"))) return "gestionnaire_depot";
 
   // Administrateur
   if (r === "admin") return "admin";
@@ -37,9 +37,9 @@ const redirectByRole = (role = "") => {
       return "/responsable/dashboard";
     case "comptable":
       return "/comptable/dashboard";
-    case "gestionnaire-boutique":
-      return "/gestionnaire-boutique/dashboard";
-    case "gestionnaire-depot":
+    case "gestionnaire_boutique":
+      return "/gestionnaire_boutique/dashboard";
+    case "gestionnaire_depot":
       return "/depot/dashboard";
     case "vendeur":
       return "/vendeur";
