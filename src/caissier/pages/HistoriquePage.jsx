@@ -121,10 +121,10 @@ const HistoriquePage = () => {
       {/* En-tête */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-text-primary dark:text-white">
+          <h1 className="text-3xl font-bold text-text-primarytext-white">
             Historique des opérations
           </h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
+          <p className="text-gray-600text-gray-400 mt-1">
             Consultez l'historique de tous vos encaissements et décaissements
           </p>
         </div>
@@ -170,20 +170,20 @@ const HistoriquePage = () => {
         <Card className="border-l-4 border-l-green-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Total encaissements</p>
-              <p className="text-2xl font-bold text-green-600 dark:text-green-400 mt-1">
+              <p className="text-sm text-gray-600text-gray-400">Total encaissements</p>
+              <p className="text-2xl font-bold text-green-600text-green-400 mt-1">
                 {formatCurrency(
                   filteredHistorique
                     .filter(item => item.type === 'encaissement')
                     .reduce((sum, item) => sum + (item.ticket?.total_ttc || 0), 0)
                 )}
               </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              <p className="text-xs text-gray-500text-gray-400 mt-1">
                 {filteredHistorique.filter(item => item.type === 'encaissement').length} opération(s)
               </p>
             </div>
-            <div className="w-12 h-12 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center">
-              <svg className="w-6 h-6 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="w-12 h-12 bg-green-100bg-green-900 rounded-full flex items-center justify-center">
+              <svg className="w-6 h-6 text-green-600text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
               </svg>
             </div>
@@ -192,30 +192,30 @@ const HistoriquePage = () => {
         <Card className="border-l-4 border-l-red-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Total décaissements</p>
-              <p className="text-2xl font-bold text-red-600 dark:text-red-400 mt-1">
+              <p className="text-sm text-gray-600text-gray-400">Total décaissements</p>
+              <p className="text-2xl font-bold text-red-600text-red-400 mt-1">
                 {formatCurrency(
                   filteredHistorique
                     .filter(item => item.type === 'decaissement')
                     .reduce((sum, item) => sum + (item.montant || 0), 0)
                 )}
               </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              <p className="text-xs text-gray-500text-gray-400 mt-1">
                 {filteredHistorique.filter(item => item.type === 'decaissement').length} opération(s)
               </p>
             </div>
-            <div className="w-12 h-12 bg-red-100 dark:bg-red-900 rounded-full flex items-center justify-center">
-              <svg className="w-6 h-6 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="w-12 h-12 bg-red-100bg-red-900 rounded-full flex items-center justify-center">
+              <svg className="w-6 h-6 text-red-600text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
               </svg>
             </div>
           </div>
         </Card>
-        <Card className="border-l-4 border-l-primary-600">
+        <Card className="border-l-4 border-l-[#472EAD]">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Solde net</p>
-              <p className="text-2xl font-bold text-primary-600 dark:text-primary-400 mt-1">
+              <p className="text-sm text-gray-600text-gray-400">Solde net</p>
+              <p className="text-2xl font-bold text-[#472EAD]text-primary-400 mt-1">
                 {formatCurrency(
                   filteredHistorique
                     .filter(item => item.type === 'encaissement')
@@ -226,8 +226,8 @@ const HistoriquePage = () => {
                 )}
               </p>
             </div>
-            <div className="w-12 h-12 bg-primary-100 dark:bg-primary-900 rounded-full flex items-center justify-center">
-              <svg className="w-6 h-6 text-primary-600 dark:text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="w-12 h-12 bg-[#F7F5FF]bg-primary-900 rounded-full flex items-center justify-center">
+              <svg className="w-6 h-6 text-[#472EAD]text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
             </div>
@@ -243,7 +243,7 @@ const HistoriquePage = () => {
         />
         {filteredHistorique.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-gray-500 dark:text-gray-400">Aucune opération trouvée</p>
+            <p className="text-gray-500text-gray-400">Aucune opération trouvée</p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -252,8 +252,8 @@ const HistoriquePage = () => {
                 key={item.id}
                 className={`border-l-4 rounded-lg p-3 hover:shadow-md transition-all ${
                   item.type === 'encaissement'
-                    ? 'border-l-green-500 bg-gradient-to-r from-green-50 to-white dark:from-green-900/20 dark:to-gray-800'
-                    : 'border-l-red-500 bg-gradient-to-r from-red-50 to-white dark:from-red-900/20 dark:to-gray-800'
+                    ? 'border-l-green-500 bg-gradient-to-r from-green-50 to-whitefrom-green-900/20to-gray-800'
+                    : 'border-l-red-500 bg-gradient-to-r from-red-50 to-whitefrom-red-900/20to-gray-800'
                 }`}
               >
                 <div className="flex items-center justify-between gap-4">
@@ -265,7 +265,7 @@ const HistoriquePage = () => {
                       >
                         {item.type === 'encaissement' ? 'Encaissement' : 'Décaissement'}
                       </Badge>
-                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                      <span className="text-xs text-gray-500text-gray-400">
                         {formatDateTime(item.created_at)}
                       </span>
                     </div>
@@ -273,32 +273,32 @@ const HistoriquePage = () => {
                     {item.type === 'encaissement' && item.ticket ? (
                       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
                         <div className="min-w-0">
-                          <span className="text-gray-500 dark:text-gray-400">Ticket:</span>
-                          <p className="font-semibold text-gray-900 dark:text-white truncate">
+                          <span className="text-gray-500text-gray-400">Ticket:</span>
+                          <p className="font-semibold text-gray-900text-white truncate">
                             {item.ticket.numero}
                           </p>
                         </div>
                         <div className="min-w-0">
-                          <span className="text-gray-500 dark:text-gray-400">Vendeur:</span>
-                          <p className="font-medium text-gray-700 dark:text-gray-300 truncate">
+                          <span className="text-gray-500text-gray-400">Vendeur:</span>
+                          <p className="font-medium text-gray-700text-gray-300 truncate">
                             {item.ticket.vendeur_nom}
                           </p>
                         </div>
                         <div className="min-w-0">
-                          <span className="text-gray-500 dark:text-gray-400">Paiement:</span>
-                          <p className="font-medium text-gray-700 dark:text-gray-300 truncate">
+                          <span className="text-gray-500text-gray-400">Paiement:</span>
+                          <p className="font-medium text-gray-700text-gray-300 truncate">
                             {moyensPaiementLabels[item.ticket.moyen_paiement] || item.ticket.moyen_paiement}
                           </p>
                         </div>
                         <div className="min-w-0">
-                          <span className="text-gray-500 dark:text-gray-400">TTC:</span>
-                          <p className="font-bold text-green-600 dark:text-green-400">
+                          <span className="text-gray-500text-gray-400">TTC:</span>
+                          <p className="font-bold text-green-600text-green-400">
                             {formatCurrency(item.ticket.total_ttc)}
                           </p>
                         </div>
                         <div className="min-w-0">
-                          <span className="text-gray-500 dark:text-gray-400">THT/TVA:</span>
-                          <p className="font-medium text-gray-600 dark:text-gray-400 text-xs">
+                          <span className="text-gray-500text-gray-400">THT/TVA:</span>
+                          <p className="font-medium text-gray-600text-gray-400 text-xs">
                             {formatCurrency(item.ticket.total_ht)} / {formatCurrency(item.ticket.tva)}
                           </p>
                         </div>
@@ -306,14 +306,14 @@ const HistoriquePage = () => {
                     ) : (
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
                         <div>
-                          <span className="text-gray-500 dark:text-gray-400">Montant:</span>
-                          <p className="font-bold text-red-600 dark:text-red-400">
+                          <span className="text-gray-500text-gray-400">Montant:</span>
+                          <p className="font-bold text-red-600text-red-400">
                             {formatCurrency(item.montant)}
                           </p>
                         </div>
                         <div className="md:col-span-2 min-w-0">
-                          <span className="text-gray-500 dark:text-gray-400">Motif:</span>
-                          <p className="font-medium text-gray-700 dark:text-gray-300 truncate">
+                          <span className="text-gray-500text-gray-400">Motif:</span>
+                          <p className="font-medium text-gray-700text-gray-300 truncate">
                             {item.motif}
                           </p>
                         </div>
@@ -326,7 +326,7 @@ const HistoriquePage = () => {
                       variant="outline"
                       size="sm"
                       onClick={() => printInvoice(item.ticket)}
-                      className="flex-shrink-0"
+                      className="flex-shrink-0 border-2 border-[#472EAD] text-[#472EAD] hover:bg-[#F7F5FF] font-semibold"
                     >
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />

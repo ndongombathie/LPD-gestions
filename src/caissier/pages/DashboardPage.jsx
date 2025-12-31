@@ -34,29 +34,29 @@ const DashboardPage = () => {
   const maxVente = Math.max(...ventesParHeure.map(v => v.montant));
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative z-10" style={{ position: 'relative', visibility: 'visible', opacity: 1, display: 'block', width: '100%', minHeight: '400px' }}>
       {/* En-tête */}
-      <div>
-        <h1 className="text-3xl font-bold text-text-primary dark:text-white">
+      <div style={{ backgroundColor: 'transparent', padding: '10px' }}>
+        <h1 className="text-3xl font-bold text-[#472EAD]" style={{ color: '#472EAD', fontSize: '2rem' }}>
           Tableau de bord
         </h1>
-        <p className="text-gray-600 dark:text-gray-400 mt-1">
+        <p className="text-gray-600 mt-1" style={{ color: '#6B7280' }}>
           Vue d'ensemble de votre activité du {formatDate(new Date().toISOString())}
         </p>
       </div>
 
       {/* Statistiques principales */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="border-l-4 border-l-primary-600 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
+        <Card className="border-l-4 border-l-[#472EAD] hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Fond d'ouverture</p>
-              <p className="text-2xl font-bold text-primary-600 dark:text-primary-400 mt-2">
+              <p className="text-sm text-gray-600">Fond d'ouverture</p>
+              <p className="text-2xl font-bold text-[#472EAD] mt-2">
                 {formatCurrency(stats.fondOuverture)}
               </p>
             </div>
-            <div className="w-12 h-12 bg-primary-100 dark:bg-primary-900 rounded-full flex items-center justify-center">
-              <svg className="w-6 h-6 text-primary-600 dark:text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="w-12 h-12 bg-[#F7F5FF] rounded-full flex items-center justify-center">
+              <svg className="w-6 h-6 text-[#472EAD]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
@@ -65,13 +65,13 @@ const DashboardPage = () => {
         <Card className="border-l-4 border-l-green-500 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Encaissements</p>
-              <p className="text-2xl font-bold text-green-600 dark:text-green-400 mt-2">
+              <p className="text-sm text-gray-600">Encaissements</p>
+              <p className="text-2xl font-bold text-green-600 mt-2">
                 {formatCurrency(stats.totalEncaissements)}
               </p>
             </div>
-            <div className="w-12 h-12 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center">
-              <svg className="w-6 h-6 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+              <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
               </svg>
             </div>
@@ -80,28 +80,28 @@ const DashboardPage = () => {
         <Card className="border-l-4 border-l-red-500 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Décaissements</p>
-              <p className="text-2xl font-bold text-red-600 dark:text-red-400 mt-2">
+              <p className="text-sm text-gray-600">Décaissements</p>
+              <p className="text-2xl font-bold text-red-600 mt-2">
                 {formatCurrency(stats.totalDecaissements)}
               </p>
             </div>
-            <div className="w-12 h-12 bg-red-100 dark:bg-red-900 rounded-full flex items-center justify-center">
-              <svg className="w-6 h-6 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+              <svg className="w-6 h-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
               </svg>
             </div>
           </div>
         </Card>
-        <Card className="border-l-4 border-l-accent-500 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
+        <Card className="border-l-4 border-l-[#F58020] hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Solde actuel</p>
-              <p className="text-2xl font-bold text-accent-500 dark:text-accent-400 mt-2">
+              <p className="text-sm text-gray-600">Solde actuel</p>
+              <p className="text-2xl font-bold text-[#F58020] mt-2">
                 {formatCurrency(stats.soldeActuel)}
               </p>
             </div>
-            <div className="w-12 h-12 bg-accent-100 dark:bg-accent-900 rounded-full flex items-center justify-center">
-              <svg className="w-6 h-6 text-accent-500 dark:text-accent-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="w-12 h-12 bg-[#FFF7ED] rounded-full flex items-center justify-center">
+              <svg className="w-6 h-6 text-[#F58020]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
             </div>
@@ -119,16 +119,16 @@ const DashboardPage = () => {
               {ventesParHeure.map((vente, index) => (
                 <div key={index}>
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    <span className="text-sm font-medium text-gray-700">
                       {vente.heure}
                     </span>
-                    <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                    <span className="text-sm font-semibold text-gray-900">
                       {formatCurrency(vente.montant)}
                     </span>
                   </div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4">
+                  <div className="w-full bg-gray-200 rounded-full h-4">
                     <div
-                      className="bg-gradient-to-r from-primary-600 to-accent-500 h-4 rounded-full transition-all duration-500 shadow-sm"
+                      className="bg-gradient-to-r from-[#472EAD] to-[#F58020] h-4 rounded-full transition-all duration-500 shadow-sm"
                       style={{ width: `${maxVente > 0 ? (vente.montant / maxVente) * 100 : 0}%` }}
                     />
                   </div>
@@ -174,10 +174,10 @@ const DashboardPage = () => {
                 </svg>
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="text-center">
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                    <p className="text-2xl font-bold text-gray-900">
                       {formatCurrency(stats.totalEncaissements)}
                     </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Total</p>
+                    <p className="text-xs text-gray-500">Total</p>
                   </div>
                 </div>
               </div>
@@ -194,13 +194,13 @@ const DashboardPage = () => {
                           backgroundColor: colors[index % colors.length],
                         }}
                       />
-                      <span className="text-sm text-gray-700 dark:text-gray-300">{item.moyen}</span>
+                      <span className="text-sm text-gray-700">{item.moyen}</span>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                      <p className="text-sm font-semibold text-gray-900">
                         {formatCurrency(item.montant)}
                       </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">{item.pourcentage}%</p>
+                      <p className="text-xs text-gray-500">{item.pourcentage}%</p>
                     </div>
                   </div>
                 );
@@ -216,44 +216,44 @@ const DashboardPage = () => {
           <CardHeader title="Tickets du jour" />
           <div className="mt-4 space-y-4">
             <div 
-              className="flex items-center justify-between p-4 bg-gradient-to-r from-accent-50 to-accent-100 dark:from-accent-900/20 dark:to-accent-900/10 rounded-lg border border-accent-200 dark:border-accent-800 cursor-pointer hover:shadow-lg transition-all"
+              className="flex items-center justify-between p-4 bg-gradient-to-r from-[#FFF7ED] to-[#FFEDD5] rounded-lg border border-[#FED7AA] cursor-pointer hover:shadow-lg transition-all"
               onClick={() => navigate('/caissier/caisse')}
             >
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-gradient-to-br from-accent-400 to-accent-600 rounded-full flex items-center justify-center shadow-md">
+                <div className="w-12 h-12 bg-gradient-to-br from-[#FB923C] to-[#F58020] rounded-full flex items-center justify-center shadow-md">
                   <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
                 <div>
-                  <p className="font-semibold text-gray-900 dark:text-white">En attente</p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <p className="font-semibold text-gray-900">En attente</p>
+                  <p className="text-sm text-gray-600">
                     {stats.ticketsEnAttente} ticket(s) à traiter
                   </p>
                 </div>
               </div>
-              <p className="text-2xl font-bold text-accent-600 dark:text-accent-400">
+              <p className="text-2xl font-bold text-[#F58020]">
                 {stats.ticketsEnAttente}
               </p>
             </div>
             <div 
-              className="flex items-center justify-between p-4 bg-gradient-to-r from-primary-50 to-primary-100 dark:from-primary-900/20 dark:to-primary-900/10 rounded-lg border border-primary-200 dark:border-primary-800 cursor-pointer hover:shadow-lg transition-all"
+              className="flex items-center justify-between p-4 bg-gradient-to-r from-[#F7F5FF] to-[#EFEAFF] rounded-lg border border-[#E4E0FF] cursor-pointer hover:shadow-lg transition-all"
               onClick={() => navigate('/caissier/caisse')}
             >
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-primary-700 rounded-full flex items-center justify-center shadow-md">
+                <div className="w-12 h-12 bg-gradient-to-br from-[#8B5CF6] to-[#472EAD] rounded-full flex items-center justify-center shadow-md">
                   <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
                 <div>
-                  <p className="font-semibold text-gray-900 dark:text-white">Traités</p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <p className="font-semibold text-gray-900">Traités</p>
+                  <p className="text-sm text-gray-600">
                     {stats.ticketsTraites} ticket(s) encaissé(s)
                   </p>
                 </div>
               </div>
-              <p className="text-2xl font-bold text-primary-600 dark:text-primary-400">
+              <p className="text-2xl font-bold text-[#472EAD]">
                 {stats.ticketsTraites}
               </p>
             </div>
@@ -263,30 +263,30 @@ const DashboardPage = () => {
         <Card>
           <CardHeader title="Activité récente" />
           <div className="mt-4 space-y-3">
-            <div className="flex items-center justify-between p-3 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between p-3 border-b border-gray-200">
               <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">Encaissement</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Il y a 5 min</p>
+                <p className="text-sm font-medium text-gray-900">Encaissement</p>
+                <p className="text-xs text-gray-500">Il y a 5 min</p>
               </div>
-              <p className="text-sm font-semibold text-green-600 dark:text-green-400">
+              <p className="text-sm font-semibold text-green-600">
                 +{formatCurrency(59000)}
               </p>
             </div>
-            <div className="flex items-center justify-between p-3 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between p-3 border-b border-gray-200">
               <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">Décaissement</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Il y a 1h</p>
+                <p className="text-sm font-medium text-gray-900">Décaissement</p>
+                <p className="text-xs text-gray-500">Il y a 1h</p>
               </div>
-              <p className="text-sm font-semibold text-red-600 dark:text-red-400">
+              <p className="text-sm font-semibold text-red-600">
                 -{formatCurrency(10000)}
               </p>
             </div>
             <div className="flex items-center justify-between p-3">
               <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">Encaissement</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Il y a 2h</p>
+                <p className="text-sm font-medium text-gray-900">Encaissement</p>
+                <p className="text-xs text-gray-500">Il y a 2h</p>
               </div>
-              <p className="text-sm font-semibold text-green-600 dark:text-green-400">
+              <p className="text-sm font-semibold text-green-600">
                 +{formatCurrency(88500)}
               </p>
             </div>
