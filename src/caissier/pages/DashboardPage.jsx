@@ -1,37 +1,148 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Card, { CardHeader } from '../../components/ui/Card';
 import { formatCurrency, formatDate } from '../../utils/formatters';
+import caissierApi from '../services/caissierApi';
+import { initializeEcho } from '../../utils/echo';
+
+// Fonction pour formater le temps relatif
+const formatTimeAgo = (date) => {
+  if (!date) return '';
+  const now = new Date();
+  const past = new Date(date);
+  const diffInMinutes = Math.floor((now - past) / (1000 * 60));
+  
+  if (diffInMinutes < 1) return 'À l\'instant';
+  if (diffInMinutes < 60) return `Il y a ${diffInMinutes} min`;
+  
+  const diffInHours = Math.floor(diffInMinutes / 60);
+  if (diffInHours < 24) return `Il y a ${diffInHours}h`;
+  
+  const diffInDays = Math.floor(diffInHours / 24);
+  return `Il y a ${diffInDays} jour${diffInDays > 1 ? 's' : ''}`;
+};
 
 const DashboardPage = () => {
   const navigate = useNavigate();
   
-  // Données fictives
-  const stats = {
-    fondOuverture: 50000,
-    totalEncaissements: 245000,
-    totalDecaissements: 15000,
-    soldeActuel: 280000,
-    ticketsEnAttente: 3,
-    ticketsTraites: 12,
+  // États
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    fondOuverture: 0,
+    totalEncaissements: 0,
+    totalDecaissements: 0,
+    soldeActuel: 0,
+    ticketsEnAttente: 0,
+    ticketsTraites: 0,
+  });
+  const [ventesParMoyen, setVentesParMoyen] = useState([]);
+  const [ventesParHeure, setVentesParHeure] = useState([]);
+  const [activiteRecente, setActiviteRecente] = useState([]);
+  const echoRef = useRef(null);
+
+  // Fonction pour charger les données
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      
+      // Charger toutes les données en parallèle
+      const [statsData, ventesMoyen, ventesHeure, activite] = await Promise.all([
+        caissierApi.getDashboardStats(),
+        caissierApi.getVentesParMoyen(),
+        caissierApi.getVentesParHeure(),
+        caissierApi.getActiviteRecente(5),
+      ]);
+      
+      setStats(statsData);
+      setVentesParMoyen(ventesMoyen);
+      setVentesParHeure(ventesHeure);
+      setActiviteRecente(activite);
+    } catch (error) {
+      // Erreur silencieuse
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const ventesParMoyen = [
-    { moyen: 'Espèces', montant: 120000, pourcentage: 49 },
-    { moyen: 'Carte', montant: 80000, pourcentage: 33 },
-    { moyen: 'Wave', montant: 25000, pourcentage: 10 },
-    { moyen: 'Orange Money', montant: 20000, pourcentage: 8 },
-  ];
+  // Charger les données
+  useEffect(() => {
+    // Chargement initial - priorité absolue
+    loadData();
 
-  const ventesParHeure = [
-    { heure: '08h-10h', montant: 35000 },
-    { heure: '10h-12h', montant: 65000 },
-    { heure: '12h-14h', montant: 85000 },
-    { heure: '14h-16h', montant: 45000 },
-    { heure: '16h-18h', montant: 16000 },
-  ];
+    // Initialiser WebSocket de manière asynchrone pour les mises à jour en temps réel
+    const timeoutId = setTimeout(() => {
+      try {
+        const echo = initializeEcho();
+        if (echo) {
+          echoRef.current = echo;
+          
+          // Récupérer l'ID de la boutique de l'utilisateur connecté
+          const userStr = localStorage.getItem('user');
+          let boutiqueId = null;
+          try {
+            const user = userStr ? JSON.parse(userStr) : null;
+            boutiqueId = user?.boutique_id;
+          } catch (e) {
+            // Ignorer
+          }
 
-  const maxVente = Math.max(...ventesParHeure.map(v => v.montant));
+          // Écouter les événements de paiement et décaissement pour mettre à jour le dashboard
+          if (boutiqueId) {
+            const boutiqueChannel = echo.private(`boutique.${boutiqueId}`);
+            
+            // Écouter les nouveaux paiements
+            boutiqueChannel.listen('.paiement.cree', () => {
+              loadData(); // Recharger les données du dashboard
+            });
+            
+            // Écouter les nouvelles commandes validées
+            boutiqueChannel.listen('.commande.validee', () => {
+              loadData();
+            });
+            
+            // Écouter les commandes annulées
+            boutiqueChannel.listen('.commande.annulee', () => {
+              loadData();
+            });
+          }
+        }
+      } catch (e) {
+        // Ignorer les erreurs WebSocket - ne pas bloquer l'application
+      }
+    }, 2000); // Démarrer après 2 secondes pour ne pas ralentir le chargement initial
+
+    return () => {
+      clearTimeout(timeoutId);
+      // Nettoyage WebSocket si nécessaire
+      if (echoRef.current) {
+        try {
+          const userStr = localStorage.getItem('user');
+          const user = userStr ? JSON.parse(userStr) : null;
+          const boutiqueId = user?.boutique_id;
+          if (boutiqueId) {
+            echoRef.current.leave(`boutique.${boutiqueId}`);
+          }
+        } catch (e) {
+          // Ignorer
+        }
+      }
+    };
+  }, []);
+
+  const maxVente = ventesParHeure.length > 0 
+    ? Math.max(...ventesParHeure.map(v => v.montant), 1) 
+    : 1;
+
+  if (loading) {
+    return (
+      <div className="space-y-6 relative z-10 flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-[#472EAD]"></div>
+          <p className="mt-4 text-gray-600">Chargement des données...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 relative z-10" style={{ position: 'relative', visibility: 'visible', opacity: 1, display: 'block', width: '100%', minHeight: '400px' }}>
@@ -263,33 +374,34 @@ const DashboardPage = () => {
         <Card>
           <CardHeader title="Activité récente" />
           <div className="mt-4 space-y-3">
-            <div className="flex items-center justify-between p-3 border-b border-gray-200">
+            {activiteRecente.length > 0 ? (
+              activiteRecente.map((activite, index) => (
+                <div 
+                  key={index} 
+                  className={`flex items-center justify-between p-3 ${
+                    index < activiteRecente.length - 1 ? 'border-b border-gray-200' : ''
+                  }`}
+                >
               <div>
-                <p className="text-sm font-medium text-gray-900">Encaissement</p>
-                <p className="text-xs text-gray-500">Il y a 5 min</p>
-              </div>
-              <p className="text-sm font-semibold text-green-600">
-                +{formatCurrency(59000)}
+                    <p className="text-sm font-medium text-gray-900">
+                      {activite.type === 'encaissement' ? 'Encaissement' : 'Décaissement'}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {formatTimeAgo(activite.date)}
               </p>
             </div>
-            <div className="flex items-center justify-between p-3 border-b border-gray-200">
-              <div>
-                <p className="text-sm font-medium text-gray-900">Décaissement</p>
-                <p className="text-xs text-gray-500">Il y a 1h</p>
-              </div>
-              <p className="text-sm font-semibold text-red-600">
-                -{formatCurrency(10000)}
+                  <p className={`text-sm font-semibold ${
+                    activite.type === 'encaissement' ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {activite.type === 'encaissement' ? '+' : '-'}{formatCurrency(activite.montant)}
               </p>
             </div>
-            <div className="flex items-center justify-between p-3">
-              <div>
-                <p className="text-sm font-medium text-gray-900">Encaissement</p>
-                <p className="text-xs text-gray-500">Il y a 2h</p>
+              ))
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <p className="text-sm">Aucune activité récente</p>
               </div>
-              <p className="text-sm font-semibold text-green-600">
-                +{formatCurrency(88500)}
-              </p>
-            </div>
+            )}
           </div>
         </Card>
       </div>

@@ -21,6 +21,7 @@ import {
   EyeOff,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { Toaster } from 'sonner'
 import { instance } from '../../utils/axios'
 import NotificationsDropdown from '../components/NotificationsDropdown'
 import ShortcutsMenu from '../components/ShortcutsMenu'
@@ -610,6 +611,7 @@ export default function CaissierLayout() {
       />
 
       <Toasts toasts={toasts} remove={removeToast} />
+      <Toaster position="top-right" richColors />
     </>
   )
 }
