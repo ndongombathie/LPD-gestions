@@ -1,0 +1,43 @@
+.vendeur-footer {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  position: fixed;
+  bottom: 0;
+  left: 0px; /* Démarre après le sidebar */
+  right: 0;
+  height: 5mm; /* 2mm de hauteur */
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.footer-content {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.footer-text {
+  color: white;
+  font-size: 3mm; /* Texte très petit */
+  font-weight: 600;
+  white-space: nowrap;
+  opacity: 0.8;
+  letter-spacing: 0.2mm;
+}
+
+/* Responsive - sur mobile le footer prend toute la largeur */
+@media (max-width: 768px) {
+  .vendeur-footer {
+    left: 0;
+  }
+}
+
+/* Pour les très petits écrans */
+@media (max-width: 480px) {
+  .footer-text {
+    font-size: 0.4mm;
+  }
+}

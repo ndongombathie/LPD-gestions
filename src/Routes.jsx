@@ -72,6 +72,9 @@ import DecaissementsPageCaissier from "./caissier/pages/DecaissementsPage";
 import HistoriquePageCaissier from "./caissier/pages/HistoriquePage";
 import RapportCaissePage from "./caissier/pages/RapportCaissePage";
 
+// =================== VENDEUR ===================
+import VendeurInterface from "./vendeur/VendeurInterface";
+
 // ==========================================================
 // 📋 Configuration des routes
 // ==========================================================
@@ -145,14 +148,14 @@ export default function AppRoutes() {
 
       {/* =================== GESTIONNAIRE BOUTIQUE =================== */}
       <Route
-        path="/gestionnaire-boutique"
+        path="/gestionnaire_boutique"
         element={
-          <ProtectedRoute allowedRoles={["gestionnaire-boutique"]}>
+          <ProtectedRoute allowedRoles={["gestionnaire_boutique"]}>
             <LayoutGestionnaire />
           </ProtectedRoute>
         }
       >
-        <Route index element={<Navigate to="/gestionnaire-boutique/dashboard" replace />} />
+        <Route index element={<Navigate to="/gestionnaire_boutique/dashboard" replace />} />
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="produits" element={<Produits />} />
         <Route path="stock" element={<Stock />} />
@@ -160,25 +163,25 @@ export default function AppRoutes() {
         <Route path="transferts" element={<Historique />} />
         <Route path="alertes" element={<Alertes />} />
         <Route path="rapports" element={<Rapports />} />
-        <Route path="*" element={<Navigate to="/gestionnaire-boutique/dashboard" replace />} />
+        <Route path="*" element={<Navigate to="/gestionnaire_boutique/dashboard" replace />} />
       </Route>
 
       {/* =================== GESTIONNAIRE DÉPÔT =================== */}
       <Route
-        path="/depot"
+        path="/gestionnaire_depot"
         element={
-          <ProtectedRoute allowedRoles={["gestionnaire-depot"]}>
+          <ProtectedRoute allowedRoles={["gestionnaire_depot"]}>
             <DepotLayout />
           </ProtectedRoute>
         }
       >
-        <Route index element={<Navigate to="/depot/dashboard" replace />} />
+        <Route index element={<Navigate to="/gestionnaire_depot/dashboard" replace />} />
         <Route path="dashboard" element={<DashboardDepot />} />
         <Route path="products" element={<ProductsDepot />} />
         <Route path="movementStock" element={<StockMovementsDepot />} />
         <Route path="suppliers" element={<SuppliersDepot />} />
         <Route path="rapports" element={<StockReportDepot />} />
-        <Route path="*" element={<Navigate to="/depot/dashboard" replace />} />
+        <Route path="*" element={<Navigate to="/gestionnaire_depot/dashboard" replace />} />
       </Route>
 
       {/* =================== CAISSIER =================== */}
@@ -197,6 +200,19 @@ export default function AppRoutes() {
         <Route path="historique" element={<HistoriquePageCaissier />} />
         <Route path="rapport" element={<RapportCaissePage />} />
         <Route path="*" element={<Navigate to="/caissier/dashboard" replace />} />
+      </Route>
+
+      {/* =================== Vendeur =================== */}
+      <Route
+        path="/vendeur"
+        element={
+          <ProtectedRoute allowedRoles={["vendeur"]}>
+            <VendeurInterface />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<Navigate to="/*" replace />} />
+        <Route path="*" element={<Navigate to="/vendeur" replace />} />
       </Route>
 
       {/* =================== REDIRECTION PAR DÉFAUT =================== */}

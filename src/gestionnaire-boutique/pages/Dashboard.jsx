@@ -87,19 +87,13 @@ const Dashboard = () => {
         </div>
 
         {/* Statistiques principales */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 my-4 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <CardStat title="En stock" value={stats.produitsEnStock} color="bg-green-600" icon={CheckCircle} />
           <CardStat title="Rupture" value={stats.produitsEnRupture} color="bg-red-600" icon={AlertTriangle} />
           <CardStat title="À compléter" value={stats.transfertsEnCours} color="bg-[#F58020]" icon={Package} subtitle={`${stats.transfertsTotal} transferts reçus`} />
           <CardStat title="Complétés" value={stats.transfertsValides} color="bg-[#472EAD]" icon={TrendingUp} />
         </div>
 
-        {/* Stat secondaire */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <CardStat title="Total produits" value={stats.nbrProduits} color="bg-blue-600" icon={Package} />
-          <CardStat title="Quantité totale" value={stats.quantiteTotale.toLocaleString("fr-FR")} color="bg-indigo-600" subtitle="unités" icon={BarChart3} />
-          <CardStat title="Valeur stock" value={`${stats.valeurStock.toLocaleString("fr-FR")} FCFA`} color="bg-gray-800" subtitle="estimée (prix gros)" icon={TrendingUp} />
-        </div>
 
         {/* Activités et alertes */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

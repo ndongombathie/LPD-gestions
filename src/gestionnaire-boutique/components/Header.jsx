@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 // framer-motion removed to avoid optional peer dep on react/jsx-runtime in dev
 import { instance } from "../../utils/axios.jsx";
+import { authAPI } from "../../utils/api";
 
 // ==========================================================
 // 🧩 Utils
@@ -153,12 +154,7 @@ function PasswordModal({ open, onClose, onSuccess, addToast }) {
     setLoading(true);
 
     try {
-      await instance.put("/auth/change-password", {
-        old_password: oldPwd,
-        new_password: newPwd,
-        new_password_confirmation: confirmPwd,
-      });
-
+      await authAPI.changePassword(oldPwd, newPwd, confirmPwd);
       addToast("success", "Mot de passe modifié", "Vos identifiants ont été mis à jour.");
       onSuccess();
     } catch (err) {

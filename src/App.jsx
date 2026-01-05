@@ -1,4 +1,3 @@
-
 // ==========================================================
 // 🚀 App.jsx — Application LPD - Point d'entrée principal
 // ==========================================================
@@ -13,5 +12,4 @@ export default function App() {
     </BrowserRouter>
   );
 }
-
 

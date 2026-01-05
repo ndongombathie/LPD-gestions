@@ -311,13 +311,15 @@ export default function Header() {
   };
 
   // Gestion de la déconnexion
-  const handleLogout = () => {
-    // ICI VOUS POUVEZ AJOUTER VOTRE LOGIQUE DE DÉCONNEXION RÉELLE
-    // Exemple: await api.logout();
+  const handleLogout = async () => {
+    try {
+      await authAPI.logout();
+    } catch (e) {
+      console.warn('Erreur déconnexion:', e);
+    }
     addToast("success", "Déconnexion", "Vous avez été déconnecté avec succès");
     setShowMenu(false);
-    // Redirection vers la page de connexion
-    setTimeout(() => navigate("/login"), 1500);
+    navigate("/login");
   };
 
   const handleSaveProfile = async () => {
