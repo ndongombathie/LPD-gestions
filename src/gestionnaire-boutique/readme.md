@@ -97,5 +97,5 @@ Utiliser ces couleurs dans les composants principaux :
 
 # affiche la liste des produits transferes par le gestionnaire de depots
 GET|HEAD        api/produits-transfer 
-# mise a jour des champs (prix de vente detail,prix de vente en gros,......) 
+# mise a jour des champs ( prix_vente_detail, prix_vente_gros, prix_seuil_detail, prix_seuil_gros )
 GET|HEAD         api/valider-produits-transfer
