@@ -402,12 +402,10 @@ const Header = ({
   onLogout,
   user,
   commandes,
-  onUpdateUser,
 }) => {
   const [ventesDuJour, setVentesDuJour] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
-  const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [toasts, setToasts] = useState([]);
   const menuRef = useRef(null);
 
@@ -530,17 +528,6 @@ const Header = ({
 
                   <button
                     onClick={() => {
-                      setProfileModalOpen(true);
-                      setMenuOpen(false);
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 rounded-md"
-                  >
-                    <User size={14} />
-                    Voir le profil
-                  </button>
-
-                  <button
-                    onClick={() => {
                       setPasswordModalOpen(true);
                       setMenuOpen(false);
                     }}
@@ -563,15 +550,6 @@ const Header = ({
           </div>
         </div>
       </header>
-
-      {/* ===== MODALES ===== */}
-      <ProfileModal
-        open={profileModalOpen}
-        onClose={() => setProfileModalOpen(false)}
-        user={user}
-        onUpdate={onUpdateUser}
-        addToast={addToast}
-      />
 
       <PasswordModal
         open={passwordModalOpen}

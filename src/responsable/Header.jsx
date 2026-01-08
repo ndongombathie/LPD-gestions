@@ -441,8 +441,7 @@ export default function Header() {
   const [showNotif, setShowNotif] = useState(false);
   const [showQuick, setShowQuick] = useState(false);
   const [showPwdModal, setShowPwdModal] = useState(false);
-  const [showProfileModal, setShowProfileModal] = useState(false);
-
+  
   // Data
   const [user, setUser] = useState(null);
   const [toasts, setToasts] = useState([]);
@@ -891,16 +890,6 @@ export default function Header() {
                 {showMenu && (
                   <div className="absolute right-0 mt-2 w-48 bg-white border shadow-lg rounded-lg p-2">
                     <ul className="text-sm">
-                      {/* Profil (si tu veux l'activer, enlève les commentaires) */}
-                      {/* <li
-                        onClick={() => {
-                          setShowProfileModal(true);
-                          setShowMenu(false);
-                        }}
-                        className="px-3 py-2 hover:bg-gray-50 cursor-pointer flex gap-2 items-center"
-                      >
-                        <User size={14} /> Mon Profil
-                      </li> */}
 
                       <li
                         onClick={() => {
@@ -932,17 +921,6 @@ export default function Header() {
         open={showPwdModal}
         onClose={() => setShowPwdModal(false)}
         onSuccess={() => setShowPwdModal(false)}
-        addToast={addToast}
-      />
-
-      <ProfileModal
-        open={showProfileModal}
-        onClose={() => setShowProfileModal(false)}
-        user={user}
-        onUpdate={(updatedUser) => {
-          setUser(updatedUser);
-          localStorage.setItem("lpd_current_user", JSON.stringify(updatedUser));
-        }}
         addToast={addToast}
       />
 

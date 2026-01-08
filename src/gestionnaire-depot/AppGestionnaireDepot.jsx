@@ -9,7 +9,7 @@ export default function AppGestionnaireDepot() {
         {/* <Route path="/" element={<Navigate to="/depot" replace />} /> */}
 
         {/* Module gestionnaire de dépôt */}
-        <Route path="/depot/*" element={<DepotRoutes />} />
+        <Route path="/gestionnaire_depot/*" element={<DepotRoutes />} />
       </Routes>
     </BrowserRouter>
   );
