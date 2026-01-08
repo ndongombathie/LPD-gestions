@@ -16,11 +16,11 @@ export default function Sidebar() {
 
   const menuItems = [
     // ✅ DASHBOARD = /depot (route index)
-    { name: "Tableau de bord", icon: MdDashboard, path: "/depot" },
-    { name: "Produits", icon: MdInventory, path: "/depot/products" },
-    { name: "Mouvements", icon: MdLayers, path: "/depot/movementStock" },
-    { name: "Fournisseurs", icon: MdPeople, path: "/depot/suppliers" },
-    { name: "Rapport stock", icon: MdAssessment, path: "/depot/rapports" },
+    { name: "Tableau de bord", icon: MdDashboard, path: "/gestionnaire_depot" },
+    { name: "Produits", icon: MdInventory, path: "/gestionnaire_depot/products" },
+    { name: "Mouvements", icon: MdLayers, path: "/gestionnaire_depot/movementStock" },
+    { name: "Fournisseurs", icon: MdPeople, path: "/gestionnaire_depot/suppliers" },
+    { name: "Rapport stock", icon: MdAssessment, path: "/gestionnaire_depot/rapports" },
   ];
 
   return (
