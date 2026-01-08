@@ -9,9 +9,8 @@ import {
   CheckCircle2,
   AlertCircle,
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import {  AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { instance } from "../../utils/axios";
 import { authAPI } from "../../utils/api";
 
 /* ==========================================================
@@ -285,10 +284,8 @@ export default function Header() {
   const [showQuick, setShowQuick] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [showProfileModal, setShowProfileModal] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [user, setUser] = useState(() => getCurrentUser());
-  const [profileData, setProfileData] = useState({ prenom: user?.prenom || "", nom: user?.nom || "" });
 
   const addToast = (type, title, message) => {
     const id = Date.now();
@@ -322,18 +319,6 @@ export default function Header() {
     navigate("/login");
   };
 
-  const handleSaveProfile = async () => {
-    try {
-      await instance.put('/mon-profil', { prenom: profileData.prenom, nom: profileData.nom });
-      const updated = { ...(user || {}), prenom: profileData.prenom, nom: profileData.nom };
-      localStorage.setItem('user', JSON.stringify(updated));
-      setUser(updated);
-      setShowProfileModal(false);
-      addToast('success', 'Profil', 'Profil mis à jour');
-    } catch (e) {
-      addToast('error', 'Profil', "Erreur lors de la mise à jour");
-    }
-  };
 
   // Gestion du changement de mot de passe
   const handlePasswordSubmit = (result) => {
@@ -494,13 +479,6 @@ export default function Header() {
               {showMenu && (
                 <div className="absolute right-0 mt-2 w-48 bg-white border shadow-lg rounded-lg p-2 text-sm z-30">
                   <button
-                    onClick={() => { setProfileData({ prenom: user?.prenom || '', nom: user?.nom || '' }); setShowProfileModal(true); setShowMenu(false); }}
-                    className="w-full px-3 py-2 hover:bg-gray-50 flex gap-2 items-center rounded-md hover:bg-[#F7F5FF]"
-                  >
-                    <svg className="w-4 h-4 text-[#472EAD]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5.121 17.804A4 4 0 018 16h8a4 4 0 012.879 1.804M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                    <span>Mon profil</span>
-                  </button>
-                  <button
                     onClick={() => {
                       setShowPasswordModal(true);
                       setShowMenu(false);
@@ -534,37 +512,7 @@ export default function Header() {
         onSubmit={handlePasswordSubmit}
       />
 
-      {/* Modal Profil */}
-      {showProfileModal && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black bg-opacity-50">
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-bold text-gray-800">Mon profil</h2>
-                <button onClick={() => setShowProfileModal(false)} className="p-1 hover:bg-gray-100 rounded-full"><X size={20} /></button>
-              </div>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Prénom</label>
-                  <input className="w-full px-3 py-2 border rounded-lg" value={profileData.prenom} onChange={(e)=>setProfileData({ ...profileData, prenom: e.target.value })} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nom</label>
-                  <input className="w-full px-3 py-2 border rounded-lg" value={profileData.nom} onChange={(e)=>setProfileData({ ...profileData, nom: e.target.value })} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                  <input className="w-full px-3 py-2 border rounded-lg bg-gray-50" value={user?.email || ''} disabled />
-                </div>
-              </div>
-              <div className="flex justify-end gap-3 pt-6">
-                <button onClick={() => setShowProfileModal(false)} className="px-4 py-2 border rounded-lg">Annuler</button>
-                <button onClick={handleSaveProfile} className="px-4 py-2 bg-[#472EAD] text-white rounded-lg">Enregistrer</button>
-              </div>
-            </div>
-          </motion.div>
-        </div>
-      )}
+    
 
       <Toasts toasts={toasts} remove={removeToast} />
     </>
