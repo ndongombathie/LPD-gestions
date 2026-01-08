@@ -99,3 +99,9 @@ Utiliser ces couleurs dans les composants principaux :
 GET|HEAD        api/produits-transfer 
 # mise a jour des champs ( prix_vente_detail, prix_vente_gros, prix_seuil_detail, prix_seuil_gros )
 GET|HEAD         api/valider-produits-transfer
+# afficher le nombre de produits
+GET         api/nombre-produits-transfer
+# afficher la quanite de total des produits
+GET         api/quantite-totale-produit-transfer
+# afficher la liste des produits sous Seuil de stock 
+GET         api/produits-sous-seuil

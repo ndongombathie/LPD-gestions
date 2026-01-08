@@ -34,3 +34,6 @@ GET|HEAD        api/historique-ventes  | la liste des ventes effectuer par un ve
 # afficher la liste des clients
 GET|HEAD        api/clients | la liste des clients filtrer par client special
 GET|HEAD        api/clients/{client}/paiements-tranches | historique des paiements par tranche d'un client
+# historique des ventes et le vendeur 
+GET             api/index  | affiche l'historique des ventes
+GET             api/total-vente-par-jour | affiche l'historique des vente pour une journée donnée. 
