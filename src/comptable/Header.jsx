@@ -10,7 +10,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronDown, LogOut, Key, X, Eye, EyeOff } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { instance } from "../utils/axios";
+import useAuth from "../hooks/useAuth";
 
 // ==========================================================
 // 🔧 Utils
@@ -21,7 +21,7 @@ const getInitials = (prenom = "", nom = "") =>
 // ==========================================================
 // 🔐 Modal — Changer mot de passe
 // ==========================================================
-function PasswordModal({ open, onClose }) {
+function PasswordModal({ open, onClose, changePassword }) {
   const [oldPwd, setOldPwd] = useState("");
   const [newPwd, setNewPwd] = useState("");
   const [confirmPwd, setConfirmPwd] = useState("");
@@ -38,11 +38,7 @@ function PasswordModal({ open, onClose }) {
 
     setLoading(true);
     try {
-      await instance.put("/auth/change-password", {
-        old_password: oldPwd,
-        new_password: newPwd,
-        new_password_confirmation: confirmPwd,
-      });
+      await changePassword(oldPwd, newPwd, confirmPwd);
       alert("Mot de passe modifié avec succès");
       onClose();
     } catch (e) {
@@ -124,18 +120,20 @@ function PasswordModal({ open, onClose }) {
 export default function Header() {
   const navigate = useNavigate();
   const menuRef = useRef(null);
+  const { user: authUser, logout, changePassword } = useAuth();
 
   const [showMenu, setShowMenu] = useState(false);
   const [showPwdModal, setShowPwdModal] = useState(false);
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => authUser || null);
 
   // Charger utilisateur
   useEffect(() => {
-    instance
-      .get("/mon-profil")
-      .then((res) => setUser(res.data))
-      .catch(() => navigate("/login"));
-  }, []);
+    if (authUser) {
+      setUser(authUser);
+      return;
+    }
+    navigate("/login");
+  }, [authUser, navigate]);
 
   // Fermer menu au clic extérieur
   useEffect(() => {
@@ -151,10 +149,10 @@ export default function Header() {
   // Déconnexion
   const handleLogout = async () => {
     try {
-      await instance.post("/auth/logout");
-    } catch {}
-    localStorage.clear();
-    navigate("/login");
+      await logout();
+    } finally {
+      navigate("/login");
+    }
   };
 
   if (!user) return null;
@@ -223,6 +221,7 @@ export default function Header() {
       <PasswordModal
         open={showPwdModal}
         onClose={() => setShowPwdModal(false)}
+        changePassword={changePassword}
       />
     </>
   );

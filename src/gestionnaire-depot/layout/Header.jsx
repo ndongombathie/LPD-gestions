@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import {  AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { authAPI } from "../../utils/api";
+import useAuth from "../../hooks/useAuth";
 
 /* ==========================================================
    CURRENT USER (depuis localStorage ou API)
@@ -54,7 +54,7 @@ const RACCOURCIS = [
 /* ==========================================================
    MODAL CHANGEMENT MOT DE PASSE
 ========================================================== */
-function PasswordModal({ isOpen, onClose, onSubmit }) {
+function PasswordModal({ isOpen, onClose, onSubmit, changePassword }) {
   const [formData, setFormData] = useState({
     currentPassword: "",
     newPassword: "",
@@ -92,7 +92,7 @@ function PasswordModal({ isOpen, onClose, onSubmit }) {
     setLoading(true);
     
     try {
-      await authAPI.changePassword(
+      await changePassword(
         formData.currentPassword,
         formData.newPassword,
         formData.confirmPassword
@@ -279,13 +279,18 @@ function Toasts({ toasts, remove }) {
 export default function Header() {
   const menuRef = useRef(null);
   const navigate = useNavigate();
+  const { user: authUser, logout, changePassword } = useAuth();
 
   const [showMenu, setShowMenu] = useState(false);
   const [showQuick, setShowQuick] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [toasts, setToasts] = useState([]);
-  const [user, setUser] = useState(() => getCurrentUser());
+  const [user, setUser] = useState(() => authUser || getCurrentUser());
+
+  useEffect(() => {
+    if (authUser) setUser(authUser);
+  }, [authUser]);
 
   const addToast = (type, title, message) => {
     const id = Date.now();
@@ -310,7 +315,7 @@ export default function Header() {
   // Gestion de la déconnexion
   const handleLogout = async () => {
     try {
-      await authAPI.logout();
+      await logout();
     } catch (e) {
       console.warn('Erreur déconnexion:', e);
     }
@@ -510,6 +515,7 @@ export default function Header() {
         isOpen={showPasswordModal}
         onClose={() => setShowPasswordModal(false)}
         onSubmit={handlePasswordSubmit}
+        changePassword={changePassword}
       />
 
     

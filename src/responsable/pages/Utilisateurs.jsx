@@ -18,7 +18,8 @@ import {
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 import DataTable from "../components/DataTable.jsx";
-import { instance } from "../../utils/axios"; // ✅
+import { utilisateursAPI } from '@/services/api';
+
 
 const ROLES = [
   "Vendeur",
@@ -114,7 +115,7 @@ export default function Utilisateurs() {
       try {
         setLoading(true);
 
-        const { data } = await instance.get("/utilisateurs");
+        const data = await utilisateursAPI.getAll();
 
         // data peut être un tableau brut OU data.data (Resource Laravel)
         const rawUsers = Array.isArray(data) ? data : data.data || [];
