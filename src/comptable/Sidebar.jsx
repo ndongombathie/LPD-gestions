@@ -1,5 +1,5 @@
 // ==========================================================
-// 🧭 SidebarComptable.jsx — VERSION STABLE AVEC UTILISATEURS
+// 🧭 SidebarComptable.jsx — VERSION PRO (TEXTE BLEU UNIFORME)
 // ==========================================================
 
 import React, { useState } from "react";
@@ -16,18 +16,22 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 
+const BLUE = "#472EAD";
+
 export default function SidebarComptable() {
   const [openGestionnaire, setOpenGestionnaire] = useState(false);
   const [openInventaire, setOpenInventaire] = useState(false);
   const [openCaissier, setOpenCaissier] = useState(false);
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-64 bg-white border-r shadow-md flex flex-col z-40">
+    <aside className="fixed left-0 top-0 h-screen w-64 bg-white shadow-md flex flex-col z-40">
 
       {/* LOGO */}
-      <div className="h-24 flex flex-col items-center justify-center border-b
+      <div className="h-24 flex flex-col items-center justify-center
                       bg-gradient-to-r from-[#472EAD] to-[#5A3BE6]">
-        <div className="text-4xl font-extrabold text-[#F58020]">LPD</div>
+        <div className="text-4xl font-extrabold text-[#F58020] leading-none">
+          LPD
+        </div>
         <p className="text-[11px] uppercase tracking-widest font-semibold text-white">
           LIBRAIRIE PAPETERIE DARADJI
         </p>
@@ -37,19 +41,8 @@ export default function SidebarComptable() {
       <nav className="flex-1 overflow-y-auto py-5 px-3">
         <ul className="space-y-1">
 
-          {/* TABLEAU DE BORD */}
-          <MainLink
-            to="/comptable/dashboard"
-            icon={LayoutDashboard}
-            label="Tableau de bord"
-          />
-
-          {/* CONTRÔLE VENDEUR */}
-          <MainLink
-            to="/comptable/controle-vendeur"
-            icon={Users}
-            label="Contrôle Vendeur"
-          />
+          <MainLink to="/comptable/dashboard" icon={LayoutDashboard} label="Tableau de bord" />
+          <MainLink to="/comptable/controle-vendeur" icon={Users} label="Contrôle Vendeur" />
 
           {/* CONTRÔLE CAISSIER */}
           <li>
@@ -59,7 +52,6 @@ export default function SidebarComptable() {
               open={openCaissier}
               toggle={() => setOpenCaissier(v => !v)}
             />
-
             {openCaissier && (
               <motion.ul className="ml-10 mt-1 space-y-1">
                 <SubLink to="/comptable/controle-caissier/caisse" label="Journal de caisse" />
@@ -77,7 +69,6 @@ export default function SidebarComptable() {
               open={openGestionnaire}
               toggle={() => setOpenGestionnaire(v => !v)}
             />
-
             {openGestionnaire && (
               <motion.ul className="ml-10 mt-1 space-y-1">
                 <SubLink to="/comptable/controle-gestionnaire/depot" label="Dépôt" />
@@ -95,7 +86,6 @@ export default function SidebarComptable() {
               open={openInventaire}
               toggle={() => setOpenInventaire(v => !v)}
             />
-
             {openInventaire && (
               <motion.ul className="ml-10 mt-1 space-y-1">
                 <SubLink to="/comptable/inventaire/depot" label="Inventaire Dépôt" />
@@ -104,19 +94,8 @@ export default function SidebarComptable() {
             )}
           </li>
 
-          {/* HISTORIQUE INVENTAIRES */}
-          <MainLink
-            to="/comptable/inventaire/historique"
-            icon={History}
-            label="Inventaires historiques"
-          />
-
-          {/* ✅ GESTION DES UTILISATEURS (AJOUTÉ) */}
-          <MainLink
-            to="/comptable/utilisateurs"
-            icon={Users}
-            label="Gestion des utilisateurs"
-          />
+          <MainLink to="/comptable/inventaire/historique" icon={History} label="Inventaires historiques" />
+          <MainLink to="/comptable/utilisateurs" icon={Users} label="Gestion des utilisateurs" />
 
         </ul>
       </nav>
@@ -124,7 +103,7 @@ export default function SidebarComptable() {
   );
 }
 
-/* ===== COMPOSANTS ===== */
+/* ===================== COMPOSANTS ===================== */
 
 function MainLink({ to, icon: Icon, label }) {
   return (
@@ -132,14 +111,15 @@ function MainLink({ to, icon: Icon, label }) {
       <NavLink
         to={to}
         className={({ isActive }) =>
-          `flex items-center gap-3 px-4 py-2.5 rounded-md text-[15px] font-medium transition ${
-            isActive
-              ? "bg-[#472EAD] text-white"
-              : "text-gray-700 hover:bg-[#F7F5FF] hover:text-[#472EAD]"
-          }`
+          `flex items-center gap-3 px-4 py-2.5 rounded-md text-[15px] font-medium transition
+          ${isActive ? "bg-[#EFEAFF]" : "hover:bg-[#F7F5FF]"}`
         }
+        style={({ isActive }) => ({
+          color: BLUE,
+          fontWeight: isActive ? "600" : "500",
+        })}
       >
-        <Icon size={18} />
+        <Icon size={18} color={BLUE} />
         {label}
       </NavLink>
     </li>
@@ -151,13 +131,14 @@ function MenuButton({ label, icon: Icon, open, toggle }) {
     <button
       onClick={toggle}
       className="flex w-full items-center justify-between px-4 py-2.5 rounded-md
-                 text-[15px] font-medium text-[#472EAD] hover:bg-[#F7F5FF]"
+                 text-[15px] font-medium hover:bg-[#F7F5FF]"
+      style={{ color: BLUE }}
     >
       <span className="flex items-center gap-3">
-        <Icon size={18} />
+        <Icon size={18} color={BLUE} />
         {label}
       </span>
-      {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+      {open ? <ChevronDown size={16} color={BLUE} /> : <ChevronRight size={16} color={BLUE} />}
     </button>
   );
 }
@@ -167,12 +148,10 @@ function SubLink({ to, label }) {
     <NavLink
       to={to}
       className={({ isActive }) =>
-        `block px-3 py-1.5 rounded-md text-sm ${
-          isActive
-            ? "bg-[#472EAD] text-white"
-            : "text-gray-600 hover:bg-[#EFEAFF]"
-        }`
+        `block px-3 py-1.5 rounded-md text-sm transition
+         ${isActive ? "bg-[#EFEAFF]" : "hover:bg-[#F7F5FF]"}`
       }
+      style={{ color: BLUE }}
     >
       {label}
     </NavLink>
