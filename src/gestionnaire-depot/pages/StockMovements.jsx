@@ -1,5 +1,6 @@
 // src/gestionnaire-depot/pages/StockMovements.jsx
 import React, { useMemo, useState, useEffect, useRef } from "react";
+import "../styles/depot-fix.css";
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -771,7 +772,7 @@ export default function StockMovements() {
   );
 
   return (
-    <div className="space-y-8">
+    <div className="depot-page space-y-8">
       {/* HEADER */}
       <div>
         <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">

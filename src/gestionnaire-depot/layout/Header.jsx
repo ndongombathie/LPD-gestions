@@ -382,18 +382,7 @@ export default function Header() {
           <div className="flex items-center gap-3">
             {/* RACCOURCIS - seulement Produits, Mouvements, Fournisseurs, Rapports */}
             <div className="relative">
-              <button
-                onClick={() => {
-                  setShowQuick(!showQuick);
-                  setShowNotif(false);
-                  setShowMenu(false);
-                }}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg border text-sm hover:bg-[#F7F5FF]"
-              >
-                <LayoutGrid size={18} className="text-[#472EAD]" />
-                <span className="hidden sm:inline">Raccourcis</span>
-              </button>
-
+            
               {showQuick && (
                 <div className="absolute right-0 mt-2 w-64 bg-white border rounded-xl shadow-lg z-30 p-2 text-sm">
                   <p className="text-xs text-gray-500 px-3 py-2 mb-1 border-b">

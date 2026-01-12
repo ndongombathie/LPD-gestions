@@ -1,5 +1,6 @@
 // src/gestionnaire-depot/pages/Reports.jsx
 import React, { useMemo, useRef, useState } from "react";
+import "../styles/depot-fix.css";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { Activity, FileText, DownloadCloud, PieChart, BarChart2, TrendingUp, Search, Filter, BarChart3, LineChart, TrendingDown, TrendingUp as TrendUp } from "lucide-react";
@@ -741,7 +742,7 @@ export default function Reports() {
   };
 
   return (
-    <div className="p-6" style={{ color: PALETTE.text }}>
+    <div className="depot-page p-6" style={{ color: PALETTE.text }}>
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>
           <div className="flex items-center gap-3">
