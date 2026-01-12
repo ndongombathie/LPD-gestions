@@ -9,20 +9,37 @@ import {
   CheckCircle2,
   AlertCircle,
 } from "lucide-react";
-import {  AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import useAuth from "../../hooks/useAuth";
 
 /* ==========================================================
-   CURRENT USER (depuis localStorage ou API)
+   CURRENT USER (depuis sessionStorage ou API)
 ========================================================== */
 const getCurrentUser = () => {
   try {
-    const u = localStorage.getItem("user");
+    const u = sessionStorage.getItem("user");
     return u ? JSON.parse(u) : null;
   } catch {
     return null;
   }
+};
+
+/* ==========================================================
+   VALIDATION UTILISATEUR
+========================================================== */
+const validateUser = (user) => {
+  if (!user) return null;
+  
+  const requiredFields = ['id', 'prenom', 'nom', 'role'];
+  const missingFields = requiredFields.filter(field => !user[field]);
+  
+  if (missingFields.length > 0) {
+    console.warn(`Utilisateur invalide : champs manquants ${missingFields.join(', ')}`);
+    return null;
+  }
+  
+  return user;
 };
 
 /* ==========================================================
@@ -99,7 +116,6 @@ function PasswordModal({ isOpen, onClose, onSubmit, changePassword }) {
       );
       onSubmit({ success: true, message: "Mot de passe modifié avec succès" });
       
-      // Réinitialiser le formulaire
       setFormData({
         currentPassword: "",
         newPassword: "",
@@ -121,7 +137,6 @@ function PasswordModal({ isOpen, onClose, onSubmit, changePassword }) {
       ...prev,
       [name]: value
     }));
-    // Effacer l'erreur quand l'utilisateur tape
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: "" }));
     }
@@ -190,7 +205,7 @@ function PasswordModal({ isOpen, onClose, onSubmit, changePassword }) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-xs font-medium text-gray-700 mb-1">
                 Confirmer le nouveau mot de passe
               </label>
               <input
@@ -286,10 +301,18 @@ export default function Header() {
   const [showNotif, setShowNotif] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [toasts, setToasts] = useState([]);
-  const [user, setUser] = useState(() => authUser || getCurrentUser());
+  
+  const [user, setUser] = useState(() => validateUser(authUser || getCurrentUser()));
 
   useEffect(() => {
-    if (authUser) setUser(authUser);
+    if (authUser) {
+      const validatedUser = validateUser(authUser);
+      setUser(validatedUser);
+      
+      if (validatedUser) {
+        sessionStorage.setItem("user", JSON.stringify(validatedUser));
+      }
+    }
   }, [authUser]);
 
   const addToast = (type, title, message) => {
@@ -301,7 +324,6 @@ export default function Header() {
   const removeToast = (id) =>
     setToasts((prev) => prev.filter((t) => t.id !== id));
 
-  // Navigation vers une route
   const handleNavigate = (path, available) => {
     if (!available) {
       addToast("error", "Page non disponible", "Cette page n'est pas encore implémentée");
@@ -312,20 +334,29 @@ export default function Header() {
     setShowQuick(false);
   };
 
-  // Gestion de la déconnexion
+  // =============================================
+  // CORRECTION : DÉCONNEXION QUI FONCTIONNE
+  // =============================================
   const handleLogout = async () => {
     try {
       await logout();
     } catch (e) {
       console.warn('Erreur déconnexion:', e);
     }
+    
+    // Nettoyage complet
+    sessionStorage.removeItem("user");
+    sessionStorage.removeItem("token");
+    localStorage.removeItem("user");
+    localStorage.removeItem("token");
+    
     addToast("success", "Déconnexion", "Vous avez été déconnecté avec succès");
     setShowMenu(false);
-    navigate("/login");
+    
+    // Redirection qui fonctionne toujours
+    window.location.href = "/";
   };
 
-
-  // Gestion du changement de mot de passe
   const handlePasswordSubmit = (result) => {
     setShowPasswordModal(false);
     addToast(
@@ -335,7 +366,6 @@ export default function Header() {
     );
   };
 
-  // Fermer menus au clic extérieur
   useEffect(() => {
     const handler = (e) => {
       if (menuRef.current && !menuRef.current.contains(e.target)) {
@@ -351,11 +381,9 @@ export default function Header() {
   return (
     <>
       <header ref={menuRef} className="sticky top-0 z-20 bg-white">
-        {/* Bande couleur */}
         <div className="h-[6px] bg-gradient-to-r from-[#472EAD] to-[#F58020]" />
 
         <div className="h-16 border-b shadow-sm px-6 flex items-center justify-between">
-          {/* LOGO */}
           <div className="flex items-center gap-3">
             <div 
               className="text-xl font-extrabold cursor-pointer"
@@ -378,11 +406,19 @@ export default function Header() {
             </div>
           </div>
 
-          {/* ACTIONS */}
           <div className="flex items-center gap-3">
-            {/* RACCOURCIS - seulement Produits, Mouvements, Fournisseurs, Rapports */}
             <div className="relative">
-            
+              <button
+                onClick={() => {
+                  setShowQuick(!showQuick);
+                  setShowMenu(false);
+                  setShowNotif(false);
+                }}
+                className="p-2 rounded-lg hover:bg-gray-100"
+              >
+                <LayoutGrid className="text-[#472EAD]" />
+              </button>
+              
               {showQuick && (
                 <div className="absolute right-0 mt-2 w-64 bg-white border rounded-xl shadow-lg z-30 p-2 text-sm">
                   <p className="text-xs text-gray-500 px-3 py-2 mb-1 border-b">
@@ -415,7 +451,6 @@ export default function Header() {
               )}
             </div>
 
-            {/* NOTIFS (FAKE) */}
             <div className="relative">
               <button
                 onClick={() => {
@@ -446,7 +481,6 @@ export default function Header() {
               )}
             </div>
 
-            {/* PROFIL */}
             <div className="relative">
               <button
                 onClick={() => {
@@ -456,7 +490,9 @@ export default function Header() {
                 }}
                 className="flex items-center gap-2 px-2 py-1.5 rounded-full border hover:bg-gray-50"
               >
-                <div className="w-8 h-8 rounded-full bg-[#472EAD] text-white flex items-center justify-center font-bold">{(user?.prenom?.[0] || '')}{(user?.nom?.[0] || '')}</div>
+                <div className="w-8 h-8 rounded-full bg-[#472EAD] text-white flex items-center justify-center font-bold">
+                  {(user?.prenom?.[0] || '')}{(user?.nom?.[0] || '')}
+                </div>
 
                 <div className="hidden sm:flex flex-col text-left">
                   <span className="text-xs font-semibold">
@@ -499,15 +535,12 @@ export default function Header() {
         </div>
       </header>
 
-      {/* MODAL CHANGEMENT MOT DE PASSE */}
       <PasswordModal
         isOpen={showPasswordModal}
         onClose={() => setShowPasswordModal(false)}
         onSubmit={handlePasswordSubmit}
         changePassword={changePassword}
       />
-
-    
 
       <Toasts toasts={toasts} remove={removeToast} />
     </>
