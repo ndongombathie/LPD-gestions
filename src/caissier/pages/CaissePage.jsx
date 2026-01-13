@@ -5,7 +5,7 @@ import Badge from '../../components/ui/Badge';
 import Modal from '../../components/ui/Modal';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
-import { formatCurrency, formatDateTime, calculateTVA } from '../../utils/formatters';
+import { formatCurrency, formatDateTime } from '../../utils/formatters';
 import { printInvoice } from '../components/InvoicePrint';
 import QRScanner from '../components/QRScanner';
 import caissierApi from '../services/caissierApi';
@@ -251,11 +251,6 @@ const CaissePage = () => {
     } finally {
       setIsProcessingPayment(false);
     }
-  };
-
-  const handlePrintInvoice = (ticket) => {
-    // TODO: Implémenter l'impression de la facture
-    window.print();
   };
 
   const handleQRScan = async (qrData) => {
@@ -836,8 +831,7 @@ const CaissePage = () => {
                 
                 try {
                   // Appel API pour annuler la commande
-                  const { instance } = await import('../../utils/axios');
-                  await instance.post(`/commandes/${ticketToCancel.commande_id}/annuler`);
+                  await caissierApi.annulerCommande(ticketToCancel.commande_id);
                   
                   toast.success('Ticket annulé', {
                     description: `Le ticket ${ticketToCancel.numero} a été annulé`

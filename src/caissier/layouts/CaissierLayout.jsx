@@ -20,9 +20,10 @@ import {
   Eye,
   EyeOff,
 } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import { Toaster } from 'sonner'
-import { instance } from '../../utils/axios'
+import useAuth from '../../hooks/useAuth'
+import profileAPI from '@/services/api/profile'
 import NotificationsDropdown from '../components/NotificationsDropdown'
 import ShortcutsMenu from '../components/ShortcutsMenu'
 
@@ -43,6 +44,7 @@ function PasswordModal({ open, onClose, addToast }) {
   const [showNew, setShowNew] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [loading, setLoading] = useState(false)
+  const { changePassword } = useAuth();
 
   if (!open) return null
 
@@ -67,7 +69,7 @@ function PasswordModal({ open, onClose, addToast }) {
     setLoading(true)
 
     try {
-      await instance.put("/auth/change-password", {
+      await changePassword({
         old_password: oldPwd,
         new_password: newPwd,
         new_password_confirmation: confirmPwd,
@@ -265,11 +267,11 @@ export default function CaissierLayout() {
   useEffect(() => {
     const loadUser = async () => {
       try {
-        const { data } = await instance.get("/mon-profil")
+        const data = await profileAPI.getProfile()
         setUser(data)
-        localStorage.setItem("lpd_current_user", JSON.stringify(data))
+        sessionStorage.setItem("lpd_current_user", JSON.stringify(data))
       } catch (err) {
-        console.error("Erreur profil :", err)
+        // Erreur silencieuse - redirection gérée par ProtectedRoute
         navigate("/login")
       }
     }
@@ -290,13 +292,16 @@ export default function CaissierLayout() {
   }, [])
 
   // Déconnexion
+  const { logout } = useAuth();
   const handleLogout = async () => {
     try {
-      await instance.post("/auth/logout")
-    } catch {}
+      await logout();
+    } catch (err) {
+      // Erreur silencieuse - continuer avec le nettoyage local
+    }
 
-    localStorage.removeItem("token")
-    localStorage.removeItem("lpd_current_user")
+    sessionStorage.removeItem("token")
+    sessionStorage.removeItem("lpd_current_user")
 
     navigate("/login")
   }

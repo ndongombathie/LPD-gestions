@@ -1,5 +1,5 @@
 // Service API pour l'interface caissier
-import { instance } from '../../utils/axios';
+import { httpClient } from '../../services/http/client';
 
 export const caissierApi = {
   // ==================== DASHBOARD ====================
@@ -17,7 +17,7 @@ export const caissierApi = {
       
       // Récupérer les commandes payées (filtrer côté client pour aujourd'hui)
       // Limiter à 50 commandes pour la performance
-      const commandesPayees = await instance.get('/commandes-payees', { params: { per_page: 50 } });
+      const commandesPayees = await httpClient.get('/commandes-payees', { params: { per_page: 50 } });
       const commandesDuJour = (commandesPayees.data?.data || commandesPayees.data || []).filter(cmd => {
         if (!cmd.date && !cmd.created_at) return false;
         const cmdDate = new Date(cmd.date || cmd.created_at);
@@ -25,7 +25,7 @@ export const caissierApi = {
       });
       
       // Récupérer les décaisements (filtrer côté client pour aujourd'hui)
-      const decaissements = await instance.get('/decaissements');
+      const decaissements = await httpClient.get('/decaissements');
       const decaissementsDuJour = (decaissements.data?.data || []).filter(dec => {
         if (!dec.created_at && !dec.updated_at) return false;
         const decDate = new Date(dec.updated_at || dec.created_at);
@@ -33,7 +33,7 @@ export const caissierApi = {
       });
       
       // Récupérer les commandes en attente
-      const commandesAttente = await instance.get('/commandes-attente');
+      const commandesAttente = await httpClient.get('/commandes-attente');
       
       // Calculer les totaux
       const totalEncaissements = commandesDuJour.reduce((sum, cmd) => sum + (cmd.total || 0), 0);
@@ -57,7 +57,7 @@ export const caissierApi = {
         ticketsTraites: commandesDuJour.length,
       };
     } catch (error) {
-      console.error('Erreur lors de la récupération des statistiques:', error);
+      // Erreur silencieuse - gérée par le composant
       throw error;
     }
   },
@@ -74,7 +74,7 @@ export const caissierApi = {
       todayEnd.setHours(23, 59, 59, 999);
       
       // Limiter à 50 commandes pour la performance
-      const commandesPayees = await instance.get('/commandes-payees', { params: { per_page: 50 } });
+      const commandesPayees = await httpClient.get('/commandes-payees', { params: { per_page: 50 } });
       const commandesDuJour = (commandesPayees.data?.data || commandesPayees.data || []).filter(cmd => {
         if (!cmd.date && !cmd.created_at) return false;
         const cmdDate = new Date(cmd.date || cmd.created_at);
@@ -120,7 +120,7 @@ export const caissierApi = {
         pourcentage: total > 0 ? Math.round((montant / total) * 100) : 0
       }));
     } catch (error) {
-      console.error('Erreur lors de la récupération des ventes par moyen:', error);
+      // Erreur silencieuse - retourner tableau vide
       return [];
     }
   },
@@ -137,7 +137,7 @@ export const caissierApi = {
       todayEnd.setHours(23, 59, 59, 999);
       
       // Limiter à 50 commandes pour la performance
-      const commandesPayees = await instance.get('/commandes-payees', { params: { per_page: 50 } });
+      const commandesPayees = await httpClient.get('/commandes-payees', { params: { per_page: 50 } });
       const commandesDuJour = (commandesPayees.data?.data || commandesPayees.data || []).filter(cmd => {
         if (!cmd.date && !cmd.created_at) return false;
         const cmdDate = new Date(cmd.date || cmd.created_at);
@@ -172,7 +172,7 @@ export const caissierApi = {
       
       return Object.values(tranches);
     } catch (error) {
-      console.error('Erreur lors de la récupération des ventes par heure:', error);
+      // Erreur silencieuse - retourner tableau vide
       return [];
     }
   },
@@ -221,7 +221,7 @@ export const caissierApi = {
       
       return activites.slice(0, limit);
     } catch (error) {
-      console.error('Erreur lors de la récupération de l\'activité récente:', error);
+      // Erreur silencieuse - retourner tableau vide
       return [];
     }
   },
@@ -233,10 +233,10 @@ export const caissierApi = {
    */
   async getCommandesAttente() {
     try {
-      const response = await instance.get('/commandes-attente');
+      const response = await httpClient.get('/commandes-attente');
       return response.data;
     } catch (error) {
-      console.error('Erreur lors de la récupération des commandes en attente:', error);
+      // Erreur silencieuse - gérée par le composant
       throw error;
     }
   },
@@ -246,10 +246,23 @@ export const caissierApi = {
    */
   async getCommandeDetails(commandeId) {
     try {
-      const response = await instance.get(`/commandes/${commandeId}`);
+      const response = await httpClient.get(`/commandes/${commandeId}`);
       return response.data;
     } catch (error) {
-      console.error('Erreur lors de la récupération des détails de la commande:', error);
+      // Erreur silencieuse - gérée par le composant
+      throw error;
+    }
+  },
+
+  /**
+   * Annule une commande
+   */
+  async annulerCommande(commandeId) {
+    try {
+      const response = await httpClient.post(`/commandes/${commandeId}/annuler`);
+      return response.data;
+    } catch (error) {
+      // Erreur silencieuse - gérée par le composant
       throw error;
     }
   },
@@ -261,13 +274,13 @@ export const caissierApi = {
    */
   async creerPaiement(commandeId, data) {
     try {
-      const response = await instance.post(`/commandes/${commandeId}/paiements`, {
+      const response = await httpClient.post(`/commandes/${commandeId}/paiements`, {
         montant: data.montant,
         type_paiement: data.type_paiement
       });
       return response.data;
     } catch (error) {
-      console.error('Erreur lors de la création du paiement:', error);
+      // Erreur silencieuse - gérée par le composant
       throw error;
     }
   },
@@ -277,10 +290,10 @@ export const caissierApi = {
    */
   async getPaiements(commandeId) {
     try {
-      const response = await instance.get(`/commandes/${commandeId}/paiements`);
+      const response = await httpClient.get(`/commandes/${commandeId}/paiements`);
       return response.data;
     } catch (error) {
-      console.error('Erreur lors de la récupération des paiements:', error);
+      // Erreur silencieuse - gérée par le composant
       throw error;
     }
   },
@@ -292,10 +305,10 @@ export const caissierApi = {
    */
   async getDecaissementsAttente() {
     try {
-      const response = await instance.get('/decaissements-attente');
+      const response = await httpClient.get('/decaissements-attente');
       return response.data;
     } catch (error) {
-      console.error('Erreur lors de la récupération des décaissements en attente:', error);
+      // Erreur silencieuse - gérée par le composant
       throw error;
     }
   },
@@ -305,10 +318,10 @@ export const caissierApi = {
    */
   async getDecaissements(filters = {}) {
     try {
-      const response = await instance.get('/decaissements', { params: filters });
+      const response = await httpClient.get('/decaissements', { params: filters });
       return response.data;
     } catch (error) {
-      console.error('Erreur lors de la récupération des décaisements:', error);
+      // Erreur silencieuse - gérée par le composant
       throw error;
     }
   },
@@ -318,12 +331,12 @@ export const caissierApi = {
    */
   async validerDecaissement(decaissementId) {
     try {
-      const response = await instance.put(`/decaissements/${decaissementId}/statut`, {
+      const response = await httpClient.put(`/decaissements/${decaissementId}/statut`, {
         statut: 'fait'
       });
       return response.data;
     } catch (error) {
-      console.error('Erreur lors de la validation du décaisement:', error);
+      // Erreur silencieuse - gérée par le composant
       throw error;
     }
   },
@@ -333,10 +346,10 @@ export const caissierApi = {
    */
   async annulerDecaissement(decaissementId) {
     try {
-      const response = await instance.delete(`/decaissements/${decaissementId}`);
+      const response = await httpClient.delete(`/decaissements/${decaissementId}`);
       return response.data;
     } catch (error) {
-      console.error('Erreur lors de l\'annulation du décaisement:', error);
+      // Erreur silencieuse - gérée par le composant
       throw error;
     }
   },
@@ -349,13 +362,13 @@ export const caissierApi = {
   async getHistoriqueComplet(filters = {}) {
     try {
       // Récupérer les commandes payées avec leurs paiements (optimisé)
-      const commandesPayeesResponse = await instance.get('/commandes-payees', { 
+      const commandesPayeesResponse = await httpClient.get('/commandes-payees', { 
         params: { per_page: 100, ...filters } 
       });
       const commandesPayees = commandesPayeesResponse.data?.data || commandesPayeesResponse.data || [];
       
       // Récupérer les commandes annulées
-      const commandesAnnuleesResponse = await instance.get('/commandes-annulees', { 
+      const commandesAnnuleesResponse = await httpClient.get('/commandes-annulees', { 
         params: { per_page: 100, ...filters } 
       });
       const commandesAnnulees = commandesAnnuleesResponse.data?.data || commandesAnnuleesResponse.data || [];
@@ -388,7 +401,7 @@ export const caissierApi = {
       });
       
       // Récupérer les décaisements
-      const decaissementsResponse = await instance.get('/decaissements', { 
+      const decaissementsResponse = await httpClient.get('/decaissements', { 
         params: { per_page: 100, ...filters } 
       });
       const decaissements = decaissementsResponse.data?.data || decaissementsResponse.data || [];
@@ -427,7 +440,7 @@ export const caissierApi = {
       
       return historique;
     } catch (error) {
-      console.error('Erreur lors de la récupération de l\'historique:', error);
+      // Erreur silencieuse - gérée par le composant
       throw error;
     }
   }
