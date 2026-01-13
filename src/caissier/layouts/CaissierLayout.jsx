@@ -20,7 +20,8 @@ import {
   Eye,
   EyeOff,
 } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
+import { Toaster } from 'sonner'
 import useAuth from '../../hooks/useAuth'
 import profileAPI from '@/services/api/profile'
 import NotificationsDropdown from '../components/NotificationsDropdown'
@@ -268,9 +269,9 @@ export default function CaissierLayout() {
       try {
         const data = await profileAPI.getProfile()
         setUser(data)
-        localStorage.setItem("lpd_current_user", JSON.stringify(data))
+        sessionStorage.setItem("lpd_current_user", JSON.stringify(data))
       } catch (err) {
-        console.error("Erreur profil :", err)
+        // Erreur silencieuse - redirection gérée par ProtectedRoute
         navigate("/login")
       }
     }
@@ -296,11 +297,11 @@ export default function CaissierLayout() {
     try {
       await logout();
     } catch (err) {
-      console.error('Logout error:', err);
+      // Erreur silencieuse - continuer avec le nettoyage local
     }
 
-    localStorage.removeItem("token")
-    localStorage.removeItem("lpd_current_user")
+    sessionStorage.removeItem("token")
+    sessionStorage.removeItem("lpd_current_user")
 
     navigate("/login")
   }
@@ -615,6 +616,7 @@ export default function CaissierLayout() {
       />
 
       <Toasts toasts={toasts} remove={removeToast} />
+      <Toaster position="top-right" richColors />
     </>
   )
 }
