@@ -2,6 +2,7 @@
 
 import React from "react";
 import { NavLink } from "react-router-dom";
+import "../styles/depot-fix.css";  // <-- IMPORT AJOUTÉ
 
 import {
   MdShoppingCart,
@@ -25,7 +26,7 @@ const Dashboard = () => {
   const dateFormatted = today.toLocaleDateString("fr-FR", options);
 
   return (
-    <div className="space-y-6">
+    <div className="depot-page space-y-6">  {/* <-- CLASSE AJOUTÉE */}
 
       {/* HEADER */}
       <div className="flex items-baseline justify-between">

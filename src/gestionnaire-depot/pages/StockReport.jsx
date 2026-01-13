@@ -1,8 +1,11 @@
 // src/gestionnaire-depot/pages/Reports.jsx
 import React, { useMemo, useRef, useState } from "react";
+import "../styles/depot-fix.css";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { Activity, FileText, DownloadCloud, PieChart, BarChart2, TrendingUp, Search, Filter, BarChart3, LineChart, TrendingDown, TrendingUp as TrendUp } from "lucide-react";
+// Ajoutez cette ligne après les autres imports
+import DOMPurify from 'dompurify';
 
 /**
  * Rapport fusionné
@@ -548,7 +551,7 @@ export default function Reports() {
         </div>
       `;
       
-      pdfContainer.innerHTML = header;
+      pdfContainer.innerHTML =  DOMPurify.sanitize(header);
       
       const createPDFContent = () => {
         const enriched = FAKE_PRODUCTS.map((p) => {
@@ -688,7 +691,7 @@ export default function Reports() {
         `;
       };
       
-      pdfContainer.innerHTML += createPDFContent();
+      pdfContainer.innerHTML += DOMPurify.sanitize(createPDFContent());
       
       pdfContainer.style.position = 'absolute';
       pdfContainer.style.left = '-9999px';
@@ -741,7 +744,7 @@ export default function Reports() {
   };
 
   return (
-    <div className="p-6" style={{ color: PALETTE.text }}>
+    <div className="depot-page p-6" style={{ color: PALETTE.text }}>
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>
           <div className="flex items-center gap-3">

@@ -1,6 +1,7 @@
 // src/gestionnaire-depot/pages/Products.jsx
 
 import React, { useEffect, useState } from "react";
+import "../styles/depot-fix.css";
 import {
   FaSearch,
   FaPlus,
@@ -712,7 +713,7 @@ export default function Products() {
      ========================================================================= */
 
   return (
-    <div className="space-y-6">
+    <div className="depot-page space-y-6">
       {/* HEADER + ONGLETS */}
       <div className="flex justify-between items-center">
         <h1 className="text-xl font-semibold text-[#472EAD] flex items-center gap-2">

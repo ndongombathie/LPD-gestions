@@ -1,5 +1,6 @@
 // src/gestionnaire-depot/pages/Suppliers.jsx
 import React, { useMemo, useState } from "react";
+import "../styles/depot-fix.css";
 import { Package, User, Phone, Store, Search as SearchIcon } from "lucide-react";
 
 /* =========================================================================
@@ -84,7 +85,7 @@ export default function Suppliers() {
   }, [suppliers, searchInput]);
 
   return (
-    <div className="space-y-6">
+    <div className="depot-page space-y-6">
       {/* HEADER SECTION */}
       <div>
         <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
