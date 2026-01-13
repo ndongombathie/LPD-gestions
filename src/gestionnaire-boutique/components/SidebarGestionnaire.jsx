@@ -56,7 +56,7 @@ export default function SidebarGestionnaire() {
             </svg>
           </div>
           <p className="text-[11px] uppercase tracking-wider text-white/80 font-medium">
-            Gestionnaire Boutique
+            Librairie Papeterie Daradji
           </p>
         </div>
       </div>
@@ -108,12 +108,6 @@ export default function SidebarGestionnaire() {
         </ul>
       </nav>
 
-      {/* === Footer === */}
-      <div className="text-center text-xs text-gray-500 py-3 border-t border-gray-200 bg-white">
-        © 2025 <span className="text-[#472EAD] font-semibold">LPD Boutique</span>
-        <br />
-        <span className="text-[#F58020] font-semibold">v1.0.0</span>
-      </div>
     </aside>
   );
 }
