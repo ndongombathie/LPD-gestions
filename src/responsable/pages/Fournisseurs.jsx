@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import FormModal from "../components/FormModal.jsx";
 import DataTable from "../components/DataTable.jsx";
-import { instance } from "../../utils/axios"; // 🔗 Axios connecté à Laravel
+import { fournisseursAPI } from '@/services/api';
 
 const cls = (...a) => a.filter(Boolean).join(" ");
 
@@ -278,7 +278,7 @@ export default function Fournisseurs() {
     const fetchFournisseurs = async () => {
       try {
         setLoading(true);
-        const { data } = await instance.get("/fournisseurs");
+        const data = await fournisseursAPI.getAll();
         const raw = Array.isArray(data) ? data : data.data || [];
 
         const normalized = raw.map((f) => ({
@@ -346,7 +346,7 @@ export default function Fournisseurs() {
         derniere_livraison: form.derniereLivraison || null,
       };
 
-      const { data } = await instance.post("/fournisseurs", payload);
+      const data = await fournisseursAPI.create(payload);
 
       const newF = {
         id: data.id,
@@ -391,10 +391,7 @@ export default function Fournisseurs() {
         derniere_livraison: form.derniereLivraison || null,
       };
 
-      const { data } = await instance.put(
-        `/fournisseurs/${editTarget.id}`,
-        payload
-      );
+      const data = await fournisseursAPI.update(editTarget.id, payload);
 
       const updated = {
         id: data.id,
@@ -433,7 +430,7 @@ export default function Fournisseurs() {
     if (!deleteTarget) return;
     try {
       setSubmitting(true);
-      await instance.delete(`/fournisseurs/${deleteTarget.id}`);
+      await fournisseursAPI.delete(deleteTarget.id);
 
       setFournisseurs((prev) =>
         prev.filter((f) => f.id !== deleteTarget.id)

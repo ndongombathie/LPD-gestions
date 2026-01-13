@@ -3,6 +3,7 @@
 // ==========================================================
 
 import { Navigate, useLocation } from "react-router-dom";
+import useAuth from "../hooks/useAuth";
 
 /**
  * Composant de protection des routes
@@ -12,44 +13,38 @@ import { Navigate, useLocation } from "react-router-dom";
  */
 export default function ProtectedRoute({ children, allowedRoles = [] }) {
   const location = useLocation();
-  const token = localStorage.getItem("token");
-  const userStr = localStorage.getItem("user");
+  const { user, isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) return null;
 
   // Si pas de token, rediriger vers login
-  if (!token) {
+  if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   // Si des rôles sont spécifiés, vérifier l'autorisation
-  if (allowedRoles.length > 0 && userStr) {
-    try {
-      const user = JSON.parse(userStr);
-      const userRole = user?.role?.toLowerCase();
+  if (allowedRoles.length > 0 && user) {
+    const userRole = user?.role?.toLowerCase();
 
-      // L'admin est autorisé partout
-      if (userRole === 'admin') {
-        return children;
-      }
+    // L'admin est autorisé partout
+    if (userRole === "admin") {
+      return children;
+    }
 
-      // Vérifier si le rôle de l'utilisateur est autorisé
-      if (!allowedRoles.some(role => role.toLowerCase() === userRole)) {
-        // Rediriger vers le dashboard correspondant au rôle
-        const redirectMap = {
-          'responsable': '/responsable/dashboard',
-          'comptable': '/comptable/dashboard',
-          'gestionnaire-boutique': '/gestionnaire-boutique/dashboard',
-          'gestionnaire-depot': '/depot/dashboard',
-          'caissier': '/caissier/dashboard',
-          'vendeur': '/vendeur',
-          'admin': '/responsable/dashboard'
-        };
-        
-        const redirectPath = redirectMap[userRole] || '/login';
-        return <Navigate to={redirectPath} replace />;
-      }
-    } catch (error) {
-      console.error("Erreur parsing user:", error);
-      return <Navigate to="/login" replace />;
+    // Vérifier si le rôle de l'utilisateur est autorisé
+    if (!allowedRoles.some((role) => role.toLowerCase() === userRole)) {
+      const redirectMap = {
+        responsable: "/responsable/dashboard",
+        comptable: "/comptable/dashboard",
+        "gestionnaire-boutique": "/gestionnaire-boutique/dashboard",
+        "gestionnaire_depot": "/depot/dashboard",
+        caissier: "/caissier/dashboard",
+        vendeur: "/vendeur",
+        admin: "/responsable/dashboard",
+      };
+
+      const redirectPath = redirectMap[userRole] || "/login";
+      return <Navigate to={redirectPath} replace />;
     }
   }
 

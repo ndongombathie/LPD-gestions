@@ -77,7 +77,7 @@ const DashboardPage = () => {
           echoRef.current = echo;
           
           // Récupérer l'ID de la boutique de l'utilisateur connecté
-          const userStr = localStorage.getItem('user');
+          const userStr = sessionStorage.getItem('user');
           let boutiqueId = null;
           try {
             const user = userStr ? JSON.parse(userStr) : null;
@@ -116,7 +116,7 @@ const DashboardPage = () => {
       // Nettoyage WebSocket si nécessaire
       if (echoRef.current) {
         try {
-          const userStr = localStorage.getItem('user');
+          const userStr = sessionStorage.getItem('user');
           const user = userStr ? JSON.parse(userStr) : null;
           const boutiqueId = user?.boutique_id;
           if (boutiqueId) {

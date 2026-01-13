@@ -30,8 +30,8 @@ import {
   Banknote,
 } from "lucide-react";
 // framer-motion removed to avoid optional peer dep on react/jsx-runtime in dev
-import { instance } from "../../utils/axios.jsx";
-import { authAPI } from "../../utils/api";
+import useAuth from "../../hooks/useAuth";
+import profileAPI from "@/services/api/profile";
 
 // ==========================================================
 // 🧩 Utils
@@ -130,7 +130,7 @@ function Toasts({ toasts, remove }) {
 // 🔐 Modal — Changer mot de passe (Connectée au backend !)
 // ==========================================================
 
-function PasswordModal({ open, onClose, onSuccess, addToast }) {
+function PasswordModal({ open, onClose, onSuccess, addToast, changePassword }) {
   const [oldPwd, setOldPwd] = useState("");
   const [newPwd, setNewPwd] = useState("");
   const [confirmPwd, setConfirmPwd] = useState("");
@@ -154,7 +154,7 @@ function PasswordModal({ open, onClose, onSuccess, addToast }) {
     setLoading(true);
 
     try {
-      await authAPI.changePassword(oldPwd, newPwd, confirmPwd);
+      await changePassword(oldPwd, newPwd, confirmPwd);
       addToast("success", "Mot de passe modifié", "Vos identifiants ont été mis à jour.");
       onSuccess();
     } catch (err) {
@@ -276,6 +276,7 @@ export default function Header() {
   const navigate = useNavigate();
   const location = useLocation();
   const menuRef = useRef();
+  const { user: authUser, logout, changePassword } = useAuth();
 
   // UI
   const [showMenu, setShowMenu] = useState(false);
@@ -292,7 +293,10 @@ export default function Header() {
     photo: null,
   });
 
-  const [user, setUser] = useState(() => defaultUser);
+  const [user, setUser] = useState(() => authUser || defaultUser);
+  useEffect(() => {
+    if (authUser) setUser(authUser);
+  }, [authUser]);
   const [toasts, setToasts] = useState([]);
   const [notifications, setNotifications] = useState(
     loadJSON("lpd_notifications", [
@@ -357,7 +361,7 @@ export default function Header() {
     const loadUser = async () => {
       // Si `instance` (axios) est disponible sur globalThis, on l'utilise ; sinon on charge un utilisateur mock depuis localStorage
       try {
-        const { data } = await instance.get("/mon-profil");
+        const data = await profileAPI.getProfile();
         const normalized = normalizeUser(data);
         setUser(normalized);
         localStorage.setItem("user", JSON.stringify(normalized));
@@ -400,15 +404,7 @@ export default function Header() {
   // ==========================================================
 
   const handleLogout = async () => {
-    try {
-      await instance.post("/auth/logout");
-    } catch (err) {
-      console.warn('Logout request failed:', err);
-    }
-
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-
+    await logout();
     navigate("/login");
   };
 
@@ -613,6 +609,7 @@ export default function Header() {
         onClose={() => setShowPwdModal(false)}
         onSuccess={() => setShowPwdModal(false)}
         addToast={addToast}
+        changePassword={changePassword}
       />
 
       <Toasts toasts={toasts} remove={removeToast} />

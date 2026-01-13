@@ -72,7 +72,7 @@ const DecaissementsPage = () => {
       toast.error('Erreur', {
         description: `Impossible de charger les décaissements: ${errorMessage}`
       });
-      console.error('Erreur détaillée décaissements:', error.response?.data || error);
+      // Erreur silencieuse - gérée par le composant
     } finally {
       setLoading(false);
     }
@@ -128,7 +128,7 @@ const DecaissementsPage = () => {
       // Recharger les décaissements (WebSocket le fera automatiquement si configuré)
       await fetchDecaissements();
     } catch (error) {
-      console.error('Erreur lors de la validation du décaissement:', error);
+      // Erreur silencieuse - gérée par le composant
       toast.error('Erreur', {
         description: error.response?.data?.message || 'Impossible de valider le décaissement'
       });
@@ -151,7 +151,7 @@ const DecaissementsPage = () => {
       // Recharger les décaissements
       await fetchDecaissements();
     } catch (error) {
-      console.error('Erreur lors de l\'annulation du décaissement:', error);
+      // Erreur silencieuse - gérée par le composant
       toast.error('Erreur', {
         description: error.response?.data?.message || 'Impossible d\'annuler le décaissement'
       });

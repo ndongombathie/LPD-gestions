@@ -15,7 +15,7 @@ import {
   CheckCircle2,
   AlertCircle,
 } from "lucide-react";
-import { authAPI } from "../utils/api";
+import useAuth from "../hooks/useAuth";
 
 
 
@@ -63,7 +63,7 @@ function Toast({ toasts, removeToast }) {
 }
 
 // ================= Password Modal =================
-function PasswordModal({ open, onClose, onSuccess, addToast }) {
+function PasswordModal({ open, onClose, onSuccess, addToast, changePassword }) {
   const [oldPwd, setOldPwd] = useState("");
   const [newPwd, setNewPwd] = useState("");
   const [confirmPwd, setConfirmPwd] = useState("");
@@ -89,7 +89,7 @@ function PasswordModal({ open, onClose, onSuccess, addToast }) {
 
     setLoading(true);
     try {
-      const result = await authAPI.changePassword(oldPwd, newPwd, confirmPwd);
+      const result = await changePassword(oldPwd, newPwd, confirmPwd);
       addToast("success", "Succès", "Mot de passe modifié avec succès");
       onSuccess();
       onClose();
@@ -403,6 +403,8 @@ const Header = ({
   user,
   commandes,
 }) => {
+  const { user: authUser, logout, changePassword } = useAuth();
+  const displayUser = user || authUser;
   const [ventesDuJour, setVentesDuJour] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
@@ -492,23 +494,23 @@ const Header = ({
                 className="flex items-center gap-2 px-3 py-1.5 rounded-full border hover:bg-gray-50"
               >
                 <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center text-sm font-semibold">
-                  {user?.photo ? (
+                  {displayUser?.photo ? (
                     <img
-                      src={user.photo}
+                      src={displayUser.photo}
                       alt=""
                       className="w-full h-full object-cover rounded-full"
                     />
                   ) : (
-                    getInitials(user?.name || "U")
+                    getInitials(displayUser?.name || "U")
                   )}
                 </div>
 
                 <div className="hidden sm:flex flex-col text-left">
                   <span className="text-xs font-semibold">
-                    {user?.name || "Utilisateur"}
+                    {displayUser?.name || "Utilisateur"}
                   </span>
                   <span className="text-[10px] text-gray-500">
-                    {user?.role || "Vendeur"}
+                    {displayUser?.role || "Vendeur"}
                   </span>
                 </div>
 
@@ -519,10 +521,10 @@ const Header = ({
               {menuOpen && (
                 <div className="absolute right-0 mt-2 w-56 bg-white border rounded-xl shadow-lg p-2">
                   <div className="px-3 py-2 border-b">
-                    <p className="text-sm font-semibold">{user?.name}</p>
-                    <p className="text-xs text-gray-500">{user?.email}</p>
+                    <p className="text-sm font-semibold">{displayUser?.name}</p>
+                    <p className="text-xs text-gray-500">{displayUser?.email}</p>
                     <p className="text-xs text-gray-400">
-                      {user?.store || "Boutique Principale"}
+                      {displayUser?.store || "Boutique Principale"}
                     </p>
                   </div>
 
@@ -538,7 +540,7 @@ const Header = ({
                   </button>
 
                   <button
-                    onClick={onLogout}
+                    onClick={onLogout || logout}
                     className="w-full flex items-center gap-2 px-3 py-2 text-sm text-orange-600 hover:bg-orange-50 rounded-md"
                   >
                     <LogOut size={14} />
@@ -556,6 +558,7 @@ const Header = ({
         onClose={() => setPasswordModalOpen(false)}
         onSuccess={() => addToast("success", "Succès", "Mot de passe modifié")}
         addToast={addToast}
+        changePassword={changePassword}
       />
 
       {/* ===== TOAST SYSTEM ===== */}

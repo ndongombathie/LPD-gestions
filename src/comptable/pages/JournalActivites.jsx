@@ -5,7 +5,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { instance } from "../../utils/axios";
+import profileAPI from "@/services/api/profile";
 import { Filter, FileDown, RefreshCw, Search } from "lucide-react";
 import jsPDF from "jspdf";
 import "jspdf-autotable";

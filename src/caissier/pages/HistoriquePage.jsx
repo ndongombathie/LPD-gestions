@@ -27,7 +27,7 @@ const HistoriquePage = () => {
         const data = await caissierApi.getHistoriqueComplet(filters);
         setHistorique(data);
       } catch (error) {
-        console.error('Erreur lors du chargement de l\'historique:', error);
+        // Erreur silencieuse - gérée par le composant
         toast.error('Erreur', {
           description: 'Impossible de charger l\'historique'
         });
