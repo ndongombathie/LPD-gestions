@@ -1,6 +1,6 @@
 // ==========================================================
 // 📊 TableauDeBord.jsx — Vendeur PREMIUM (LPD Manager)
-// Design moderne + logique EXISTANTE conservée
+// Design moderne + aperçus en blanc - Version simplifiée
 // ==========================================================
 
 import React, { useEffect, useState } from "react";
@@ -20,9 +20,6 @@ import {
 import { motion } from "framer-motion";
 
 const TableauDeBord = () => {
-  /* =============================
-     LOGIQUE EXISTANTE (INCHANGÉE)
-  ============================= */
   const [stats, setStats] = useState({
     ventesAujourdhui: 0,
     commandesTraitees: 0,
@@ -50,6 +47,7 @@ const TableauDeBord = () => {
           ventes: 28,
           revenu: 420000,
           tendance: "up",
+          variation: "+12%",
         },
         {
           id: 2,
@@ -58,6 +56,7 @@ const TableauDeBord = () => {
           ventes: 19,
           revenu: 285000,
           tendance: "up",
+          variation: "+8%",
         },
         {
           id: 3,
@@ -66,6 +65,7 @@ const TableauDeBord = () => {
           ventes: 15,
           revenu: 675000,
           tendance: "stable",
+          variation: "0%",
         },
         {
           id: 4,
@@ -74,6 +74,7 @@ const TableauDeBord = () => {
           ventes: 12,
           revenu: 360000,
           tendance: "down",
+          variation: "-5%",
         },
       ]);
 
@@ -91,18 +92,18 @@ const TableauDeBord = () => {
     return () => clearInterval(interval);
   }, []);
 
-  /* =============================
-     HELPERS
-  ============================= */
   const getTendanceIcon = (tendance) => {
-    if (tendance === "up") return <ArrowUp className="text-emerald-500" />;
-    if (tendance === "down") return <ArrowDown className="text-rose-500" />;
-    return <Minus className="text-gray-400" />;
+    if (tendance === "up") return <ArrowUp className="text-emerald-500" size={16} />;
+    if (tendance === "down") return <ArrowDown className="text-rose-500" size={16} />;
+    return <Minus className="text-gray-400" size={16} />;
   };
 
-  /* =============================
-     LOADING
-  ============================= */
+  const getVariationStyle = (variation) => {
+    if (variation.startsWith("+")) return "text-emerald-600 bg-emerald-50";
+    if (variation.startsWith("-")) return "text-rose-600 bg-rose-50";
+    return "text-gray-600 bg-gray-50";
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[300px]">
@@ -111,11 +112,8 @@ const TableauDeBord = () => {
     );
   }
 
-  /* =============================
-     RENDER PREMIUM
-  ============================= */
   return (
-    <div className="space-y-10">
+    <div className="space-y-8">
       {/* ===== HEADER ===== */}
       <motion.div
         initial={{ opacity: 0, y: -15 }}
@@ -124,7 +122,7 @@ const TableauDeBord = () => {
       >
         <div>
           <h1 className="text-2xl font-extrabold text-[#2F1F7A] flex items-center gap-2">
-            <TrendingUp /> Tableau de bord vendeur
+            <TrendingUp size={24} /> Tableau de bord vendeur
           </h1>
           <p className="text-sm text-gray-500 mt-1">
             Aperçu de votre activité en temps réel
@@ -132,11 +130,11 @@ const TableauDeBord = () => {
         </div>
 
         <div className="flex gap-4 text-sm text-gray-600">
-          <span className="flex items-center gap-1">
+          <span className="flex items-center gap-1 bg-white px-3 py-1.5 rounded-lg border border-gray-200">
             <Calendar size={16} />
             {new Date().toLocaleDateString("fr-FR")}
           </span>
-          <span className="flex items-center gap-1">
+          <span className="flex items-center gap-1 bg-white px-3 py-1.5 rounded-lg border border-gray-200">
             <Clock size={16} />
             {new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
           </span>
@@ -147,60 +145,128 @@ const TableauDeBord = () => {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="grid grid-cols-1 sm:grid-cols-3 gap-6"
+        className="grid grid-cols-1 md:grid-cols-3 gap-6"
       >
-        <KpiCard
-          label="Ventes du jour"
-          value={`${stats.ventesAujourdhui.toLocaleString()} FCFA`}
-          icon={<DollarSign />}
-          gradient="from-[#472EAD] to-[#7A5BF5]"
-        />
-        <KpiCard
-          label="Commandes traitées"
-          value={stats.commandesTraitees}
-          icon={<ShoppingCart />}
-          gradient="from-[#F58020] to-[#FF9F66]"
-        />
-        <KpiCard
-          label="Produits vendus"
-          value={stats.produitsVendus}
-          icon={<Package />}
-          gradient="from-[#10B981] to-[#34D399]"
-        />
+        {/* Ventes du jour */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <p className="text-sm font-medium text-gray-500">Ventes du jour</p>
+              <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                {stats.ventesAujourdhui.toLocaleString()} FCFA
+              </h3>
+            </div>
+            <div className="bg-[#472EAD]/10 p-3 rounded-xl">
+              <DollarSign className="text-[#472EAD]" size={24} />
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-sm">
+            <span className="flex items-center gap-1 text-emerald-600">
+              <ArrowUp size={14} />
+              +12% vs hier
+            </span>
+            <span className="text-gray-400">•</span>
+            <span className="text-gray-500">Objectif: 150K FCFA</span>
+          </div>
+        </div>
+
+        {/* Commandes traitées */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <p className="text-sm font-medium text-gray-500">Commandes traitées</p>
+              <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                {stats.commandesTraitees}
+              </h3>
+            </div>
+            <div className="bg-[#F58020]/10 p-3 rounded-xl">
+              <ShoppingCart className="text-[#F58020]" size={24} />
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-sm">
+            <span className="flex items-center gap-1 text-emerald-600">
+              <ArrowUp size={14} />
+              +3 aujourd'hui
+            </span>
+            <span className="text-gray-400">•</span>
+            <span className="text-gray-500">En attente: 2</span>
+          </div>
+        </div>
+
+        {/* Produits vendus */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <p className="text-sm font-medium text-gray-500">Produits vendus</p>
+              <h3 className="text-2xl font-bold text-gray-900 mt-1">
+                {stats.produitsVendus}
+              </h3>
+            </div>
+            <div className="bg-[#10B981]/10 p-3 rounded-xl">
+              <Package className="text-[#10B981]" size={24} />
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-sm">
+            <span className="flex items-center gap-1 text-emerald-600">
+              <ArrowUp size={14} />
+              +8 unités
+            </span>
+            <span className="text-gray-400">•</span>
+            <span className="text-gray-500">Stock disponible: 156</span>
+          </div>
+        </div>
       </motion.div>
 
       {/* ===== PRODUITS POPULAIRES ===== */}
       <motion.div
-        initial={{ opacity: 0, y: 30 }}
+        initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-white/70 backdrop-blur-xl border border-[#E4E0FF] rounded-2xl p-6 shadow-sm"
+        className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100"
       >
-        <div className="flex items-center gap-2 mb-4">
-          <Flame className="text-orange-500" />
-          <h2 className="text-lg font-bold text-[#2F1F7A]">
-            Produits populaires
-          </h2>
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="bg-orange-100 p-2 rounded-lg">
+              <Flame className="text-orange-600" size={20} />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">
+                Produits populaires
+              </h2>
+              <p className="text-sm text-gray-500">Top 4 du mois</p>
+            </div>
+          </div>
+          <button className="text-sm font-medium text-[#472EAD] hover:text-[#3B21A8]">
+            Voir tout →
+          </button>
         </div>
 
-        <div className="space-y-3">
+        <div className="space-y-4">
           {produitsPopulaires.map((p) => (
             <div
               key={p.id}
-              className="flex items-center justify-between p-3 rounded-xl hover:bg-[#F7F5FF] transition"
+              className="flex items-center justify-between p-4 rounded-xl hover:bg-gray-50 transition-colors"
             >
-              <div>
-                <p className="font-semibold text-gray-800">{p.nom}</p>
-                <p className="text-xs text-gray-500">{p.reference}</p>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                  <Package size={18} className="text-gray-600" />
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900">{p.nom}</p>
+                  <p className="text-xs text-gray-500">{p.reference}</p>
+                </div>
               </div>
 
               <div className="text-right">
-                <p className="text-sm font-medium">
+                <p className="text-sm font-semibold text-gray-900">
                   {p.revenu.toLocaleString()} FCFA
                 </p>
-                <p className="text-xs text-gray-500">{p.ventes} ventes</p>
+                <div className="flex items-center justify-end gap-2 mt-1">
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${getVariationStyle(p.variation)}`}>
+                    {p.variation}
+                  </span>
+                  <span className="text-xs text-gray-500">{p.ventes} ventes</span>
+                </div>
               </div>
-
-              {getTendanceIcon(p.tendance)}
             </div>
           ))}
         </div>
@@ -208,18 +274,5 @@ const TableauDeBord = () => {
     </div>
   );
 };
-
-/* =============================
-   SOUS-COMPONENT
-============================= */
-const KpiCard = ({ label, value, icon, gradient }) => (
-  <div
-    className={`relative overflow-hidden rounded-2xl p-5 text-white bg-gradient-to-br ${gradient}`}
-  >
-    <div className="absolute top-4 right-4 opacity-20">{icon}</div>
-    <p className="text-sm opacity-90">{label}</p>
-    <p className="text-2xl font-extrabold mt-1">{value}</p>
-  </div>
-);
 
 export default TableauDeBord;

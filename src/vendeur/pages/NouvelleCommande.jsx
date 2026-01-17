@@ -1,4 +1,6 @@
 import React, { useState, useRef } from 'react';
+import Ticket from "./Ticket";
+import { useReactToPrint } from "react-to-print";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
   faShoppingCart,
@@ -24,14 +26,12 @@ import {
   faDatabase,
   faCartArrowDown,
   faCheckSquare,
-  faSquare,
-  faPrint   // 🔹 AJOUT POUR LE BOUTON IMPRIMER
+  faPrint,
+  faXmark,
+  faSquare
 } from '@fortawesome/free-solid-svg-icons';
 
-import { QRCodeCanvas } from 'qrcode.react'; // 🔹 AJOUT POUR LE QR CODE
-import '../css/NouvelleCommande.css';
 
-// 🔹 sellerName ajouté pour récupérer le nom du vendeur réel
 const NouvelleCommande = ({ panier, setPanier, produits, onCommandeValidee, sellerName = null }) => {
   const [rechercheProduit, setRechercheProduit] = useState('');
   const [codeBarre, setCodeBarre] = useState('');
@@ -43,22 +43,16 @@ const NouvelleCommande = ({ panier, setPanier, produits, onCommandeValidee, sell
   const [tvaActive, setTvaActive] = useState(true);
   const inputCodeBarreRef = useRef(null);
   const inputNomClientRef = useRef(null);
+  const [commandeValidee, setCommandeValidee] = useState(null);
+  const ticketRef = useRef();
 
-  // 🔹 NOUVEAU : commande utilisée pour le ticket QR
-  const [commandePourTicket, setCommandePourTicket] = useState(null);
 
-  /**
-   * Filtrer les produits selon la recherche
-   */
   const produitsFiltres = produits.filter(produit =>
     produit.nom.toLowerCase().includes(rechercheProduit.toLowerCase()) ||
     produit.reference.toLowerCase().includes(rechercheProduit.toLowerCase()) ||
     produit.code_barre.includes(rechercheProduit)
   );
 
-  /**
-   * Obtenir le prix et le prix seuil selon le type de vente
-   */
   const obtenirPrixParType = (produit, typeVente) => {
     if (typeVente === 'gros') {
       return {
@@ -72,9 +66,6 @@ const NouvelleCommande = ({ panier, setPanier, produits, onCommandeValidee, sell
     };
   };
 
-  /**
-   * Ajouter un produit au panier avec le type de vente sélectionné
-   */
   const ajouterAuPanier = (produit, typeVenteSpecifique = null) => {
     const typeVente = typeVenteSpecifique || typeVenteGlobal;
     const { prix, prix_seuil } = obtenirPrixParType(produit, typeVente);
@@ -102,9 +93,6 @@ const NouvelleCommande = ({ panier, setPanier, produits, onCommandeValidee, sell
     }
   };
 
-  /**
-   * Ajouter par code barre
-   */
   const ajouterParCodeBarre = () => {
     if (!codeBarre.trim()) {
       alert('❌ Veuillez saisir un code barre');
@@ -122,9 +110,6 @@ const NouvelleCommande = ({ panier, setPanier, produits, onCommandeValidee, sell
     }
   };
 
-  /**
-   * Modifier la quantité avec saisie directe
-   */
   const demarrerEditionQuantite = (produit) => {
     setEditionQuantite({
       produitId: produit.id,
@@ -164,9 +149,6 @@ const NouvelleCommande = ({ panier, setPanier, produits, onCommandeValidee, sell
     setEditionQuantite(null);
   };
 
-  /**
-   * Modifier la quantité avec les boutons +/- 
-   */
   const modifierQuantite = (produitId, typeVente, nouvelleQuantite) => {
     if (nouvelleQuantite <= 0) {
       retirerDuPanier(produitId, typeVente);
@@ -179,9 +161,6 @@ const NouvelleCommande = ({ panier, setPanier, produits, onCommandeValidee, sell
     }
   };
 
-  /**
-   * Retirer un produit du panier
-   */
   const retirerDuPanier = (produitId, typeVente) => {
     setPanier(panier.filter(item => 
       !(item.id === produitId && item.type_vente === typeVente)
@@ -194,9 +173,6 @@ const NouvelleCommande = ({ panier, setPanier, produits, onCommandeValidee, sell
     }
   };
 
-  /**
-   * Démarrer l'édition du prix
-   */
   const demarrerEditionPrix = (produit) => {
     setEditionPrix({
       produitId: produit.id,
@@ -247,9 +223,6 @@ const NouvelleCommande = ({ panier, setPanier, produits, onCommandeValidee, sell
     setEditionPrix(null);
   };
 
-  /**
-   * Réinitialiser le prix au prix original
-   */
   const reinitialiserPrix = (produitId, typeVente) => {
     const produit = panier.find(item => 
       item.id === produitId && item.type_vente === typeVente
@@ -264,9 +237,6 @@ const NouvelleCommande = ({ panier, setPanier, produits, onCommandeValidee, sell
     }
   };
 
-  /**
-   * Calculer les totaux de la commande avec TVA optionnelle
-   */
   const calculerTotaux = () => {
     const totalHT = panier.reduce((total, item) => total + (item.prix_vente * item.quantite), 0);
     
@@ -288,16 +258,12 @@ const NouvelleCommande = ({ panier, setPanier, produits, onCommandeValidee, sell
 
   const { totalHT, tva, totalTTC } = calculerTotaux();
 
-  /**
-   * Valider la commande finale
-   */
   const validerCommande = async () => {
     if (panier.length === 0) {
       alert('❌ Le panier est vide !');
       return;
     }
 
-    // Vérification du nom du client avec redirection automatique
     if (!client.nom.trim()) {
       alert('❌ Veuillez saisir le nom du client !');
       
@@ -308,13 +274,11 @@ const NouvelleCommande = ({ panier, setPanier, produits, onCommandeValidee, sell
           block: 'center' 
         });
         
-        inputNomClientRef.current.style.borderColor = '#e74c3c';
-        inputNomClientRef.current.style.boxShadow = '0 0 0 2px rgba(231, 76, 60, 0.2)';
+        inputNomClientRef.current.classList.add('border-red-500', 'ring-2', 'ring-red-200');
         
         setTimeout(() => {
           if (inputNomClientRef.current) {
-            inputNomClientRef.current.style.borderColor = '';
-            inputNomClientRef.current.style.boxShadow = '';
+            inputNomClientRef.current.classList.remove('border-red-500', 'ring-2', 'ring-red-200');
           }
         }, 2000);
       }
@@ -356,32 +320,29 @@ const NouvelleCommande = ({ panier, setPanier, produits, onCommandeValidee, sell
         total_ttc: totalTTC,
         tva_appliquee: tvaActive,
         statut: 'en_attente_paiement',
-        vendeur: sellerName || 'Vendeur Principal' // 🔹 utilise le vrai vendeur si dispo
+        vendeur: sellerName || 'Vendeur Principal'
       };
 
-      // 🔹 On appelle le parent (pour sauvegarder / envoyer au backend)
       await onCommandeValidee(nouvelleCommande);
+      setCommandeValidee(nouvelleCommande);
 
-      // 🔹 On garde la commande pour générer le ticket QR
-      setCommandePourTicket(nouvelleCommande);
 
-      // 🔹 On vide le formulaire pour la prochaine commande
       setPanier([]);
       setClient({ nom: '', telephone: '', adresse: '' });
       setEditionPrix(null);
       setEditionQuantite(null);
       
     } catch (error) {
-      console.error('Erreur validation commande:', error);
       alert('❌ Erreur lors de l\'envoi de la commande');
     } finally {
       setEnvoiEnCours(false);
     }
   };
+  const imprimerTicket = useReactToPrint({
+  content: () => ticketRef.current,
+});
 
-  /**
-   * Annuler la commande en cours
-   */
+
   const annulerCommande = () => {
     if (panier.length === 0) {
       alert('ℹ️ Aucune commande en cours !');
@@ -396,9 +357,6 @@ const NouvelleCommande = ({ panier, setPanier, produits, onCommandeValidee, sell
     }
   };
 
-  /**
-   * Grouper les produits du panier par type de vente
-   */
   const produitsParType = panier.reduce((acc, item) => {
     const type = item.type_vente;
     if (!acc[type]) {
@@ -408,70 +366,59 @@ const NouvelleCommande = ({ panier, setPanier, produits, onCommandeValidee, sell
     return acc;
   }, {});
 
-  // 🔹 Impression du ticket : on utilise window.print()
-  const imprimerTicket = () => {
-    if (!commandePourTicket) return;
-    window.print();
-  };
-
-  // 🔹 Contenu JSON encodé dans le QR :
-  const getValeurQRCode = () => {
-    if (!commandePourTicket) return '';
-    // ici on met TOUTES les infos utiles dans le QR
-    const data = {
-      type: 'ticket_commande',
-      numero_commande: commandePourTicket.numero_commande,
-      date: commandePourTicket.date,
-      vendeur: commandePourTicket.vendeur,
-      client: commandePourTicket.client,
-      total_ht: commandePourTicket.total_ht,
-      tva: commandePourTicket.tva,
-      total_ttc: commandePourTicket.total_ttc,
-      produits: commandePourTicket.produits
-    };
-    return JSON.stringify(data);
-  };
-
   return (
-    <div className="nouvelle-commande">
-      <div className="commande-entete">
-        <h2>
-          <FontAwesomeIcon icon={faShoppingCart} className="entete-icone" />
+    <div className="p-5 min-h-screen bg-gray-50 box-border">
+      <div className="mb-5">
+        <div className="flex justify-between items-center mb-4 gap-4">
+          <div className="flex items-center gap-3">
+           
+            <div className="flex flex-col gap-0">
+             </div>
+          </div>
+          
+          <div className="text-right text-sm text-gray-700">
+            <div className="font-semibold">{new Date().toLocaleDateString('fr-FR')}</div>
+            <div className="text-xs text-gray-600">{new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</div>
+          </div>
+        </div>
+
+        <h2 className="text-2xl text-gray-800 mb-2 font-bold flex items-center gap-2">
+          <FontAwesomeIcon icon={faShoppingCart} className="text-indigo-700 text-xl" />
           Nouvelle Commande
         </h2>
-        <p>Créez une commande client - Gestion détail et gros</p>
+        <p className="text-gray-600 text-sm font-light">Créez une commande client - Gestion détail et gros</p>
       </div>
 
-      <div className="commande-conteneur">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 h-[calc(100vh-180px)] box-border">
         {/* Section gauche : Produits */}
-        <div className="section-produits">
-          {/* Configuration du type de vente global */}
-          <div className="section-type-vente-global">
-            <h3>
-              <FontAwesomeIcon icon={faShoppingBag} className="section-icone" />
+        <div className="lg:col-span-2 bg-white rounded-xl p-5 shadow-sm overflow-y-auto box-border">
+          {/* Type de vente global */}
+          <div className="mb-5 pb-5 border-b border-gray-100">
+            <h3 className="text-base text-gray-800 mb-3 font-semibold flex items-center gap-2">
+              <FontAwesomeIcon icon={faShoppingBag} className="text-[#472ead] text-sm" />
               Type de Vente Global
             </h3>
-            <div className="selecteur-type-vente">
+            <div className="flex gap-3 mb-3">
               <button
-                className={`bouton-type-vente ${typeVenteGlobal === 'détail' ? 'actif' : ''}`}
+                className={`flex-1 py-2 px-4 border-2 rounded-lg font-semibold transition-all duration-300 cursor-pointer flex items-center gap-2 justify-center text-sm ${typeVenteGlobal === 'détail' ? 'border-[#472ead] bg-gradient-to-br from-[#472ead] to-[#5a3bc0] text-white transform -translate-y-0.5 shadow-lg shadow-[#472ead]/30' : 'border-gray-200 bg-white hover:border-[#472ead] hover:bg-[#472ead]/5'}`}
                 onClick={() => setTypeVenteGlobal('détail')}
               >
-                <FontAwesomeIcon icon={faShoppingBag} className="bouton-icone" />
+                <FontAwesomeIcon icon={faShoppingBag} className="text-sm" />
                 Détail
               </button>
               <button
-                className={`bouton-type-vente ${typeVenteGlobal === 'gros' ? 'actif' : ''}`}
+                className={`flex-1 py-2 px-4 border-2 rounded-lg font-semibold transition-all duration-300 cursor-pointer flex items-center gap-2 justify-center text-sm ${typeVenteGlobal === 'gros' ? 'border-[#f58020] bg-gradient-to-br from-[#f58020] to-[#ff9c4d] text-white transform -translate-y-0.5 shadow-lg shadow-[#f58020]/30' : 'border-gray-200 bg-white hover:border-[#f58020] hover:bg-[#f58020]/5'}`}
                 onClick={() => setTypeVenteGlobal('gros')}
               >
-                <FontAwesomeIcon icon={faPallet} className="bouton-icone" />
+                <FontAwesomeIcon icon={faPallet} className="text-sm" />
                 Gros
               </button>
             </div>
-            <div className="info-type-vente-global">
-              <p>
+            <div className="bg-gray-50 p-3 rounded-lg">
+              <p className="text-sm">
                 <strong>Type :</strong> {typeVenteGlobal === 'détail' ? 'Détail' : 'Gros'}
               </p>
-              <small>
+              <small className="text-xs text-gray-500">
                 {typeVenteGlobal === 'détail' 
                   ? 'Prix standard - Quantités unitaires' 
                   : 'Prix réduit - Quantités importantes'}
@@ -480,12 +427,12 @@ const NouvelleCommande = ({ panier, setPanier, produits, onCommandeValidee, sell
           </div>
 
           {/* Code barre */}
-          <div className="section-code-barre">
-            <h3>
-              <FontAwesomeIcon icon={faBarcode} className="section-icone" />
+          <div className="mb-5 pb-5 border-b border-gray-100">
+            <h3 className="text-base text-gray-800 mb-3 font-semibold flex items-center gap-2">
+              <FontAwesomeIcon icon={faBarcode} className="text-[#472ead] text-sm" />
               Scanner Code Barre
             </h3>
-            <div className="controle-code-barre">
+            <div className="flex gap-3 items-center">
               <input
                 ref={inputCodeBarreRef}
                 type="text"
@@ -493,19 +440,22 @@ const NouvelleCommande = ({ panier, setPanier, produits, onCommandeValidee, sell
                 value={codeBarre}
                 onChange={(e) => setCodeBarre(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && ajouterParCodeBarre()}
-                className="input-code-barre"
+                className="flex-1 py-2 px-3 text-sm border-2 border-gray-200 rounded-lg transition-colors focus:border-[#472ead] focus:outline-none"
               />
-              <button onClick={ajouterParCodeBarre} className="bouton-scanner">
-                <FontAwesomeIcon icon={faSearch} className="bouton-icone" />
+              <button 
+                onClick={ajouterParCodeBarre} 
+                className="bg-gradient-to-br from-[#472ead] to-[#5a3bc0] text-white py-2 px-4 rounded-lg font-semibold transition-all duration-300 flex items-center gap-2 border-none cursor-pointer text-sm hover:shadow-lg hover:-translate-y-0.5 shadow-md"
+              >
+                <FontAwesomeIcon icon={faSearch} className="text-sm" />
                 Scanner
               </button>
             </div>
           </div>
 
           {/* Recherche manuelle */}
-          <div className="section-recherche">
-            <h3>
-              <FontAwesomeIcon icon={faSearch} className="section-icone" />
+          <div className="mb-5 pb-5 border-b border-gray-100">
+            <h3 className="text-base text-gray-800 mb-3 font-semibold flex items-center gap-2">
+              <FontAwesomeIcon icon={faSearch} className="text-[#472ead] text-sm" />
               Recherche Produits
             </h3>
             <input
@@ -513,75 +463,75 @@ const NouvelleCommande = ({ panier, setPanier, produits, onCommandeValidee, sell
               placeholder="Nom, référence ou code barre..."
               value={rechercheProduit}
               onChange={(e) => setRechercheProduit(e.target.value)}
-              className="input-recherche"
+              className="w-full py-2 px-3 text-sm border-2 border-gray-200 rounded-lg transition-colors focus:border-[#472ead] focus:outline-none"
             />
           </div>
 
           {/* Liste des produits disponibles */}
-          <div className="liste-produits">
-            <h3>
-              <FontAwesomeIcon icon={faBox} className="section-icone" />
+          <div>
+            <h3 className="text-base text-gray-800 mb-4 font-semibold flex items-center gap-2">
+              <FontAwesomeIcon icon={faBox} className="text-[#472ead] text-sm" />
               Produits Disponibles ({produitsFiltres.length})
             </h3>
-            <div className="grille-produits">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {produitsFiltres.map(produit => {
                 const prixDetail = obtenirPrixParType(produit, 'détail');
                 const prixGros = obtenirPrixParType(produit, 'gros');
                 
                 return (
-                  <div key={produit.id} className="carte-produit">
-                    <div className="produit-info">
-                      <h4>{produit.nom}</h4>
-                      <p className="produit-reference">
-                        <FontAwesomeIcon icon={faDatabase} className="info-icone" />
+                  <div key={produit.id} className="bg-gray-50 rounded-lg p-4 border-2 border-gray-200 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-[#472ead] flex flex-col justify-between">
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-800 mb-2">{produit.nom}</h4>
+                      <p className="text-xs mb-1 text-gray-600 flex items-center gap-2">
+                        <FontAwesomeIcon icon={faDatabase} className="text-xs" />
                         Ref: {produit.reference}
                       </p>
-                      <p className="produit-code-barre">
-                        <FontAwesomeIcon icon={faBarcode} className="info-icone" />
+                      <p className="text-xs mb-3 text-gray-600 flex items-center gap-2">
+                        <FontAwesomeIcon icon={faBarcode} className="text-xs" />
                         Code: {produit.code_barre}
                       </p>
                       
-                      <div className="prix-par-type">
-                        <div className="prix-type">
-                          <span className="type-label">
-                            <FontAwesomeIcon icon={faShoppingBag} className="type-icone" />
+                      <div className="space-y-2 my-3">
+                        <div className="bg-white p-2 rounded border border-gray-200 text-xs">
+                          <div className="font-semibold text-gray-800 flex items-center gap-2 mb-1 text-xs">
+                            <FontAwesomeIcon icon={faShoppingBag} className="text-xs text-[#472ead]" />
                             Détail:
-                          </span>
-                          <span className="prix-valeur">{prixDetail.prix.toLocaleString()} FCFA</span>
-                          <small>
-                            <FontAwesomeIcon icon={faMoneyBillWave} className="seuil-icone" />
+                          </div>
+                          <div className="font-bold text-green-600 text-sm">{prixDetail.prix.toLocaleString()} FCFA</div>
+                          <small className="text-gray-500 flex items-center gap-1 text-xs">
+                            <FontAwesomeIcon icon={faMoneyBillWave} className="text-red-500 text-xs" />
                             Seuil: {prixDetail.prix_seuil.toLocaleString()} FCFA
                           </small>
                         </div>
-                        <div className="prix-type">
-                          <span className="type-label">
-                            <FontAwesomeIcon icon={faPallet} className="type-icone" />
+                        <div className="bg-white p-2 rounded border border-gray-200 text-xs">
+                          <div className="font-semibold text-gray-800 flex items-center gap-2 mb-1 text-xs">
+                            <FontAwesomeIcon icon={faPallet} className="text-xs text-[#f58020]" />
                             Gros:
-                          </span>
-                          <span className="prix-valeur">{prixGros.prix.toLocaleString()} FCFA</span>
-                          <small>
-                            <FontAwesomeIcon icon={faMoneyBillWave} className="seuil-icone" />
+                          </div>
+                          <div className="font-bold text-green-600 text-sm">{prixGros.prix.toLocaleString()} FCFA</div>
+                          <small className="text-gray-500 flex items-center gap-1 text-xs">
+                            <FontAwesomeIcon icon={faMoneyBillWave} className="text-red-500 text-xs" />
                             Seuil: {prixGros.prix_seuil.toLocaleString()} FCFA
                           </small>
                         </div>
                       </div>
                     </div>
                     
-                    <div className="actions-produit">
+                    <div className="flex gap-2 mt-4">
                       <button
                         onClick={() => ajouterAuPanier(produit, 'détail')}
-                        className="bouton-ajouter detail"
+                        className="flex-1 py-2 px-3 rounded text-xs font-semibold bg-gradient-to-br from-[#472ead] to-[#5a3bc0] text-white flex items-center gap-2 justify-center hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300"
                         title="Ajouter en vente détail"
                       >
-                        <FontAwesomeIcon icon={faShoppingBag} className="bouton-ajouter-icone" />
+                        <FontAwesomeIcon icon={faShoppingBag} className="text-xs" />
                         Détail
                       </button>
                       <button
                         onClick={() => ajouterAuPanier(produit, 'gros')}
-                        className="bouton-ajouter gros"
+                        className="flex-1 py-2 px-3 rounded text-xs font-semibold bg-gradient-to-br from-[#f58020] to-[#ff9c4d] text-white flex items-center gap-2 justify-center hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300"
                         title="Ajouter en vente gros"
                       >
-                        <FontAwesomeIcon icon={faPallet} className="bouton-ajouter-icone" />
+                        <FontAwesomeIcon icon={faPallet} className="text-xs" />
                         Gros
                       </button>
                     </div>
@@ -593,43 +543,43 @@ const NouvelleCommande = ({ panier, setPanier, produits, onCommandeValidee, sell
         </div>
 
         {/* Section droite : Panier et Client */}
-        <div className="section-droite">
+        <div className="space-y-5">
           {/* Informations client */}
-          <div className="section-client">
-            <h3>
-              <FontAwesomeIcon icon={faUser} className="section-icone" />
+          <div className="bg-white rounded-xl p-5 shadow-sm">
+            <h3 className="text-base text-gray-800 mb-4 font-semibold flex items-center gap-2">
+              <FontAwesomeIcon icon={faUser} className="text-[#472ead] text-sm" />
               Informations Client
             </h3>
-            <div className="formulaire-client">
-              <div className="input-group">
-                <FontAwesomeIcon icon={faUser} className="input-icon" />
+            <div className="space-y-3">
+              <div className="relative flex items-center">
+                <FontAwesomeIcon icon={faUser} className="absolute left-3 text-gray-500 text-sm z-10" />
                 <input
                   ref={inputNomClientRef}
                   type="text"
                   placeholder="Nom complet *"
                   value={client.nom}
                   onChange={(e) => setClient({...client, nom: e.target.value})}
-                  className="input-client"
+                  className="w-full py-2 px-3 pl-10 text-sm border-2 border-gray-200 rounded-lg transition-colors focus:border-[#472ead] focus:outline-none"
                   required
                 />
               </div>
-              <div className="input-group">
-                <FontAwesomeIcon icon={faPhone} className="input-icon" />
+              <div className="relative flex items-center">
+                <FontAwesomeIcon icon={faPhone} className="absolute left-3 text-gray-500 text-sm z-10" />
                 <input
                   type="tel"
                   placeholder="Téléphone"
                   value={client.telephone}
                   onChange={(e) => setClient({...client, telephone: e.target.value})}
-                  className="input-client"
+                  className="w-full py-2 px-3 pl-10 text-sm border-2 border-gray-200 rounded-lg transition-colors focus:border-[#472ead] focus:outline-none"
                 />
               </div>
-              <div className="input-group">
-                <FontAwesomeIcon icon={faMapMarkerAlt} className="input-icon" />
+              <div className="relative flex items-center">
+                <FontAwesomeIcon icon={faMapMarkerAlt} className="absolute left-3 top-3 text-gray-500 text-sm z-10" />
                 <textarea
                   placeholder="Adresse"
                   value={client.adresse}
                   onChange={(e) => setClient({...client, adresse: e.target.value})}
-                  className="textarea-adresse"
+                  className="w-full py-2 px-3 pl-10 text-sm border-2 border-gray-200 rounded-lg transition-colors focus:border-[#472ead] focus:outline-none resize-y min-h-[60px]"
                   rows="2"
                 />
               </div>
@@ -637,43 +587,43 @@ const NouvelleCommande = ({ panier, setPanier, produits, onCommandeValidee, sell
           </div>
 
           {/* Panier */}
-          <div className="section-panier">
-            <div className="panier-entete">
-              <h3>
-                <FontAwesomeIcon icon={faShoppingCart} className="panier-icone" />
+          <div className="bg-white rounded-xl p-5 shadow-sm flex flex-col flex-1 overflow-y-auto">
+            <div className="flex justify-between items-center mb-4 pb-4 border-b border-gray-100">
+              <h3 className="text-base text-gray-800 font-bold flex items-center gap-2">
+                <FontAwesomeIcon icon={faShoppingCart} className="text-[#472ead] text-sm" />
                 Panier
               </h3>
-              <div className="panier-statut">
+              <div className="bg-[#472ead] text-white py-1 px-3 rounded-full text-xs font-semibold">
                 {panier.length} art. - {totalTTC.toLocaleString()} FCFA
               </div>
             </div>
 
             {panier.length === 0 ? (
-              <div className="panier-vide">
-                <FontAwesomeIcon icon={faCartArrowDown} className="panier-vide-icone" />
-                <p>Panier vide</p>
-                <small>Ajoutez des produits</small>
+              <div className="text-center py-8 text-gray-500">
+                <FontAwesomeIcon icon={faCartArrowDown} className="text-4xl mb-3 text-gray-300" />
+                <p className="font-medium">Panier vide</p>
+                <small className="text-sm">Ajoutez des produits</small>
               </div>
             ) : (
               <>
                 {/* Contrôle TVA */}
-                <div className="controle-tva-panier">
-                  <div className="checkbox-tva">
-                    <label className="checkbox-label">
+                <div className="bg-gray-50 border-2 border-gray-200 rounded-lg p-4 mb-4">
+                  <div className="mb-0">
+                    <label className="flex items-center gap-3 cursor-pointer font-medium text-gray-800 text-sm">
                       <input
                         type="checkbox"
                         checked={tvaActive}
                         onChange={(e) => setTvaActive(e.target.checked)}
-                        className="checkbox-input"
+                        className="hidden"
                       />
-                      <span className="checkbox-custom">
+                      <span className="flex items-center justify-center w-4 h-4">
                         <FontAwesomeIcon 
                           icon={tvaActive ? faCheckSquare : faSquare} 
-                          className={`checkbox-icon ${tvaActive ? 'checked' : ''}`}
+                          className={`text-sm transition-all duration-300 ${tvaActive ? 'text-green-500' : 'text-gray-400'}`}
                         />
                       </span>
-                      <span className="checkbox-text">
-                        <FontAwesomeIcon icon={faReceipt} className="checkbox-icone" />
+                      <span className="flex items-center gap-2 text-sm">
+                        <FontAwesomeIcon icon={faReceipt} className="text-[#472ead] text-sm" />
                         TVA (18%)
                       </span>
                     </label>
@@ -682,108 +632,108 @@ const NouvelleCommande = ({ panier, setPanier, produits, onCommandeValidee, sell
 
                 {/* Affichage groupé par type de vente */}
                 {Object.entries(produitsParType).map(([typeVente, produits]) => (
-                  <div key={typeVente} className="groupe-type-vente">
-                    <div className="entete-groupe-type">
-                      <h4>
+                  <div key={typeVente} className="mb-4 border-2 border-gray-200 rounded-lg overflow-hidden">
+                    <div className="bg-gray-50 py-3 px-4 flex justify-between items-center border-b-2 border-gray-200">
+                      <h4 className="m-0 text-gray-800 font-semibold flex items-center gap-2 text-sm">
                         {typeVente === 'détail' ? (
                           <>
-                            <FontAwesomeIcon icon={faShoppingBag} className="groupe-icone" />
+                            <FontAwesomeIcon icon={faShoppingBag} className="text-[#472ead] text-sm" />
                             Détail
                           </>
                         ) : (
                           <>
-                            <FontAwesomeIcon icon={faPallet} className="groupe-icone" />
+                            <FontAwesomeIcon icon={faPallet} className="text-[#f58020] text-sm" />
                             Gros
                           </>
                         )}
                       </h4>
-                      <span className="badge-type">
+                      <span className={`${typeVente === 'détail' ? 'bg-[#472ead]' : 'bg-[#f58020]'} text-white py-0.5 px-2 rounded-full text-xs font-semibold`}>
                         {produits.length} prod.
                       </span>
                     </div>
                     
-                    <div className="liste-panier-groupe">
+                    <div className="p-3">
                       {produits.map(item => (
-                        <div key={`${item.id}-${item.type_vente}`} className="item-panier">
-                          <div className="item-info">
-                            <div className="item-nom">{item.nom}</div>
-                            <div className="item-reference">
+                        <div key={`${item.id}-${item.type_vente}`} className="bg-gray-50 rounded-lg p-3 mb-3 border-2 border-gray-200">
+                          <div className="mb-3">
+                            <div className="font-bold text-gray-800 mb-1 text-sm">{item.nom}</div>
+                            <div className="text-xs text-gray-600 mb-3">
                               Ref: {item.reference}
                             </div>
                             
                             {/* ÉDITION DU PRIX */}
                             {editionPrix && editionPrix.produitId === item.id && editionPrix.typeVente === item.type_vente ? (
-                              <div className="edition-prix">
-                                <div className="controle-prix">
-                                  <label>Nouveau prix:</label>
+                              <div className="bg-amber-50 border-2 border-amber-200 rounded-lg p-3 my-3 text-xs">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <label className="font-semibold text-amber-700 text-xs">Nouveau prix:</label>
                                   <input
                                     type="number"
                                     value={editionPrix.nouveauPrix}
                                     onChange={(e) => changerPrixEdition(e.target.value)}
-                                    className="input-prix"
+                                    className="w-20 py-1 px-2 border border-amber-300 rounded text-xs font-semibold text-center"
                                     min={item.prix_seuil}
                                     step="100"
                                   />
-                                  <span>FCFA</span>
+                                  <span className="text-xs">FCFA</span>
                                 </div>
-                                <div className="limites-prix">
-                                  <small>Min: {item.prix_seuil.toLocaleString()} FCFA</small>
-                                  <small>Base: {item.prix_base.toLocaleString()} FCFA</small>
+                                <div className="flex justify-between mb-3 flex-wrap gap-1 text-xs">
+                                  <small className="text-amber-700 text-xs">Min: {item.prix_seuil.toLocaleString()} FCFA</small>
+                                  <small className="text-amber-700 text-xs">Base: {item.prix_base.toLocaleString()} FCFA</small>
                                 </div>
-                                <div className="actions-edition">
-                                  <button onClick={validerModificationPrix} className="bouton-confirmer-prix">
+                                <div className="flex gap-2">
+                                  <button onClick={validerModificationPrix} className="bg-green-500 text-white py-1 px-3 rounded text-xs font-semibold flex items-center gap-1 border-none cursor-pointer transition-all hover:shadow">
                                     <FontAwesomeIcon icon={faCheck} />
                                   </button>
-                                  <button onClick={annulerEditionPrix} className="bouton-annuler-prix">
+                                  <button onClick={annulerEditionPrix} className="bg-red-500 text-white py-1 px-3 rounded text-xs font-semibold flex items-center gap-1 border-none cursor-pointer transition-all hover:shadow">
                                     <FontAwesomeIcon icon={faTimes} />
                                   </button>
                                 </div>
                               </div>
                             ) : (
-                              <div className="affichage-prix">
-                                <span className={`prix-actuel ${item.prix_vente !== item.prix_base ? 'prix-modifie' : ''}`}>
+                              <div className="my-3">
+                                <span className={`text-sm font-bold ${item.prix_vente !== item.prix_base ? 'text-amber-600' : 'text-gray-800'}`}>
                                   {item.prix_vente.toLocaleString()} × {item.quantite}
                                 </span>
-                                <div className="sous-total">
+                                <div className="text-xs text-green-600 font-semibold mt-1">
                                   {(item.prix_vente * item.quantite).toLocaleString()} FCFA
                                 </div>
                               </div>
                             )}
                           </div>
 
-                          <div className="item-actions">
+                          <div className="flex justify-between items-center">
                             {/* ÉDITION DE LA QUANTITÉ */}
                             {editionQuantite && editionQuantite.produitId === item.id && editionQuantite.typeVente === item.type_vente ? (
-                              <div className="edition-quantite">
-                                <div className="controle-quantite-edition">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
                                   <input
                                     type="number"
                                     value={editionQuantite.nouvelleQuantite}
                                     onChange={(e) => changerQuantiteEdition(e.target.value)}
-                                    className="input-quantite-edition"
+                                    className="w-16 py-1 px-2 border border-gray-300 rounded text-sm text-center"
                                     min="1"
                                   />
-                                  <div className="actions-edition-quantite">
-                                    <button onClick={validerModificationQuantite} className="bouton-confirmer-quantite">
-                                      <FontAwesomeIcon icon={faCheck} />
+                                  <div className="flex gap-1">
+                                    <button onClick={validerModificationQuantite} className="bg-green-500 text-white w-7 h-7 rounded flex items-center justify-center">
+                                      <FontAwesomeIcon icon={faCheck} className="text-xs" />
                                     </button>
-                                    <button onClick={annulerEditionQuantite} className="bouton-annuler-quantite">
-                                      <FontAwesomeIcon icon={faTimes} />
+                                    <button onClick={annulerEditionQuantite} className="bg-red-500 text-white w-7 h-7 rounded flex items-center justify-center">
+                                      <FontAwesomeIcon icon={faTimes} className="text-xs" />
                                     </button>
                                   </div>
                                 </div>
                               </div>
                             ) : (
-                              <div className="controle-quantite">
+                              <div className="flex items-center gap-2 bg-white py-1 px-2 rounded-lg border border-gray-200">
                                 <button
                                   onClick={() => modifierQuantite(item.id, item.type_vente, item.quantite - 1)}
-                                  className="bouton-quantite"
+                                  className={`${item.type_vente === 'détail' ? 'bg-[#472ead]' : 'bg-[#f58020]'} text-white w-6 h-6 rounded text-sm font-bold border-none cursor-pointer disabled:opacity-50`}
                                   disabled={!!editionPrix}
                                 >
-                                  <FontAwesomeIcon icon={faMinus} />
+                                  <FontAwesomeIcon icon={faMinus} className="text-xs" />
                                 </button>
                                 <span 
-                                  className="quantite"
+                                  className="font-semibold text-gray-800 cursor-pointer px-2"
                                   onClick={() => demarrerEditionQuantite(item)}
                                   title="Modifier quantité"
                                 >
@@ -791,40 +741,40 @@ const NouvelleCommande = ({ panier, setPanier, produits, onCommandeValidee, sell
                                 </span>
                                 <button
                                   onClick={() => modifierQuantite(item.id, item.type_vente, item.quantite + 1)}
-                                  className="bouton-quantite"
+                                  className={`${item.type_vente === 'détail' ? 'bg-[#472ead]' : 'bg-[#f58020]'} text-white w-6 h-6 rounded text-sm font-bold border-none cursor-pointer disabled:opacity-50`}
                                   disabled={!!editionPrix}
                                 >
-                                  <FontAwesomeIcon icon={faPlus} />
+                                  <FontAwesomeIcon icon={faPlus} className="text-xs" />
                                 </button>
                               </div>
                             )}
 
-                            <div className="actions-prix">
+                            <div className="flex gap-2">
                               {!editionPrix && !editionQuantite && (
                                 <button
                                   onClick={() => demarrerEditionPrix(item)}
-                                  className="bouton-modifier-prix"
+                                  className="bg-blue-500 text-white w-7 h-7 rounded flex items-center justify-center hover:shadow"
                                   title="Modifier prix"
                                 >
-                                  <FontAwesomeIcon icon={faEdit} />
+                                  <FontAwesomeIcon icon={faEdit} className="text-xs" />
                                 </button>
                               )}
                               {!editionPrix && !editionQuantite && item.prix_vente !== item.prix_base && (
                                 <button
                                   onClick={() => reinitialiserPrix(item.id, item.type_vente)}
-                                  className="bouton-reinitialiser-prix"
+                                  className="bg-amber-500 text-white w-7 h-7 rounded flex items-center justify-center hover:shadow"
                                   title="Rétablir prix"
                                 >
-                                  <FontAwesomeIcon icon={faRedo} />
+                                  <FontAwesomeIcon icon={faRedo} className="text-xs" />
                                 </button>
                               )}
                               <button
                                 onClick={() => retirerDuPanier(item.id, item.type_vente)}
-                                className="bouton-supprimer"
+                                className="bg-red-500 text-white w-7 h-7 rounded flex items-center justify-center hover:shadow disabled:opacity-50"
                                 disabled={!!editionPrix || !!editionQuantite}
                                 title="Retirer"
                               >
-                                <FontAwesomeIcon icon={faTrash} />
+                                <FontAwesomeIcon icon={faTrash} className="text-xs" />
                               </button>
                             </div>
                           </div>
@@ -835,43 +785,43 @@ const NouvelleCommande = ({ panier, setPanier, produits, onCommandeValidee, sell
                 ))}
 
                 {/* Résumé */}
-                <div className="resume-commande">
-                  <h4>
-                    <FontAwesomeIcon icon={faReceipt} className="resume-icone" />
+                <div className="bg-gray-50 rounded-lg p-4 mb-4 border-2 border-gray-200">
+                  <h4 className="text-sm text-gray-800 mb-3 font-semibold flex items-center gap-2">
+                    <FontAwesomeIcon icon={faReceipt} className="text-[#472ead] text-sm" />
                     Résumé
                   </h4>
-                  <div className="ligne-total">
+                  <div className="flex justify-between mb-2 pb-2 border-b border-gray-200 text-sm">
                     <span>Total HT:</span>
                     <span>{totalHT.toLocaleString()} FCFA</span>
                   </div>
                   {tvaActive && (
-                    <div className="ligne-tva">
+                    <div className="flex justify-between mb-2 pb-2 border-b border-gray-200 text-sm">
                       <span>TVA (18%):</span>
                       <span>{tva.toLocaleString()} FCFA</span>
                     </div>
                   )}
-                  <div className="ligne-total-ttc">
+                  <div className="flex justify-between text-sm font-bold text-gray-800">
                     <strong>Total TTC:</strong>
                     <strong>{totalTTC.toLocaleString()} FCFA</strong>
                   </div>
                 </div>
 
                 {/* Actions */}
-                <div className="actions-panier">
+                <div className="flex flex-col gap-3 mt-auto">
                   <button
                     onClick={validerCommande}
-                    className="bouton-valider"
+                    className="py-3 rounded-lg text-sm font-bold border-none cursor-pointer flex items-center gap-2 justify-center bg-gradient-to-br from-green-500 to-emerald-600 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300"
                     disabled={!!editionPrix || !!editionQuantite || envoiEnCours}
                   >
-                    <FontAwesomeIcon icon={faPaperPlane} className="bouton-icone" />
+                    <FontAwesomeIcon icon={faPaperPlane} className="text-sm" />
                     {envoiEnCours ? 'Envoi...' : 'Envoyer au Caissier'}
                   </button>
                   <button
                     onClick={annulerCommande}
-                    className="bouton-annuler"
+                    className="py-3 rounded-lg text-sm font-bold border-none cursor-pointer flex items-center gap-2 justify-center bg-gradient-to-br from-red-500 to-rose-600 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300"
                     disabled={!!editionPrix || !!editionQuantite || envoiEnCours}
                   >
-                    <FontAwesomeIcon icon={faBan} className="bouton-icone" />
+                    <FontAwesomeIcon icon={faBan} className="text-sm" />
                     Annuler
                   </button>
                 </div>
@@ -880,48 +830,55 @@ const NouvelleCommande = ({ panier, setPanier, produits, onCommandeValidee, sell
           </div>
         </div>
       </div>
+{commandeValidee && (
+  <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+    <div className="bg-white p-5 rounded-2xl shadow-2xl w-[340px]">
+      
+      {/* TITRE */}
+      <div className="flex items-center justify-between mb-3 border-b pb-2">
+        <h3 className="font-bold text-sm flex items-center gap-2">
+          <FontAwesomeIcon icon={faPrint} />
+          Aperçu du ticket
+        </h3>
+        <button
+          onClick={() => setCommandeValidee(null)}
+          className="text-gray-500 hover:text-red-600"
+        >
+          <FontAwesomeIcon icon={faXmark} />
+        </button>
+      </div>
 
-      {/* 🔹 MODAL TICKET AVEC QR CODE (après validation) */}
-      {commandePourTicket && (
-        <div className="ticket-overlay">
-          <div className="ticket-contenu">
-            {/* Partie visible à l'écran uniquement (pas imprimée) */}
-            <div className="ticket-texte-ecran">
-              <h3>Ticket commande</h3>
-              <p>Numéro : <strong>{commandePourTicket.numero_commande}</strong></p>
-              <p>Vendeur : <strong>{commandePourTicket.vendeur}</strong></p>
-              <p>Total TTC : <strong>{commandePourTicket.total_ttc.toLocaleString()} FCFA</strong></p>
-              <p style={{ fontSize: '0.85rem', opacity: 0.8 }}>
-                Le ticket imprimé contiendra uniquement le QR code.
-              </p>
-            </div>
+      {/* TICKET */}
+      <div className="flex justify-center">
+        <Ticket ref={ticketRef} commande={commandeValidee} />
+      </div>
 
-            {/* Partie qui sera imprimée : uniquement ce bloc QR */}
-            <div className="ticket-qrcode-print">
-              <QRCodeCanvas 
-                value={getValeurQRCode()}
-                size={220}
-                includeMargin={true}
-              />
-            </div>
+      {/* ACTIONS */}
+      <div className="flex gap-3 mt-4">
+        <button
+          onClick={imprimerTicket}
+          className="flex-1 flex items-center justify-center gap-2
+                     bg-green-600 hover:bg-green-700
+                     text-white py-2 rounded-lg font-bold transition"
+        >
+          <FontAwesomeIcon icon={faPrint} />
+          Imprimer
+        </button>
 
-            {/* Boutons (non imprimés) */}
-            <div className="ticket-actions">
-              <button className="bouton-imprimer-ticket" onClick={imprimerTicket}>
-                <FontAwesomeIcon icon={faPrint} className="bouton-icone" />
-                Imprimer le ticket
-              </button>
-              <button 
-                className="bouton-fermer-ticket" 
-                onClick={() => setCommandePourTicket(null)}
-              >
-                <FontAwesomeIcon icon={faTimes} className="bouton-icone" />
-                Fermer
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+        <button
+          onClick={() => setCommandeValidee(null)}
+          className="flex-1 flex items-center justify-center gap-2
+                     bg-gray-200 hover:bg-gray-300
+                     py-2 rounded-lg font-bold transition"
+        >
+          <FontAwesomeIcon icon={faXmark} />
+          Fermer
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
     </div>
   );
 };

@@ -4,7 +4,7 @@ import Sidebar from './Sidebar';
 import TableauDeBord from './TableauDeBord';
 import NouvelleCommande from './pages/NouvelleCommande';
 import HistoriqueCommandes from './pages/HistoriqueCommandes';
-import Footer from './Footer'; // Import du footer
+import Footer from './Footer';
 import './css/VendeurInterface.css';
 import { useNavigate } from 'react-router-dom';
 import useAuth from '../hooks/useAuth';
@@ -14,7 +14,6 @@ const VendeurInterface = () => {
   const [panier, setPanier] = useState([]);
   const [produits, setProduits] = useState([]);
   const [historiqueCommandes, setHistoriqueCommandes] = useState([]);
-  const [isLoggedIn, setIsLoggedIn] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
   const navigate = useNavigate();
   const { logout } = useAuth();
@@ -33,7 +32,6 @@ const VendeurInterface = () => {
       
       if (userStr) {
         const apiUser = JSON.parse(userStr);
-        console.log('✅ Utilisateur chargé depuis localStorage:', apiUser);
         
         // Mapper les données API vers le format utilisé dans l'interface
         const mappedUser = {
@@ -59,7 +57,6 @@ const VendeurInterface = () => {
       }
 
       // Fallback si aucune donnée dans le localStorage
-      console.warn('⚠️ Aucune donnée utilisateur trouvée dans localStorage');
       const defaultUser = {
         id: null,
         name: "Utilisateur",
@@ -74,7 +71,6 @@ const VendeurInterface = () => {
       setCurrentUser(defaultUser);
       
     } catch (error) {
-      console.error('❌ Erreur chargement données utilisateur:', error);
       setCurrentUser({
         id: null,
         name: "Utilisateur",
@@ -91,8 +87,6 @@ const VendeurInterface = () => {
 
   // Fonction pour mettre à jour les informations utilisateur
   const handleUpdateUser = (updatedUser) => {
-    console.log('🔄 Mise à jour utilisateur:', updatedUser);
-    
     try {
       // Mettre à jour l'état local
       setCurrentUser(updatedUser);
@@ -114,7 +108,6 @@ const VendeurInterface = () => {
         };
         
         localStorage.setItem('user', JSON.stringify(updatedApiUser));
-        console.log('✅ Données utilisateur mises à jour dans localStorage');
       }
       
     } catch (error) {
@@ -279,9 +272,6 @@ const VendeurInterface = () => {
 
   const gererCommandeValidee = async (nouvelleCommande) => {
     try {
-      // Simulation d'envoi vers le microservice caisse
-      console.log('📨 Envoi commande au caissier:', nouvelleCommande);
-
       // Ajouter à l'historique local
       setHistoriqueCommandes(prev => [nouvelleCommande, ...prev]);
 

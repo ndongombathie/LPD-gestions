@@ -1,25 +1,39 @@
-import React, { useState, useEffect, useRef } from "react";
+// ==========================================================
+// 🧠 Header.jsx — LPD Manager (Vendeur)
+// ==========================================================
+
+import React, { useState, useMemo } from "react";
 import {
-  User,
   ChevronDown,
   LogOut,
   Key,
   X,
-  Save,
-  Store,
-  Calendar,
   Banknote,
-  Eye,
-  EyeOff,
-  Camera,
-  CheckCircle2,
   AlertCircle,
+  CheckCircle,
+  User,
 } from "lucide-react";
 import useAuth from "../hooks/useAuth";
 
-
-
 // ================= Utils =================
+const getDisplayName = (user) => {
+  if (!user) return "Utilisateur";
+  
+  if (user.prenom && user.nom) {
+    return `${user.prenom} ${user.nom}`;
+  }
+  
+  if (user.name) {
+    return user.name;
+  }
+  
+  if (user.email) {
+    return user.email.split('@')[0];
+  }
+  
+  return "Utilisateur";
+};
+
 const getInitials = (name = "") =>
   name
     .split(" ")
@@ -28,80 +42,129 @@ const getInitials = (name = "") =>
     .toUpperCase()
     .slice(0, 2);
 
-// ================= Toast System =================
-function Toast({ toasts, removeToast }) {
-  return (
-    <div className="fixed top-4 right-4 z-[999] space-y-2">
-      {toasts.map((t) => (
-        <div
-          key={t.id}
-          className={`flex items-start gap-3 px-4 py-3 rounded-xl shadow-md border ${
-            t.type === "success"
-              ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-              : "bg-rose-50 border-rose-200 text-rose-800"
-          }`}
-        >
-          {t.type === "success" ? (
-            <CheckCircle2 className="w-5 h-5 mt-0.5" />
-          ) : (
-            <AlertCircle className="w-5 h-5 mt-0.5" />
-          )}
-          <div>
-            <div className="font-semibold text-sm">{t.title}</div>
-            {t.message && <div className="text-xs opacity-90 mt-0.5">{t.message}</div>}
-          </div>
-          <button
-            onClick={() => removeToast(t.id)}
-            className="ml-3 text-gray-500 hover:text-gray-800"
-          >
-            <X size={14} />
-          </button>
-        </div>
-      ))}
-    </div>
-  );
-}
+// ================= Password Validation =================
+const validatePassword = (password) => {
+  const errors = [];
+  if (password.length < 6) errors.push("6 caractères minimum");
+  return errors;
+};
 
 // ================= Password Modal =================
-function PasswordModal({ open, onClose, onSuccess, addToast, changePassword }) {
+function PasswordModal({ open, onClose }) {
   const [oldPwd, setOldPwd] = useState("");
   const [newPwd, setNewPwd] = useState("");
   const [confirmPwd, setConfirmPwd] = useState("");
-  const [showOld, setShowOld] = useState(false);
-  const [showNew, setShowNew] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [validationErrors, setValidationErrors] = useState([]);
+
+  const { changePassword } = useAuth();
+
+  // Validation en temps réel
+  const handleNewPasswordChange = (value) => {
+    setNewPwd(value);
+    if (value) {
+      const errors = validatePassword(value);
+      setValidationErrors(errors);
+    } else {
+      setValidationErrors([]);
+    }
+  };
+
+  const validateForm = () => {
+    // Réinitialiser les messages
+    setError("");
+    setSuccess("");
+
+    // Validation basique
+    if (!oldPwd.trim()) {
+      setError("L'ancien mot de passe est requis");
+      return false;
+    }
+
+    if (!newPwd.trim()) {
+      setError("Le nouveau mot de passe est requis");
+      return false;
+    }
+
+    if (validationErrors.length > 0) {
+      setError("Le mot de passe doit contenir au moins 6 caractères");
+      return false;
+    }
+
+    if (newPwd !== confirmPwd) {
+      setError("Les nouveaux mots de passe ne correspondent pas");
+      return false;
+    }
+
+    if (oldPwd === newPwd) {
+      setError("Le nouveau mot de passe doit être différent de l'ancien");
+      return false;
+    }
+
+    return true;
+  };
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!oldPwd || !newPwd || !confirmPwd) {
-      addToast("error", "Erreur", "Veuillez remplir tous les champs");
-      return;
-    }
-    if (newPwd !== confirmPwd) {
-      addToast("error", "Erreur", "Les mots de passe ne correspondent pas");
-      return;
-    }
-    if (newPwd.length < 6) {
-      addToast("error", "Erreur", "Le mot de passe doit contenir au moins 6 caractères");
+    
+    if (!validateForm()) {
       return;
     }
 
     setLoading(true);
+    setError("");
+
     try {
-      const result = await changePassword(oldPwd, newPwd, confirmPwd);
-      addToast("success", "Succès", "Mot de passe modifié avec succès");
-      onSuccess();
-      onClose();
+      await changePassword(oldPwd, newPwd, confirmPwd);
+      
+      // Succès
+      setSuccess("Mot de passe changé avec succès !");
+      
+      // Réinitialiser le formulaire
       setOldPwd("");
       setNewPwd("");
       setConfirmPwd("");
-    } catch (error) {
-      console.error("Erreur changement mot de passe:", error);
-      addToast("error", "Erreur", error.response?.data?.message || "Erreur lors du changement de mot de passe");
+      setValidationErrors([]);
+      
+      // Fermer automatiquement après 2 secondes
+      setTimeout(() => {
+        onClose();
+        setSuccess("");
+      }, 2000);
+      
+    } catch (err) {
+      // Gestion des erreurs spécifiques
+      if (err.response?.status === 401) {
+        setError("L'ancien mot de passe est incorrect");
+      } else if (err.response?.status === 400) {
+        setError(err.response.data?.message || "Données invalides");
+      } else if (err.response?.status === 429) {
+        setError("Trop de tentatives. Veuillez réessayer plus tard");
+      } else {
+        setError("Erreur lors du changement de mot de passe. Veuillez réessayer.");
+      }
+      
+      // Log en développement seulement
+      if (process.env.NODE_ENV === 'development') {
+        console.error("Erreur changement mot de passe:", err);
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleClose = () => {
+    // Réinitialiser tout à la fermeture
+    setOldPwd("");
+    setNewPwd("");
+    setConfirmPwd("");
+    setError("");
+    setSuccess("");
+    setValidationErrors([]);
+    setLoading(false);
+    onClose();
   };
 
   if (!open) return null;
@@ -109,87 +172,130 @@ function PasswordModal({ open, onClose, onSuccess, addToast, changePassword }) {
   return (
     <div className="fixed inset-0 z-[200] bg-black/40 flex items-center justify-center">
       <div className="bg-white w-[95%] sm:w-[420px] rounded-2xl shadow-2xl p-5">
-        <div className="flex justify-between items-center border-b pb-2 mb-4">
-          <h2 className="text-lg font-semibold text-indigo-700 flex items-center gap-2">
-            <Key className="w-5 h-5" /> Changer le mot de passe
+        <div className="flex justify-between items-center border-b pb-3 mb-4">
+          <h2 className="text-lg font-semibold text-[#472EAD] flex items-center gap-2">
+            <Key size={18} /> Changer le mot de passe
           </h2>
-          <button onClick={onClose}>
-            <X size={18} className="text-gray-500" />
+          <button 
+            onClick={handleClose}
+            className="hover:bg-gray-100 p-1 rounded-full"
+            disabled={loading}
+          >
+            <X size={18} />
           </button>
         </div>
 
         <form onSubmit={submit} className="space-y-3">
+          {/* Ancien mot de passe */}
           <div>
-            <label className="block text-sm font-medium text-gray-600">Ancien mot de passe</label>
-            <div className="relative">
-              <input
-                type={showOld ? "text" : "password"}
-                className="w-full border rounded-lg px-3 py-2 mt-1 pr-10"
-                value={oldPwd}
-                onChange={(e) => setOldPwd(e.target.value)}
-              />
-              <button
-                type="button"
-                onClick={() => setShowOld((v) => !v)}
-                className="absolute right-2 top-1/2 -translate-y-1/2"
-              >
-                {showOld ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Ancien mot de passe *
+            </label>
+            <input
+              type="password"
+              placeholder="Entrez votre mot de passe actuel"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#472EAD] focus:border-transparent"
+              value={oldPwd}
+              onChange={(e) => setOldPwd(e.target.value)}
+              disabled={loading}
+              required
+            />
           </div>
 
+          {/* Nouveau mot de passe */}
           <div>
-            <label className="block text-sm font-medium text-gray-600">Nouveau mot de passe</label>
-            <div className="relative">
-              <input
-                type={showNew ? "text" : "password"}
-                className="w-full border rounded-lg px-3 py-2 mt-1 pr-10"
-                value={newPwd}
-                onChange={(e) => setNewPwd(e.target.value)}
-              />
-              <button
-                type="button"
-                onClick={() => setShowNew((v) => !v)}
-                className="absolute right-2 top-1/2 -translate-y-1/2"
-              >
-                {showNew ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Nouveau mot de passe *
+            </label>
+            <input
+              type="password"
+              placeholder="Minimum 6 caractères"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 ${
+                newPwd && validationErrors.length > 0
+                  ? "border-red-500 focus:ring-red-500"
+                  : "border-gray-300 focus:ring-[#472EAD]"
+              }`}
+              value={newPwd}
+              onChange={(e) => handleNewPasswordChange(e.target.value)}
+              disabled={loading}
+              required
+            />
+            
+            {/* Indicateur de validation simple */}
+            {newPwd && validationErrors.length > 0 && (
+              <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                <AlertCircle size={12} /> Minimum 6 caractères requis
+              </p>
+            )}
           </div>
 
+          {/* Confirmation */}
           <div>
-            <label className="block text-sm font-medium text-gray-600">Confirmer le mot de passe</label>
-            <div className="relative">
-              <input
-                type={showConfirm ? "text" : "password"}
-                className="w-full border rounded-lg px-3 py-2 mt-1 pr-10"
-                value={confirmPwd}
-                onChange={(e) => setConfirmPwd(e.target.value)}
-              />
-              <button
-                type="button"
-                onClick={() => setShowConfirm((v) => !v)}
-                className="absolute right-2 top-1/2 -translate-y-1/2"
-              >
-                {showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Confirmer le mot de passe *
+            </label>
+            <input
+              type="password"
+              placeholder="Retapez le nouveau mot de passe"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 ${
+                confirmPwd && newPwd !== confirmPwd
+                  ? "border-red-500 focus:ring-red-500"
+                  : "border-gray-300 focus:ring-[#472EAD]"
+              }`}
+              value={confirmPwd}
+              onChange={(e) => setConfirmPwd(e.target.value)}
+              disabled={loading}
+              required
+            />
+            {confirmPwd && newPwd !== confirmPwd && (
+              <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
+                <AlertCircle size={12} /> Les mots de passe ne correspondent pas
+              </p>
+            )}
           </div>
 
+          {/* Messages d'erreur/succès */}
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-red-700 text-sm flex items-center gap-2">
+                <AlertCircle size={16} />
+                {error}
+              </p>
+            </div>
+          )}
+
+          {success && (
+            <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+              <p className="text-green-700 text-sm flex items-center gap-2">
+                <CheckCircle size={16} />
+                {success}
+              </p>
+            </div>
+          )}
+
+          {/* Actions */}
           <div className="flex justify-end gap-3 pt-2">
             <button
               type="button"
-              onClick={onClose}
-              className="px-4 py-2 border rounded-lg"
+              onClick={handleClose}
+              className="border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+              disabled={loading}
             >
               Annuler
             </button>
             <button
               type="submit"
-              disabled={loading}
-              className="px-4 py-2 text-white rounded-lg bg-indigo-600 disabled:opacity-50"
+              disabled={loading || validationErrors.length > 0}
+              className="bg-[#472EAD] text-white px-4 py-2 rounded-lg hover:bg-[#3a2399] disabled:opacity-50 disabled:cursor-not-allowed min-w-[100px]"
             >
-              {loading ? "Chargement..." : "Confirmer"}
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Chargement...
+                </span>
+              ) : (
+                "Confirmer"
+              )}
             </button>
           </div>
         </form>
@@ -198,373 +304,145 @@ function PasswordModal({ open, onClose, onSuccess, addToast, changePassword }) {
   );
 }
 
-// ================= Profile Modal =================
-function ProfileModal({ open, onClose, user, onUpdate, addToast }) {
-  const [preview, setPreview] = useState(user?.photo || null);
-  const [prenom, setPrenom] = useState(user?.prenom || "");
-  const [nom, setNom] = useState(user?.nom || "");
-  const [email, setEmail] = useState(user?.email || "");
-  const [telephone, setTelephone] = useState(user?.telephone || "");
-  const [adresse, setAdresse] = useState(user?.adresse || "");
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (open && user) {
-      setPrenom(user.prenom || user.name?.split(' ')[0] || "");
-      setNom(user.nom || user.name?.split(' ').slice(1).join(' ') || "");
-      setEmail(user.email || "");
-      setTelephone(user.telephone || "");
-      setAdresse(user.adresse || "");
-      setPreview(user.photo || null);
-    }
-  }, [open, user]);
-
-  if (!open) return null;
-
-  const handlePhotoChange = (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = () => setPreview(reader.result);
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleSave = async () => {
-    if (!prenom || !nom || !email) {
-      addToast("error", "Erreur", "Veuillez remplir les champs obligatoires");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const updatedUser = {
-        ...user,
-        prenom,
-        nom,
-        name: `${prenom} ${nom}`.trim(),
-        email,
-        telephone,
-        adresse,
-        photo: preview,
-      };
-
-      // TODO: Appel API pour mettre à jour le profil sur le serveur
-      // const result = await updateUserAPI(updatedUser);
-
-      // Sauvegarder dans localStorage (format API)
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        const apiUser = JSON.parse(userStr);
-        const updatedApiUser = {
-          ...apiUser,
-          prenom,
-          nom,
-          email,
-          telephone,
-          adresse,
-          photo: preview,
-        };
-        localStorage.setItem('user', JSON.stringify(updatedApiUser));
-      }
-
-      onUpdate(updatedUser);
-      addToast("success", "Succès", "Profil mis à jour avec succès");
-      onClose();
-    } catch (error) {
-      console.error("Erreur mise à jour profil:", error);
-      addToast("error", "Erreur", "Erreur lors de la mise à jour du profil");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-[200] bg-black/40 flex items-center justify-center">
-      <div className="bg-white w-[95%] sm:w-[500px] rounded-2xl shadow-2xl p-5 max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center border-b pb-2 mb-4">
-          <h2 className="text-lg font-semibold text-indigo-700 flex items-center gap-2">
-            <User className="w-5 h-5" /> Mon Profil
-          </h2>
-          <button onClick={onClose}>
-            <X size={18} className="text-gray-500" />
-          </button>
-        </div>
-
-        <div className="space-y-4">
-          {/* Photo */}
-          <div className="flex justify-center">
-            <div className="relative">
-              <div className="w-20 h-20 rounded-full bg-indigo-600 text-white flex items-center justify-center text-2xl font-semibold overflow-hidden">
-                {preview ? (
-                  <img src={preview} alt="profil" className="w-full h-full object-cover" />
-                ) : (
-                  getInitials(`${prenom} ${nom}`)
-                )}
-              </div>
-              <label className="absolute bottom-0 right-0 bg-indigo-600 text-white rounded-full p-2 cursor-pointer">
-                <Camera size={14} />
-                <input type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
-              </label>
-            </div>
-          </div>
-
-          {/* Prénom */}
-          <div>
-            <label className="block text-sm font-medium text-gray-600">Prénom</label>
-            <input
-              type="text"
-              className="w-full border rounded-lg px-3 py-2 mt-1"
-              value={prenom}
-              onChange={(e) => setPrenom(e.target.value)}
-            />
-          </div>
-
-          {/* Nom */}
-          <div>
-            <label className="block text-sm font-medium text-gray-600">Nom</label>
-            <input
-              type="text"
-              className="w-full border rounded-lg px-3 py-2 mt-1"
-              value={nom}
-              onChange={(e) => setNom(e.target.value)}
-            />
-          </div>
-
-          {/* Email */}
-          <div>
-            <label className="block text-sm font-medium text-gray-600">Email</label>
-            <input
-              type="email"
-              className="w-full border rounded-lg px-3 py-2 mt-1"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-
-          {/* Téléphone */}
-          <div>
-            <label className="block text-sm font-medium text-gray-600">Téléphone</label>
-            <input
-              type="tel"
-              className="w-full border rounded-lg px-3 py-2 mt-1"
-              value={telephone}
-              onChange={(e) => setTelephone(e.target.value)}
-            />
-          </div>
-
-          {/* Adresse */}
-          <div>
-            <label className="block text-sm font-medium text-gray-600">Adresse</label>
-            <textarea
-              className="w-full border rounded-lg px-3 py-2 mt-1"
-              rows="2"
-              value={adresse}
-              onChange={(e) => setAdresse(e.target.value)}
-            />
-          </div>
-
-          {/* Boutique (lecture seule) */}
-          <div>
-            <label className="block text-sm font-medium text-gray-600">Boutique</label>
-            <input
-              type="text"
-              className="w-full border rounded-lg px-3 py-2 mt-1 bg-gray-50"
-              value={user?.store || "Boutique"}
-              disabled
-            />
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4 border-t">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 border rounded-lg"
-            >
-              Annuler
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={loading}
-              className="px-4 py-2 text-white rounded-lg bg-indigo-600 flex items-center gap-2 disabled:opacity-50"
-            >
-              <Save size={14} />
-              {loading ? "Chargement..." : "Enregistrer"}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ================= Header =================
-const Header = ({
-  onLogout,
-  user,
-  commandes,
-}) => {
-  const { user: authUser, logout, changePassword } = useAuth();
-  const displayUser = user || authUser;
-  const [ventesDuJour, setVentesDuJour] = useState(0);
+// ================= HEADER =================
+export default function Header({ user, commandes = [], onLogout }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
-  const [toasts, setToasts] = useState([]);
-  const menuRef = useRef(null);
+  const [pwdOpen, setPwdOpen] = useState(false);
 
-  // ===== Calcul ventes =====
-  useEffect(() => {
-    const today = new Date().toDateString();
-    const total = (commandes || [])
+  const ventesDuJour = useMemo(() => {
+    return commandes
       .filter(
         (c) =>
-          new Date(c.created_at).toDateString() === today &&
-          c.statut === "complétée"
+          c.statut === "complétée" &&
+          new Date(c.created_at).toDateString() ===
+            new Date().toDateString()
       )
-      .reduce((sum, c) => sum + (c.total_ttc || 0), 0);
-
-    setVentesDuJour(total);
+      .reduce((s, c) => s + (c.total_ttc || 0), 0);
   }, [commandes]);
 
   const formatMoney = (v) =>
     new Intl.NumberFormat("fr-FR").format(v) + " FCFA";
 
-  // ===== Toast System =====
-  const addToast = (type, title, message) => {
-    const id = Date.now();
-    const toast = { id, type, title, message };
-    setToasts((prev) => [...prev, toast]);
-    setTimeout(() => removeToast(id), 4000);
-  };
-
-  const removeToast = (id) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  };
-
-  // ===== Click outside =====
-  useEffect(() => {
-    const handler = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) {
-        setMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  // Récupérer le nom complet
+  const displayName = getDisplayName(user);
+  const initials = getInitials(displayName);
 
   return (
     <>
-      {/* ===== HEADER ===== */}
-      <header className="sticky top-0 z-20 bg-white border-b shadow-sm">
-        <div className="h-[5px] bg-gradient-to-r from-indigo-600 to-orange-400" />
+      <header className="fixed top-0 left-64 right-0 z-20 bg-white">
+        <div className="h-[6px] bg-gradient-to-r from-[#472EAD] to-[#F58020]" />
 
-        <div className="max-w-7xl mx-auto h-16 px-4 flex items-center justify-between">
-          {/* ===== LEFT ===== */}
-          <div>
-            <h1 className="text-lg font-bold text-indigo-700 flex items-center gap-2">
-              <Store size={18} />
-              Librairie Papeterie Daradji
-            </h1>
-            <p className="text-xs text-gray-500 flex items-center gap-2">
-              <Calendar size={12} />
-              {new Date().toLocaleDateString("fr-FR", {
-                weekday: "long",
-                day: "numeric",
-                month: "long",
-                year: "numeric",
-              })}
-            </p>
-          </div>
+        <div className="h-16 border-b shadow-sm">
+          <div className="h-full px-4 flex items-center justify-between">
+            {/* LOGO */}
+            <div className="flex items-center gap-3">
+              <div className="flex items-center">
+                <span className="text-[#472EAD] font-extrabold text-xl">LP</span>
+                <span className="text-[#F58020] font-extrabold text-xl">D</span>
+              </div>
 
-          {/* ===== RIGHT ===== */}
-          <div className="flex items-center gap-4">
-            {/* Ventes */}
-            <div className="hidden sm:flex flex-col text-right">
-              <span className="text-xs text-gray-500 flex items-center gap-1 justify-end">
-                <Banknote size={12} /> Ventes du jour
-              </span>
-              <span className="font-semibold text-green-600">
-                {formatMoney(ventesDuJour)}
-              </span>
+              <div>
+                <h1 className="text-base font-semibold text-[#472EAD]">
+                  LPD Manager
+                  <span className="text-gray-500 font-normal text-sm">
+                    {" "} | Interface Vendeur
+                  </span>
+                </h1>
+                <p className="hidden sm:block text-xs text-gray-400">
+                  Gestion des ventes 
+                </p>
+              </div>
             </div>
 
-            {/* User */}
-            <div className="relative" ref={menuRef}>
-              <button
-                onClick={() => setMenuOpen((v) => !v)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-full border hover:bg-gray-50"
-              >
-                <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center text-sm font-semibold">
-                  {displayUser?.photo ? (
-                    <img
-                      src={displayUser.photo}
-                      alt=""
-                      className="w-full h-full object-cover rounded-full"
-                    />
-                  ) : (
-                    getInitials(displayUser?.name || "U")
-                  )}
-                </div>
+            {/* ACTIONS */}
+            <div className="flex items-center gap-4">
+              <div className="hidden sm:flex flex-col text-right">
+                <span className="text-xs text-gray-500 flex items-center gap-1 justify-end">
+                  <Banknote size={12} /> Ventes du jour
+                </span>
+                <span className="font-semibold text-emerald-600">
+                  {formatMoney(ventesDuJour)}
+                </span>
+              </div>
 
-                <div className="hidden sm:flex flex-col text-left">
-                  <span className="text-xs font-semibold">
-                    {displayUser?.name || "Utilisateur"}
-                  </span>
-                  <span className="text-[10px] text-gray-500">
-                    {displayUser?.role || "Vendeur"}
-                  </span>
-                </div>
-
-                <ChevronDown size={14} />
-              </button>
-
-              {/* ===== Dropdown ===== */}
-              {menuOpen && (
-                <div className="absolute right-0 mt-2 w-56 bg-white border rounded-xl shadow-lg p-2">
-                  <div className="px-3 py-2 border-b">
-                    <p className="text-sm font-semibold">{displayUser?.name}</p>
-                    <p className="text-xs text-gray-500">{displayUser?.email}</p>
-                    <p className="text-xs text-gray-400">
-                      {displayUser?.store || "Boutique Principale"}
-                    </p>
+              <div className="relative">
+                <button
+                  onClick={() => setMenuOpen((v) => !v)}
+                  className="flex items-center gap-3 pl-2 pr-4 py-1.5 rounded-full border hover:bg-gray-50 transition-colors"
+                  aria-expanded={menuOpen}
+                  aria-label="Menu utilisateur"
+                >
+                  <div 
+                    className="w-8 h-8 rounded-full bg-gradient-to-r from-[#472EAD] to-[#F58020] text-white flex items-center justify-center text-sm font-semibold"
+                    title={displayName}
+                  >
+                    {initials}
                   </div>
+                  <div className="flex flex-col items-start">
+                    <span className="text-sm font-medium text-gray-900 leading-tight">
+                      {displayName}
+                    </span>
+                    <span className="text-xs text-gray-500 leading-tight">
+                      {user?.role === 'vendeur' ? 'Vendeur' : 'Utilisateur'}
+                    </span>
+                  </div>
+                  <ChevronDown 
+                    size={14} 
+                    className={`text-gray-500 transition-transform ${
+                      menuOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
 
-                  <button
-                    onClick={() => {
-                      setPasswordModalOpen(true);
-                      setMenuOpen(false);
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 rounded-md"
-                  >
-                    <Key size={14} />
-                    Modifier le mot de passe
-                  </button>
+                {menuOpen && (
+                  <>
+                    <div 
+                      className="fixed inset-0 z-10"
+                      onClick={() => setMenuOpen(false)}
+                    />
+                    <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 shadow-lg rounded-lg p-2 z-20">
+                      <div className="px-3 py-2 border-b mb-2">
+                        <p className="font-medium text-gray-900">{displayName}</p>
+                        <p className="text-xs text-gray-500 truncate">{user?.email || 'Aucun email'}</p>
+                        <div className="flex items-center gap-1 mt-1">
+                          <User size={10} className="text-gray-400" />
+                          <span className="text-xs text-gray-600">
+                            {user?.store || 'Boutique par défaut'}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      <button
+                        onClick={() => {
+                          setPwdOpen(true);
+                          setMenuOpen(false);
+                        }}
+                        className="w-full px-3 py-2 text-sm hover:bg-gray-50 flex gap-2 items-center rounded-md"
+                      >
+                        <Key size={14} /> Changer mot de passe
+                      </button>
 
-                  <button
-                    onClick={onLogout || logout}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-orange-600 hover:bg-orange-50 rounded-md"
-                  >
-                    <LogOut size={14} />
-                    Déconnexion
-                  </button>
-                </div>
-              )}
+                      <button
+                        onClick={() => {
+                          if (window.confirm("Voulez-vous vous déconnecter ?")) {
+                            onLogout();
+                          }
+                          setMenuOpen(false);
+                        }}
+                        className="w-full px-3 py-2 text-sm text-[#F58020] hover:bg-orange-50 flex gap-2 items-center rounded-md mt-1"
+                      >
+                        <LogOut size={14} /> Déconnexion
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>
       </header>
 
-      <PasswordModal
-        open={passwordModalOpen}
-        onClose={() => setPasswordModalOpen(false)}
-        onSuccess={() => addToast("success", "Succès", "Mot de passe modifié")}
-        addToast={addToast}
-        changePassword={changePassword}
-      />
-
-      {/* ===== TOAST SYSTEM ===== */}
-      <Toast toasts={toasts} removeToast={removeToast} />
+      <PasswordModal open={pwdOpen} onClose={() => setPwdOpen(false)} />
     </>
   );
-};
-
-export default Header;
+}
