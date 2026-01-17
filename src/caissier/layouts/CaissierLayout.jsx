@@ -296,7 +296,7 @@ export default function CaissierLayout() {
   const handleLogout = async () => {
     try {
       await logout();
-    } catch (err) {
+    } catch (_err) {
       // Erreur silencieuse - continuer avec le nettoyage local
     }
 

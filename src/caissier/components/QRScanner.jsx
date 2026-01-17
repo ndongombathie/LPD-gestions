@@ -92,8 +92,8 @@ const QRScanner = ({ onScan, onClose }) => {
       };
 
       detectQR();
-    } catch (err) {
-      throw err;
+    } catch (_err) {
+      throw _err;
     }
   };
 

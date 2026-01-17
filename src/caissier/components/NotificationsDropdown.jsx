@@ -92,7 +92,7 @@ const NotificationsDropdown = ({ isOpen, onClose }) => {
       }));
       setNotifications(newNotifications);
     } catch (error) {
-      console.error('Erreur lors du chargement des notifications:', error);
+      // Erreur silencieuse - gérée par le composant
       setNotifications([]);
     } finally {
       setLoading(false);
