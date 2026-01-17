@@ -1,6 +1,5 @@
 // ==========================================================
 // 🧾 FactureModal.jsx — Génération de facture professionnelle
-// Version Premium avec Logo + QR Code + Thème LPD Manager
 // ==========================================================
 
 import React from "react";
@@ -9,18 +8,28 @@ import jsPDF from "jspdf";
 import "jspdf-autotable";
 import QRCode from "qrcode";
 
+/* ===================== Logger local ===================== */
+const logWarning = (context, error) => {
+  if (process.env.NODE_ENV !== "production") {
+    console.warn(`[${context}]`, error);
+  }
+};
+
 export default function FactureModal({ open, onClose, commande }) {
   if (!commande) return null;
 
   const formatFCFA = (n) =>
-    new Intl.NumberFormat("fr-FR", { style: "currency", currency: "XOF" }).format(Number(n || 0));
+    new Intl.NumberFormat("fr-FR", {
+      style: "currency",
+      currency: "XOF",
+    }).format(Number(n || 0));
 
   // ————————————————————————————————————————
   // Génération du PDF
   // ————————————————————————————————————————
   const generatePDF = async () => {
     const doc = new jsPDF();
-    const logo = "/logo-lpd.png"; // 💡 Mets ton logo ici (public/logo-lpd.png)
+    const logo = "/logo-lpd.png";
     const qrData = `Client: ${commande.client} | Total: ${commande.montantTotal} | Payé: ${commande.montantPaye} | Date: ${commande.date}`;
     const qrCode = await QRCode.toDataURL(qrData, { width: 100 });
 
@@ -28,10 +37,11 @@ export default function FactureModal({ open, onClose, commande }) {
     if (logo) {
       try {
         doc.addImage(logo, "PNG", 14, 10, 25, 25);
-      } catch (e) {
-        console.warn("⚠️ Logo introuvable ou invalide : ", e.message);
+      } catch (error) {
+        logWarning("FactureModal - Logo PDF", error);
       }
     }
+
     doc.setFontSize(18);
     doc.setTextColor(71, 46, 173);
     doc.text("Facture Client — LPD Manager", 45, 20);
@@ -46,9 +56,9 @@ export default function FactureModal({ open, onClose, commande }) {
     // === Infos client ===
     doc.setFontSize(12);
     doc.setTextColor(50);
-    doc.text(`👤 Client : ${commande.client}`, 14, 46);
-    doc.text(`📅 Date : ${commande.date}`, 14, 52);
-    doc.text(`💬 Statut : ${commande.statut}`, 14, 58);
+    doc.text(`Client : ${commande.client}`, 14, 46);
+    doc.text(`Date : ${commande.date}`, 14, 52);
+    doc.text(`Statut : ${commande.statut}`, 14, 58);
 
     // === Tableau des montants ===
     doc.autoTable({
@@ -67,7 +77,7 @@ export default function FactureModal({ open, onClose, commande }) {
       theme: "grid",
     });
 
-    // === QR code + Message ===
+    // === QR Code ===
     const y = doc.lastAutoTable.finalY + 10;
     doc.addImage(qrCode, "PNG", 160, y, 30, 30);
     doc.setFontSize(10);
@@ -83,25 +93,28 @@ export default function FactureModal({ open, onClose, commande }) {
       14,
       footerY
     );
-    doc.text("www.lpd-consulting.com | support@lpd-consulting.com", 14, footerY + 5);
+    doc.text(
+      "www.lpd-consulting.com | support@lpd-consulting.com",
+      14,
+      footerY + 5
+    );
 
-    // ✅ Enregistrement
     doc.save(`Facture_${commande.client}_${commande.date}.pdf`);
   };
 
   // ————————————————————————————————————————
-  // Rendu visuel modale
+  // Rendu visuel
   // ————————————————————————————————————————
   return (
-    <FormModal open={open} onClose={onClose} title={`Facture — ${commande.client}`}>
+    <FormModal
+      open={open}
+      onClose={onClose}
+      title={`Facture — ${commande.client}`}
+    >
       <div className="space-y-4 text-sm text-gray-700">
         <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-          <p>
-            <b>Client :</b> {commande.client}
-          </p>
-          <p>
-            <b>Date :</b> {commande.date}
-          </p>
+          <p><b>Client :</b> {commande.client}</p>
+          <p><b>Date :</b> {commande.date}</p>
           <p>
             <b>Statut :</b>{" "}
             <span
@@ -116,12 +129,8 @@ export default function FactureModal({ open, onClose, commande }) {
               {commande.statut}
             </span>
           </p>
-          <p>
-            <b>Montant total :</b> {formatFCFA(commande.montantTotal)}
-          </p>
-          <p>
-            <b>Montant payé :</b> {formatFCFA(commande.montantPaye)}
-          </p>
+          <p><b>Montant total :</b> {formatFCFA(commande.montantTotal)}</p>
+          <p><b>Montant payé :</b> {formatFCFA(commande.montantPaye)}</p>
           <p>
             <b>Reste à payer :</b>{" "}
             {formatFCFA(commande.montantTotal - commande.montantPaye)}
