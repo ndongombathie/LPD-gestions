@@ -1,17 +1,18 @@
-// App.jsx
-import React from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import Connexion from "./authentification/login/Connexion";          // adapte le chemin
-import VendeurInterface from "./vendeur/VendeurInterface"; // adapte le chemin
+// ==========================================================
+// 🚀 App.jsx — Application LPD - Point d'entrée principal
+// ==========================================================
+
+import { BrowserRouter } from "react-router-dom";
+import AppRoutes from "./Routes";
+import { AuthProvider } from "./contexts/AuthContext";
 
 export default function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Connexion />} />
-        <Route path="/login" element={<Connexion />} />
-        <Route path="/vendeur" element={<VendeurInterface />} />
-      </Routes>
-    </Router>
+    <AuthProvider>
+      <BrowserRouter>
+        <AppRoutes />
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
+
