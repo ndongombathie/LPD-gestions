@@ -13,6 +13,9 @@ GET|HEAD        api/produits/{produit} | afficher les detaille d'un produit spec
 PUT|PATCH       api/produits/{produit} | modifier un produit
 DELETE          api/produits/{produit} | supprimer un produit
 
+# la liste des produits en rupture
+GET             api/produits_en_rupture | les produits en rupture de stock
+
 
 
 
