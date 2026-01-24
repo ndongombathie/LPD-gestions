@@ -1,5 +1,5 @@
 # liste des produits
-api/produits-disponibles-boutique   | toutes les produits disponible
+GET             api/produits-disponibles-boutique   | toutes les produits disponible
 # la gestion des clients
 POST            api/clients  | ajouter une client normal
 PUT|PATCH       api/clients/{client} | modifier les informations d'un client
