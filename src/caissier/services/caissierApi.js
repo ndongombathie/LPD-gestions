@@ -10,51 +10,16 @@ export const caissierApi = {
   async getDashboardStats(date = null) {
     try {
       const today = date || new Date().toISOString().split('T')[0];
-      const todayStart = new Date(today);
-      todayStart.setHours(0, 0, 0, 0);
-      const todayEnd = new Date(today);
-      todayEnd.setHours(23, 59, 59, 999);
-      
-      // Récupérer les commandes payées (filtrer côté client pour aujourd'hui)
-      // Limiter à 50 commandes pour la performance
-      const commandesPayees = await httpClient.get('/commandes-payees', { params: { per_page: 50 } });
-      const commandesDuJour = (commandesPayees.data?.data || commandesPayees.data || []).filter(cmd => {
-        if (!cmd.date && !cmd.created_at) return false;
-        const cmdDate = new Date(cmd.date || cmd.created_at);
-        return cmdDate >= todayStart && cmdDate <= todayEnd;
-      });
-      
-      // Récupérer les décaisements (filtrer côté client pour aujourd'hui)
-      const decaissements = await httpClient.get('/decaissements');
-      const decaissementsDuJour = (decaissements.data?.data || []).filter(dec => {
-        if (!dec.created_at && !dec.updated_at) return false;
-        const decDate = new Date(dec.updated_at || dec.created_at);
-        return decDate >= todayStart && decDate <= todayEnd;
-      });
-      
-      // Récupérer les commandes en attente
-      const commandesAttente = await httpClient.get('/commandes-attente');
-      
-      // Calculer les totaux
-      const totalEncaissements = commandesDuJour.reduce((sum, cmd) => sum + (cmd.total || 0), 0);
-      const totalDecaissements = decaissementsDuJour.reduce((sum, dec) => {
-        if (dec.statut === 'fait') {
-          return sum + (dec.montant || 0);
-        }
-        return sum;
-      }, 0);
-      
-      // Fond d'ouverture (à définir plus tard, pour l'instant 0)
-      const fondOuverture = 0;
-      const soldeActuel = fondOuverture + totalEncaissements - totalDecaissements;
-      
+      const response = await httpClient.get('/caissier/dashboard/stats', { params: { date: today } });
+      const data = response.data || {};
+
       return {
-        fondOuverture,
-        totalEncaissements,
-        totalDecaissements,
-        soldeActuel,
-        ticketsEnAttente: commandesAttente.data?.data?.length || 0,
-        ticketsTraites: commandesDuJour.length,
+        fondOuverture: data.fond_ouverture ?? 0,
+        totalEncaissements: data.total_encaissements ?? 0,
+        totalDecaissements: data.total_decaissements ?? 0,
+        soldeActuel: data.solde_actuel ?? 0,
+        ticketsEnAttente: data.tickets_en_attente ?? 0,
+        ticketsTraites: data.tickets_traites ?? 0,
       };
     } catch (error) {
       // Erreur silencieuse - gérée par le composant
@@ -68,57 +33,8 @@ export const caissierApi = {
   async getVentesParMoyen(date = null) {
     try {
       const today = date || new Date().toISOString().split('T')[0];
-      const todayStart = new Date(today);
-      todayStart.setHours(0, 0, 0, 0);
-      const todayEnd = new Date(today);
-      todayEnd.setHours(23, 59, 59, 999);
-      
-      // Limiter à 50 commandes pour la performance
-      const commandesPayees = await httpClient.get('/commandes-payees', { params: { per_page: 50 } });
-      const commandesDuJour = (commandesPayees.data?.data || commandesPayees.data || []).filter(cmd => {
-        if (!cmd.date && !cmd.created_at) return false;
-        const cmdDate = new Date(cmd.date || cmd.created_at);
-        return cmdDate >= todayStart && cmdDate <= todayEnd;
-      });
-      
-      // Utiliser les paiements déjà inclus dans les commandes (optimisation)
-      const ventesParMoyen = {};
-      
-      commandesDuJour.forEach(commande => {
-        // Si les paiements sont déjà inclus dans la réponse
-        if (commande.paiements && Array.isArray(commande.paiements)) {
-          commande.paiements.forEach(paiement => {
-            const moyen = paiement.type_paiement || 'especes';
-            if (!ventesParMoyen[moyen]) {
-              ventesParMoyen[moyen] = 0;
-            }
-            ventesParMoyen[moyen] += paiement.montant || 0;
-          });
-        } else {
-          // Fallback : utiliser le total de la commande avec un moyen par défaut
-          const moyen = 'especes';
-          if (!ventesParMoyen[moyen]) {
-            ventesParMoyen[moyen] = 0;
-          }
-          ventesParMoyen[moyen] += commande.total || 0;
-        }
-      });
-      
-      // Convertir en tableau avec pourcentages
-      const total = Object.values(ventesParMoyen).reduce((sum, val) => sum + val, 0);
-      const labels = {
-        'especes': 'Espèces',
-        'carte': 'Carte',
-        'wave': 'Wave',
-        'om': 'Orange Money',
-        'autre': 'Autre'
-      };
-      
-      return Object.entries(ventesParMoyen).map(([moyen, montant]) => ({
-        moyen: labels[moyen] || moyen,
-        montant,
-        pourcentage: total > 0 ? Math.round((montant / total) * 100) : 0
-      }));
+      const response = await httpClient.get('/caissier/dashboard/ventes-par-moyen', { params: { date: today } });
+      return response.data?.ventes || [];
     } catch (error) {
       // Erreur silencieuse - retourner tableau vide
       return [];
@@ -131,50 +47,38 @@ export const caissierApi = {
   async getVentesParHeure(date = null) {
     try {
       const today = date || new Date().toISOString().split('T')[0];
-      const todayStart = new Date(today);
-      todayStart.setHours(0, 0, 0, 0);
-      const todayEnd = new Date(today);
-      todayEnd.setHours(23, 59, 59, 999);
-      
-      // Limiter à 50 commandes pour la performance
-      const commandesPayees = await httpClient.get('/commandes-payees', { params: { per_page: 50 } });
-      const commandesDuJour = (commandesPayees.data?.data || commandesPayees.data || []).filter(cmd => {
-        if (!cmd.date && !cmd.created_at) return false;
-        const cmdDate = new Date(cmd.date || cmd.created_at);
-        return cmdDate >= todayStart && cmdDate <= todayEnd;
-      });
-      
-      // Grouper par tranche horaire
-      const tranches = {
-        '08h-10h': { heure: '08h-10h', montant: 0 },
-        '10h-12h': { heure: '10h-12h', montant: 0 },
-        '12h-14h': { heure: '12h-14h', montant: 0 },
-        '14h-16h': { heure: '14h-16h', montant: 0 },
-        '16h-18h': { heure: '16h-18h', montant: 0 },
-        '18h-20h': { heure: '18h-20h', montant: 0 },
-      };
-      
-      commandesDuJour.forEach(commande => {
-        const dateCommande = new Date(commande.date || commande.created_at);
-        const heure = dateCommande.getHours();
-        
-        let tranche = '18h-20h';
-        if (heure >= 8 && heure < 10) tranche = '08h-10h';
-        else if (heure >= 10 && heure < 12) tranche = '10h-12h';
-        else if (heure >= 12 && heure < 14) tranche = '12h-14h';
-        else if (heure >= 14 && heure < 16) tranche = '14h-16h';
-        else if (heure >= 16 && heure < 18) tranche = '16h-18h';
-        
-        if (tranches[tranche]) {
-          tranches[tranche].montant += commande.total || 0;
-        }
-      });
-      
-      return Object.values(tranches);
+      const response = await httpClient.get('/caissier/dashboard/ventes-par-heure', { params: { date: today } });
+      return response.data?.ventes || [];
     } catch (error) {
       // Erreur silencieuse - retourner tableau vide
       return [];
     }
+  },
+
+  // ==================== CAISSE JOURNAL (CAISSIER) ====================
+
+  /**
+   * Récupère le rapport journalier de caisse pour une date.
+   */
+  async getCaissierCaisseJournal(date) {
+    const response = await httpClient.get(`/caissier/caisses-journal/${date}`);
+    return response.data;
+  },
+
+  /**
+   * Initialise (ou met à jour) le fond d'ouverture d'un jour.
+   */
+  async createCaissierCaisseJournal(data) {
+    const response = await httpClient.post('/caissier/caisses-journal', data);
+    return response.data;
+  },
+
+  /**
+   * Clôture la caisse d'un jour.
+   */
+  async cloturerCaissierCaisseJournal(date, data) {
+    const response = await httpClient.put(`/caissier/caisses-journal/${date}/cloture`, data);
+    return response.data;
   },
 
   /**
@@ -183,12 +87,12 @@ export const caissierApi = {
   async getActiviteRecente(limit = 5) {
     try {
       // Récupérer les dernières commandes payées (limiter pour la performance)
-      const commandesPayees = await instance.get('/commandes-payees', {
+      const commandesPayees = await httpClient.get('/commandes-payees', {
         params: { per_page: Math.min(limit * 2, 50) }
       });
       
       // Récupérer les derniers décaisements (limiter pour la performance)
-      const decaissements = await instance.get('/decaissements', {
+      const decaissements = await httpClient.get('/decaissements', {
         params: { per_page: Math.min(limit * 2, 50) }
       });
       
@@ -231,12 +135,24 @@ export const caissierApi = {
   /**
    * Récupère les commandes en attente
    */
-  async getCommandesAttente() {
+  async getCommandesAttente(filters = {}) {
     try {
-      const response = await httpClient.get('/commandes-attente');
+      const response = await httpClient.get('/commandes-attente', { params: filters });
       return response.data;
     } catch (error) {
       // Erreur silencieuse - gérée par le composant
+      throw error;
+    }
+  },
+
+  /**
+   * Récupère les commandes payées (historique des ventes)
+   */
+  async getCommandesPayees(filters = {}) {
+    try {
+      const response = await httpClient.get('/commandes-payees', { params: filters });
+      return response.data;
+    } catch (error) {
       throw error;
     }
   },
@@ -329,10 +245,11 @@ export const caissierApi = {
   /**
    * Valide un décaisement
    */
-  async validerDecaissement(decaissementId) {
+  async validerDecaissement(decaissementId, data = {}) {
     try {
       const response = await httpClient.put(`/decaissements/${decaissementId}/statut`, {
-        statut: 'fait'
+        statut: 'fait',
+        ...(data?.methode_paiement ? { methode_paiement: data.methode_paiement } : {})
       });
       return response.data;
     } catch (error) {
@@ -433,8 +350,17 @@ export const caissierApi = {
         }))
       ].sort((a, b) => {
         // Trier par date/heure exacte dans l'ordre chronologique (croissant)
-        const dateA = new Date(a.date || a.created_at);
-        const dateB = new Date(b.date || b.created_at);
+        const normalize = (v) => {
+          if (!v) return null;
+          const s = (typeof v === 'string' && v.includes(' ') && !v.includes('T')) ? v.replace(' ', 'T') : v;
+          const d = new Date(s);
+          return Number.isNaN(d.getTime()) ? null : d;
+        };
+        const dateA = normalize(a.date || a.created_at);
+        const dateB = normalize(b.date || b.created_at);
+        if (!dateA && !dateB) return 0;
+        if (!dateA) return -1;
+        if (!dateB) return 1;
         return dateA - dateB;
       });
       

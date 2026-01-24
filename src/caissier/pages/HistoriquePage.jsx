@@ -12,12 +12,37 @@ import { toast } from 'sonner';
 const HistoriquePage = () => {
   const [historique, setHistorique] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
   const [filters, setFilters] = useState({
     type: 'tous',
     dateDebut: '',
     dateFin: '',
     recherche: '',
   });
+
+  const parseMontant = (value) => {
+    if (value === null || value === undefined) return 0;
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    if (typeof value === 'string') {
+      const n = parseFloat(value.replace(/[^\d.-]/g, ''));
+      return Number.isFinite(n) ? n : 0;
+    }
+    return 0;
+  };
+
+  const toValidDate = (value) => {
+    if (!value) return null;
+    try {
+      const s =
+        typeof value === 'string' && value.includes(' ') && !value.includes('T')
+          ? value.replace(' ', 'T')
+          : value;
+      const d = new Date(s);
+      return Number.isNaN(d.getTime()) ? null : d;
+    } catch (_e) {
+      return null;
+    }
+  };
 
   // Charger l'historique depuis l'API
   useEffect(() => {
@@ -48,13 +73,15 @@ const HistoriquePage = () => {
     
     // Filtre par date
     if (filters.dateDebut) {
-      const itemDate = new Date(item.date);
-      const dateDebut = new Date(filters.dateDebut);
+      const itemDate = toValidDate(item.date || item.created_at);
+      const dateDebut = toValidDate(filters.dateDebut);
+      if (!itemDate || !dateDebut) return false;
       if (itemDate < dateDebut) return false;
     }
     if (filters.dateFin) {
-      const itemDate = new Date(item.date);
-      const dateFin = new Date(filters.dateFin);
+      const itemDate = toValidDate(item.date || item.created_at);
+      const dateFin = toValidDate(filters.dateFin);
+      if (!itemDate || !dateFin) return false;
       dateFin.setHours(23, 59, 59, 999);
       if (itemDate > dateFin) return false;
     }
@@ -81,6 +108,18 @@ const HistoriquePage = () => {
     }
     return true;
   });
+
+  // Pagination (côté client)
+  const PAGE_SIZE = 20;
+  const totalPages = Math.max(1, Math.ceil(filteredHistorique.length / PAGE_SIZE));
+  const paginatedHistorique = filteredHistorique.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters.type, filters.dateDebut, filters.dateFin, filters.recherche, historique.length]);
 
   const moyensPaiementLabels = {
     especes: 'Espèces',
@@ -158,8 +197,8 @@ const HistoriquePage = () => {
                 {filteredHistorique.filter(item => item.type === 'encaissement').length} opération(s)
               </p>
             </div>
-            <div className="w-12 h-12 bg-green-100bg-green-900 rounded-full flex items-center justify-center">
-              <svg className="w-6 h-6 text-green-600text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="w-12 h-12 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center">
+              <svg className="w-6 h-6 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
               </svg>
             </div>
@@ -173,15 +212,15 @@ const HistoriquePage = () => {
                 {formatCurrency(
                   filteredHistorique
                     .filter(item => item.type === 'decaissement')
-                    .reduce((sum, item) => sum + (parseFloat(item.decaissement?.montant?.replace(/[^\d.-]/g, '')) || 0), 0)
+                    .reduce((sum, item) => sum + parseMontant(item.decaissement?.montant), 0)
                 )}
               </p>
               <p className="text-xs text-gray-500 mt-1">
                 {filteredHistorique.filter(item => item.type === 'decaissement').length} opération(s)
               </p>
             </div>
-            <div className="w-12 h-12 bg-red-100bg-red-900 rounded-full flex items-center justify-center">
-              <svg className="w-6 h-6 text-red-600text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="w-12 h-12 bg-red-100 dark:bg-red-900 rounded-full flex items-center justify-center">
+              <svg className="w-6 h-6 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
               </svg>
             </div>
@@ -198,12 +237,12 @@ const HistoriquePage = () => {
                     .reduce((sum, item) => sum + (item.paiement?.montant || item.commande?.total || 0), 0) -
                   filteredHistorique
                     .filter(item => item.type === 'decaissement')
-                    .reduce((sum, item) => sum + (parseFloat(item.decaissement?.montant?.replace(/[^\d.-]/g, '')) || 0), 0)
+                    .reduce((sum, item) => sum + parseMontant(item.decaissement?.montant), 0)
                 )}
               </p>
             </div>
-            <div className="w-12 h-12 bg-[#F7F5FF]bg-primary-900 rounded-full flex items-center justify-center">
-              <svg className="w-6 h-6 text-[#472EAD]text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="w-12 h-12 bg-[#F7F5FF] dark:bg-primary-900 rounded-full flex items-center justify-center">
+              <svg className="w-6 h-6 text-[#472EAD] dark:text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
             </div>
@@ -228,13 +267,41 @@ const HistoriquePage = () => {
           </div>
         ) : (
           <div className="space-y-2">
-            {filteredHistorique.map((item) => (
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between gap-3 py-2">
+                <p className="text-xs text-gray-500">
+                  Page {currentPage} / {totalPages}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="border border-gray-300 font-semibold hover:bg-gray-100 disabled:opacity-50"
+                  >
+                    Précédent
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="border border-gray-300 font-semibold hover:bg-gray-100 disabled:opacity-50"
+                  >
+                    Suivant
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {paginatedHistorique.map((item) => (
               <div
                 key={item.id}
                 className={`border-l-4 rounded-lg p-3 hover:shadow-md transition-all ${
                   item.type === 'encaissement'
-                    ? 'border-l-green-500 bg-gradient-to-r from-green-50 to-whitefrom-green-900/20to-gray-800'
-                    : 'border-l-red-500 bg-gradient-to-r from-red-50 to-whitefrom-red-900/20to-gray-800'
+                    ? 'border-l-green-500 bg-gradient-to-r from-green-50 to-white dark:from-green-900/20 dark:to-gray-800'
+                    : 'border-l-red-500 bg-gradient-to-r from-red-50 to-white dark:from-red-900/20 dark:to-gray-800'
                 }`}
               >
                 <div className="flex items-center justify-between gap-4">
@@ -297,7 +364,7 @@ const HistoriquePage = () => {
                         <div>
                           <span className="text-gray-500">Montant:</span>
                           <p className="font-bold text-red-600">
-                            {formatCurrency(parseFloat(item.decaissement.montant?.replace(/[^\d.-]/g, '')) || 0)}
+                            {formatCurrency(parseMontant(item.decaissement.montant))}
                           </p>
                         </div>
                         <div className="md:col-span-2 min-w-0">

@@ -9,10 +9,11 @@ export const initializeEcho = () => {
     return echoInstance;
   }
 
-  const token = localStorage.getItem('token');
+  // Utiliser sessionStorage (utilisé partout dans l'app) + fallback localStorage
+  const token = sessionStorage.getItem('token') || localStorage.getItem('token');
   
   if (!token) {
-    console.warn('No token found, Echo will not be initialized');
+    // Pas de token => pas de websocket (silencieux)
     return null;
   }
 

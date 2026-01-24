@@ -26,6 +26,8 @@ import useAuth from '../../hooks/useAuth'
 import profileAPI from '@/services/api/profile'
 import NotificationsDropdown from '../components/NotificationsDropdown'
 import ShortcutsMenu from '../components/ShortcutsMenu'
+import caissierApi from '../services/caissierApi'
+import { getEcho } from '../../utils/echo'
 
 // ==========================================================
 // 🔧 Utils
@@ -244,6 +246,9 @@ export default function CaissierLayout() {
 
   // Data
   const [user, setUser] = useState(null)
+  const [pendingTicketsCount, setPendingTicketsCount] = useState(0)
+  const echoRef = useRef(null)
+  const subscriptionsRef = useRef([])
 
   // Menu items
   const menuItems = [
@@ -277,6 +282,67 @@ export default function CaissierLayout() {
     }
     loadUser()
   }, [navigate])
+
+  // Charger le compteur de tickets en attente (notifications)
+  useEffect(() => {
+    const loadCount = async () => {
+      try {
+        const res = await caissierApi.getCommandesAttente()
+        const commandes = res?.data || []
+        setPendingTicketsCount(Array.isArray(commandes) ? commandes.length : 0)
+      } catch (_err) {
+        setPendingTicketsCount(0)
+      }
+    }
+
+    loadCount()
+  }, [])
+
+  // Temps réel: mettre à jour le compteur via Echo (si dispo)
+  useEffect(() => {
+    if (!user?.boutique_id) return
+
+    const echo = getEcho()
+    if (!echo) return
+    echoRef.current = echo
+
+    const refresh = async () => {
+      try {
+        const res = await caissierApi.getCommandesAttente()
+        const commandes = res?.data || []
+        setPendingTicketsCount(Array.isArray(commandes) ? commandes.length : 0)
+      } catch (_err) {
+        // silencieux
+      }
+    }
+
+    try {
+      const channelName = `boutique.${user.boutique_id}`
+      const channel = echo.private(channelName)
+
+      channel.listen('.commande.validee', refresh)
+      channel.listen('.paiement.cree', refresh)
+      channel.listen('.commande.annulee', refresh)
+
+      subscriptionsRef.current.push({ channel: channelName })
+    } catch (_err) {
+      // silencieux
+    }
+
+    return () => {
+      try {
+        subscriptionsRef.current.forEach((sub) => {
+          if (echoRef.current) {
+            echoRef.current.leave(sub.channel)
+          }
+        })
+      } catch (_err) {
+        // silencieux
+      } finally {
+        subscriptionsRef.current = []
+      }
+    }
+  }, [user?.boutique_id])
 
   // Fermer menus au clic extérieur
   useEffect(() => {
@@ -496,16 +562,17 @@ export default function CaissierLayout() {
                       className="p-2 rounded-lg hover:bg-gray-100 relative"
                     >
                       <Bell className="w-5 h-5 text-[#472EAD]" />
+                      {pendingTicketsCount > 0 && (
+                        <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-[#F58020] text-white text-[10px] font-bold flex items-center justify-center">
+                          {pendingTicketsCount > 99 ? '99+' : pendingTicketsCount}
+                        </span>
+                      )}
                     </button>
 
-                    {showNotif && (
-                      <div className="absolute right-0 mt-2 w-80 bg-white border rounded-xl shadow-lg p-3 z-40">
-                        <NotificationsDropdown
-                          isOpen={showNotif}
-                          onClose={() => setShowNotif(false)}
-                        />
-                      </div>
-                    )}
+                    <NotificationsDropdown
+                      isOpen={showNotif}
+                      onClose={() => setShowNotif(false)}
+                    />
                   </div>
 
                   {/* PROFIL */}

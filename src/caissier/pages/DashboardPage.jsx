@@ -260,7 +260,22 @@ const DashboardPage = () => {
                     const circumference = 2 * Math.PI * 90;
                     let cumulativePercentage = 0;
                     const colors = ['#472EAD', '#F58020', '#10b981', '#8b5cf6', '#ef4444'];
-                    
+
+                    if (!ventesParMoyen || ventesParMoyen.length === 0) {
+                      return (
+                        <circle
+                          cx="100"
+                          cy="100"
+                          r="90"
+                          fill="transparent"
+                          stroke="#E5E7EB"
+                          strokeWidth="20"
+                          strokeDasharray={`${circumference} ${circumference}`}
+                          strokeDashoffset={0}
+                        />
+                      );
+                    }
+
                     return ventesParMoyen.map((item, index) => {
                       const percentage = item.pourcentage;
                       const strokeDashoffset = circumference * (1 - cumulativePercentage / 100);
@@ -294,7 +309,11 @@ const DashboardPage = () => {
               </div>
             </div>
             <div className="space-y-3">
-              {ventesParMoyen.map((item, index) => {
+              {ventesParMoyen.length === 0 ? (
+                <div className="text-center py-6 text-gray-500">
+                  <p className="text-sm">Aucune vente enregistrée pour le moment</p>
+                </div>
+              ) : ventesParMoyen.map((item, index) => {
                 const colors = ['#472EAD', '#F58020', '#10b981', '#8b5cf6', '#ef4444'];
                 return (
                   <div key={index} className="flex items-center justify-between">

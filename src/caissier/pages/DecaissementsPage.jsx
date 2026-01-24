@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import Card, { CardHeader } from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
-import Badge from '../../components/ui/Badge';
 import Select from '../../components/ui/Select';
 import { formatCurrency, formatDateTime } from '../../utils/formatters';
 import { printDecaissement } from '../components/DecaissementPrint';
@@ -15,7 +14,12 @@ const DecaissementsPage = () => {
   const [loading, setLoading] = useState(true);
   const [selectedDecaissement, setSelectedDecaissement] = useState(null);
   const [isValidationModalOpen, setIsValidationModalOpen] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
   const [compteChoisi, setCompteChoisi] = useState('caisse');
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [decaissementToCancel, setDecaissementToCancel] = useState(null);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
   const echoRef = useRef(null);
   const subscriptionsRef = useRef([]);
 
@@ -67,10 +71,8 @@ const DecaissementsPage = () => {
       
       setDecaissements(transformed);
     } catch (error) {
-      // Afficher l'erreur détaillée pour le débogage
-      const errorMessage = error.response?.data?.error || error.message || 'Erreur inconnue';
       toast.error('Erreur', {
-        description: `Impossible de charger les décaissements: ${errorMessage}`
+        description: 'Impossible de charger les décaissements en attente'
       });
       // Erreur silencieuse - gérée par le composant
     } finally {
@@ -112,17 +114,37 @@ const DecaissementsPage = () => {
 
   const handleConfirmDecaissement = async () => {
     if (!selectedDecaissement) return;
+    if (isValidating) return;
 
     try {
+      setIsValidating(true);
       // Appel API pour valider le décaissement
-      await caissierApi.validerDecaissement(selectedDecaissement.id);
+      await caissierApi.validerDecaissement(selectedDecaissement.id, { methode_paiement: compteChoisi });
 
       toast.success('Décaissement validé', {
-        description: `Décaissement de ${formatCurrency(selectedDecaissement.montant)} effectué avec succès`
+        description: `Décaissement de ${formatCurrency(selectedDecaissement.montant)} effectué avec succès`,
+        action: {
+          label: 'Imprimer',
+          onClick: () => printDecaissement(decaissementForPrint),
+        }
       });
 
       // Fermer le modal immédiatement
       setIsValidationModalOpen(false);
+      const currentUserStr = sessionStorage.getItem('user') || sessionStorage.getItem('lpd_current_user');
+      let currentUser = null;
+      try {
+        currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
+      } catch (_e) {
+        currentUser = null;
+      }
+
+      const decaissementForPrint = {
+        ...selectedDecaissement,
+        statut: 'fait',
+        fait_par: currentUser ? `${currentUser.prenom || ''} ${currentUser.nom || ''}`.trim() : (selectedDecaissement.fait_par || 'N/A'),
+        fait_le: new Date().toISOString(),
+      };
       setSelectedDecaissement(null);
 
       // Recharger les décaissements (WebSocket le fera automatiquement si configuré)
@@ -130,36 +152,56 @@ const DecaissementsPage = () => {
     } catch (error) {
       // Erreur silencieuse - gérée par le composant
       toast.error('Erreur', {
-        description: error.response?.data?.message || 'Impossible de valider le décaissement'
+        description: String(error.response?.data?.message || 'Impossible de valider le décaissement')
+          .replace(/https?:\/\/localhost:[0-9]+/gi, '')
+          .trim()
       });
+    } finally {
+      setIsValidating(false);
     }
   };
 
-  const handleAnnulerDecaissement = async (decaissement) => {
-    if (!window.confirm(`Voulez-vous vraiment annuler ce décaissement de ${formatCurrency(decaissement.montant)} ?`)) {
-      return;
-    }
+  const openCancelModal = (decaissement) => {
+    setDecaissementToCancel(decaissement);
+    setIsCancelModalOpen(true);
+  };
 
+  const handleConfirmCancel = async () => {
+    if (!decaissementToCancel || isCancelling) return;
     try {
-      // Appel API pour annuler le décaissement
-      await caissierApi.annulerDecaissement(decaissement.id);
-      
+      setIsCancelling(true);
+      await caissierApi.annulerDecaissement(decaissementToCancel.id);
       toast.success('Décaissement annulé', {
         description: 'Le décaissement a été annulé avec succès'
       });
-
-      // Recharger les décaissements
       await fetchDecaissements();
+      setIsCancelModalOpen(false);
+      setDecaissementToCancel(null);
     } catch (error) {
-      // Erreur silencieuse - gérée par le composant
       toast.error('Erreur', {
-        description: error.response?.data?.message || 'Impossible d\'annuler le décaissement'
+        description: String(error.response?.data?.message || 'Impossible d\'annuler le décaissement')
+          .replace(/https?:\/\/localhost:[0-9]+/gi, '')
+          .trim()
       });
+    } finally {
+      setIsCancelling(false);
     }
   };
 
   const decaissementsEnAttente = decaissements.filter(d => d.statut === 'en_attente');
   const totalEnAttente = decaissementsEnAttente.reduce((sum, d) => sum + (d.montant || 0), 0);
+
+  // Pagination (côté client)
+  const PAGE_SIZE = 10;
+  const totalPages = Math.max(1, Math.ceil(decaissementsEnAttente.length / PAGE_SIZE));
+  const paginatedDecaissements = decaissementsEnAttente.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [decaissementsEnAttente.length]);
 
   return (
     <div className="space-y-6 relative z-10">
@@ -225,6 +267,33 @@ const DecaissementsPage = () => {
           </div>
         ) : (
           <div className="overflow-x-auto">
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between gap-3 py-2 px-4">
+                <p className="text-xs text-gray-500">
+                  Page {currentPage} / {totalPages}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="border border-gray-300 font-semibold hover:bg-gray-100 disabled:opacity-50"
+                  >
+                    Précédent
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="border border-gray-300 font-semibold hover:bg-gray-100 disabled:opacity-50"
+                  >
+                    Suivant
+                  </Button>
+                </div>
+              </div>
+            )}
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
@@ -246,7 +315,7 @@ const DecaissementsPage = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {decaissementsEnAttente.map((dec) => (
+                {paginatedDecaissements.map((dec) => (
                   <tr 
                     key={dec.id} 
                     className="hover:bg-gray-50"
@@ -276,7 +345,7 @@ const DecaissementsPage = () => {
                         <Button
                           variant="secondary"
                           size="sm"
-                          onClick={() => handleAnnulerDecaissement(dec)}
+                          onClick={() => openCancelModal(dec)}
                           className="border border-gray-300 font-semibold hover:bg-gray-100"
                         >
                           <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -298,6 +367,7 @@ const DecaissementsPage = () => {
       <Modal
         isOpen={isValidationModalOpen}
         onClose={() => {
+          if (isValidating) return;
           setIsValidationModalOpen(false);
           setSelectedDecaissement(null);
         }}
@@ -308,19 +378,32 @@ const DecaissementsPage = () => {
             <Button
               variant="secondary"
               onClick={() => {
+                if (isValidating) return;
                 setIsValidationModalOpen(false);
                 setSelectedDecaissement(null);
               }}
-              className="border border-gray-300 font-semibold hover:bg-gray-100"
+              disabled={isValidating}
+              className="border border-gray-300 font-semibold hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Annuler
             </Button>
             <Button 
               variant="primary" 
               onClick={handleConfirmDecaissement}
-              className="bg-[#472EAD] hover:bg-[#3d2888] text-white font-semibold shadow-md hover:shadow-lg"
+              disabled={isValidating}
+              className="bg-[#472EAD] hover:bg-[#3d2888] text-white font-semibold shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Confirmer le décaissement
+              {isValidating ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Validation...
+                </>
+              ) : (
+                'Confirmer le décaissement'
+              )}
             </Button>
           </>
         }
@@ -375,6 +458,93 @@ const DecaissementsPage = () => {
                 className="w-full"
               />
             </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Modal de confirmation d'annulation */}
+      <Modal
+        isOpen={isCancelModalOpen}
+        onClose={() => {
+          if (isCancelling) return;
+          setIsCancelModalOpen(false);
+          setDecaissementToCancel(null);
+        }}
+        title="Confirmer l'annulation"
+        size="md"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                if (isCancelling) return;
+                setIsCancelModalOpen(false);
+                setDecaissementToCancel(null);
+              }}
+              disabled={isCancelling}
+              className="border border-gray-300 font-semibold hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Non, garder
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleConfirmCancel}
+              disabled={isCancelling}
+              className="bg-red-600 hover:bg-red-700 text-white font-semibold shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isCancelling ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Annulation...
+                </>
+              ) : (
+                'Oui, annuler'
+              )}
+            </Button>
+          </>
+        }
+      >
+        {decaissementToCancel && (
+          <div className="space-y-4">
+            <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <svg className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <div>
+                  <h4 className="font-semibold text-red-900 mb-1">
+                    Attention : Annulation du décaissement
+                  </h4>
+                  <p className="text-sm text-red-800">
+                    Vous êtes sur le point d'annuler un décaissement de <strong>{formatCurrency(decaissementToCancel.montant)}</strong>.
+                    Cette action est irréversible.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+              <h5 className="font-semibold text-gray-900 mb-3">Détails</h5>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Motif:</span>
+                  <span className="font-medium text-gray-900">{decaissementToCancel.motif}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Créé par:</span>
+                  <span className="font-medium text-gray-900">{decaissementToCancel.cree_par}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Date:</span>
+                  <span className="font-medium text-gray-900">{formatDateTime(decaissementToCancel.created_at)}</span>
+                </div>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600 text-center">
+              Confirmez-vous l'annulation ?
+            </p>
           </div>
         )}
       </Modal>
