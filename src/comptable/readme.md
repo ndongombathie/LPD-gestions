@@ -19,7 +19,19 @@
 | Méthode | Endpoint | Description |
 |----------|-----------|-------------|
 | **GET** | `/api/uilisateurs` | Liste tous les utilisateurs |
-| **POST** | `/api/uilisateurs` | Crée un nouvel utilisateur |
+| **POST** | `/api/uilisateurs` | Crée un nouvel utilisateur | 
+  exemple :
+  {
+      "nom": "Diallo",
+      "prenom": "Diallo",
+      "password":"password",
+      "adresse": "9400 Orval Fort\nEast Drew, MD 41584",
+      "numero_cni": "CNI05001378",
+      "telephone": "771232454",
+      "role": "caissier",
+      "email": "diallo.malick@univ-thies.sn"
+  }
+  
 | **GET** | `/api/uilisateurs/{uilisateur}` | Récupère un utilisateur |
 | **PUT** | `/api/uilisateurs/{uilisateur}` | Met à jour un utilisateur |
 | **DELETE** | `/api/uilisateurs/{uilisateur}` | Supprime un utilisateur |
