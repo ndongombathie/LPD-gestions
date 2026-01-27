@@ -27,6 +27,9 @@ import { QRCodeCanvas as QRCode } from "qrcode.react";
 import "jspdf-autotable";
 import { useLocation } from "react-router-dom";
 import { commandesAPI, produitsAPI, clientsAPI } from '@/services/api';
+import { logger } from "@/utils/logger";
+
+
 
 // === Utils ===
 const formatFCFA = (n) =>
@@ -323,7 +326,7 @@ function QrCommandeModal({ open, onClose, commande, qrPayload }) {
       // ================= SAUVEGARDE =================
       doc.save(`Ticket_commande_${commande.numero}.pdf`);
     } catch (e) {
-      console.error(e);
+      logger.error("commande.qr.print", e);
       window.print();
     }
   };
@@ -656,8 +659,8 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
         setLoadingRefs(true);
 
         const [clientsRes, produitsRes] = await Promise.all([
-          axios.get("/clients", { params: { type_client: "special" } }),
-          axios.get("/produits"),
+          clientsAPI.getAll({ type_client: "special" }),
+          produitsAPI.getAll(),
         ]);
 
         const clientsPayload = Array.isArray(clientsRes.data?.data)
@@ -725,7 +728,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
         setClients(normalizedClients);
         setCatalogue(normalizedProduits);
       } catch (error) {
-        console.error("Erreur chargement références:", error);
+        logger.error("refs.load.clients_produits", error);
         toast(
           "error",
           "Erreur de chargement",
@@ -1740,6 +1743,7 @@ function normalizeCommande(cmd) {
 export default function Commandes() {
   const { state } = useLocation();
 
+
   // Quand on vient depuis ClientsSpeciaux :
   // navigate("/responsable/commandes", { state: { clientId, clientNom } })
   const clientIdFromState = state?.clientId || null;
@@ -1756,8 +1760,9 @@ export default function Commandes() {
   const [filterStatut, setFilterStatut] = useState("tous");
   const [filterStartDate, setFilterStartDate] = useState("");
   const [filterEndDate, setFilterEndDate] = useState("");
-  const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
+  const [lastPage, setLastPage] = useState(1);
+  const [total, setTotal] = useState(0);
 
   // map id client -> nom client pour compléter ce que le backend n’envoie pas
   const [clientsMap, setClientsMap] = useState({});
@@ -1783,13 +1788,25 @@ export default function Commandes() {
     try {
       setLoading(true);
 
-      const res = await axios.get("/commandes");
-      const payload = Array.isArray(res.data?.data) ? res.data.data : res.data;
+    const res = await commandesAPI.getAll({
+      type_client: "special",
+      page,
+      statut: filterStatut !== "tous" ? filterStatut : undefined,
+      start_date: filterStartDate || undefined,
+      end_date: filterEndDate || undefined,
+    });
 
-      const normalized = (payload || []).map(normalizeCommande);
-      setCommandes(normalized);
+    // ✅ DONNÉES
+    setCommandes((res.data || []).map(normalizeCommande));
+
+    // ✅ PAGINATION LARAVEL
+    setPage(res.current_page);
+    setLastPage(res.last_page);
+    setTotal(res.total);
+
+
     } catch (error) {
-      console.error("Erreur chargement commandes :", error);
+      logger.error("commandes.fetch", error);
       toast(
         "error",
         "Erreur de chargement",
@@ -1803,17 +1820,19 @@ export default function Commandes() {
   useEffect(() => {
     fetchCommandes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [page, filterStatut, filterStartDate, filterEndDate]) ;
 
   // 🔗 Chargement des clients spéciaux pour retrouver les noms
   useEffect(() => {
     const fetchClients = async () => {
       try {
-        const res = await axios.get("/clients", {
-          params: { type_client: "special" },
-        });
+        const res = await clientsAPI.getAll({ type_client: "special" });
 
-        const clientsPayload = Array.isArray(res.data?.data) ? res.data.data : res.data;
+
+        const clientsPayload = Array.isArray(res.data?.data)
+          ? res.data.data
+          : res.data || [];
+
 
         const map = {};
         (clientsPayload || []).forEach((c) => {
@@ -1831,7 +1850,7 @@ export default function Commandes() {
 
         setClientsMap(map);
       } catch (error) {
-        console.error("Erreur chargement clients spéciaux :", error);
+        logger.error("clients.fetch.special", error);
       }
     };
 
@@ -1894,7 +1913,7 @@ export default function Commandes() {
         })),
       };
 
-      const res = await axios.post("/commandes", payload);
+      const res = await commandesAPI.create(payload);
 
       let raw = res.data;
       if (Array.isArray(res.data?.data)) {
@@ -1920,8 +1939,6 @@ export default function Commandes() {
         normalized = commandeDraft;
       }
 
-      setCommandes((prev) => [normalized, ...prev]);
-
       // ✅ Mémoriser la dernière commande créée pour le QR
       setLastCreatedCommande(normalized);
       setShowQrModal(true);
@@ -1932,7 +1949,7 @@ export default function Commandes() {
         `${normalized.clientNom || "Client"} — ${formatFCFA(normalized.totalTTC)}`
       );
     } catch (error) {
-      console.error("Erreur création commande :", error);
+      logger.error("commandes.create", error);
       if (error.response?.status === 422 && error.response.data?.errors) {
         const firstError =
           Object.values(error.response.data.errors)[0]?.[0] ||
@@ -1975,7 +1992,7 @@ export default function Commandes() {
     }
 
     try {
-      await axios.post(`/commandes/${commande.id}/annuler`);
+      await commandesAPI.cancel(commande.id);
 
       setCommandes((prev) =>
         prev.map((c) =>
@@ -1991,7 +2008,7 @@ export default function Commandes() {
         `Commande #${commande.numero} pour ${commande.clientNom}`
       );
     } catch (error) {
-      console.error("Erreur annulation commande :", error);
+      logger.error("commandes.cancel", error);
       toast(
         "error",
         "Erreur",
@@ -2033,18 +2050,6 @@ export default function Commandes() {
       list = list.filter((c) => c.clientNom === clientNameFromState);
     }
 
-    // 2) filtre statut
-    if (filterStatut !== "tous") {
-      list = list.filter((c) => c.statut === filterStatut);
-    }
-
-    // 3) filtre période (sur dateCommande)
-    list = list.filter((c) => {
-      const dateStr = String(c.dateCommande || "");
-      if (filterStartDate && dateStr < filterStartDate) return false;
-      if (filterEndDate && dateStr > filterEndDate) return false;
-      return true;
-    });
 
     // 4) recherche (numero + client + statut + lignes)
     const q = (searchTerm || "").trim().toLowerCase();
@@ -2067,9 +2072,6 @@ export default function Commandes() {
     commandes,
     clientIdFromState,
     clientNameFromState,
-    filterStatut,
-    filterStartDate,
-    filterEndDate,
     searchTerm,
   ]);
 
@@ -2083,23 +2085,8 @@ export default function Commandes() {
     searchTerm,
     clientIdFromState,
     clientNameFromState,
-    pageSize,
   ]);
 
-  const totalFiltered = commandesFiltrees.length;
-  const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize));
-  const safePage = Math.min(page, totalPages);
-
-  const startIndex = (safePage - 1) * pageSize;
-  const endIndex = startIndex + pageSize;
-
-  const commandesPage = useMemo(
-    () => commandesFiltrees.slice(startIndex, endIndex),
-    [commandesFiltrees, startIndex, endIndex]
-  );
-
-  const rangeFrom = totalFiltered ? startIndex + 1 : 0;
-  const rangeTo = Math.min(endIndex, totalFiltered);
 
   if (loading)
     return (
@@ -2276,21 +2263,6 @@ export default function Commandes() {
                       className="border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:border-[#472EAD] focus:ring-1 focus:ring-[#472EAD] bg-white"
                     />
                   </div>
-
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-500 font-medium">Lignes :</span>
-                    <select
-                      value={pageSize}
-                      onChange={(e) => setPageSize(Number(e.target.value))}
-                      className="border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none focus:border-[#472EAD] focus:ring-1 focus:ring-[#472EAD]"
-                    >
-                      {[10, 20, 50, 100].map((n) => (
-                        <option key={n} value={n}>
-                          {n} / page
-                        </option>
-                      ))}
-                    </select>
-                  </div>
                 </div>
               </div>
 
@@ -2316,18 +2288,19 @@ export default function Commandes() {
                 ) : null}
               </div>
 
-              {/* Résumé affichage */}
+              {/* Résumé affichage (pagination backend Laravel) */}
               <div className="flex items-center justify-between text-[11px] text-gray-500">
                 <span>
-                  Affichage : <span className="font-semibold">{rangeFrom}</span>–
-                  <span className="font-semibold">{rangeTo}</span> sur{" "}
-                  <span className="font-semibold">{totalFiltered}</span>
+                  Affichage :{" "}
+                  <span className="font-semibold">{commandesFiltrees.length}</span> sur{" "}
+                  <span className="font-semibold">{total}</span>
                 </span>
                 <span>
-                  Page <span className="font-semibold">{safePage}</span> /{" "}
-                  <span className="font-semibold">{totalPages}</span>
+                  Page <span className="font-semibold">{page}</span> /{" "}
+                  <span className="font-semibold">{lastPage}</span>
                 </span>
               </div>
+            
             </div>
 
             {/* TABLEAU */}
@@ -2346,8 +2319,8 @@ export default function Commandes() {
                   </tr>
                 </thead>
                 <tbody>
-                  {commandesPage.length ? (
-                    commandesPage.map((c) => (
+                  {commandesFiltrees.length ? (
+                    commandesFiltrees.map((c) => (
                       <tr
                         key={c.id}
                         className="border-b border-gray-100 hover:bg-[#F9F9FF]"
@@ -2407,33 +2380,38 @@ export default function Commandes() {
             <div className="flex items-center justify-between pt-2">
               <button
                 type="button"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={safePage <= 1}
+                disabled={page <= 1}
+                onClick={() => setPage((p) => p - 1)}
+
                 className={cls(
                   "px-3 py-1.5 rounded-lg border text-xs",
-                  safePage <= 1
+                  page <= 1
                     ? "border-gray-200 text-gray-300 cursor-not-allowed bg-gray-50"
                     : "border-gray-300 text-gray-700 bg-white hover:bg-gray-50"
                 )}
+
               >
                 ← Précédent
               </button>
 
               <div className="text-[11px] text-gray-500">
-                Page <span className="font-semibold">{safePage}</span> /{" "}
-                <span className="font-semibold">{totalPages}</span>
+                Page <span className="font-semibold">{page}</span> /{" "}
+                <span className="font-semibold">{lastPage}</span>
               </div>
+
 
               <button
                 type="button"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={safePage >= totalPages}
-                className={cls(
-                  "px-3 py-1.5 rounded-lg border text-xs",
-                  safePage >= totalPages
-                    ? "border-gray-200 text-gray-300 cursor-not-allowed bg-gray-50"
-                    : "border-gray-300 text-gray-700 bg-white hover:bg-gray-50"
-                )}
+                disabled={page >= lastPage}
+                onClick={() => setPage((p) => p + 1)}
+
+              className={cls(
+                "px-3 py-1.5 rounded-lg border text-xs",
+                page >= lastPage
+                  ? "border-gray-200 text-gray-300 cursor-not-allowed bg-gray-50"
+                  : "border-gray-300 text-gray-700 bg-white hover:bg-gray-50"
+              )}
+
               >
                 Suivant →
               </button>

@@ -293,7 +293,6 @@ export default function Fournisseurs() {
 
         setFournisseurs(normalized);
       } catch (err) {
-        console.error("Erreur chargement fournisseurs :", err);
         toast(
           "error",
           "Erreur",
@@ -335,9 +334,23 @@ export default function Fournisseurs() {
 
   // ➕ Ajout (POST /api/fournisseurs)
   const handleAdd = async (form) => {
-    try {
-      setSubmitting(true);
+    const tempId = `tmp-${Date.now()}`;
 
+    const optimisticFournisseur = {
+      id: tempId,
+      nom: form.nom,
+      contact: form.contact,
+      adresse: form.adresse,
+      typeProduit: form.typeProduit,
+      derniereLivraison: form.derniereLivraison || "",
+      totalAchats: 0,
+    };
+
+    // 1️⃣ Optimistic update UI
+    setFournisseurs((prev) => [optimisticFournisseur, ...prev]);
+    setSubmitting(true);
+
+    try {
       const payload = {
         nom: form.nom,
         contact: form.contact,
@@ -348,25 +361,35 @@ export default function Fournisseurs() {
 
       const data = await fournisseursAPI.create(payload);
 
-      const newF = {
-        id: data.id,
-        nom: data.nom || "",
-        contact: data.contact || "",
-        adresse: data.adresse || "",
-        typeProduit: data.type_produit || "",
-        derniereLivraison: data.derniere_livraison || "",
-        totalAchats: data.total_achats ?? 0,
-      };
+      // 2️⃣ Remplacer le faux fournisseur par le vrai
+      setFournisseurs((prev) =>
+        prev.map((f) =>
+          f.id === tempId
+            ? {
+                id: data.id,
+                nom: data.nom || "",
+                contact: data.contact || "",
+                adresse: data.adresse || "",
+                typeProduit: data.type_produit || "",
+                derniereLivraison: data.derniere_livraison || "",
+                totalAchats: data.total_achats ?? 0,
+              }
+            : f
+        )
+      );
 
-      setFournisseurs((prev) => [newF, ...prev]);
       toast(
         "success",
         "Fournisseur ajouté",
-        `${newF.nom} a été ajouté avec succès.`
+        `${data.nom} a été ajouté avec succès.`
       );
       setOpenAdd(false);
-    } catch (err) {
-      console.error("Erreur ajout fournisseur :", err);
+    } catch {
+      // 3️⃣ Rollback si erreur
+      setFournisseurs((prev) =>
+        prev.filter((f) => f.id !== tempId)
+      );
+
       toast(
         "error",
         "Erreur",
@@ -377,12 +400,30 @@ export default function Fournisseurs() {
     }
   };
 
+
   // ✏️ Modification (PUT /api/fournisseurs/{id})
   const handleEdit = async (form) => {
     if (!editTarget) return;
-    try {
-      setSubmitting(true);
 
+    const previous = fournisseurs;
+
+    const optimisticUpdated = {
+      ...editTarget,
+      nom: form.nom,
+      contact: form.contact,
+      adresse: form.adresse,
+      typeProduit: form.typeProduit,
+      derniereLivraison: form.derniereLivraison || "",
+    };
+
+    // 1️⃣ Optimistic update
+    setFournisseurs((prev) =>
+      prev.map((f) => (f.id === editTarget.id ? optimisticUpdated : f))
+    );
+
+    setSubmitting(true);
+
+    try {
       const payload = {
         nom: form.nom,
         contact: form.contact,
@@ -391,30 +432,18 @@ export default function Fournisseurs() {
         derniere_livraison: form.derniereLivraison || null,
       };
 
-      const data = await fournisseursAPI.update(editTarget.id, payload);
-
-      const updated = {
-        id: data.id,
-        nom: data.nom || "",
-        contact: data.contact || "",
-        adresse: data.adresse || "",
-        typeProduit: data.type_produit || "",
-        derniereLivraison: data.derniere_livraison || "",
-        totalAchats: data.total_achats ?? editTarget.totalAchats ?? 0,
-      };
-
-      setFournisseurs((prev) =>
-        prev.map((f) => (f.id === editTarget.id ? updated : f))
-      );
+      await fournisseursAPI.update(editTarget.id, payload);
 
       toast(
         "success",
         "Fournisseur modifié",
-        `${updated.nom} a été mis à jour.`
+        `${form.nom} a été mis à jour.`
       );
       setEditTarget(null);
-    } catch (err) {
-      console.error("Erreur modification fournisseur :", err);
+    } catch {
+      // 2️⃣ Rollback
+      setFournisseurs(previous);
+
       toast(
         "error",
         "Erreur",
@@ -425,16 +454,22 @@ export default function Fournisseurs() {
     }
   };
 
+
   // 🗑️ Suppression (DELETE /api/fournisseurs/{id})
   const handleDelete = async () => {
     if (!deleteTarget) return;
-    try {
-      setSubmitting(true);
-      await fournisseursAPI.delete(deleteTarget.id);
 
-      setFournisseurs((prev) =>
-        prev.filter((f) => f.id !== deleteTarget.id)
-      );
+    const previous = fournisseurs;
+
+    // 1️⃣ Optimistic removal
+    setFournisseurs((prev) =>
+      prev.filter((f) => f.id !== deleteTarget.id)
+    );
+
+    setSubmitting(true);
+
+    try {
+      await fournisseursAPI.delete(deleteTarget.id);
 
       toast(
         "success",
@@ -442,8 +477,10 @@ export default function Fournisseurs() {
         `${deleteTarget.nom} a été supprimé.`
       );
       setDeleteTarget(null);
-    } catch (err) {
-      console.error("Erreur suppression fournisseur :", err);
+    } catch {
+      // 2️⃣ Rollback
+      setFournisseurs(previous);
+
       toast(
         "error",
         "Erreur",

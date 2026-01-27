@@ -4,11 +4,11 @@
 // ==========================================================
 
 import React, { useState, useRef, useEffect } from "react";
+import { logger } from "@/utils/logger";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   Bell,
   ChevronDown,
-  LayoutGrid,
   LogOut,
   User,
   Key,
@@ -33,9 +33,9 @@ import {
   XCircle,
   Info,
 } from "lucide-react";
-import { AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import useAuth from "../hooks/useAuth";
-import profileAPI from "@/services/api/profile";
+//import profileAPI from "@/services/api/profile";
 
 // ==========================================================
 // 🧩 Utils
@@ -46,14 +46,17 @@ const getInitials = (prenom = "", nom = "") =>
 
 const loadJSON = (k, def) => {
   try {
-    const v = localStorage.getItem(k);
+    const v = sessionStorage.getItem(k);
     return v ? JSON.parse(v) : def;
-  } catch {
+  } catch (err) {
+    logger.warn("Invalid JSON in sessionStorage", { key: k, error: err });
     return def;
   }
 };
 
-const saveJSON = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+const saveJSON = (k, v) =>
+  sessionStorage.setItem(k, JSON.stringify(v)); // ✅ sessionStorage
+
 
 const RECENTS_KEY = "lpd_recent_paths";
 
@@ -171,7 +174,9 @@ function PasswordModal({ open, onClose, onSuccess, addToast, changePassword }) {
     setLoading(true);
 
     try {
-      await changePassword(oldPwd, newPwd, confirmPwd);
+      //await changePassword(oldPwd, newPwd, confirmPwd);
+      await new Promise((res) => setTimeout(res, 800));
+
       addToast("success", "Mot de passe modifié", "Vos identifiants ont été mis à jour.");
       onSuccess();
     } catch (err) {
@@ -312,13 +317,17 @@ function ProfileModal({ open, onClose, user, onUpdate, addToast }) {
 
   const handleSave = async () => {
     try {
-      const res = await profileAPI.updateProfile({
-        prenom,
-        nom,
-        photo: preview,
-      });
+     // const res = await profileAPI.updateProfile({
+       // prenom,
+        //nom,
+        //photo: preview,
+      //});
+      // const res = await profileAPI.updateProfile(...)
+      await new Promise((res) => setTimeout(res, 500));
+      onUpdate({ ...user, prenom, nom, photo: preview });
 
-      onUpdate(res);
+
+      //onUpdate(res);
       addToast("success", "Profil mis à jour", "Modification enregistrée.");
       onClose();
     } catch (err) {
@@ -508,96 +517,127 @@ export default function Header() {
   // 🔥 Charger le VRAI utilisateur
   // ==========================================================
 
-  useEffect(() => {
-    const loadUser = async () => {
-      try {
-        const data = await profileAPI.getProfile();
-        setUser(data);
-        localStorage.setItem("lpd_current_user", JSON.stringify(data));
-      } catch (err) {
-        console.error("Erreur profil :", err);
-        // Ne rediriger que si c'est une vraie erreur d'auth (401), pas un timeout
-        if (err?.response?.status === 401) {
-          navigate("/login");
-        } else {
-          // Charger depuis localStorage en cas de timeout/erreur réseau
-          const savedUser = localStorage.getItem("lpd_current_user");
-          if (savedUser) {
-            try {
-              setUser(JSON.parse(savedUser));
-            } catch (e) {
-              console.error("Erreur parsing user:", e);
-            }
-          }
-        }
-      }
-    };
-    loadUser();
-  }, [navigate]);
+// ==========================================================
+// 🔥 Charger le VRAI utilisateur (DÉSACTIVÉ TEMPORAIREMENT)
+// En attente des endpoints backend profil
+// ==========================================================
+
+// useEffect(() => {
+//   const loadUser = async () => {
+//     try {
+//       const data = await profileAPI.getProfile();
+//       setUser(data);
+//       sessionStorage.setItem("lpd_current_user", JSON.stringify(data));
+//     } catch (err) {
+//       addToast(
+//         "error",
+//         "Session expirée",
+//         "Impossible de charger votre profil. Veuillez vous reconnecter."
+//       );
+
+//       logger.error("Profile load failed", { error: err });
+//       // Ne rediriger que si c'est une vraie erreur d'auth (401), pas un timeout
+//       if (err?.response?.status === 401) {
+//         navigate("/login");
+//       } else {
+//         // Charger depuis localStorage en cas de timeout/erreur réseau
+//         const savedUser = sessionStorage.getItem("lpd_current_user");
+//         if (savedUser) {
+//           try {
+//             const parsed = JSON.parse(savedUser);
+//             if (parsed && parsed.id && parsed.email) {
+//               setUser(parsed);
+//             } else {
+//               throw new Error("User JSON invalide");
+//             }
+//           } catch (e) {
+//             console.warn("Invalid cached user, clearing session");
+//             sessionStorage.removeItem("lpd_current_user");
+//           }
+//         }
+//       }
+//     }
+//   };
+//   loadUser();
+// }, [navigate]);
+
+
+// ==========================================================
+// 👤 Utilisateur temporaire depuis le contexte Auth
+// ==========================================================
+
+
+
 
   // ==========================================================
   // 🔔 Charger les notifications depuis l'API
   // ==========================================================
 
-  useEffect(() => {
-    if (!user) return;
+  // useEffect(() => {
+  //   if (!user) return;
 
-    const fetchNotifications = async () => {
-      try {
-        const data = await profileAPI.getNotifications();
-        setNotifications(data.items || []);
-        setUnreadTotal(data.unread_total || 0);
-        setModuleCounts(data.per_module || {});
-      } catch (err) {
-        console.error("Erreur chargement notifications :", err);
-      }
-    };
+  //   const fetchNotifications = async () => {
+  //     try {
+  //       const data = await profileAPI.getNotifications();
+  //       setNotifications(data.items || []);
+  //       setUnreadTotal(data.unread_total || 0);
+  //       setModuleCounts(data.per_module || {});
+  //     } catch (err) {
+  //       addToast(
+  //         "error",
+  //         "Notifications indisponibles",
+  //         "Impossible de charger les notifications pour le moment."
+  //       );
+  //       logger.warn("Notifications fetch failed", { error: err });
+  //     }
+  //   };
 
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, 60000); // refresh toutes les 60s
-    return () => clearInterval(interval);
-  }, [user]);
+  //   fetchNotifications();
+  //   const interval = setInterval(fetchNotifications, 60000);
+  //   return () => clearInterval(interval);
+  // }, [user]);
+
 
   // ==========================================================
   // ✅ Quand on ouvre une page → marquer son module comme lu
   // ==========================================================
 
-  useEffect(() => {
-    if (!user) return;
+  // useEffect(() => {
+  //   if (!user) return;
 
-    const module = getModuleFromPath(location.pathname);
-    if (!module) return;
+  //   const module = getModuleFromPath(location.pathname);
+  //   if (!module) return;
 
-    const unreadForModule = moduleCounts?.[module]?.unread || 0;
-    if (unreadForModule === 0) return;
+  //   const unreadForModule = moduleCounts?.[module]?.unread || 0;
+  //   if (unreadForModule === 0) return;
 
-    const markModuleAsRead = async () => {
-      try {
-        await profileAPI.markNotificationModule(module);
+  //   const markModuleAsRead = async () => {
+  //     try {
+  //       await profileAPI.markNotificationModule(module);
 
-        // Mettre à jour l'état local : toutes les notifs de ce module passent en "read: true"
-        setNotifications((prev) =>
-          prev.map((n) =>
-            n.module === module ? { ...n, read: true } : n
-          )
-        );
+  //       setNotifications((prev) =>
+  //         prev.map((n) =>
+  //           n.module === module ? { ...n, read: true } : n
+  //         )
+  //       );
 
-        setModuleCounts((prev) => {
-          const copy = { ...prev };
-          if (copy[module]) {
-            copy[module] = { ...copy[module], unread: 0 };
-          }
-          return copy;
-        });
+  //       setModuleCounts((prev) => {
+  //         const copy = { ...prev };
+  //         if (copy[module]) {
+  //           copy[module] = { ...copy[module], unread: 0 };
+  //         }
+  //         return copy;
+  //       });
 
-        setUnreadTotal((prev) => Math.max(prev - unreadForModule, 0));
-      } catch (err) {
-        console.error("Erreur mark-module :", err);
-      }
-    };
+  //       setUnreadTotal((prev) => Math.max(prev - unreadForModule, 0));
+  //     } catch (err) {
+  //       logger.warn("Notifications fetch failed", { error: err });
+  //     }
+  //   };
 
-    markModuleAsRead();
-  }, [location.pathname, user, moduleCounts]);
+  //   markModuleAsRead();
+  // }, [location.pathname, user, moduleCounts]);
+
 
   // Fermer menus au clic extérieur
   useEffect(() => {
@@ -619,10 +659,22 @@ export default function Header() {
   const handleLogout = async () => {
     try {
       await logout();
+    } catch (err) {
+      logger.warn("Logout API failed, retrying", { error: err });
+      try {
+        await logout(); // retry simple
+      } catch (e) {
+        addToast(
+          "error",
+          "Déconnexion partielle",
+          "Serveur indisponible. Déconnexion locale."
+        );
+      }
     } finally {
       navigate("/login");
     }
   };
+
 
   // ==========================================================
   // 🔔 Notifications — ouverture (NE MARQUE PLUS RIEN comme lu)
@@ -670,50 +722,7 @@ export default function Header() {
 
             {/* ACTIONS */}
             <div className="flex items-center gap-3 sm:gap-4">
-              {/* 🆕 RACCOURCIS — maintenant visible aussi sur mobile */}
-              <div className="relative">
-                <button
-                  onClick={() => {
-                    setShowQuick((v) => !v);
-                    setShowNotif(false);
-                    setShowMenu(false);
-                  }}
-                  className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 rounded-lg border border-gray-200 text-xs sm:text-sm text-gray-700 hover:bg-[#F7F5FF] hover:text-[#472EAD] transition"
-                >
-                  <LayoutGrid size={18} className="text-[#472EAD]" />
-                  <span className="hidden sm:inline">Raccourcis</span>
-                </button>
 
-                {showQuick && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.18 }}
-                    className="absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-lg shadow-lg p-2 z-30"
-                  >
-                    <p className="text-xs font-semibold text-gray-500 px-2 py-1">
-                      Accès rapide (4 dernières pages)
-                    </p>
-                    <ul className="text-sm text-gray-700">
-                      {recentPaths.map((path) => {
-                        const item = SHORTCUT_ITEMS.find((i) => i.path === path);
-                        if (!item) return null;
-                        const Icon = item.icon;
-                        return (
-                          <li
-                            key={path}
-                            onClick={() => handleGoShortcut(path)}
-                            className="flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer hover:bg-[#F7F5FF]"
-                          >
-                            <Icon size={16} className="text-[#472EAD]" />
-                            <span>{item.name}</span>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </motion.div>
-                )}
-              </div>
 
               {/* NOTIFS */}
               <div className="relative">

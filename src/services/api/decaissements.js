@@ -13,6 +13,7 @@ const ENDPOINTS = {
 };
 
 export const decaissementsAPI = {
+  list: (params = {}) => decaissementsAPI.getAll(params),
   getAll: async (params = {}) => {
     try {
       const response = await httpClient.get(ENDPOINTS.GET_ALL, { params });

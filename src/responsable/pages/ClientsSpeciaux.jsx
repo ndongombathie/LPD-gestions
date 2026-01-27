@@ -21,7 +21,9 @@ import {
 import FormModal from "../components/FormModal.jsx";
 import DataTable from "../components/DataTable.jsx";
 import VoirDetailClient from "../components/VoirDetailClient.jsx";
-import { clientsAPI, commandesAPI, paiementsAPI } from '@/services/api';
+import { useClientsSpeciaux } from "@/hooks/useClientsSpeciaux";
+import { usePaiementsClients } from "@/hooks/usePaiementsClients";
+
 
 const cls = (...a) => a.filter(Boolean).join(" ");
 const formatFCFA = (n) =>
@@ -77,166 +79,6 @@ function Toasts({ toasts, remove }) {
     </div>
   );
 }
-
-// ==========================================================
-// 🔧 Helper : normaliser une commande (même modèle que Commandes.jsx)
-// ==========================================================
-function normalizeCommande(cmd) {
-  const client =
-    cmd.client ||
-    cmd.client_special ||
-    cmd.clientSpecial ||
-    cmd.client_speciale ||
-    cmd.client_speciale_detail ||
-    {};
-
-  let clientNom =
-    cmd.client_nom ||
-    cmd.nom_client ||
-    cmd.nom_client_special ||
-    cmd.client_name ||
-    cmd.customer_name ||
-    client.nom ||
-    client.nom_client ||
-    client.nom_client_special ||
-    client.raison_sociale ||
-    client.raisonSociale ||
-    client.name ||
-    client.libelle ||
-    client.intitule ||
-    "";
-
-  if (!clientNom && client && typeof client === "object") {
-    const firstStringValue = Object.values(client).find(
-      (v) => typeof v === "string" && v.trim() !== ""
-    );
-    if (firstStringValue) clientNom = firstStringValue;
-  }
-
-  const clientCode =
-    cmd.client_code ||
-    cmd.code_client ||
-    client.code_client ||
-    client.codeClient ||
-    client.code ||
-    cmd.code ||
-    undefined;
-
-  const lignesSource =
-    cmd.lignes || cmd.ligne_commandes || cmd.details || cmd.items || [];
-
-  const lignes = (lignesSource || []).map((l) => {
-    const qte = Number(l.quantite || l.qte || l.qty || 0);
-    const pu = Number(l.prix_unitaire || l.prix || l.price || 0);
-    const modeVente = l.mode_vente || l.modeVente || l.mode || "detail";
-
-    const totalHTLigne = Number(
-      l.total_ht || l.totalHT || (qte && pu ? qte * pu : 0)
-    );
-    const totalTTCLigne = Number(
-      l.total_ttc || l.totalTTC || l.total || totalHTLigne * 1.18 || 0
-    );
-
-    const quantiteUnites = Number(
-      l.quantite_unites ||
-        l.quantiteUnites ||
-        (modeVente === "gros" ? qte * (l.unites_par_carton || 1) : qte)
-    );
-
-    return {
-      id: l.id,
-      produitId: l.produit_id || l.produitId || null,
-      libelle: l.libelle || l.nom_produit || l.designation || l.nom || "",
-      ref: l.ref || l.code_produit || l.reference || l.code || null,
-      qte,
-      prixUnitaire: pu,
-      totalHT: totalHTLigne,
-      totalTTC: totalTTCLigne,
-      modeVente,
-      quantiteUnites,
-    };
-  });
-
-  let totalHT = Number(cmd.total_ht ?? cmd.totalHT ?? cmd.montant_ht ?? 0);
-  let totalTTC = Number(
-    cmd.total_ttc ?? cmd.totalTTC ?? cmd.montant_total ?? cmd.total ?? 0
-  );
-
-  if ((!totalHT || Number.isNaN(totalHT)) && lignes.length) {
-    totalHT = lignes.reduce(
-      (s, l) => s + (Number(l.totalHT) || l.qte * l.prixUnitaire || 0),
-      0
-    );
-  }
-
-  if ((!totalTTC || Number.isNaN(totalTTC)) && lignes.length) {
-    totalTTC = lignes.reduce(
-      (s, l) => s + (Number(l.totalTTC) || Number(l.totalHT) || 0),
-      0
-    );
-  }
-
-  let totalTVA = Number(
-    cmd.total_tva ?? cmd.totalTVA ?? cmd.montant_tva ?? (totalTTC - totalHT)
-  );
-  if (Number.isNaN(totalTVA)) {
-    totalTVA = totalTTC - totalHT;
-  }
-
-  const montantPaye = Number(
-    cmd.montant_paye || cmd.montantPaye || cmd.total_paye || 0
-  );
-  const resteAPayer = Number(
-    cmd.reste_a_payer ||
-      cmd.resteAPayer ||
-      cmd.montant_restant ||
-      totalTTC - montantPaye
-  );
-
-  const statut = cmd.statut || "en_attente_caisse";
-  const statutLabelMap = {
-    en_attente_caisse: "En attente caisse",
-    partiellement_payee: "Partiellement payée",
-    soldee: "Soldée",
-    annulee: "Annulée",
-  };
-  const statutLabel =
-    cmd.statut_label || cmd.statutLabel || statutLabelMap[statut] || statut;
-
-  const paiements = (cmd.paiements || []).map((p) => ({
-    id: p.id,
-    date: p.date_paiement || p.date || null,
-    montant: Number(p.montant || p.montant_paye || 0),
-    mode: p.mode_paiement || p.mode || "",
-    commentaire: p.commentaire || "",
-    statut:
-      p.statut || p.status || p.statut_paiement || p.statutPaiement || null,
-    type: p.type_paiement || p.type || p.typePaiement || null,
-  }));
-
-  return {
-    id: cmd.id,
-    numero: cmd.numero || cmd.reference || cmd.code || `CMD-${cmd.id}`,
-    clientId: cmd.client_id || cmd.clientId || client.id || null,
-    clientNom,
-    clientCode,
-    dateCommande:
-      cmd.date_commande ||
-      cmd.dateCommande ||
-      (cmd.created_at ? String(cmd.created_at).slice(0, 10) : todayISO()),
-    lignes,
-    totalHT,
-    totalTVA,
-    totalTTC,
-    tauxTVA: totalHT ? totalTVA / totalHT : 0.18,
-    paiements,
-    montantPaye,
-    resteAPayer,
-    statut,
-    statutLabel,
-  };
-}
-
 // ==========================================================
 // 💸 Modal Nouvelle Tranche (côté Responsable)
 // ==========================================================
@@ -722,9 +564,7 @@ function ClientForm({ initial, onSubmit, onCancel, submitting }) {
 // 📋 Page principale Clients Spéciaux
 // ==========================================================
 export default function ClientsSpeciaux() {
-  const [clients, setClients] = useState([]);
-  const [commandes, setCommandes] = useState([]);
-  const [loading, setLoading] = useState(true);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [openAdd, setOpenAdd] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
@@ -742,323 +582,26 @@ export default function ClientsSpeciaux() {
     setTimeout(() => removeToast(id), 4000);
   };
   const removeToast = (id) => setToasts((t) => t.filter((x) => x.id !== id));
+  const {
+    clients,
+    commandes,
+    loading,
+    clientsEnrichis,
+    statsGlobales,
+    handleAdd,
+    handleEdit,
+    handleDelete,
+  } = useClientsSpeciaux(toast);
 
-  // ======================================================
-  // 🔗 Chargement des clients spéciaux + commandes
-  // ======================================================
-  const fetchData = async () => {
-    try {
-      setLoading(true);
 
-      const [clientsRes, commandesRes] = await Promise.all([
-        clientsAPI.getAll({ type_client: "special" }),
-        commandesAPI.getAll(),
-      ]);
+  const {
+  loadPaiementsForClient,
+  handleTrancheSubmit,
+  handleVoirDetailEditTranche,
+  handleVoirDetailDeleteTranche,
+} = usePaiementsClients(toast);
 
-      const clientsPayload = Array.isArray(clientsRes?.data)
-        ? clientsRes.data
-        : clientsRes;
 
-      const normalizedClients = (clientsPayload || []).map((c) => ({
-        id: c.id,
-        nom: c.nom || "",
-        contact: c.contact || c.telephone || "",
-        entreprise: c.entreprise || "",
-        adresse: c.adresse || "",
-      }));
-
-      const commandesPayload = Array.isArray(commandesRes.data?.data)
-        ? commandesRes.data.data
-        : commandesRes.data;
-
-      const allCommandes = (commandesPayload || []).map(normalizeCommande);
-
-      const clientIds = new Set(normalizedClients.map((c) => c.id));
-      const commandesClientsSpeciaux = allCommandes.filter((cmd) =>
-        clientIds.has(cmd.clientId)
-      );
-
-      setClients(normalizedClients);
-      setCommandes(commandesClientsSpeciaux);
-    } catch (error) {
-      console.error("Erreur chargement clients/commandes :", error);
-      toast(
-        "error",
-        "Erreur de chargement",
-        "Impossible de charger les clients spéciaux."
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // On ignore TOUTES les commandes annulées pour les agrégats
-  const commandesActives = useMemo(
-    () => commandes.filter((c) => c.statut !== "annulee"),
-    [commandes]
-  );
-
-  // Agrégation : enrichir chaque client avec ses commandes actives + tranches en attente
-  const clientsEnrichis = useMemo(() => {
-    return clients.map((c) => {
-      const cs = commandesActives.filter((cmd) => cmd.clientId === c.id);
-      if (!cs.length) {
-        return {
-          ...c,
-          nbCommandes: 0,
-          totalTTC: 0,
-          totalPaye: 0,
-          detteTotale: 0,
-          derniereActivite: null,
-          nbTranchesEnAttente: 0,
-          montantTranchesEnAttente: 0,
-        };
-      }
-
-      const totalTTC = cs.reduce((s, x) => s + (x.totalTTC || 0), 0);
-      const totalPaye = cs.reduce((s, x) => s + (x.montantPaye || 0), 0);
-      const detteTotale = cs.reduce(
-        (s, x) => s + Math.max(x.resteAPayer || 0, 0),
-        0
-      );
-
-      const datesActivite = [
-        ...cs.map((x) => x.dateCommande),
-        ...cs.flatMap((x) => (x.paiements || []).map((p) => p.date)),
-      ].filter(Boolean);
-      const derniereActivite = datesActivite.length
-        ? datesActivite.sort().slice(-1)[0]
-        : null;
-
-      const paiementsClient = cs.flatMap((cmd) => cmd.paiements || []);
-      const tranchesEnAttente = paiementsClient.filter(
-        (p) =>
-          p.type === "tranche" &&
-          p.statut === "en_attente_caisse" &&
-          p.montant
-      );
-      const nbTranchesEnAttente = tranchesEnAttente.length;
-      const montantTranchesEnAttente = tranchesEnAttente.reduce(
-        (s, p) => s + Number(p.montant || 0),
-        0
-      );
-
-      return {
-        ...c,
-        nbCommandes: cs.length,
-        totalTTC,
-        totalPaye,
-        detteTotale,
-        derniereActivite,
-        nbTranchesEnAttente,
-        montantTranchesEnAttente,
-      };
-    });
-  }, [clients, commandesActives]);
-
-  // Stats globales (basées sur clientsEnrichis donc SANS commandes annulées)
-  const statsGlobales = useMemo(() => {
-    const nbClients = clientsEnrichis.length;
-    const totalTTC = clientsEnrichis.reduce((s, c) => s + c.totalTTC, 0);
-    const totalPaye = clientsEnrichis.reduce((s, c) => s + c.totalPaye, 0);
-    const detteTotale = clientsEnrichis.reduce(
-      (s, c) => s + c.detteTotale,
-      0
-    );
-    return { nbClients, totalTTC, totalPaye, detteTotale };
-  }, [clientsEnrichis]);
-
-  // ============================
-  // 🔁 CRUD connecté au backend
-  // ============================
-  const handleAdd = async (data) => {
-    setSubmitting(true);
-    try {
-      const payload = {
-        nom: data.nom,
-        prenom: null,
-        entreprise: data.entreprise,
-        adresse: data.adresse,
-        numero_cni: null,
-        telephone: null,
-        type_client: "special",
-        solde: 0,
-        contact: data.contact,
-      };
-
-      const c = await clientsAPI.create(payload);
-
-      const newClient = {
-        id: c.id,
-        nom: c.nom || data.nom,
-        contact: c.contact || c.telephone || data.contact,
-        entreprise: c.entreprise || data.entreprise,
-        adresse: c.adresse || data.adresse,
-      };
-
-      setClients((prev) => [newClient, ...prev]);
-
-      toast(
-        "success",
-        "Client ajouté",
-        `${newClient.nom} a été ajouté avec succès.`
-      );
-      setOpenAdd(false);
-    } catch (error) {
-      console.error("Erreur création client spécial :", error);
-
-      if (error.response) {
-        const { status, data } = error.response;
-
-        if (status === 422 && data?.errors) {
-          const firstError =
-            Object.values(data.errors)[0]?.[0] ||
-            "Vérifiez les champs obligatoires.";
-          toast("error", "Impossible d'ajouter ce client spécial", firstError);
-        } else {
-          toast(
-            "error",
-            "Création impossible",
-            data?.message || "Erreur lors de la création du client."
-          );
-        }
-      } else {
-        toast(
-          "error",
-          "Erreur réseau",
-          "Impossible de contacter le serveur."
-        );
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleEdit = async (data) => {
-    if (!editTarget) return;
-    setSubmitting(true);
-
-    try {
-      const payload = {
-        nom: data.nom,
-        entreprise: data.entreprise,
-        adresse: data.adresse,
-        contact: data.contact,
-      };
-
-      await clientsAPI.update(editTarget.id, payload);
-
-      setClients((prev) =>
-        prev.map((c) =>
-          c.id === editTarget.id
-            ? {
-                ...c,
-                nom: data.nom,
-                entreprise: data.entreprise,
-                adresse: data.adresse,
-                contact: data.contact,
-              }
-            : c
-        )
-      );
-
-      toast("success", "Client modifié", `${data.nom} a été mis à jour.`);
-      setEditTarget(null);
-    } catch (error) {
-      console.error(error);
-      toast(
-        "error",
-        "Erreur",
-        "Impossible de modifier ce client spécial pour le moment."
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
-    setSubmitting(true);
-
-    try {
-      await clientsAPI.delete(deleteTarget.id);
-
-      setClients((prev) => prev.filter((c) => c.id !== deleteTarget.id));
-
-      toast(
-        "success",
-        "Client supprimé",
-        `${deleteTarget.nom} a été supprimé.`
-      );
-      setDeleteTarget(null);
-    } catch (error) {
-      console.error(error);
-      toast(
-        "error",
-        "Erreur",
-        "Impossible de supprimer ce client spécial pour le moment."
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  // 🔄 Charge les paiements d'un client
-  const loadPaiementsForClient = async (clientId) => {
-    try {
-      const commandesClient = commandes.filter((c) => c.clientId === clientId);
-      if (!commandesClient.length) return;
-
-      const updated = [...commandes];
-
-      await Promise.all(
-        commandesClient.map(async (cmd) => {
-          try {
-            const payload = await paiementsAPI.getByCommande(cmd.id);
-
-            const paiements = (payload || []).map((p) => ({
-              id: p.id,
-              date: p.date_paiement || p.date || "",
-              montant:
-                Number(
-                  p.montant || p.montant_paye || p.montant_paiement || 0
-                ) || 0,
-              mode: p.mode_paiement || p.mode || "especes",
-              commentaire: p.commentaire || "",
-              statut:
-                p.statut ||
-                p.status ||
-                p.statut_paiement ||
-                p.statutPaiement ||
-                null,
-              type: p.type_paiement || p.type || p.typePaiement || null,
-            }));
-
-            const idx = updated.findIndex((c) => c.id === cmd.id);
-            if (idx !== -1) {
-              updated[idx] = { ...updated[idx], paiements };
-            }
-          } catch (e) {
-            console.error("Erreur chargement paiements commande :", e);
-          }
-        })
-      );
-
-      setCommandes(updated);
-    } catch (error) {
-      console.error("Erreur chargement paiements client :", error);
-      toast(
-        "error",
-        "Erreur",
-        "Impossible de charger les paiements de ce client."
-      );
-    }
-  };
 
   const openHistoriqueClient = (client) => {
     setHistoriqueClient(client);
@@ -1071,169 +614,9 @@ export default function ClientsSpeciaux() {
     setOpenTranche(true);
   };
 
-  // 🔗 Enregistrement d'une nouvelle tranche côté API (préparation Responsable)
-  const handleTrancheSubmit = async (commande, tranche) => {
-    try {
-      const res = await paiementsAPI.create(commande.id, {
-        montant: tranche.montant,
-        mode_paiement: tranche.mode,
-        date_paiement: tranche.date,
-        type_paiement: "tranche",
-        statut_paiement: "en_attente_caisse",
-        statut: "en_attente_caisse",
-        commentaire: tranche.commentaire || "",
-      });
 
-      const created = Array.isArray(res.data?.data)
-        ? res.data.data[0]
-        : res.data;
 
-      const nouveauPaiement = {
-        id: created?.id || Date.now(),
-        date: created?.date_paiement || created?.date || tranche.date,
-        montant:
-          Number(
-            created?.montant ||
-              created?.montant_paye ||
-              created?.montant_paiement ||
-              tranche.montant
-          ) || tranche.montant,
-        mode: created?.mode_paiement || created?.mode || tranche.mode,
-        commentaire: created?.commentaire || tranche.commentaire || "",
-        statut:
-          created?.statut ||
-          created?.status ||
-          created?.statut_paiement ||
-          "en_attente_caisse",
-        type: created?.type_paiement || created?.type || "tranche",
-      };
 
-      // ⚠️ IMPORTANT : on NE touche PAS au montant payé / reste / statut de la commande ici.
-      // La commande ne sera soldée que quand la caisse encaisse réellement.
-      setCommandes((prev) =>
-        prev.map((c) =>
-          c.id === commande.id
-            ? {
-                ...c,
-                paiements: [...(c.paiements || []), nouveauPaiement],
-              }
-            : c
-        )
-      );
-
-      toast(
-        "success",
-        "Tranche en attente caisse",
-        `${trancheClient?.nom || commande.clientNom} — ${formatFCFA(
-          tranche.montant
-        )}`
-      );
-
-      setOpenTranche(false);
-      setTrancheClient(null);
-    } catch (error) {
-      console.error("Erreur enregistrement tranche :", error);
-
-      if (error.response?.status === 422 && error.response.data?.errors) {
-        const firstError =
-          Object.values(error.response.data.errors)[0]?.[0] ||
-          "Vérifiez les informations de la tranche.";
-        toast("error", "Tranche refusée", firstError);
-      } else {
-        toast(
-          "error",
-          "Erreur",
-          "Impossible d'enregistrer cette tranche pour le moment."
-        );
-      }
-    }
-  };
-
-  // 🔄 Édition de tranche depuis VoirDetailClient (modal interne)
-  const handleVoirDetailEditTranche = async (commande, updatedPaiement) => {
-    try {
-      await paiementsAPI.update(updatedPaiement.id, {
-        montant: updatedPaiement.montant,
-        mode_paiement: updatedPaiement.mode,
-        date_paiement: updatedPaiement.date,
-        commentaire: updatedPaiement.commentaire || "",
-        // Toujours en attente caisse tant que non encaissé
-        statut_paiement: "en_attente_caisse",
-      });
-
-      setCommandes((prev) =>
-        prev.map((c) => {
-          if (c.id !== commande.id) return c;
-          return {
-            ...c,
-            paiements: (c.paiements || []).map((p) =>
-              p.id === updatedPaiement.id
-                ? {
-                    ...p,
-                    montant: updatedPaiement.montant,
-                    mode: updatedPaiement.mode,
-                    date: updatedPaiement.date,
-                    commentaire: updatedPaiement.commentaire || "",
-                    statut: "en_attente_caisse",
-                    type: p.type || "tranche",
-                  }
-                : p
-            ),
-          };
-        })
-      );
-
-      toast(
-        "success",
-        "Tranche modifiée",
-        "La tranche a été mise à jour (toujours en attente caisse)."
-      );
-    } catch (error) {
-      console.error("Erreur modification tranche (VoirDetail) :", error);
-
-      if (error.response?.status === 422 && error.response.data?.errors) {
-        const firstError =
-          Object.values(error.response.data.errors)[0]?.[0] ||
-          "Vérifiez les informations de la tranche.";
-        toast("error", "Modification refusée", firstError);
-      } else {
-        toast(
-          "error",
-          "Erreur",
-          "Impossible de modifier cette tranche pour le moment."
-        );
-      }
-    }
-  };
-
-  // 🔄 Suppression de tranche depuis VoirDetailClient
-  const handleVoirDetailDeleteTranche = async (commande, paiement) => {
-    try {
-      await paiementsAPI.delete(paiement.id);
-
-      setCommandes((prev) =>
-        prev.map((c) =>
-          c.id === commande.id
-            ? {
-                ...c,
-                paiements: (c.paiements || []).filter(
-                  (p) => p.id !== paiement.id
-                ),
-              }
-            : c
-        )
-      );
-
-      toast("success", "Tranche supprimée", "La tranche a été supprimée.");
-    } catch (error) {
-      console.error("Erreur suppression tranche (VoirDetail) :", error);
-      toast(
-        "error",
-        "Erreur",
-        "Impossible de supprimer cette tranche pour le moment."
-      );
-    }
-  };
 
   const filtered = useMemo(() => {
     const q = searchTerm.toLowerCase();
@@ -1397,7 +780,7 @@ export default function ClientsSpeciaux() {
                     </div>
                   ),
                 },
-                { key: "contact", label: "Contact" },
+                //{ key: "contact", label: "Contact" },
                 {
                   key: "totalTTC",
                   label: "Total TTC",
@@ -1539,11 +922,12 @@ export default function ClientsSpeciaux() {
                 Annuler
               </button>
               <button
-                onClick={handleDelete}
+                onClick={() => handleDelete(deleteTarget.id)}
                 className="px-4 py-2 rounded-lg text-sm text-white bg-rose-600 hover:bg-rose-700 shadow-sm"
               >
                 Supprimer
               </button>
+
             </div>
           </FormModal>
 

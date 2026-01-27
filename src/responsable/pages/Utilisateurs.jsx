@@ -13,29 +13,39 @@ import {
   CheckCircle2,
   AlertCircle,
   X,
-  FileDown,
 } from "lucide-react";
-import jsPDF from "jspdf";
-import "jspdf-autotable";
 import DataTable from "../components/DataTable.jsx";
 import { utilisateursAPI } from '@/services/api';
+import Pagination from "../components/Pagination.jsx";
 
 
 const ROLES = [
   "Vendeur",
   "Caissier",
+  "Comptable",
   "Gestionnaire Dépôt",
   "Gestionnaire Boutique",
   "Responsable",
 ];
 
+
 const ROLE_LABELS = {
   vendeur: "Vendeur",
   caissier: "Caissier",
+  comptable: "Comptable",
   gestionnaire_depot: "Gestionnaire Dépôt",
   gestionnaire_boutique: "Gestionnaire Boutique",
   responsable: "Responsable",
 };
+const getRoleKeyFromLabel = (label) =>
+  Object.keys(ROLE_LABELS).find(
+    (key) => ROLE_LABELS[key] === label
+  );
+
+
+
+
+
 
 const cls = (...a) => a.filter(Boolean).join(" ");
 
@@ -96,29 +106,69 @@ export default function Utilisateurs() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterRole, setFilterRole] = useState("Tous");
   const [toasts, setToasts] = useState([]);
+  // Pagination backend
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const [loadingPage, setLoadingPage] = useState(false);
+
+
+
 
   const removeToast = (id) =>
     setToasts((t) => t.filter((x) => x.id !== id));
 
-  const toast = (type, title, message) => {
-    const id = Date.now();
-    setToasts((t) => [...t, { id, type, title, message }]);
-    setTimeout(() => removeToast(id), 4000);
-  };
+const toast = React.useCallback((type, title, message) => {
+  const id = Date.now();
+  setToasts((t) => [...t, { id, type, title, message }]);
+  setTimeout(() => removeToast(id), 4000);
+}, []);
+
 
   // ————————————————————————————————————————————————
   // 🔗 Chargement des vrais utilisateurs depuis l'API
   // GET /api/users (protégé Sanctum + role:responsable)
   // ————————————————————————————————————————————————
   useEffect(() => {
+    setPage(1);
+  }, [filterRole]);
+
+
+
+  useEffect(() => {
     const fetchUsers = async () => {
       try {
-        setLoading(true);
+          setLoading(page === 1);
+          setLoadingPage(page !== 1);
 
-        const data = await utilisateursAPI.getAll();
 
-        // data peut être un tableau brut OU data.data (Resource Laravel)
+
+        const data = await utilisateursAPI.getAll({
+          page,
+          role:
+            filterRole !== "Tous"
+              ? getRoleKeyFromLabel(filterRole)
+              : undefined,
+        });
+
+
+
+
+        // pagination Laravel (sécurisée côté front)
+        if (!Array.isArray(data)) {
+          const total = data.total || 0;
+          const perPage = data.per_page || 20;
+
+          setTotalItems(total);
+
+          const pages = Math.ceil(total / perPage);
+          setTotalPages(pages <= 1 ? 1 : pages);
+        }
+
+
+        // data Laravel paginée
         const rawUsers = Array.isArray(data) ? data : data.data || [];
+
 
         const normalized = rawUsers.map((u) => {
           // Présence : priorité à un booléen is_online si dispo,
@@ -148,65 +198,56 @@ export default function Utilisateurs() {
 
         setUsers(normalized);
       } catch (err) {
-        console.error("Erreur chargement utilisateurs :", err);
         toast(
           "error",
           "Erreur",
           "Impossible de charger la liste des utilisateurs."
         );
+
       } finally {
         setLoading(false);
+        setLoadingPage(false);
       }
     };
 
     fetchUsers();
-  }, []);
+  }, [toast, page,  filterRole]);
+  const filteredUsers = useMemo(() => {
+  const q = searchTerm.toLowerCase();
+
+  return users.filter((u) => {
+    const prenom = (u.prenom || "").toLowerCase();
+    const nom = (u.nom || "").toLowerCase();
+    const email = (u.email || "").toLowerCase();
+    const tel = String(u.tel || "").toLowerCase();
+    const adresse = (u.adresse || "").toLowerCase();
+
+    return (
+      prenom.includes(q) ||
+      nom.includes(q) ||
+      email.includes(q) ||
+      tel.includes(q) ||
+      adresse.includes(q)
+    );
+  });
+}, [users, searchTerm]);
+
+
 
   // Stats rapides (pour les petits badges)
-  const stats = useMemo(() => {
-    const total = users.length;
-    const enLigne = users.filter((u) => u.is_online).length;
-    const horsLigne = total - enLigne;
+    const stats = useMemo(() => {
+      const enLigne = users.filter((u) => u.is_online).length;
+      const horsLigne = totalItems - enLigne;
 
-    return { total, enLigne, horsLigne };
-  }, [users]);
+      return {
+        total: totalItems,
+        enLigne,
+        horsLigne,
+      };
+    }, [users, totalItems]);
 
-  // Liste filtrée (recherche + rôle)
-  const filtered = useMemo(() => {
-    const q = searchTerm.toLowerCase();
-    return users.filter(
-      (u) =>
-        (u.nom.toLowerCase().includes(q) ||
-          u.prenom.toLowerCase().includes(q) ||
-          u.email.toLowerCase().includes(q) ||
-          (u.tel || "").includes(q) ||
-          (u.adresse || "").toLowerCase().includes(q)) &&
-        (filterRole === "Tous" || u.role === filterRole)
-    );
-  }, [users, searchTerm, filterRole]);
 
-  // Export PDF (liste courante filtrée)
-  const exportPDF = () => {
-    const doc = new jsPDF();
-    doc.text("Liste des utilisateurs — LPD Manager", 14, 16);
-    doc.autoTable({
-      startY: 24,
-      head: [["Nom complet", "Email", "Téléphone", "Rôle", "Adresse"]],
-      body: filtered.map((u) => [
-        `${u.prenom} ${u.nom}`,
-        u.email,
-        u.tel,
-        u.role,
-        u.adresse,
-      ]),
-      styles: { fontSize: 9 },
-      headStyles: { fillColor: [71, 46, 173] },
-    });
-    doc.save(
-      `Utilisateurs_LPD_${new Date().toISOString().slice(0, 10)}.pdf`
-    );
-    toast("success", "Export PDF", "Fichier téléchargé avec succès.");
-  };
+  
 
   // ————————————————————————————————————————————————
   // ⏳ Loader harmonisé
@@ -255,7 +296,6 @@ export default function Utilisateurs() {
             </p>
           </div>
 
-          {/* Bouton Export PDF */}
 
         </motion.header>
 
@@ -318,69 +358,55 @@ export default function Utilisateurs() {
 
           {/* TABLE (lecture seule, aucune action) */}
           <div className="mt-1">
-            <DataTable
-              columns={[
-                {
-                  label: "Nom complet",
-                  key: "prenom",
-                  render: (_, r) => `${r.prenom} ${r.nom}`,
-                },
-                { label: "Email", key: "email" },
-                {
-                  label: "Rôle",
-                  key: "role",
-                  render: (val) => (
-                    <span
-                      className={cls(
-                        "px-2.5 py-1 rounded-full text-[11px] font-semibold",
-                        val === "Vendeur"
-                          ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
-                          : val === "Caissier"
-                          ? "bg-[#FFF4E5] text-[#F58020] border border-[#FFE0B8]"
-                          : val.includes("Gestionnaire")
-                          ? "bg-[#F7F5FF] text-[#472EAD] border border-[#E4E0FF]"
-                          : val === "Responsable"
-                          ? "bg-sky-50 text-sky-700 border border-sky-200"
-                          : "bg-gray-100 text-gray-700 border border-gray-200"
-                      )}
-                    >
-                      {val}
-                    </span>
-                  ),
-                },
-                { label: "Téléphone", key: "tel" },
-                { label: "Adresse", key: "adresse" },
-                { label: "CNI", key: "cni" },
-                {
-                  label: "Présence",
-                  key: "is_online",
-                  render: (_, r) => (
-                    <span
-                      className={cls(
-                        "inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold rounded-full border",
-                        r.is_online
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                          : "bg-gray-50 text-gray-600 border-gray-200"
-                      )}
-                    >
-                      <Circle
-                        className={cls(
-                          "w-3 h-3",
-                          r.is_online
-                            ? "text-emerald-500"
-                            : "text-gray-400"
-                        )}
-                        fill="currentColor"
-                      />
-                      {r.is_online ? "En ligne" : "Hors ligne"}
-                    </span>
-                  ),
-                },
-              ]}
-              data={filtered}
-              actions={[]} // 👈 AUCUNE ACTION (lecture seule)
-            />
+            {filteredUsers.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-14 text-center text-gray-400">
+                <Search className="w-8 h-8 mb-3 opacity-60" />
+                <p className="text-sm font-medium">
+                  Aucun utilisateur trouvé
+                </p>
+                <p className="text-xs mt-1">
+                  Essayez de modifier votre recherche ou vos filtres.
+                </p>
+              </div>
+            ) : (
+              <>
+                <DataTable
+                  columns={[
+                    {
+                      label: "Nom complet",
+                      key: "prenom",
+                      render: (_, r) => `${r.prenom} ${r.nom}`,
+                    },
+                    { label: "Email", key: "email" },
+                    { label: "Téléphone", key: "tel" },
+                    { label: "Adresse", key: "adresse" },
+                  ]}
+                  data={filteredUsers}
+                  actions={[]}
+                />
+
+                {loadingPage && (
+                  <div className="flex justify-center py-2 text-xs text-gray-400">
+                    Chargement de la page...
+                  </div>
+                )}
+                <Pagination
+                  page={page}
+                  totalPages={totalPages}
+                  onPageChange={(p) => {
+                    if (p < 1 || p > totalPages) return;
+                    if (p === page) return;
+                    if (loadingPage) return;
+                    setPage(p);
+                  }}
+                />
+
+              </>
+            )}
           </div>
+
+
+
         </section>
 
         {/* TOASTS */}

@@ -2,7 +2,7 @@
 // 💸 Decaissements.jsx — Interface Responsable (LPD Manager)
 // ✅ Fix : soumission fiable + debug utile + modal robuste
 // - KPI + export PDF + modal création + modal détail
-// ✅ Option A : Pagination locale (limite l'affichage sans toucher au backend)
+// ✅ Option B : Pagination backend (source unique = API)
 // ==========================================================
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -18,8 +18,6 @@ import {
   CheckCircle2,
   AlertCircle,
   Clock3,
-  ChevronLeft,
-  ChevronRight,
 } from "lucide-react";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -27,7 +25,9 @@ import autoTable from "jspdf-autotable";
 import { decaissementsAPI } from '@/services/api';
 import FormModal from "../components/FormModal";
 import DecaissementForm from "../components/DecaissementForm";
+import Pagination from "../components/Pagination";
 import { Toaster, toast } from "sonner";
+
 
 // ——————————————————————————————————————————————————
 // 🔧 Helpers
@@ -171,30 +171,41 @@ export default function Decaissements() {
   const [filterEndDate, setFilterEndDate] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
 
-  // ✅ Pagination locale (Option A)
-  const [pageSize, setPageSize] = useState(10);
+  // ✅ Pagination backend (Option b)
   const [page, setPage] = useState(1);
-
+  const [lastPage, setLastPage] = useState(1);
+  
   // ——————————————————————————————————————————————————
   // 📥 Chargement initial
   // ——————————————————————————————————————————————————
+
+
   const loadData = async () => {
     try {
       setLoading(true);
-      const { data } = await instance.get("/decaissements");
-      setDemandes(data || []);
-    } catch (e) {
-      console.error("Erreur chargement décaissements:", e);
-      toast.error("Impossible de charger les décaissements.");
+      const res = await decaissementsAPI.list({
+        page,
+        statut: filterStatut !== "tous" ? filterStatut : undefined,
+        start_date: filterStartDate || undefined,
+        end_date: filterEndDate || undefined,
+        search: searchTerm || undefined,
+      });
+
+      setDemandes(res.data.data || []);
+      setPage(res.data.current_page);
+      setLastPage(res.data.last_page);
+      
     } finally {
       setLoading(false);
     }
   };
 
+
+
   useEffect(() => {
     loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [page, filterStatut, filterStartDate, filterEndDate, searchTerm]);
+
 
   // ——————————————————————————————————————————————————
   // 💾 Ajout (POST API) — en camelCase pour matcher le backend
@@ -202,30 +213,60 @@ export default function Decaissements() {
   const handleAdd = async (form) => {
     if (submitting) return;
 
-    const lignesPayload = (form?.lignes || []).map((l) => ({
+    // ———————————————————————————
+    // ✅ VALIDATION FRONT (AVANT API)
+    // ———————————————————————————
+
+    const motifGlobal = String(form?.motifGlobal || "").trim();
+    if (!motifGlobal || motifGlobal.length < 3) {
+      toast.error("Le motif global est obligatoire (au moins 3 caractères).");
+      return;
+    }
+
+    const datePrevue = form?.datePrevue || todayISO();
+    if (!datePrevue) {
+      toast.error("La date prévue est obligatoire.");
+      return;
+    }
+
+    const lignes = Array.isArray(form?.lignes) ? form.lignes : [];
+    if (lignes.length === 0) {
+      toast.error("Ajoutez au moins une ligne de décaissement.");
+      return;
+    }
+
+    const lignesPayload = lignes.map((l) => ({
       libelle: String(l?.libelle || "").trim(),
       montant: Number(l?.montant || 0),
     }));
 
+    const ligneInvalide = lignesPayload.find(
+      (l) => !l.libelle || l.montant <= 0
+    );
+
+    if (ligneInvalide) {
+      toast.error(
+        "Chaque ligne doit avoir un libellé et un montant supérieur à 0."
+      );
+      return;
+    }
+
+    // ———————————————————————————
+    // ✅ PAYLOAD FINAL
+    // ———————————————————————————
     const payload = {
-      motifGlobal: String(form?.motifGlobal || "").trim(),
+      motifGlobal,
       methodePrevue: form?.methodePrevue || "Espèces",
-      datePrevue: form?.datePrevue || todayISO(),
+      datePrevue,
       lignes: lignesPayload,
     };
-
-    console.log("✅ POST /decaissements payload =>", payload);
 
     const toastId = toast.loading("Envoi à la caisse...");
 
     try {
       setSubmitting(true);
 
-      const { data } = await instance.post("/decaissements", payload, {
-        headers: { "Content-Type": "application/json" },
-      });
-
-      console.log("✅ POST /decaissements response =>", data);
+      const { data } = await decaissementsAPI.create(payload);
 
       const d = data.decaissement || data;
 
@@ -241,28 +282,20 @@ export default function Decaissements() {
       setDemandes((prev) => [normalised, ...prev]);
       setOpenModal(false);
       toast.success("Demande envoyée à la caisse ✅", { id: toastId });
-
-      // ✅ Option A : on revient à la 1ère page (visuel)
       setPage(1);
     } catch (e) {
-      console.error("❌ Erreur POST /decaissements:", e);
-
       const status = e?.response?.status;
       const data = e?.response?.data;
 
       if (status === 422 && data?.errors) {
         const firstField = Object.keys(data.errors)[0];
-        const firstMsg = data.errors[firstField]?.[0] || "Données invalides.";
+        const firstMsg =
+          data.errors[firstField]?.[0] || "Données invalides.";
         toast.error(firstMsg, { id: toastId });
       } else {
-        const apiMsg =
-          data?.message ||
-          data?.error ||
-          (typeof data === "string" ? data : null);
-
         toast.error(
-          apiMsg
-            ? `Erreur (${status}) : ${apiMsg}`
+          data?.message
+            ? `Erreur (${status}) : ${data.message}`
             : `Envoi impossible (${status || "?"}).`,
           { id: toastId }
         );
@@ -271,6 +304,8 @@ export default function Decaissements() {
       setSubmitting(false);
     }
   };
+
+
 
   // ——————————————————————————————————————————————————
   // 📊 Stats
@@ -301,59 +336,21 @@ export default function Decaissements() {
   // ——————————————————————————————————————————————————
   // 🔎 Filtres + recherche
   // ——————————————————————————————————————————————————
-  const filteredDemandes = useMemo(() => {
-    return demandes.filter((d) => {
-      if (!d) return false;
 
-      if (filterStatut !== "tous" && d.statut !== filterStatut) return false;
-
-      const dateStr = String(d.datePrevue || "");
-      if (filterStartDate && dateStr < filterStartDate) return false;
-      if (filterEndDate && dateStr > filterEndDate) return false;
-
-      const term = searchTerm.trim().toLowerCase();
-      if (term) {
-        const motif = (d.motifGlobal || "").toLowerCase();
-        const lignesText = (d.lignes || [])
-          .map((l) => l.libelle || "")
-          .join(" ")
-          .toLowerCase();
-        if (!`${motif} ${lignesText}`.includes(term)) return false;
-      }
-
-      return true;
-    });
-  }, [demandes, filterStatut, filterStartDate, filterEndDate, searchTerm]);
 
   // ✅ Reset page quand les filtres changent
   useEffect(() => {
     setPage(1);
   }, [filterStatut, filterStartDate, filterEndDate, searchTerm]);
 
+
   // ✅ Pagination calculs
-  const totalPages = useMemo(() => {
-    const n = Math.ceil((filteredDemandes?.length || 0) / Number(pageSize || 10));
-    return Math.max(1, n);
-  }, [filteredDemandes, pageSize]);
 
-  // Si page actuelle dépasse totalPages (quand on filtre), on la corrige
-  useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
 
-  const paginatedDemandes = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    const end = start + pageSize;
-    return (filteredDemandes || []).slice(start, end);
-  }, [filteredDemandes, page, pageSize]);
 
-  const pageInfo = useMemo(() => {
-    const total = filteredDemandes.length;
-    if (!total) return { from: 0, to: 0, total: 0 };
-    const from = (page - 1) * pageSize + 1;
-    const to = Math.min(page * pageSize, total);
-    return { from, to, total };
-  }, [filteredDemandes.length, page, pageSize]);
+
+
+
 
   // ——————————————————————————————————————————————————
   // 📤 Export PDF
@@ -492,7 +489,6 @@ export default function Decaissements() {
       doc.save(`Decaissements_LPD_${todayISO()}.pdf`);
       toast.success("Export PDF généré avec succès.");
     } catch (e) {
-      console.error("Erreur export PDF décaissements :", e);
       toast.error("Erreur lors de l’export PDF des décaissements.");
     }
   };
@@ -669,25 +665,9 @@ export default function Decaissements() {
                     </button>
                   ))}
                 </div>
-
-                {/* ✅ Page size */}
-                <div className="ml-0 lg:ml-3 inline-flex items-center gap-2">
-                  <span className="text-gray-500 font-medium">Afficher :</span>
-                  <select
-                    value={pageSize}
-                    onChange={(e) => {
-                      setPageSize(Number(e.target.value));
-                      setPage(1);
-                    }}
-                    className="border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:border-[#472EAD] focus:ring-1 focus:ring-[#472EAD] bg-white"
-                  >
-                    <option value={10}>10</option>
-                    <option value={20}>20</option>
-                    <option value={50}>50</option>
-                  </select>
-                  <span className="text-gray-400">lignes</span>
-                </div>
               </div>
+
+                
 
               <div className="flex flex-col sm:flex-row sm:items-center gap-3 text-xs">
                 <div className="flex items-center gap-1">
@@ -743,8 +723,8 @@ export default function Decaissements() {
                 </tr>
               </thead>
               <tbody>
-                {paginatedDemandes.length ? (
-                  paginatedDemandes.map((d) => (
+                {demandes.length ? (
+                  demandes.map((d) => (
                     <tr
                       key={d.id}
                       className="border-t border-gray-100 hover:bg-[#F9F9FF] transition"
@@ -791,46 +771,12 @@ export default function Decaissements() {
             </table>
 
             {/* ✅ Pagination footer */}
-            <div className="px-4 py-3 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs">
-              <div className="text-gray-500">
-                Affichage{" "}
-                <span className="font-semibold text-gray-700">
-                  {pageInfo.from}-{pageInfo.to}
-                </span>{" "}
-                sur{" "}
-                <span className="font-semibold text-gray-700">
-                  {pageInfo.total}
-                </span>
-              </div>
+            <Pagination
+              page={page}
+              totalPages={lastPage}
+              onPageChange={setPage}
+            />
 
-              <div className="flex items-center gap-2 justify-end">
-                <button
-                  type="button"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page <= 1}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                  Précédent
-                </button>
-
-                <span className="text-gray-600">
-                  Page{" "}
-                  <span className="font-semibold text-gray-800">{page}</span> /{" "}
-                  <span className="font-semibold text-gray-800">{totalPages}</span>
-                </span>
-
-                <button
-                  type="button"
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page >= totalPages}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Suivant
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
           </section>
 
           {/* MODALE CRÉATION */}
