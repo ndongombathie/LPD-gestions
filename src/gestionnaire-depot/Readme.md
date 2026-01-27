@@ -3,6 +3,13 @@ npm install react-router-dom react-icons lucide-react html2canvas jspdf
 
 Dramé je penses k ca marchera et ni ca ne marche pas fait un capture de l'erreurs et envoi le à l'ia que tu utilise
 
+
+# endpoints  pour la gestion des categories
+GET|HEAD        api/categories ................................................................................................................................ categories.index › CategorieController@index
+POST            api/categories ................................................................................................................................ categories.store › CategorieController@store  
+GET|HEAD        api/categories/{category} ....................................................................................................................... categories.show › CategorieController@show  
+PUT|PATCH       api/categories/{category} ................................................................................................................... categories.update › CategorieController@update
+DELETE          api/categories/{category}
 # creer un transfer vers le gestionnaire de boutique 
 POST       api/stocks/transfer | envoyer un transfert vers le gestion de boutique
 # les endpoints pour la gestion des produits
