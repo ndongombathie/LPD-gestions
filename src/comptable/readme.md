@@ -46,3 +46,6 @@
 | **GET** | `/api/fournisseurs/{fournisseur}` | Détails d’un fournisseur |
 | **PUT** | `/api/fournisseurs/{fournisseur}` | Met à jour un fournisseur |
 | **DELETE** | `/api/fournisseurs/{fournisseur}` | Supprime un fournisseur |
+
+# Endpoint pour l'inventaire du boutique
+GET|HEAD        api/inventaires-boutique | affiche l'inventaire des produits du boutique
