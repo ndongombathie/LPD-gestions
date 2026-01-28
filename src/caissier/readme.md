@@ -8,3 +8,4 @@ POST            api/commandes/{commande}/annuler | annuler une commande
 GET             api/commandes/{commande}  | scanner et afficher une commande et ses details
 
 # Endpoint pour les decaissements
+PUT             api/decaissements/{decaissement}/statut     valider ou annuler un decaissement par exemple "status":"valider" ou "status"="annuler"

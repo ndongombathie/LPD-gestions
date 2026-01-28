@@ -8,8 +8,8 @@ Dramé je penses k ca marchera et ni ca ne marche pas fait un capture de l'erreu
 GET|HEAD        api/categories ..................................... | affiche la liste des categories
 POST            api/categories ..................................... | creer un categories (donner le  nom en entree)
 GET|HEAD        api/categories/{category} ...........................| afficher les infos d'un categorie (nom)
-PUT|PATCH       api/categories/{category} ........................... | modiier les infos d'un categorie  (nom)
-DELETE          api/categories/{category}                             |supprimer une categorie
+PUT|PATCH       api/categories/{category} ...........................|  modiier les infos d'un categorie  (nom)
+DELETE          api/categories/{category}                            | supprimer une categorie
 
 # creer un transfer vers le gestionnaire de boutique 
 POST       api/stocks/transfer | envoyer un transfert vers le gestion de boutique
