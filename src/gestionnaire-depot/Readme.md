@@ -24,6 +24,9 @@ DELETE          api/produits/{produit} | supprimer un produit
 # la liste des produits en rupture
 GET             api/produits_en_rupture | les produits en rupture de stock
 
+# endpoint pour reapprovisionner un produit
+ POST            api/stocks/reapprovisionner    | donner en post le quantité et le produit_id
+
 
 
 
