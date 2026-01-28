@@ -57,74 +57,7 @@ import {
   fournisseursAPI, 
   commandesAPI, 
   clientsAPI
-  // PAS d'inventaireAPI car pas encore d'endpoints
 } from '@/services/api';
-
-// ==========================================================
-// 📦 DONNÉES SIMULÉES POUR L'INVENTAIRE (seulement)
-// ==========================================================
-const mockInventaire = [
-  {
-    id: 1,
-    produit: 'Ordinateur portable',
-    categorie: 'Informatique',
-    libelle: 'HP EliteBook 840 G9',
-    qteTheorique: 10,
-    qteReelle: 8,
-    prixUnitaire: 650000,
-    date: '2024-01-15',
-    reference: 'INV-001',
-    created_at: '2024-01-15T10:30:00Z'
-  },
-  {
-    id: 2,
-    produit: 'Imprimante laser',
-    categorie: 'Bureau',
-    libelle: 'Canon MF644Cdw',
-    qteTheorique: 5,
-    qteReelle: 5,
-    prixUnitaire: 350000,
-    date: '2024-01-15',
-    reference: 'INV-002',
-    created_at: '2024-01-15T14:20:00Z'
-  },
-  {
-    id: 3,
-    produit: 'Smartphone',
-    categorie: 'Téléphonie',
-    libelle: 'Samsung Galaxy S23',
-    qteTheorique: 15,
-    qteReelle: 12,
-    prixUnitaire: 450000,
-    date: '2024-01-16',
-    reference: 'INV-003',
-    created_at: '2024-01-16T09:15:00Z'
-  },
-  {
-    id: 4,
-    produit: 'Tablette',
-    categorie: 'Informatique',
-    libelle: 'iPad Air 5',
-    qteTheorique: 8,
-    qteReelle: 10,
-    prixUnitaire: 550000,
-    date: '2024-01-16',
-    reference: 'INV-004',
-    created_at: '2024-01-16T11:45:00Z'
-  },
-  {
-    id: 5,
-    produit: 'Écran 24"',
-    categorie: 'Périphériques',
-    libelle: 'Dell UltraSharp U2422H',
-    qteTheorique: 12,
-    qteReelle: 12,
-    prixUnitaire: 250000,
-    date: '2024-01-17',
-    reference: 'INV-005',
-    created_at: '2024-01-17T16:30:00Z'
-  }
-];
 
 // ==========================================================
 // 🧮 Helpers
@@ -191,20 +124,6 @@ const fetchClientsSpeciaux = async () => {
     return data;
   } catch (error) {
     console.error("Erreur fetch clients spéciaux:", error);
-    return [];
-  }
-};
-
-// 🔹 Récupérer les données d'inventaire (SIMULÉES)
-const fetchInventaire = async () => {
-  try {
-    // Simulation d'un délai d'API
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // Retourne les données simulées
-    return mockInventaire;
-  } catch (error) {
-    console.error("Erreur fetch inventaire (simulé):", error);
     return [];
   }
 };
@@ -315,37 +234,6 @@ const computeStatsClients = (clients, commandes) => {
   };
 };
 
-// 🔹 Statistiques pour Inventaire
-const computeStatsInventaire = (inventaireData) => {
-  const totalArticles = inventaireData.length;
-  const avecEcart = inventaireData.filter(item => {
-    const ecart = Number(item.qteReelle || 0) - Number(item.qteTheorique || 0);
-    return ecart !== 0;
-  }).length;
-  
-  const sansEcart = totalArticles - avecEcart;
-  
-  const valeurTheorique = inventaireData.reduce((sum, item) => 
-    sum + (Number(item.qteTheorique || 0) * Number(item.prixUnitaire || 0)), 0);
-    
-  const valeurReelle = inventaireData.reduce((sum, item) => 
-    sum + (Number(item.qteReelle || 0) * Number(item.prixUnitaire || 0)), 0);
-  
-  const ecartGlobal = valeurReelle - valeurTheorique;
-  const tauxEcart = valeurTheorique ? (ecartGlobal / valeurTheorique) * 100 : 0;
-
-  return {
-    totalArticles,
-    avecEcart,
-    sansEcart,
-    valeurTheorique,
-    valeurReelle,
-    ecartGlobal,
-    tauxEcart,
-    tauxPrecision: 100 - Math.abs(tauxEcart)
-  };
-};
-
 // ==========================================================
 // 🧪 Fonctions pour générer les actions
 // ==========================================================
@@ -416,23 +304,7 @@ const getActionsClientsSpeciaux = (clients) => {
   }));
 };
 
-// Actions INVENTAIRE
-const getActionsInventaire = (inventaireData) => {
-  return inventaireData.slice(0, 5).map((item, idx) => ({
-    id: item.id || idx + 1,
-    date: item.date || todayISO(),
-    type: 'ajustement',
-    description: `Ajustement stock ${item.produit || item.libelle}`,
-    reference: item.reference || `AJU-${String(item.id || idx + 1).padStart(4, '0')}`,
-    categorie: item.categorie || "Divers",
-    quantite: Number(item.qteReelle || 0) - Number(item.qteTheorique || 0),
-    valeur: Math.abs((Number(item.qteReelle || 0) - Number(item.qteTheorique || 0)) * Number(item.prixUnitaire || 0)),
-    statut: 'validé',
-    user: "Responsable"
-  }));
-};
-
-// Cartes de navigation
+// Cartes de navigation (uniquement les 4 modules réels)
 const MODULE_CARDS = [
   { 
     id: "decaissements", 
@@ -462,13 +334,6 @@ const MODULE_CARDS = [
     icon: Star, 
     color: "amber"
   },
-  { 
-    id: "inventaire", 
-    label: "Inventaire", 
-    description: "Gestion des stocks", 
-    icon: Layers, 
-    color: "indigo"
-  },
 ];
 
 // ==========================================================
@@ -493,7 +358,6 @@ export default function Rapports() {
   const [fournisseurs, setFournisseurs] = useState([]);
   const [commandes, setCommandes] = useState([]);
   const [clientsSpeciaux, setClientsSpeciaux] = useState([]);
-  const [inventaireData, setInventaireData] = useState([]);
   const [loading, setLoading] = useState(false);
 
   // Options pour le module actif
@@ -517,10 +381,6 @@ export default function Rapports() {
         setCommandes(commandesRes);
         setClientsSpeciaux(clientsRes);
         
-        // Charger l'inventaire (simulé) séparément
-        const inventaireRes = await fetchInventaire();
-        setInventaireData(inventaireRes);
-        
       } catch (error) {
         console.error("Erreur chargement données:", error);
         toast.error("Erreur lors du chargement des données");
@@ -543,12 +403,10 @@ export default function Rapports() {
         return getActionsCommandes(commandes);
       case "clients":
         return getActionsClientsSpeciaux(clientsSpeciaux);
-      case "inventaire":
-        return getActionsInventaire(inventaireData);
       default:
         return [];
     }
-  }, [moduleActif, decaissements, fournisseurs, commandes, clientsSpeciaux, inventaireData]);
+  }, [moduleActif, decaissements, fournisseurs, commandes, clientsSpeciaux]);
 
   // Calculer les stats pour le module actif
   const getStatsForModule = useMemo(() => {
@@ -561,12 +419,10 @@ export default function Rapports() {
         return computeStatsCommandes(commandes);
       case "clients":
         return computeStatsClients(clientsSpeciaux, commandes);
-      case "inventaire":
-        return computeStatsInventaire(inventaireData);
       default:
         return {};
     }
-  }, [moduleActif, decaissements, fournisseurs, commandes, clientsSpeciaux, inventaireData]);
+  }, [moduleActif, decaissements, fournisseurs, commandes, clientsSpeciaux]);
 
   // Types d'action disponibles pour le module actif
   const typesActionDisponibles = useMemo(() => {
@@ -652,8 +508,6 @@ export default function Rapports() {
         return "Rechercher numéro, client, statut...";
       case "clients":
         return "Rechercher nom, entreprise, adresse...";
-      case "inventaire":
-        return "Rechercher produit, catégorie, référence...";
       default:
         return "Rechercher dans les actions...";
     }
@@ -699,8 +553,6 @@ export default function Rapports() {
         return [...base, "Client", "Montant", "Statut paiement"];
       case "clients":
         return [...base, "Entreprise", "Type", "Remise"];
-      case "inventaire":
-        return [...base, "Catégorie", "Quantité", "Valeur"];
       default:
         return base;
     }
@@ -725,8 +577,6 @@ export default function Rapports() {
         return [...base, action.fournisseur || "-", action.montant ? formatFCFA(action.montant) : "-", action.statut];
       case "clients":
         return [...base, action.details?.split(' - ')[0] || "-", action.typeClient || "-", action.remise || "-"];
-      case "inventaire":
-        return [...base, action.categorie || "-", action.quantite || "-", action.valeur ? formatFCFA(action.valeur) : "-"];
       default:
         return base;
     }
@@ -800,17 +650,6 @@ export default function Rapports() {
           secondaryValue: stats.avecDette,
           secondaryColor: "text-rose-600"
         };
-      case "inventaire":
-        return {
-          primaryIcon: Package,
-          primaryLabel: "Valeur théorique",
-          primaryValue: formatFCFA(stats.valeurTheorique),
-          primaryColor: "text-indigo-600",
-          secondaryIcon: BarChart3,
-          secondaryLabel: "Écart global",
-          secondaryValue: formatFCFA(stats.ecartGlobal),
-          secondaryColor: stats.ecartGlobal < 0 ? "text-red-600" : "text-emerald-600"
-        };
       default:
         return {
           primaryIcon: BarChart3,
@@ -862,7 +701,7 @@ export default function Rapports() {
                 Rapports d'activités du Responsable
               </h1>
               <p className="mt-1 text-sm text-gray-500">
-                Suivi détaillé de toutes vos actions : décaissements, fournisseurs, commandes, clients spéciaux et inventaire.
+                Suivi détaillé de toutes vos actions : décaissements, fournisseurs, commandes et clients spéciaux.
               </p>
             </div>
             <p className="text-[11px] text-gray-400">
@@ -1012,7 +851,7 @@ export default function Rapports() {
         </motion.div>
 
         {/* CARTES DE NAVIGATION */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {MODULE_CARDS.map((module) => {
             const Icon = module.icon;
             const isActive = moduleActif === module.id;
@@ -1021,7 +860,6 @@ export default function Rapports() {
               green: 'bg-green-50 text-green-600 border-green-200',
               purple: 'bg-purple-50 text-purple-600 border-purple-200',
               amber: 'bg-amber-50 text-amber-600 border-amber-200',
-              indigo: 'bg-indigo-50 text-indigo-600 border-indigo-200',
             };
             
             // Calculer le nombre d'actions pour chaque module
@@ -1031,7 +869,6 @@ export default function Rapports() {
               case "fournisseurs": actionCount = fournisseurs.length; break;
               case "commandes": actionCount = commandes.length; break;
               case "clients": actionCount = clientsSpeciaux.length; break;
-              case "inventaire": actionCount = inventaireData.length; break;
             }
             
             return (
@@ -1087,7 +924,7 @@ export default function Rapports() {
                 moduleActif === "fournisseurs" ? "bg-green-50 text-green-600" :
                 moduleActif === "commandes" ? "bg-purple-50 text-purple-600" :
                 moduleActif === "clients" ? "bg-amber-50 text-amber-600" :
-                "bg-indigo-50 text-indigo-600"
+                "bg-gray-50 text-gray-600"
               }`}>
                 {moduleActifData ? <moduleActifData.icon className="w-5 h-5" /> : <DollarSign className="w-5 h-5" />}
               </div>
@@ -1143,7 +980,7 @@ export default function Rapports() {
                   moduleActif === "fournisseurs" ? "bg-green-50" :
                   moduleActif === "commandes" ? "bg-purple-50" :
                   moduleActif === "clients" ? "bg-amber-50" :
-                  "bg-indigo-50"
+                  "bg-gray-100"
                 }`}>
                   <statsConfig.primaryIcon className={`w-5 h-5 ${statsConfig.primaryColor}`} />
                 </div>
@@ -1153,7 +990,7 @@ export default function Rapports() {
                  moduleActif === "fournisseurs" ? "Fournisseurs enregistrés" :
                  moduleActif === "commandes" ? "Valeur totale des commandes" :
                  moduleActif === "clients" ? "Clients spéciaux enregistrés" :
-                 "Valeur théorique du stock"}
+                 "Actions"}
               </p>
             </div>
 
@@ -1182,7 +1019,7 @@ export default function Rapports() {
                  moduleActif === "fournisseurs" ? "Avec livraison renseignée" :
                  moduleActif === "commandes" ? "Montant encaissé" :
                  moduleActif === "clients" ? "Clients avec dette active" :
-                 "Différence valeur réelle"}
+                 "Actions validées"}
               </p>
             </div>
           </div>
@@ -1292,20 +1129,6 @@ export default function Rapports() {
                           </>
                         )}
                         
-                        {moduleActif === "inventaire" && (
-                          <>
-                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Catégorie
-                            </th>
-                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Quantité
-                            </th>
-                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Valeur
-                            </th>
-                          </>
-                        )}
-                        
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Statut
                         </th>
@@ -1370,20 +1193,6 @@ export default function Rapports() {
                               </>
                             )}
                             
-                            {moduleActif === "inventaire" && (
-                              <>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                  {action.categorie}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                  {action.quantite}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                  {action.valeur ? formatFCFA(action.valeur) : "-"}
-                                </td>
-                              </>
-                            )}
-                            
                             <td className="px-6 py-4 whitespace-nowrap">
                               <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
                                 ["validé", "terminé", "livrée", "actif", "modifié"].includes(action.statut)
@@ -1403,7 +1212,6 @@ export default function Rapports() {
                             moduleActif === "decaissements" ? 8 :
                             moduleActif === "commandes" ? 8 :
                             moduleActif === "clients" ? 8 :
-                            moduleActif === "inventaire" ? 9 :
                             moduleActif === "fournisseurs" ? 6 : 5
                           } className="px-6 py-12 text-center">
                             <div className="flex flex-col items-center justify-center text-gray-400">

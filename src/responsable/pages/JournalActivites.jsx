@@ -77,7 +77,7 @@ const ROLE_CARDS = [
   {
     id: "gestionnaire_boutique",
     label: "Gestionnaire Boutique",
-    description: "Stock et réapprovisionnement",
+    description: "Stock et réappro",
     icon: Store,
     color: "blue",
     accent: "from-blue-400 to-blue-600",

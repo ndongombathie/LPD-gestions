@@ -399,7 +399,6 @@ export default function VoirDetailClient({
       toast.success("Tranche mise à jour (en attente caisse)");
       setTrancheToEdit(null);
     } catch (error) {
-      console.error(error);
       toast.error("Erreur lors de la mise à jour de la tranche");
     }
   };
@@ -418,7 +417,6 @@ export default function VoirDetailClient({
       );
       toast.success("Tranche supprimée (en attente caisse)");
     } catch (error) {
-      console.error(error);
       toast.error("Erreur lors de la suppression de la tranche");
     }
 
