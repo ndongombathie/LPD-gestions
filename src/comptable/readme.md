@@ -49,3 +49,7 @@
 
 # Endpoint pour l'inventaire du boutique
 GET|HEAD        api/inventaires-boutique | affiche l'inventaire des produits du boutique
+
+# historique des ventes 
+GET           api/historique-ventes  | afficher la liste de l'historique des ventes on appliquer des filtre aussi
+GET           api/total-vente-par-jour | la vente journalier
