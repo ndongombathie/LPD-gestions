@@ -1,6 +1,3 @@
-/**
- * 🛒 Produits API
- */
 import httpClient from '../http/client';
 
 const ENDPOINTS = {
@@ -9,9 +6,14 @@ const ENDPOINTS = {
   CREATE: '/produits',
   UPDATE: '/produits/:id',
   DELETE: '/produits/:id',
+  RUPTURES: '/produits-ruptures',
+  REAPPRO: '/stocks/reapprovisionner',
+  TRANSFER: '/stocks/transfer',
 };
 
 export const produitsAPI = {
+  // --- GESTION CRUD PRODUITS ---
+
   getAll: async (params = {}) => {
     try {
       const response = await httpClient.get(ENDPOINTS.GET_ALL, { params });
@@ -61,4 +63,47 @@ export const produitsAPI = {
       throw error;
     }
   },
+
+  // --- GESTION DES STOCKS ---
+
+  /**
+   * Récupère la liste des produits en rupture de stock
+   */
+  getRuptures: async () => {
+    try {
+      const response = await httpClient.get(ENDPOINTS.RUPTURES);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erreur getRuptures:', error.message);
+      throw error;
+    }
+  },
+
+  /**
+   * Réapprovisionner un produit (Augmenter le stock)
+   * @param {Object} data - { produit_id: number, quantite: number }
+   */
+  reapprovisionner: async (data) => {
+    try {
+      const response = await httpClient.post(ENDPOINTS.REAPPRO, data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erreur reapprovisionner stock:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  /**
+   * Transférer du stock vers une boutique
+   * @param {Object} data - { produit_id: number, quantite_transfert: number, boutique_id: number }
+   */
+  transferToBoutique: async (data) => {
+    try {
+      const response = await httpClient.post(ENDPOINTS.TRANSFER, data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erreur transferToBoutique:', error.response?.data || error.message);
+      throw error;
+    }
+  }
 };

@@ -1,5 +1,7 @@
 // src/gestionnaire-depot/pages/Products.jsx
+// 👇 AJOUTE CET IMPORT ICI 👇
 
+// (Vérifie bien que le chemin vers ton fichier 'services' est correct)
 import React, { useEffect, useState } from "react";
 import "../styles/depot-fix.css";
 import {

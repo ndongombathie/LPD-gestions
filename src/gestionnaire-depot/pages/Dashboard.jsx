@@ -1,16 +1,17 @@
 // src/gestionnaire-depot/pages/Dashboard.jsx
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { NavLink } from "react-router-dom";
-import "../styles/depot-fix.css";  // <-- IMPORT AJOUTÉ
+import "../styles/depot-fix.css";
+// 👇 IMPORT DE L'API
+import { produitsAPI } from "../../services/api/produits"; 
 
 import {
   MdShoppingCart,
-  MdTrendingUp,
   MdCompareArrows,
   MdLocalShipping,
   MdWarning,
-  MdInventory,
+  MdCheckCircle,
 } from "react-icons/md";
 
 import {
@@ -20,13 +21,73 @@ import {
 } from "react-icons/hi2";
 
 const Dashboard = () => {
+  // --- ÉTATS (Données dynamiques) ---
+  const [stats, setStats] = useState({
+    totalProduits: 0,
+    ruptureStricte: 0, // Stock = 0
+    stockFaible: 0,    // 0 < Stock <= Seuil
+    pourcentageSain: 0,
+    livraisons: 8,      // Statique (Fournisseurs)
+    mouvements: 23      // Statique
+  });
+  
+  const [loading, setLoading] = useState(true);
+
+  // --- CHARGEMENT DES DONNÉES ---
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // 1. On lance les requêtes
+        const [allProductsData, rupturesData] = await Promise.all([
+          produitsAPI.getAll(),
+          produitsAPI.getRuptures()
+        ]);
+
+        // 2. Traitement des listes
+        const productsList = Array.isArray(allProductsData) ? allProductsData : allProductsData.data || [];
+        const rupturesList = Array.isArray(rupturesData) ? rupturesData : rupturesData.data || [];
+
+        // 3. Gestion du Total (Fix Pagination)
+        const vraiTotal = allProductsData.meta?.total || allProductsData.total || productsList.length;
+
+        // 4. Calculs "Stock Optimal" (Temporaire avant API backend)
+        const totalEchantillon = productsList.length;
+        const produitsSains = productsList.filter(p => p.stock_global > p.stock_seuil).length;
+        const pourcentageSain = totalEchantillon > 0 
+          ? Math.round((produitsSains / totalEchantillon) * 100) 
+          : 0;
+
+        // 5. Distinction Rupture vs Sous Seuil
+        const nbRuptureStricte = rupturesList.filter(p => p.stock_global <= 0).length;
+        const nbStockFaible = rupturesList.filter(p => p.stock_global > 0).length; 
+
+        // 6. Mise à jour de l'état
+        setStats(prev => ({
+          ...prev,
+          totalProduits: vraiTotal,
+          ruptureStricte: nbRuptureStricte,
+          stockFaible: nbStockFaible,
+          pourcentageSain: pourcentageSain
+        }));
+
+      } catch (error) {
+        console.error("❌ Erreur chargement dashboard:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+
   // --- Date dynamique ---
   const today = new Date();
   const options = { weekday: "long", day: "numeric", month: "long", year: "numeric" };
   const dateFormatted = today.toLocaleDateString("fr-FR", options);
 
   return (
-    <div className="depot-page space-y-6">  {/* <-- CLASSE AJOUTÉE */}
+    <div className="depot-page space-y-6">
 
       {/* HEADER */}
       <div className="flex items-baseline justify-between">
@@ -38,52 +99,59 @@ const Dashboard = () => {
             Bienvenue, Modou Ndiaye – Gestionnaire Dépôt
           </p>
         </div>
-
         <p className="text-xs text-gray-400">
           Aujourd&apos;hui · {dateFormatted}
         </p>
       </div>
 
-      {/* QUICK STATS */}
+      {/* QUICK STATS (Cartes du haut) */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
 
-        {/* Produit */}
+        {/* 1. Produits en Stock */}
         <div className="bg-white rounded-xl shadow-sm border p-5">
           <div className="flex justify-between items-center">
             <p className="text-xs text-gray-500">Produits en Stock</p>
             <MdShoppingCart className="text-purple-700" size={22} />
           </div>
-          <p className="text-3xl font-bold text-gray-900 mt-2">150</p>
-          <p className="text-xs text-red-500 mt-1">12 en stock faible</p>
+          <p className="text-3xl font-bold text-gray-900 mt-2">
+            {loading ? "..." : stats.totalProduits}
+          </p>
+          <p className="text-xs text-gray-400 mt-1">
+            Total référencé
+          </p>
         </div>
 
-        {/* Niveau Stock */}
+        {/* 2. Stock Optimal */}
         <div className="bg-white rounded-xl shadow-sm border p-5">
           <div className="flex justify-between items-center">
-            <p className="text-xs text-gray-500">Niveau Stock Moyen</p>
-            <HiArrowTrendingUp className="text-orange-500" size={22} />
+            <p className="text-xs text-gray-500">Stock Optimal</p>
+            <HiArrowTrendingUp className="text-green-600" size={22} />
           </div>
-          <p className="text-3xl font-bold text-gray-900 mt-2">72%</p>
-          <p className="text-xs text-orange-500 mt-1">3 produits critiques</p>
+          <p className="text-3xl font-bold text-gray-900 mt-2">
+            {stats.pourcentageSain}%
+          </p>
+          <p className="text-xs text-green-600 mt-1">
+            Produits en bonne santé
+          </p>
         </div>
 
-        {/* Mouvements */}
+        {/* 3. Mouvements */}
         <div className="bg-white rounded-xl shadow-sm border p-5">
           <div className="flex justify-between items-center">
             <p className="text-xs text-gray-500">Mouvements Aujourd&apos;hui</p>
             <MdCompareArrows className="text-blue-500" size={22} />
           </div>
-          <p className="text-3xl font-bold text-gray-900 mt-2">23</p>
+          <p className="text-3xl font-bold text-gray-900 mt-2">{stats.mouvements}</p>
           <p className="text-xs text-gray-500 mt-1">Entrées & sorties</p>
         </div>
 
-        {/* Fournisseurs */}
+        {/* 4. Fournisseurs */}
         <div className="bg-white rounded-xl shadow-sm border p-5">
           <div className="flex justify-between items-center">
             <p className="text-xs text-gray-500">Fournisseurs</p>
             <MdLocalShipping className="text-green-600" size={22} />
           </div>
-          <p className="text-3xl font-bold text-gray-900 mt-2">8</p>
+          <p className="text-3xl font-bold text-gray-900 mt-2">{stats.livraisons}</p>
           <p className="text-xs text-gray-500 mt-1">15 livraisons ce mois</p>
         </div>
       </div>
@@ -91,14 +159,13 @@ const Dashboard = () => {
       {/* --- ACTIVITÉ + ALERTES --- */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-        {/* ACTIVITÉ */}
+        {/* ACTIVITÉ (Filtrée : Que Entrées / Sorties) */}
         <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border p-5">
           <h2 className="text-sm font-semibold text-gray-800 mb-3">
             Activité Récente
           </h2>
 
           <div className="space-y-4 text-sm">
-
             <div className="flex justify-between items-start border-b pb-3">
               <div className="flex gap-3">
                 <HiClock className="text-purple-600 mt-1" size={18} />
@@ -120,35 +187,22 @@ const Dashboard = () => {
               </div>
               <p className="text-xs text-gray-400">Il y a 4 heures</p>
             </div>
-
-            <div className="flex justify-between items-start border-b pb-3">
-              <div className="flex gap-3">
-                <MdWarning className="text-red-500 mt-1" size={18} />
-                <div>
-                  <p className="font-medium text-gray-900">Stock faible détecté</p>
-                  <p className="text-xs text-gray-500">Classeurs (moins de 5)</p>
-                </div>
-              </div>
-              <p className="text-xs text-gray-400">Il y a 1 jour</p>
-            </div>
-
+            
             <div className="flex justify-between items-start">
               <div className="flex gap-3">
-                <MdInventory className="text-orange-500 mt-1" size={18} />
+                <MdShoppingCart className="text-blue-600 mt-1" size={18} />
                 <div>
-                  <p className="font-medium text-gray-900">Inventaire planifié</p>
-                  <p className="text-xs text-gray-500">
-                    Prévu vendredi
-                  </p>
+                  <p className="font-medium text-gray-900">Sortie vers Boutique</p>
+                  <p className="text-xs text-gray-500">10 Caisses Papier A4</p>
                 </div>
               </div>
-              <p className="text-xs text-gray-400">Il y a 3 jours</p>
+              <p className="text-xs text-gray-400">Hier</p>
             </div>
 
           </div>
         </div>
 
-        {/* ALERTES */}
+        {/* ALERTES & NOTIFICATIONS (Simplifié) */}
         <div className="bg-white rounded-xl shadow-sm border p-5">
           <h2 className="text-sm font-semibold text-gray-800 mb-3">
             Alertes & Notifications
@@ -156,47 +210,58 @@ const Dashboard = () => {
 
           <div className="space-y-3 text-xs">
 
-            <div className="rounded-md bg-red-50 border border-red-200 px-3 py-3">
-              <div className="flex items-center gap-2">
-                <HiBellAlert className="text-red-700" size={18} />
-                <p className="font-semibold text-red-700">Rupture de stock</p>
-              </div>
-              <p className="text-red-600 mt-1">3 produits à réapprovisionner</p>
-            </div>
+            {/* CAS 1 : RUPTURE STRICTE (Rouge) */}
+            {stats.ruptureStricte > 0 && (
+                <div className="rounded-md bg-red-50 border border-red-200 px-3 py-3">
+                <div className="flex items-center gap-2">
+                    <HiBellAlert className="text-red-700" size={18} />
+                    <p className="font-semibold text-red-700">Produits en rupture</p>
+                </div>
+                <p className="text-red-600 mt-1">
+                    <strong>{stats.ruptureStricte}</strong> produit(s) à 0 stock
+                </p>
+                </div>
+            )}
 
-            <div className="rounded-md bg-blue-50 border border-blue-200 px-3 py-3">
-              <div className="flex items-center gap-2">
-                <MdLocalShipping className="text-blue-700" size={18} />
-                <p className="font-semibold text-blue-700">Livraisons attendues</p>
-              </div>
-              <p className="text-blue-600 mt-1">2 cette semaine</p>
-            </div>
+            {/* CAS 2 : SOUS SEUIL (Orange) */}
+            {stats.stockFaible > 0 && (
+                <div className="rounded-md bg-orange-50 border border-orange-200 px-3 py-3">
+                <div className="flex items-center gap-2">
+                    <MdWarning className="text-orange-700" size={18} />
+                    <p className="font-semibold text-orange-700">Produits sous seuil</p>
+                </div>
+                <p className="text-orange-600 mt-1">
+                    <strong>{stats.stockFaible}</strong> produit(s) atteignent la limite
+                </p>
+                </div>
+            )}
 
-            <div className="rounded-md bg-green-50 border border-green-200 px-3 py-3">
-              <div className="flex items-center gap-2">
-                <HiArrowTrendingUp className="text-green-700" size={18} />
-                <p className="font-semibold text-green-700">Stock optimal</p>
-              </div>
-              <p className="text-green-600 mt-1">85% des produits OK</p>
-            </div>
+            {/* CAS 3 : TOUT EST OK (Vert) - Seulement si aucune alerte */}
+            {stats.ruptureStricte === 0 && stats.stockFaible === 0 && (
+                <div className="rounded-md bg-green-50 border border-green-200 px-3 py-3">
+                     <div className="flex items-center gap-2">
+                        <MdCheckCircle className="text-green-700" size={18} />
+                        <p className="font-semibold text-green-700">Stock OK</p>
+                    </div>
+                    <p className="text-green-600 mt-1">Tous les niveaux sont bons</p>
+                </div>
+            )}
 
           </div>
         </div>
       </div>
 
-      {/* 🔥 ACTIONS RAPIDES AVEC REDIRECTION */}
+      {/* ACTIONS RAPIDES */}
       <div className="bg-white rounded-xl shadow-sm border p-5">
         <h2 className="text-sm font-semibold text-gray-800 mb-3">
           Actions Rapides
         </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-
-          {/* ➤ Redirection vers Produits */}
           <NavLink
             to="/gestionnaire_depot/products"
             className="flex items-center justify-between border rounded-lg px-6 py-4 text-left 
-             transition hover:bg-purple-100 hover:border-purple-400"
+              transition hover:bg-purple-100 hover:border-purple-400"
           >
             <div>
               <p className="font-medium text-gray-900">Gestion des Produits</p>
@@ -207,11 +272,10 @@ const Dashboard = () => {
             </div>
           </NavLink>
 
-          {/* ➤ Redirection vers Mouvements */}
           <NavLink
             to="/gestionnaire_depot/movementStock"
             className="flex items-center justify-between border rounded-lg px-6 py-4 text-left 
-             transition hover:bg-orange-100 hover:border-orange-400"
+              transition hover:bg-orange-100 hover:border-orange-400"
           >
             <div>
               <p className="font-medium text-gray-900">Mouvements de Stock</p>
@@ -221,7 +285,6 @@ const Dashboard = () => {
               <MdCompareArrows className="text-orange-500" size={22} />
             </div>
           </NavLink>
-
         </div>
       </div>
     </div>
