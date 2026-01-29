@@ -11,8 +11,9 @@ GET|HEAD        api/categories/{category} ...........................| afficher 
 PUT|PATCH       api/categories/{category} ...........................|  modiier les infos d'un categorie  (nom)
 DELETE          api/categories/{category}                            | supprimer une categorie
 
-# creer un transfer vers le gestionnaire de boutique 
+# creer un transfer et mouvement de stock vers le gestionnaire de boutique 
 POST       api/stocks/transfer | envoyer un transfert vers le gestion de boutique
+GET        api/mouvements-stock | afficher les mouvements de stocks
 # les endpoints pour la gestion des produits
 GET             api/produits  | la liste des produits
 POST            api/produits  | enregistrer un nouveau produit
@@ -23,7 +24,6 @@ DELETE          api/produits/{produit} | supprimer un produit
 
 # la liste des produits en rupture
 GET             api/produits_en_rupture | les produits en rupture de stock
-
 # endpoint pour reapprovisionner un produit
  POST            api/stocks/reapprovisionner    | donner en post le quantité et le produit_id
 
