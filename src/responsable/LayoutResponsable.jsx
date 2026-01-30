@@ -8,32 +8,32 @@ import Sidebar from "./Sidebar";
 export default function LayoutResponsable() {
   return (
     <div className="flex bg-lpd-light text-lpd-text min-h-screen">
-      {/* Sidebar */}
+      {/* Sidebar - z-index réduit pour laisser passer les modals */}
       <Sidebar />
 
       {/* Contenu principal */}
-      <div className="flex flex-col flex-1 md:ml-64 relative z-10">
-        {/* Header (tu gardes ta logique actuelle dedans) */}
+      <div className="flex flex-col flex-1 md:ml-64 relative">
+        {/* Header */}
         <Header />
 
-        {/* Contenu principal (on ajoute du padding en bas pour ne pas passer sous le footer) */}
+        {/* Contenu principal */}
         <main className="flex-1 overflow-y-auto bg-gradient-to-b from-white to-lpd-light px-4 sm:px-6 lg:px-8 py-4 sm:py-6 pb-20 transition-all duration-300 ease-in-out">
           <div className="max-w-7xl mx-auto fade-in">
             <Outlet />
           </div>
         </main>
 
-        {/* Footer FIXE en bas de l'écran */}
+        {/* Footer FIXE */}
         <footer
           className="
             fixed 
             bottom-0 
             left-0 
             right-0 
-            md:left-64   /* pour laisser la place au sidebar en desktop */
+            md:left-64
             border-t border-lpd-border/80 
             bg-white/90 backdrop-blur-sm 
-            z-30
+            z-20 /* z-index réduit pour les modals */
           "
         >
           <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] sm:text-xs text-gray-500">

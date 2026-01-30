@@ -1,10 +1,6 @@
 // ==========================================================
-// 🧾 JournalActivites.jsx — Version 2 (UX Redesign)
-// Refonte visuelle avec focus sur l'expérience utilisateur
-// - Même design que les autres pages
-// - Suppression de la carte "Tous les profils"
-// - Barre de filtres horizontale
-// - Statistiques améliorées
+// 🧾 JournalActivites.jsx — Version alignée avec l'architecture
+// - Affichage des sous-pages des rôles DANS JournalActivites
 // ==========================================================
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -17,28 +13,24 @@ import {
   Activity,
   ShoppingCart,
   Banknote,
-  Warehouse,
   Store,
-  UserCircle2,
   AlertTriangle,
   CalendarDays,
-  TrendingUp,
-  TrendingDown,
-  Users,
-  Package,
-  DollarSign,
-  Eye,
-  ChevronDown,
-  X,
-  Info,
   Download,
   Clock,
   CheckCircle,
   XCircle,
+  ChevronDown,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
+
+// Import des sous-pages des rôles
+import VendeursPage from "./roles/VendeursPage.jsx";
+import CaissiersPage from "./roles/CaissiersPage.jsx";
+import GestionnairesBoutiquePage from "./roles/GestionnairesBoutiquePage.jsx";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
@@ -56,7 +48,7 @@ const parseLogDate = (dateStr) => {
   return new Date(onlyDate);
 };
 
-// Profils suivis par le journal (SANS "Tous les profils")
+// Profils suivis par le journal
 const ROLE_CARDS = [
   {
     id: "vendeur",
@@ -64,7 +56,6 @@ const ROLE_CARDS = [
     description: "Ventes, paniers, annulations",
     icon: ShoppingCart,
     color: "emerald",
-    accent: "from-emerald-400 to-emerald-600",
   },
   {
     id: "caissier",
@@ -72,7 +63,6 @@ const ROLE_CARDS = [
     description: "Encaissements, décaissements",
     icon: Banknote,
     color: "amber",
-    accent: "from-amber-400 to-amber-600",
   },
   {
     id: "gestionnaire_boutique",
@@ -80,23 +70,6 @@ const ROLE_CARDS = [
     description: "Stock et réappro",
     icon: Store,
     color: "blue",
-    accent: "from-blue-400 to-blue-600",
-  },
-  {
-    id: "gestionnaire_depot",
-    label: "Gestionnaire Dépôt",
-    description: "Inventaires et transferts",
-    icon: Warehouse,
-    color: "purple",
-    accent: "from-purple-400 to-purple-600",
-  },
-  {
-    id: "responsable",
-    label: "Responsable",
-    description: "Gestion des utilisateurs",
-    icon: UserCircle2,
-    color: "indigo",
-    accent: "from-indigo-400 to-indigo-600",
   },
 ];
 
@@ -114,6 +87,8 @@ const ACTION_TYPES = [
   "stock",
   "inventaire",
   "ajustement",
+  "rapport",
+  "audit",
 ];
 
 // Modules
@@ -122,7 +97,6 @@ const MODULES = [
   "VENTE",
   "CAISSE",
   "STOCK_BOUTIQUE",
-  "STOCK_DEPOT",
   "DECAISSEMENT",
   "UTILISATEURS",
 ];
@@ -132,7 +106,6 @@ const MODULE_LABELS = {
   VENTE: "Vente",
   CAISSE: "Caisse",
   STOCK_BOUTIQUE: "Stock boutique",
-  STOCK_DEPOT: "Stock dépôt",
   DECAISSEMENT: "Décaissement",
   UTILISATEURS: "Utilisateurs",
 };
@@ -158,6 +131,8 @@ function computeStatsForRole(logs, activeRole) {
   const ajustements = logs.filter((l) => l.type === "ajustement");
   const creations = logs.filter((l) => l.type === "creation");
   const modifications = logs.filter((l) => l.type === "modification");
+  const rapports = logs.filter((l) => l.type === "rapport");
+  const audits = logs.filter((l) => l.type === "audit");
 
   const annulations = logs.filter(
     (l) =>
@@ -189,6 +164,8 @@ function computeStatsForRole(logs, activeRole) {
     ajustementsCount: ajustements.length,
     annulationsCount: annulations.length,
     anomaliesCount: anomalies.length,
+    rapportsCount: rapports.length,
+    auditsCount: audits.length,
     ticketMoyen,
     ventesTotal,
     encaisseTotal,
@@ -200,7 +177,7 @@ function computeStatsForRole(logs, activeRole) {
 }
 
 // ==========================================================
-// 💰 Composant principal — VERSION 2 (UX Redesign)
+// 💰 Composant principal — VERSION CORRIGÉE
 // ==========================================================
 export default function JournalActivites() {
   const [dateDebut, setDateDebut] = useState(() => {
@@ -211,6 +188,7 @@ export default function JournalActivites() {
   const [dateFin, setDateFin] = useState(todayISO());
 
   const [activeRole, setActiveRole] = useState("vendeur");
+  const [activeRolePage, setActiveRolePage] = useState("vendeur");
   const [typeAction, setTypeAction] = useState("Tous");
   const [moduleFilter, setModuleFilter] = useState("Tous");
   const [recherche, setRecherche] = useState("");
@@ -364,70 +342,6 @@ export default function JournalActivites() {
             description:
               "Ajustement stock 'Classeur archives A4' (-3 suite inventaire)",
             ref: "AJU-BOUT-001",
-            montant: null,
-            statut: "ok",
-          },
-
-          // Gestionnaire Dépôt
-          {
-            id: 12,
-            date: "2025-11-09 07:30",
-            role: "gestionnaire_depot",
-            user: "Gest. Dépôt #2",
-            module: "STOCK_DEPOT",
-            type: "inventaire",
-            description: "Inventaire partiel rayon Papeterie (zone A)",
-            ref: "INV-DEP-2025-01",
-            montant: null,
-            statut: "ok",
-          },
-          {
-            id: 13,
-            date: "2025-11-09 07:40",
-            role: "gestionnaire_depot",
-            user: "Gest. Dépôt #2",
-            module: "STOCK_DEPOT",
-            type: "reappro",
-            description: "Transfert vers Boutique 1 : Ramette A4 x 100",
-            ref: "TRF-DEP-BOUT-001",
-            montant: null,
-            statut: "ok",
-          },
-          {
-            id: 14,
-            date: "2025-11-09 08:00",
-            role: "gestionnaire_depot",
-            user: "Gest. Dépôt #2",
-            module: "STOCK_DEPOT",
-            type: "stock",
-            description: "Rupture 'Classeur archives A4' au dépôt",
-            ref: "ALR-DEP-002",
-            montant: null,
-            statut: "anomalie",
-          },
-
-          // Responsable / Utilisateurs
-          {
-            id: 15,
-            date: "2025-11-09 08:20",
-            role: "responsable",
-            user: "Responsable",
-            module: "UTILISATEURS",
-            type: "creation",
-            description: "Création utilisateur 'Vendeur #13'",
-            ref: "USR-00013",
-            montant: null,
-            statut: "ok",
-          },
-          {
-            id: 16,
-            date: "2025-11-09 08:25",
-            role: "responsable",
-            user: "Responsable",
-            module: "UTILISATEURS",
-            type: "modification",
-            description: "Changement rôle 'Caissier #2' → actif",
-            ref: "USR-00007",
             montant: null,
             statut: "ok",
           },
@@ -627,6 +541,8 @@ export default function JournalActivites() {
               </h1>
               <p className="mt-1 text-sm text-gray-500">
                 Traçabilité complète des connexions, ventes, mouvements de stock, encaissements et décaissements.
+                <br />
+                <span className="text-indigo-600 font-medium">Cliquez sur une carte pour voir les détails par rôle</span>
               </p>
             </div>
             <p className="text-[11px] text-gray-400">
@@ -770,36 +686,64 @@ export default function JournalActivites() {
           </div>
         </motion.div>
 
-        {/* CARTES PROFILS */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        {/* CARTES PROFILS (CLIQUABLES) - ONGLETS MÉTIER */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+        >
           {ROLE_CARDS.map((role) => {
             const Icon = role.icon;
             const isActive = activeRole === role.id;
-            const colorClass = {
-              emerald: 'bg-emerald-50 text-emerald-600 border-emerald-200',
-              amber: 'bg-amber-50 text-amber-600 border-amber-200',
-              blue: 'bg-blue-50 text-blue-600 border-blue-200',
-              purple: 'bg-purple-50 text-purple-600 border-purple-200',
-              indigo: 'bg-indigo-50 text-indigo-600 border-indigo-200',
-            }[role.color];
+            const colorClasses = {
+              emerald: {
+                bg: 'bg-emerald-50',
+                text: 'text-emerald-600',
+                border: 'border-emerald-200',
+                ring: 'ring-emerald-300',
+                dot: 'bg-emerald-500'
+              },
+              amber: {
+                bg: 'bg-amber-50',
+                text: 'text-amber-600',
+                border: 'border-amber-200',
+                ring: 'ring-amber-300',
+                dot: 'bg-amber-500'
+              },
+              blue: {
+                bg: 'bg-blue-50',
+                text: 'text-blue-600',
+                border: 'border-blue-200',
+                ring: 'ring-blue-300',
+                dot: 'bg-blue-500'
+              },
+            };
+            
+            const colors = colorClasses[role.color];
             
             return (
-              <button
+              <motion.button
                 key={role.id}
                 type="button"
-                onClick={() => setActiveRole(role.id)}
-                className={`relative group text-left rounded-xl border px-4 py-4 transition shadow-sm hover:shadow-md ${
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => {
+                  setActiveRole(role.id);       // pour les stats
+                  setActiveRolePage(role.id);  // pour la sous-page
+                }}
+                className={`relative group text-left rounded-xl border px-4 py-4 transition-all duration-300 shadow-sm hover:shadow-md ${
                   isActive
-                    ? `${colorClass} ring-2 ring-opacity-50 ring-${role.color}-300`
+                    ? `${colors.bg} ${colors.text} ${colors.border} ring-2 ring-opacity-50 ${colors.ring}`
                     : 'bg-white border-gray-200 hover:border-gray-300'
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg ${isActive ? colorClass.split(' ')[0] : 'bg-gray-50'}`}>
-                    <Icon className={`w-5 h-5 ${isActive ? colorClass.split(' ')[1] : 'text-gray-500'}`} />
+                  <div className={`p-2 rounded-lg ${isActive ? colors.bg : 'bg-gray-50'}`}>
+                    <Icon className={`w-5 h-5 ${isActive ? colors.text : 'text-gray-500'}`} />
                   </div>
                   <div className="flex flex-col text-left">
-                    <span className={`text-sm font-semibold ${isActive ? colorClass.split(' ')[1] : 'text-gray-700'}`}>
+                    <span className={`text-sm font-semibold ${isActive ? colors.text : 'text-gray-700'}`}>
                       {role.label}
                     </span>
                     <span className="text-xs text-gray-500">
@@ -808,18 +752,24 @@ export default function JournalActivites() {
                   </div>
                 </div>
                 {isActive && (
-                  <div className={`absolute top-2 right-2 w-2 h-2 rounded-full bg-${role.color}-500`} />
+                  <div className={`absolute top-2 right-2 w-2 h-2 rounded-full ${colors.dot}`} />
                 )}
-              </button>
+                <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+                <div className={`absolute inset-0 rounded-xl ${colors.bg} opacity-0 group-hover:opacity-10 transition-opacity duration-200`} />
+              </motion.button>
             );
           })}
-        </div>
+        </motion.div>
 
         {/* STATISTIQUES PAR PROFIL */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
+          transition={{ delay: 0.3 }}
           className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm"
         >
           <div className="flex items-center justify-between mb-6">
@@ -892,7 +842,7 @@ export default function JournalActivites() {
               </>
             )}
 
-            {(activeRole === "gestionnaire_boutique" || activeRole === "gestionnaire_depot") && (
+            {activeRole === "gestionnaire_boutique" && (
               <>
                 <div className="bg-gray-50 rounded-lg p-4">
                   <p className="text-xs text-gray-500 font-medium">Réapprovisionnements</p>
@@ -916,403 +866,24 @@ export default function JournalActivites() {
                 </div>
               </>
             )}
-
-            {activeRole === "responsable" && (
-              <>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <p className="text-xs text-gray-500 font-medium">Utilisateurs créés</p>
-                  <p className="text-xl font-bold text-emerald-600 mt-1">{stats.creationCount}</p>
-                  <p className="text-xs text-gray-500 mt-1">Nouveaux comptes</p>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <p className="text-xs text-gray-500 font-medium">Modifications</p>
-                  <p className="text-xl font-bold text-indigo-600 mt-1">{stats.modificationCount}</p>
-                  <p className="text-xs text-gray-500 mt-1">Changements effectués</p>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <p className="text-xs text-gray-500 font-medium">Actions totales</p>
-                  <p className="text-xl font-bold text-gray-800 mt-1">{stats.totalEvents}</p>
-                  <p className="text-xs text-gray-500 mt-1">Sur la période</p>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <p className="text-xs text-gray-500 font-medium">Activité globale</p>
-                  <p className="text-xl font-bold text-blue-600 mt-1">{stats.totalEvents}</p>
-                  <p className="text-xs text-gray-500 mt-1">Toutes actions</p>
-                </div>
-              </>
-            )}
           </div>
         </motion.div>
 
-        {/* ONGLETS DE NAVIGATION */}
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="border-b border-gray-200">
-            <nav className="flex overflow-x-auto">
-              {[
-                { id: "overview", label: "Vue d'ensemble", icon: <Activity className="w-4 h-4" /> },
-                { id: "timeline", label: "Timeline", icon: <Clock className="w-4 h-4" /> },
-                { id: "details", label: "Détails complets", icon: <FileDown className="w-4 h-4" /> },
-                { id: "analytics", label: "Analyses", icon: <TrendingUp className="w-4 h-4" /> },
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-6 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition ${
-                    activeTab === tab.id
-                      ? "border-indigo-600 text-indigo-600 bg-indigo-50/50"
-                      : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-                  }`}
-                >
-                  {tab.icon}
-                  {tab.label}
-                </button>
-              ))}
-            </nav>
-          </div>
+        {/* ZONE D'AFFICHAGE DES SOUS-PAGES */}
+        {activeRolePage && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm"
+          >
+            {activeRolePage === "vendeur" && <VendeursPage />}
+            {activeRolePage === "caissier" && <CaissiersPage />}
+            {activeRolePage === "gestionnaire_boutique" && <GestionnairesBoutiquePage />}
+          </motion.div>
+        )}
 
-          {/* CONTENU DES ONGLETS */}
-          <div className="p-6">
-            {activeTab === "overview" && (
-              <div className="space-y-6">
-                {/* ACTIVITÉS RÉCENTES */}
-                <div className="bg-white rounded-xl border border-gray-200 p-5">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <div className="p-1.5 bg-blue-50 rounded-lg">
-                        <Clock className="w-4 h-4 text-blue-600" />
-                      </div>
-                      <h3 className="font-semibold text-gray-800">Activités récentes</h3>
-                    </div>
-                    <span className="text-xs text-gray-500">Dernières 8 activités</span>
-                  </div>
-                  
-                  <div className="space-y-3">
-                    {filteredLogs.slice(0, 8).map((log) => (
-                      <div key={log.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
-                        <div className={`p-2 rounded-full ${
-                          log.statut === "ok" ? 'bg-emerald-100 text-emerald-600' :
-                          log.statut === "anomalie" ? 'bg-red-100 text-red-600' :
-                          'bg-amber-100 text-amber-600'
-                        }`}>
-                          {log.statut === "ok" ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium text-gray-800">{log.user}</span>
-                            <span className="text-xs text-gray-500">{log.date.slice(11, 16)}</span>
-                          </div>
-                          <p className="text-sm text-gray-600 mt-1">{log.description}</p>
-                          <div className="flex items-center gap-2 mt-2">
-                            <span className="text-xs px-2 py-1 bg-gray-200 text-gray-700 rounded-full">
-                              {log.type}
-                            </span>
-                            {log.montant && (
-                              <span className="text-xs px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full">
-                                {formatFCFA(log.montant)}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
 
-                {/* RÉPARTITION PAR TYPE */}
-                <div className="bg-white rounded-xl border border-gray-200 p-5">
-                  <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center gap-2">
-                      <div className="p-1.5 bg-purple-50 rounded-lg">
-                        <TrendingUp className="w-4 h-4 text-purple-600" />
-                      </div>
-                      <h3 className="font-semibold text-gray-800">Répartition par type d'action</h3>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {Object.entries(
-                      filteredLogs.reduce((acc, log) => {
-                        acc[log.type] = (acc[log.type] || 0) + 1;
-                        return acc;
-                      }, {})
-                    ).map(([type, count]) => (
-                      <div key={type} className="bg-gray-50 rounded-lg p-4">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-gray-700 capitalize">{type}</span>
-                          <span className="text-lg font-bold text-gray-800">{count}</span>
-                        </div>
-                        <div className="h-2 bg-gray-200 rounded-full overflow-hidden mt-2">
-                          <div 
-                            className="h-full bg-indigo-500 rounded-full"
-                            style={{ width: `${(count / filteredLogs.length) * 100}%` }}
-                          />
-                        </div>
-                        <p className="text-xs text-gray-500 mt-2">
-                          {((count / filteredLogs.length) * 100).toFixed(1)}% du total
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeTab === "timeline" && (
-              <div className="space-y-6">
-                <div className="bg-white rounded-xl border border-gray-200 p-5">
-                  <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center gap-2">
-                      <div className="p-1.5 bg-amber-50 rounded-lg">
-                        <Clock className="w-4 h-4 text-amber-600" />
-                      </div>
-                      <h3 className="font-semibold text-gray-800">Timeline des activités</h3>
-                    </div>
-                  </div>
-                  
-                  <div className="relative pl-8">
-                    {/* Ligne verticale */}
-                    <div className="absolute left-3 top-0 bottom-0 w-0.5 bg-gray-200" />
-                    
-                    {filteredLogs.slice(0, 10).map((log, index) => (
-                      <div key={log.id} className="relative mb-6 last:mb-0">
-                        {/* Point sur la timeline */}
-                        <div className={`absolute left-2.5 w-3 h-3 rounded-full border-2 border-white ${
-                          log.statut === "ok" ? 'bg-emerald-500' :
-                          log.statut === "anomalie" ? 'bg-red-500' :
-                          'bg-amber-500'
-                        }`} />
-                        
-                        {/* Carte d'activité */}
-                        <div className="ml-6 bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium text-gray-800">{log.user}</span>
-                              <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">
-                                {log.role}
-                              </span>
-                            </div>
-                            <div className="text-xs text-gray-500">{log.date}</div>
-                          </div>
-                          <p className="text-sm text-gray-600 mt-2">{log.description}</p>
-                          <div className="flex items-center gap-2 mt-3">
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              log.statut === "ok" ? 'bg-emerald-100 text-emerald-700' :
-                              log.statut === "anomalie" ? 'bg-red-100 text-red-700' :
-                              'bg-amber-100 text-amber-700'
-                            }`}>
-                              {log.statut}
-                            </span>
-                            {log.ref && (
-                              <span className="text-xs text-gray-500">Ref: {log.ref}</span>
-                            )}
-                            {log.montant && (
-                              <span className="text-xs font-medium text-emerald-600 ml-auto">
-                                {formatFCFA(log.montant)}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeTab === "details" && (
-              <div className="space-y-4">
-                {/* EN-TÊTE TABLEAU */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-gray-800">Détail complet des activités</h3>
-                    <span className="bg-gray-100 text-gray-600 text-xs font-medium px-2 py-1 rounded-full">
-                      {filteredLogs.length} activité{filteredLogs.length > 1 && 's'}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={exportPDF}
-                      className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition"
-                    >
-                      <Download className="w-4 h-4" />
-                      Exporter
-                    </button>
-                  </div>
-                </div>
-
-                {/* TABLEAU COMPLET */}
-                <div className="overflow-hidden rounded-lg border border-gray-200">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Date & Heure
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Utilisateur
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Type
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Référence
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Montant
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Statut
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Description
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {filteredLogs.length ? (
-                        filteredLogs.map((log) => (
-                          <tr key={log.id} className="hover:bg-gray-50 transition-colors">
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {log.date}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div>
-                                <div className="text-sm font-medium text-gray-900">{log.user}</div>
-                                <div className="text-xs text-gray-500 capitalize">{log.role}</div>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className="px-2.5 py-0.5 text-xs font-medium bg-gray-100 text-gray-800 rounded-full capitalize">
-                                {log.type}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {log.ref || "-"}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {log.montant ? formatFCFA(log.montant) : "-"}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                log.statut === "ok"
-                                  ? "bg-emerald-100 text-emerald-700"
-                                  : log.statut === "anomalie"
-                                  ? "bg-red-100 text-red-700"
-                                  : "bg-amber-100 text-amber-700"
-                              }`}>
-                                {log.statut}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 text-sm text-gray-600">
-                              {log.description}
-                            </td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan={7} className="px-6 py-12 text-center">
-                            <div className="flex flex-col items-center justify-center text-gray-400">
-                              <Activity className="w-12 h-12 mb-3 opacity-30" />
-                              <p className="text-sm">Aucune activité trouvée avec les filtres actuels</p>
-                              <button
-                                onClick={resetFilters}
-                                className="mt-2 text-sm text-indigo-600 hover:text-indigo-700"
-                              >
-                                Réinitialiser les filtres
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* PAGINATION */}
-                {filteredLogs.length > 0 && (
-                  <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-gray-200">
-                    <div className="flex items-center gap-4">
-                      <p className="text-sm text-gray-700">
-                        Affichage de <span className="font-medium">1</span> à{" "}
-                        <span className="font-medium">{Math.min(filteredLogs.length, 10)}</span> sur{" "}
-                        <span className="font-medium">{filteredLogs.length}</span> résultats
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <button className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">
-                        Précédent
-                      </button>
-                      <button className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">
-                        Suivant
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {activeTab === "analytics" && (
-              <div className="space-y-6">
-                <div className="bg-white rounded-xl border border-gray-200 p-6">
-                  <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center gap-2">
-                      <div className="p-1.5 bg-emerald-50 rounded-lg">
-                        <TrendingUp className="w-4 h-4 text-emerald-600" />
-                      </div>
-                      <h3 className="font-semibold text-gray-800">Analyses par profil</h3>
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <div className="bg-gray-50 rounded-lg p-4">
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">Activité horaire</h4>
-                      <div className="text-2xl font-bold text-gray-800">
-                        08:00 - 12:00
-                      </div>
-                      <p className="text-xs text-gray-500 mt-1">Pic d'activité quotidien</p>
-                    </div>
-                    <div className="bg-gray-50 rounded-lg p-4">
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">Taux d'anomalies</h4>
-                      <div className="text-2xl font-bold text-gray-800">
-                        {filteredLogs.length > 0 ? ((stats.anomaliesCount / filteredLogs.length) * 100).toFixed(1) : 0}%
-                      </div>
-                      <p className="text-xs text-gray-500 mt-1">Sur les activités filtrées</p>
-                    </div>
-                    <div className="bg-gray-50 rounded-lg p-4">
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">Utilisateur le plus actif</h4>
-                      <div className="text-2xl font-bold text-gray-800">
-                        {(() => {
-                          const userCounts = filteredLogs.reduce((acc, log) => {
-                            acc[log.user] = (acc[log.user] || 0) + 1;
-                            return acc;
-                          }, {});
-                          const mostActive = Object.entries(userCounts).sort((a, b) => b[1] - a[1])[0];
-                          return mostActive ? mostActive[0] : '-';
-                        })()}
-                      </div>
-                      <p className="text-xs text-gray-500 mt-1">Sur la période</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* FOOTER INFORMATIF */}
-        <div className="bg-white/80 border border-gray-200 rounded-xl p-4">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <Info className="w-4 h-4" />
-              <span>Système de traçabilité temps réel - Données actualisées automatiquement</span>
-            </div>
-            <div className="flex items-center gap-4 text-xs text-gray-500">
-              <span>Dernière mise à jour : {new Date().toLocaleTimeString('fr-FR')}</span>
-              <button className="text-indigo-600 hover:text-indigo-700">
-                <RefreshCw className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );
