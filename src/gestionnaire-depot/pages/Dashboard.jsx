@@ -3,8 +3,10 @@
 import React, { useState, useEffect } from "react";
 import { NavLink } from "react-router-dom";
 import "../styles/depot-fix.css";
-// 👇 IMPORT DE L'API
+
+// 👇 IMPORT DES API
 import { produitsAPI } from "../../services/api/produits"; 
+import { mouvementsAPI } from "../../services/api/mouvements"; // 🆕 NOUVEAU
 
 import {
   MdShoppingCart,
@@ -12,6 +14,8 @@ import {
   MdLocalShipping,
   MdWarning,
   MdCheckCircle,
+  MdArrowDownward, // Pour Sortie
+  MdArrowUpward    // Pour Entrée
 } from "react-icons/md";
 
 import {
@@ -24,40 +28,52 @@ const Dashboard = () => {
   // --- ÉTATS (Données dynamiques) ---
   const [stats, setStats] = useState({
     totalProduits: 0,
-    ruptureStricte: 0, // Stock = 0
-    stockFaible: 0,    // 0 < Stock <= Seuil
+    ruptureStricte: 0, 
+    stockFaible: 0,    
     pourcentageSain: 0,
-    livraisons: 8,      // Statique (Fournisseurs)
-    mouvements: 23      // Statique
+    livraisons: 0,      
+    mouvements: 0      // 🆕 Deviendra dynamique
   });
   
+  const [recentActivity, setRecentActivity] = useState([]); // 🆕 Pour la liste
   const [loading, setLoading] = useState(true);
 
   // --- CHARGEMENT DES DONNÉES ---
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // 1. On lance les requêtes
-        const [allProductsData, rupturesData] = await Promise.all([
+        // 1. On lance les requêtes (Produits ET Mouvements)
+        const [allProductsData, rupturesData, mouvementsData] = await Promise.all([
           produitsAPI.getAll(),
-          produitsAPI.getRuptures()
+          produitsAPI.getRuptures(),
+          mouvementsAPI.getAll() // 🆕 Appel API Mouvements
         ]);
 
-        // 2. Traitement des listes
+        // 2. Traitement des listes Produits
         const productsList = Array.isArray(allProductsData) ? allProductsData : allProductsData.data || [];
         const rupturesList = Array.isArray(rupturesData) ? rupturesData : rupturesData.data || [];
+        
+        // 3. Traitement des Mouvements 🆕
+        // L'API renvoie souvent { data: [...], meta: ... } ou directement [...]
+        const rawMouvements = mouvementsData.data?.data || mouvementsData.data || [];
+        
+        // Calcul : Mouvements du jour (comparaison de date simple)
+        const todayStr = new Date().toISOString().split('T')[0]; // "2024-01-30"
+        const mouvementsDuJour = rawMouvements.filter(m => m.date_mouvement && m.date_mouvement.startsWith(todayStr)).length;
 
-        // 3. Gestion du Total (Fix Pagination)
+        // On garde les 3 derniers pour l'affichage
+        const derniersMouvements = rawMouvements.slice(0, 3);
+
+
+        // --- LOGIQUE EXISTANTE ---
         const vraiTotal = allProductsData.meta?.total || allProductsData.total || productsList.length;
 
-        // 4. Calculs "Stock Optimal" (Temporaire avant API backend)
         const totalEchantillon = productsList.length;
         const produitsSains = productsList.filter(p => p.stock_global > p.stock_seuil).length;
         const pourcentageSain = totalEchantillon > 0 
           ? Math.round((produitsSains / totalEchantillon) * 100) 
           : 0;
 
-        // 5. Distinction Rupture vs Sous Seuil
         const nbRuptureStricte = rupturesList.filter(p => p.stock_global <= 0).length;
         const nbStockFaible = rupturesList.filter(p => p.stock_global > 0).length; 
 
@@ -67,8 +83,11 @@ const Dashboard = () => {
           totalProduits: vraiTotal,
           ruptureStricte: nbRuptureStricte,
           stockFaible: nbStockFaible,
-          pourcentageSain: pourcentageSain
+          pourcentageSain: pourcentageSain,
+          mouvements: mouvementsDuJour // 🆕 Mis à jour
         }));
+
+        setRecentActivity(derniersMouvements); // 🆕 Stockage pour l'affichage
 
       } catch (error) {
         console.error("❌ Erreur chargement dashboard:", error);
@@ -85,6 +104,13 @@ const Dashboard = () => {
   const today = new Date();
   const options = { weekday: "long", day: "numeric", month: "long", year: "numeric" };
   const dateFormatted = today.toLocaleDateString("fr-FR", options);
+
+  // Fonction utilitaire pour formater la date relative (ex: "Il y a 2h")
+  const formatDateRelative = (dateString) => {
+    if (!dateString) return "Récemment";
+    const date = new Date(dateString);
+    return date.toLocaleDateString("fr-FR", { hour: '2-digit', minute:'2-digit' });
+  };
 
   return (
     <div className="depot-page space-y-6">
@@ -135,7 +161,7 @@ const Dashboard = () => {
           </p>
         </div>
 
-        {/* 3. Mouvements */}
+        {/* 3. Mouvements (DYNAMIQUE 🆕) */}
         <div className="bg-white rounded-xl shadow-sm border p-5">
           <div className="flex justify-between items-center">
             <p className="text-xs text-gray-500">Mouvements Aujourd&apos;hui</p>
@@ -145,71 +171,70 @@ const Dashboard = () => {
           <p className="text-xs text-gray-500 mt-1">Entrées & sorties</p>
         </div>
 
-        {/* 4. Fournisseurs */}
+        {/* 4. Fournisseurs (Statique pour l'instant) */}
         <div className="bg-white rounded-xl shadow-sm border p-5">
           <div className="flex justify-between items-center">
             <p className="text-xs text-gray-500">Fournisseurs</p>
             <MdLocalShipping className="text-green-600" size={22} />
           </div>
-          <p className="text-3xl font-bold text-gray-900 mt-2">{stats.livraisons}</p>
-          <p className="text-xs text-gray-500 mt-1">15 livraisons ce mois</p>
+          <p className="text-3xl font-bold text-gray-900 mt-2">8</p>
+          <p className="text-xs text-gray-500 mt-1">Partenaires actifs</p>
         </div>
       </div>
 
       {/* --- ACTIVITÉ + ALERTES --- */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-        {/* ACTIVITÉ (Filtrée : Que Entrées / Sorties) */}
+        {/* ACTIVITÉ (DYNAMIQUE 🆕) */}
         <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border p-5">
           <h2 className="text-sm font-semibold text-gray-800 mb-3">
             Activité Récente
           </h2>
 
           <div className="space-y-4 text-sm">
-            <div className="flex justify-between items-start border-b pb-3">
-              <div className="flex gap-3">
-                <HiClock className="text-purple-600 mt-1" size={18} />
-                <div>
-                  <p className="font-medium text-gray-900">Réception de marchandise</p>
-                  <p className="text-xs text-gray-500">50 cartons – Papeterie Plus</p>
-                </div>
-              </div>
-              <p className="text-xs text-gray-400">Il y a 2 heures</p>
-            </div>
-
-            <div className="flex justify-between items-start border-b pb-3">
-              <div className="flex gap-3">
-                <MdShoppingCart className="text-blue-600 mt-1" size={18} />
-                <div>
-                  <p className="font-medium text-gray-900">Sortie vers Boutique</p>
-                  <p className="text-xs text-gray-500">30 stylos – Dakar Centre</p>
-                </div>
-              </div>
-              <p className="text-xs text-gray-400">Il y a 4 heures</p>
-            </div>
             
-            <div className="flex justify-between items-start">
-              <div className="flex gap-3">
-                <MdShoppingCart className="text-blue-600 mt-1" size={18} />
-                <div>
-                  <p className="font-medium text-gray-900">Sortie vers Boutique</p>
-                  <p className="text-xs text-gray-500">10 Caisses Papier A4</p>
+            {/* Si chargement ou vide */}
+            {!loading && recentActivity.length === 0 && (
+                <p className="text-gray-400 text-xs italic">Aucun mouvement récent.</p>
+            )}
+
+            {/* LISTE DYNAMIQUE */}
+            {recentActivity.map((mouv, index) => (
+                <div key={index} className="flex justify-between items-start border-b pb-3 last:border-0">
+                    <div className="flex gap-3">
+                        {/* Icône change selon Entrée ou Sortie */}
+                        {mouv.type === 'entree' ? (
+                            <MdArrowUpward className="text-green-600 mt-1" size={18} />
+                        ) : (
+                            <MdArrowDownward className="text-orange-600 mt-1" size={18} />
+                        )}
+                        
+                        <div>
+                            <p className="font-medium text-gray-900">
+                                {mouv.type === 'entree' ? "Réception" : "Sortie"} de Stock
+                            </p>
+                            <p className="text-xs text-gray-500">
+                                {/* Affiche le nom du produit s'il est dispo, sinon l'ID */}
+                                {mouv.quantite} unités — {mouv.motif || `Produit #${mouv.produit_id}`}
+                            </p>
+                        </div>
+                    </div>
+                    <p className="text-xs text-gray-400">
+                        {formatDateRelative(mouv.date_mouvement)}
+                    </p>
                 </div>
-              </div>
-              <p className="text-xs text-gray-400">Hier</p>
-            </div>
+            ))}
 
           </div>
         </div>
 
-        {/* ALERTES & NOTIFICATIONS (Simplifié) */}
+        {/* ALERTES & NOTIFICATIONS (Déjà dynamique) */}
         <div className="bg-white rounded-xl shadow-sm border p-5">
           <h2 className="text-sm font-semibold text-gray-800 mb-3">
             Alertes & Notifications
           </h2>
 
           <div className="space-y-3 text-xs">
-
             {/* CAS 1 : RUPTURE STRICTE (Rouge) */}
             {stats.ruptureStricte > 0 && (
                 <div className="rounded-md bg-red-50 border border-red-200 px-3 py-3">
@@ -236,17 +261,16 @@ const Dashboard = () => {
                 </div>
             )}
 
-            {/* CAS 3 : TOUT EST OK (Vert) - Seulement si aucune alerte */}
+            {/* CAS 3 : TOUT EST OK (Vert) */}
             {stats.ruptureStricte === 0 && stats.stockFaible === 0 && (
                 <div className="rounded-md bg-green-50 border border-green-200 px-3 py-3">
-                     <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2">
                         <MdCheckCircle className="text-green-700" size={18} />
                         <p className="font-semibold text-green-700">Stock OK</p>
                     </div>
                     <p className="text-green-600 mt-1">Tous les niveaux sont bons</p>
                 </div>
             )}
-
           </div>
         </div>
       </div>
