@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react";
 import { FileText, TrendingUp, Package, AlertTriangle } from "lucide-react";
 import DataTable from "../components/DataTable";
 import jsPDF from "jspdf";
-import * as api from "../services/apiMock";
+import { gestionnaireBoutiqueAPI } from "@/services/api";
+import { toast } from "sonner";
 
 const CardStat = ({ title, value, color, subtitle }) => (
   <div className={`rounded-lg shadow p-4 text-left ${color} text-white`}>
@@ -15,9 +16,11 @@ const CardStat = ({ title, value, color, subtitle }) => (
 const Rapports = () => {
   const [periode, setPeriode] = useState("7");
   const [typeRapport, setTypeRapport] = useState("produits");
-  const [stocks, setStocks] = useState([]);
-  const [transferts, setTransferts] = useState([]);
-  const [historique, setHistorique] = useState([]);
+  const [sousSeuil, setSousSeuil] = useState([]);
+  const [pending, setPending] = useState([]);
+  const [valides, setValides] = useState([]);
+  const [nombreProduits, setNombreProduits] = useState(0);
+  const [quantiteTotale, setQuantiteTotale] = useState(0);
   const [loading, setLoading] = useState(true);
   const [rapport, setRapport] = useState(null);
 
@@ -25,14 +28,30 @@ const Rapports = () => {
 
   useEffect(() => {
     let mounted = true;
-    setLoading(true);
-    Promise.all([api.fetchStocks(), api.fetchTransferts(), api.fetchHistorique()]).then(([s, t, h]) => {
-      if (!mounted) return;
-      setStocks(s || []);
-      setTransferts(t || []);
-      setHistorique(h || []);
-      setLoading(false);
-    });
+    const load = async () => {
+      try {
+        setLoading(true);
+        const [nb, qty, ss, pend, val] = await Promise.all([
+          gestionnaireBoutiqueAPI.getNombreProduitsTotal(),
+          gestionnaireBoutiqueAPI.getQuantiteTotaleProduit(),
+          gestionnaireBoutiqueAPI.getProduitsSousSeuil(),
+          gestionnaireBoutiqueAPI.getProduitsTransfer(),
+          gestionnaireBoutiqueAPI.getTransfertsValides(),
+        ]);
+        if (!mounted) return;
+        setNombreProduits(Number(nb || 0));
+        setQuantiteTotale(Number(qty || 0));
+        setSousSeuil(Array.isArray(ss) ? ss : []);
+        setPending(Array.isArray(pend?.data) ? pend.data : []);
+        setValides(Array.isArray(val?.data) ? val.data : []);
+      } catch (error) {
+        console.error('❌ Erreur chargement rapports:', error);
+        toast.error('Erreur de chargement', { description: 'Impossible de charger les données des rapports' });
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    load();
     return () => (mounted = false);
   }, []);
 
@@ -40,37 +59,31 @@ const Rapports = () => {
   useEffect(() => {
     genererRapport();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stocks, transferts, historique, typeRapport, periode]);
+  }, [sousSeuil, pending, valides, typeRapport, periode, nombreProduits, quantiteTotale]);
 
   const genererRapport = () => {
-    if (!stocks.length && !transferts.length) {
+    if (!nombreProduits && !pending.length && !valides.length) {
       setRapport(null);
       return;
     }
+    const totalProduits = nombreProduits;
+    const valeurStock = 0; // Non disponible via endpoints actuels
+    const produitsSousSeuil = sousSeuil;
+    const produitsEpuises = [];
 
-    const totalProduits = stocks.length;
-    const quantiteTotale = stocks.reduce((sum, s) => sum + (s.quantite * s.nbr_pieces), 0);
-    const valeurStock = stocks.reduce((sum, s) => sum + (s.quantite * s.nbr_pieces * (s.prix_gros || 0)), 0);
-    const produitsSousSeuil = stocks.filter((s) => s.quantite <= s.seuil);
-    const produitsEpuises = stocks.filter((s) => s.quantite === 0);
-
-    const totalTransferts = transferts.length;
-    const transfertsEnAttente = transferts.filter((t) => t.statut === "en_attente");
-    const transfertsValides = totalTransferts - transfertsEnAttente.length; // complément logique
+    const allTransferts = [
+      ...pending.map((t) => ({ ...t, statut: t.statut || 'en_attente' })),
+      ...valides.map((t) => ({ ...t, statut: 'validé' })),
+    ];
+    const totalTransferts = allTransferts.length;
+    const transfertsEnAttente = allTransferts.filter((t) => t.statut === 'en_attente');
+    const transfertsValides = allTransferts.filter((t) => t.statut === 'validé').length;
     const quantiteAttente = transfertsEnAttente.reduce((sum, t) => sum + (t.quantite || 0), 0);
-    const quantiteValide = transferts
-      .filter((t) => t.statut === "validé")
+    const quantiteValide = allTransferts
+      .filter((t) => t.statut === 'validé')
       .reduce((sum, t) => sum + (t.quantite || 0), 0);
 
-    // Distribution catégories
-    const catMap = stocks.reduce((acc, s) => {
-      acc[s.categorie] = (acc[s.categorie] || 0) + 1;
-      return acc;
-    }, {});
-    const categoryDistribution = Object.entries(catMap).map(([category, count]) => ({
-      category,
-      value: Math.round((count / Math.max(totalProduits, 1)) * 100),
-    }));
+    const categoryDistribution = [];
 
     setRapport({
       totalProduits,
@@ -123,14 +136,14 @@ const Rapports = () => {
     if (!rapport) return { rows: [], columns: [] };
     if (typeRapport === "transferts") {
       return {
-        rows: transferts.map((t) => ({
+        rows: [...pending, ...valides].map((t) => ({
           id: t.id,
-          produit: t.nom,
+          produit: t.nom || t.produit,
           code: t.code,
-          statut: t.statut,
+          statut: t.statut || (valides.find(v => v.id === t.id) ? 'validé' : 'en_attente'),
           quantite: t.quantite,
-          source: t.source,
-          date: t.dateValidation || t.dateCreation,
+          source: t.source || 'Dépôt',
+          date: t.updated_at || t.created_at,
         })),
         columns: [
           { label: "Produit", key: "produit" },
@@ -159,24 +172,20 @@ const Rapports = () => {
 
     // défaut: produits / stock
     return {
-      rows: stocks.map((p) => ({
+      rows: sousSeuil.map((p) => ({
         id: p.id,
         nom: p.nom,
         code: p.code,
         categorie: p.categorie,
-        stockUnite: p.quantite,
-        totalUnites: p.quantite * p.nbr_pieces,
+        quantite: p.quantite,
         seuil: p.seuil,
-        valeur: p.quantite * p.nbr_pieces * (p.prix_gros || 0),
       })),
       columns: [
         { label: "Produit", key: "nom" },
         { label: "Code", key: "code" },
         { label: "Catégorie", key: "categorie" },
-        { label: "Quantité / unité", key: "stockUnite" },
-        { label: "Total unités", key: "totalUnites" },
+        { label: "Quantité", key: "quantite" },
         { label: "Seuil", key: "seuil" },
-        { label: "Valeur stock", key: "valeur", render: (v) => `${formatNumber(v)} FCFA` },
       ],
     };
   };

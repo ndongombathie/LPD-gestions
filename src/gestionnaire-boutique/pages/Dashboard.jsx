@@ -1,62 +1,64 @@
 import React, { useEffect, useState } from "react";
 import { Activity, AlertTriangle, TrendingUp, Package, CheckCircle, BarChart3 } from "lucide-react";
 import CardStat from "../components/CardStat";
-import * as api from "../services/apiMock";
+import { gestionnaireBoutiqueAPI } from "@/services/api";
+import { toast } from "sonner";
 
 const Dashboard = () => {
-  const [transferts, setTransferts] = useState([]);
-  const [historique, setHistorique] = useState([]);
-  const [stocks, setStocks] = useState([]);
+  const [stats, setStats] = useState({
+    nombreProduits: 0,
+    quantiteTotale: 0,
+    produitsSousSeuil: 0,
+    transfertsEnAttente: 0,
+    transfertsValides: 0
+  });
+  const [alertes, setAlertes] = useState([]);
+  const [transfertsPending, setTransfertsPending] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
-    setLoading(true);
-    Promise.all([
-      api.fetchTransferts(),
-      api.fetchHistorique(),
-      api.fetchStocks(),
-    ]).then(([t, h, s]) => {
-      if (!mounted) return;
-      setTransferts(t);
-      setHistorique(h);
-      setStocks(s);
-      setLoading(false);
-    });
-    return () => (mounted = false);
+    
+    const loadDashboardData = async () => {
+      try {
+        setLoading(true);
+        
+        // Charger les statistiques
+        const [statsData, produitsTransfer, transfertsValides, produitsSousSeuil] = await Promise.all([
+          gestionnaireBoutiqueAPI.getStatistiquesBoutique(),
+          gestionnaireBoutiqueAPI.getProduitsTransfer(),
+          gestionnaireBoutiqueAPI.getTransfertsValides(),
+          gestionnaireBoutiqueAPI.getProduitsSousSeuil()
+        ]);
+        
+        if (!mounted) return;
+        
+        setStats({
+          nombreProduits: statsData.nombreProduits || 0,
+          quantiteTotale: statsData.quantiteTotale || 0,
+          produitsSousSeuil: statsData.produitsSousSeuil || 0,
+          transfertsEnAttente: produitsTransfer?.data?.length || 0,
+          transfertsValides: transfertsValides?.total || 0
+        });
+        
+        setAlertes(Array.isArray(produitsSousSeuil) ? produitsSousSeuil.slice(0, 5) : []);
+        setTransfertsPending(produitsTransfer?.data || []);
+        
+      } catch (error) {
+        console.error('❌ Erreur chargement dashboard:', error);
+        if (mounted) {
+          toast.error('Erreur de chargement', {
+            description: 'Impossible de charger les données du tableau de bord'
+          });
+        }
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    
+    loadDashboardData();
+    return () => { mounted = false; };
   }, []);
-
-  // Calculer les stats dynamiques (totaux cohérents)
-  const transfertsTotal = transferts.length;
-  const transfertsEnAttente = transferts.filter(t => t.statut === "en_attente").length;
-  const transfertsValides = transfertsTotal - transfertsEnAttente; // complément pour rester logique
-
-  const stats = {
-    produitsEnStock: stocks.filter(s => s.quantite > s.seuil).length,
-    produitsEnRupture: stocks.filter(s => s.quantite === 0).length,
-    transfertsEnCours: transfertsEnAttente,
-    transfertsValides,
-    transfertsTotal,
-    nbrProduits: stocks.length,
-    quantiteTotale: stocks.reduce((sum, s) => sum + (s.quantite * s.nbr_pieces), 0),
-    valeurStock: stocks.reduce((sum, s) => sum + (s.quantite * s.nbr_pieces * (s.prix_gros || 0)), 0),
-  };
-
-  // Récentes activités
-  const recentActivities = historique.slice(0, 5).map(h => ({
-    text: `${h.action} - ${h.produit}`,
-    time: new Date(h.date).toLocaleDateString("fr-FR"),
-    statut: h.statut,
-  }));
-
-  // Alertes
-  const alertes = stocks
-    .filter(s => s.quantite <= s.seuil)
-    .slice(0, 5)
-    .map(s => ({
-      text: s.nom,
-      subtext: `Quantité: ${s.quantite * s.nbr_pieces} (Seuil: ${s.seuil})`,
-    }));
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -72,13 +74,13 @@ const Dashboard = () => {
           </div>
           <div className="flex gap-2">
             <button
-              onClick={() => (window.location.href = "/gestionnaire_boutique/historique")}
+              onClick={() => (window.location.href = "/gestionnaire-boutique/historique")}
               className="px-4 py-2 bg-white text-[#472EAD] border border-[#472EAD] rounded-lg hover:bg-[#F7F5FF] font-medium shadow-sm"
             >
               Voir l'historique
             </button>
             <button
-              onClick={() => (window.location.href = "/gestionnaire_boutique/alertes")}
+              onClick={() => (window.location.href = "/gestionnaire-boutique/alertes")}
               className="px-4 py-2 bg-[#F58020] text-white rounded-lg hover:bg-[#e67e1a] font-medium shadow-sm"
             >
               Voir les alertes
@@ -88,38 +90,58 @@ const Dashboard = () => {
 
         {/* Statistiques principales */}
         <div className="grid grid-cols-1 my-4 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <CardStat title="En stock" value={stats.produitsEnStock} color="bg-green-600" icon={CheckCircle} />
-          <CardStat title="Rupture" value={stats.produitsEnRupture} color="bg-red-600" icon={AlertTriangle} />
-          <CardStat title="À compléter" value={stats.transfertsEnCours} color="bg-[#F58020]" icon={Package} subtitle={`${stats.transfertsTotal} transferts reçus`} />
-          <CardStat title="Complétés" value={stats.transfertsValides} color="bg-[#472EAD]" icon={TrendingUp} />
+          <CardStat 
+            title="Produits Total" 
+            value={stats.nombreProduits} 
+            color="bg-[#472EAD]" 
+            icon={Package} 
+          />
+          <CardStat 
+            title="Quantité Totale" 
+            value={stats.quantiteTotale} 
+            color="bg-green-600" 
+            icon={CheckCircle} 
+          />
+          <CardStat 
+            title="Sous Seuil" 
+            value={stats.produitsSousSeuil} 
+            color="bg-red-600" 
+            icon={AlertTriangle} 
+          />
+          <CardStat 
+            title="À Compléter" 
+            value={stats.transfertsEnAttente} 
+            color="bg-[#F58020]" 
+            icon={TrendingUp} 
+            subtitle={`${stats.transfertsValides} validés`} 
+          />
         </div>
 
 
         {/* Activités et alertes */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Activité récente */}
+          {/* Transferts récents */}
           <div className="bg-white p-5 rounded-lg shadow border border-gray-200">
             <h3 className="text-lg font-semibold text-[#111827] mb-4 flex items-center gap-2">
               <Activity size={20} className="text-[#472EAD]" />
-              Activité récente
+              Transferts en attente
             </h3>
             {loading ? (
               <p className="text-gray-600 text-sm">Chargement...</p>
-            ) : recentActivities.length === 0 ? (
-              <p className="text-gray-600 text-sm">Aucune activité</p>
+            ) : transfertsPending.length === 0 ? (
+              <p className="text-gray-600 text-sm">Aucun transfert en attente</p>
             ) : (
               <ul className="space-y-3">
-                {recentActivities.map((act, idx) => (
-                  <li key={idx} className="p-3 bg-gray-50 rounded-lg flex justify-between items-start border-l-4 border-[#472EAD]">
+                {transfertsPending.slice(0, 5).map((transfert, idx) => (
+                  <li key={idx} className="p-3 bg-gray-50 rounded-lg border-l-4 border-[#472EAD]">
                     <div className="flex-1">
-                      <p className="text-gray-900 text-sm font-medium">{act.text}</p>
-                      <span className={`text-xs px-2 py-1 rounded-full mt-1 inline-block ${
-                        act.statut === "validé" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
-                      }`}>
-                        {act.statut}
-                      </span>
+                      <p className="text-gray-900 text-sm font-medium">
+                        {transfert.nom || `Produit #${transfert.id}`}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Quantité: {transfert.quantite || 0}
+                      </p>
                     </div>
-                    <span className="text-sm text-gray-500 ml-2">{act.time}</span>
                   </li>
                 ))}
               </ul>
@@ -134,7 +156,7 @@ const Dashboard = () => {
                 Alertes & Notifications
               </h3>
               <button
-                onClick={() => (window.location.href = "/gestionnaire_boutique/alertes")}
+                onClick={() => (window.location.href = "/gestionnaire-boutique/alertes")}
                 className="text-sm px-3 py-1 bg-[#F58020] text-white rounded hover:bg-[#e67e1a] transition"
               >
                 Ouvrir
@@ -152,14 +174,16 @@ const Dashboard = () => {
                   {alertes.map((alert, idx) => (
                     <button
                       key={idx}
-                      onClick={() => (window.location.href = "/gestionnaire_boutique/alertes")}
+                      onClick={() => (window.location.href = "/gestionnaire-boutique/alertes")}
                       className="w-full text-left p-3 border-l-4 border-[#F58020] bg-orange-50 rounded hover:bg-orange-100 transition"
                     >
                       <div className="text-gray-900 font-medium text-sm flex items-center gap-2">
                         <AlertTriangle size={16} className="text-[#F58020]" />
-                        {alert.text}
+                        {alert.nom || alert.text || 'Produit'}
                       </div>
-                      <div className="text-xs text-gray-600 mt-1">{alert.subtext}</div>
+                      <div className="text-xs text-gray-600 mt-1">
+                        Quantité: {alert.quantite || 0} / Seuil: {alert.seuil || 0}
+                      </div>
                     </button>
                   ))}
                 </div>
@@ -169,17 +193,17 @@ const Dashboard = () => {
         </div>
 
         {/* Transferts en attente */}
-        {!loading && stats.transfertsEnCours > 0 && (
+        {!loading && stats.transfertsEnAttente > 0 && (
           <div className="bg-white p-5 rounded-lg shadow border border-[#F58020]">
             <h3 className="text-lg font-semibold text-[#111827] mb-4 flex items-center gap-2">
               <Package size={20} className="text-[#F58020]" />
               Transferts en attente de complétion
             </h3>
             <p className="text-sm text-gray-600 mb-4">
-              Vous avez <span className="font-bold text-[#F58020]">{stats.transfertsEnCours}</span> transfert(s) à compléter sur {stats.transfertsTotal}
+              Vous avez <span className="font-bold text-[#F58020]">{stats.transfertsEnAttente}</span> transfert(s) à compléter
             </p>
             <button
-              onClick={() => window.location.href = "/gestionnaire/produits"}
+              onClick={() => window.location.href = "/gestionnaire-boutique/produits"}
               className="px-4 py-2 bg-[#F58020] text-white rounded-lg hover:bg-[#e67e1a] transition font-medium"
             >
               Aller aux transferts

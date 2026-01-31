@@ -3,7 +3,8 @@ import { FileText, Filter, Download, Eye } from "lucide-react";
 import DataTable from "../components/DataTable";
 import LoadingSpinner from "../components/LoadingSpinner";
 import EmptyState from "../components/EmptyState";
-import * as api from "../services/apiMock";
+import { gestionnaireBoutiqueAPI } from "@/services/api";
+import { toast } from "sonner";
 
 const Historique = () => {
   const [historique, setHistorique] = useState([]);
@@ -15,16 +16,44 @@ const Historique = () => {
 
   useEffect(() => {
     let mounted = true;
-    setLoading(true);
-    api.fetchHistorique()
-      .then((res) => {
+    const load = async () => {
+      try {
+        setLoading(true);
+        const [pend, val] = await Promise.all([
+          gestionnaireBoutiqueAPI.getProduitsTransfer(),
+          gestionnaireBoutiqueAPI.getTransfertsValides(),
+        ]);
         if (!mounted) return;
-        setHistorique(res ? res.sort((a, b) => new Date(b.date) - new Date(a.date)) : []);
-      })
-      .catch((err) => {
-        console.error(err);
-      })
-      .finally(() => mounted && setLoading(false));
+        const pending = Array.isArray(pend?.data) ? pend.data : [];
+        const valides = Array.isArray(val?.data) ? val.data : [];
+        const mapPending = pending.map((t) => ({
+          id: `p-${t.id}`,
+          date: t.created_at || new Date().toISOString(),
+          action: 'Transfert reçu',
+          produit: t.nom || t.produit || `#${t.id}`,
+          quantite: t.quantite,
+          utilisateur: 'Gestionnaire dépôt',
+          statut: 'en_attente',
+        }));
+        const mapValides = valides.map((t) => ({
+          id: `v-${t.id}`,
+          date: t.updated_at || t.created_at || new Date().toISOString(),
+          action: 'Produit validé',
+          produit: t.nom || t.produit || `#${t.id}`,
+          quantite: t.quantite,
+          utilisateur: 'Gestionnaire boutique',
+          statut: 'validé',
+        }));
+        const merged = [...mapPending, ...mapValides].sort((a, b) => new Date(b.date) - new Date(a.date));
+        setHistorique(merged);
+      } catch (error) {
+        console.error('❌ Erreur chargement historique:', error);
+        toast.error('Erreur de chargement', { description: "Impossible de charger l'historique" });
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    load();
     return () => { mounted = false; };
   }, []);
 

@@ -4,35 +4,51 @@ import CardStat from "../components/CardStat";
 import DataTable from "../components/DataTable";
 import LoadingSpinner from "../components/LoadingSpinner";
 import EmptyState from "../components/EmptyState";
-import * as api from "../services/apiMock";
+import { gestionnaireBoutiqueAPI } from "@/services/api";
+import { toast } from "sonner";
 
 const Stock = () => {
   const [recherche, setRecherche] = useState("");
   const [categorieFiltre, setCategorieFiltre] = useState("Toutes");
   const [produitDetail, setProduitDetail] = useState(null);
-  const [stocks, setStocks] = useState([]);
+  const [stocks, setStocks] = useState([]); // Utilisé pour afficher les produits sous seuil
+  const [nombreProduits, setNombreProduits] = useState(0);
+  const [quantiteTotale, setQuantiteTotale] = useState(0);
   const [loading, setLoading] = useState(true);
 
   // Stats
   const stats = {
-    totalProduits: stocks.length,
-    totalQuantite: stocks.reduce((sum, s) => sum + (s.quantite * s.nbr_pieces), 0),
-    disponible: stocks.filter(s => s.quantite > s.seuil).length,
-    faible: stocks.filter(s => s.quantite > 0 && s.quantite <= s.seuil).length,
-    epuisse: stocks.filter(s => s.quantite === 0).length,
+    totalProduits: nombreProduits,
+    totalQuantite: quantiteTotale,
+    faible: stocks.length,
+    horsAlerte: Math.max(nombreProduits - stocks.length, 0),
   };
 
   const categories = ["Toutes", ...new Set(stocks.map(s => s.categorie))];
 
   useEffect(() => {
     let mounted = true;
-    setLoading(true);
-    api.fetchStocks().then((res) => {
-      if (!mounted) return;
-      setStocks(res);
-      setLoading(false);
-    });
-    return () => (mounted = false);
+    const load = async () => {
+      try {
+        setLoading(true);
+        const [nb, qty, sousSeuil] = await Promise.all([
+          gestionnaireBoutiqueAPI.getNombreProduitsTotal(),
+          gestionnaireBoutiqueAPI.getQuantiteTotaleProduit(),
+          gestionnaireBoutiqueAPI.getProduitsSousSeuil(),
+        ]);
+        if (!mounted) return;
+        setNombreProduits(Number(nb || 0));
+        setQuantiteTotale(Number(qty || 0));
+        setStocks(Array.isArray(sousSeuil) ? sousSeuil : []);
+      } catch (error) {
+        console.error('❌ Erreur chargement stock:', error);
+        toast.error('Erreur de chargement', { description: 'Impossible de charger les informations de stock' });
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    load();
+    return () => { mounted = false; };
   }, []);
 
   const stocksFiltres = stocks.filter(s => {
@@ -62,7 +78,7 @@ const Stock = () => {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <CardStat title="Nombre de produits" value={stats.totalProduits} color="bg-[#472EAD]" />
           <CardStat title="Quantité totale" value={stats.totalQuantite.toLocaleString("fr-FR")} color="bg-blue-600" subtitle="unités" />
-          <CardStat title="Disponibles" value={stats.disponible} color="bg-green-600" />
+          <CardStat title="Hors alerte" value={stats.horsAlerte} color="bg-green-600" />
           <CardStat title="Stock faible" value={stats.faible} color="bg-[#F58020]" />
         </div>
 
@@ -104,38 +120,9 @@ const Stock = () => {
             <DataTable
               columns={[
                 { label: "Produit", key: "nom" },
-                { label: "Code", key: "code" },
                 { label: "Catégorie", key: "categorie" },
-                {
-                  label: "Quantité par unité",
-                  key: "quantite",
-                  render: (v, row) => `${v} x${row.nbr_pieces}`,
-                },
-                {
-                  label: "Total unités",
-                  key: "quantite",
-                  render: (v, row) => `${v * row.nbr_pieces}`,
-                },
+                { label: "Quantité", key: "quantite" },
                 { label: "Seuil", key: "seuil" },
-                {
-                  label: "Valeur stock",
-                  key: "valeur",
-                  render: (_, row) => `${(row.quantite * row.nbr_pieces * row.prix_gros).toLocaleString("fr-FR")} FCFA`,
-                },
-                {
-                  label: "Statut",
-                  key: "statut",
-                  render: (_, row) => {
-                    const quantiteTotale = row.quantite * row.nbr_pieces;
-                    if (quantiteTotale === 0) {
-                      return <span className="flex items-center gap-2 text-red-600 font-semibold"><AlertTriangle size={16} /> Épuisé</span>;
-                    } else if (quantiteTotale <= row.seuil) {
-                      return <span className="flex items-center gap-2 text-[#F58020] font-semibold"><AlertTriangle size={16} /> Faible</span>;
-                    } else {
-                      return <span className="text-green-600 font-semibold">OK</span>;
-                    }
-                  },
-                },
               ]}
               data={stocksFiltres}
               actions={[
@@ -178,26 +165,34 @@ const Stock = () => {
                   <p className="text-gray-600 font-medium">Quantité (unités)</p>
                   <p className="text-[#111827] font-semibold mt-1">{produitDetail.quantite}</p>
                 </div>
-                <div className="border-b pb-3">
-                  <p className="text-gray-600 font-medium">Nombre de pièces</p>
-                  <p className="text-[#111827] font-semibold mt-1">{produitDetail.nbr_pieces}</p>
-                </div>
-                <div className="border-b pb-3">
-                  <p className="text-gray-600 font-medium">Quantité totale</p>
-                  <p className="text-[#111827] font-semibold mt-1">{produitDetail.quantite * produitDetail.nbr_pieces}</p>
-                </div>
+                {produitDetail.nbr_pieces != null && (
+                  <>
+                    <div className="border-b pb-3">
+                      <p className="text-gray-600 font-medium">Nombre de pièces</p>
+                      <p className="text-[#111827] font-semibold mt-1">{produitDetail.nbr_pieces}</p>
+                    </div>
+                    <div className="border-b pb-3">
+                      <p className="text-gray-600 font-medium">Quantité totale</p>
+                      <p className="text-[#111827] font-semibold mt-1">{produitDetail.quantite * produitDetail.nbr_pieces}</p>
+                    </div>
+                  </>
+                )}
                 <div className="border-b pb-3">
                   <p className="text-gray-600 font-medium">Seuil d'alerte</p>
                   <p className="text-[#111827] font-semibold mt-1">{produitDetail.seuil}</p>
                 </div>
-                <div className="border-b pb-3">
-                  <p className="text-gray-600 font-medium">Prix gros</p>
-                  <p className="text-[#111827] font-semibold mt-1">{produitDetail.prix_gros.toLocaleString("fr-FR")} FCFA</p>
-                </div>
-                <div className="border-b pb-3">
-                  <p className="text-gray-600 font-medium">Prix détail</p>
-                  <p className="text-[#111827] font-semibold mt-1">{produitDetail.prix_detail.toLocaleString("fr-FR")} FCFA</p>
-                </div>
+                {produitDetail.prix_gros != null && (
+                  <div className="border-b pb-3">
+                    <p className="text-gray-600 font-medium">Prix gros</p>
+                    <p className="text-[#111827] font-semibold mt-1">{Number(produitDetail.prix_gros).toLocaleString("fr-FR")} FCFA</p>
+                  </div>
+                )}
+                {produitDetail.prix_detail != null && (
+                  <div className="border-b pb-3">
+                    <p className="text-gray-600 font-medium">Prix détail</p>
+                    <p className="text-[#111827] font-semibold mt-1">{Number(produitDetail.prix_detail).toLocaleString("fr-FR")} FCFA</p>
+                  </div>
+                )}
                 <div className="col-span-2 border-b pb-3">
                   <p className="text-gray-600 font-medium">Valeur du stock</p>
                   <p className="text-[#472EAD] font-bold text-lg mt-1">

@@ -4,7 +4,8 @@ import CardStat from "../components/CardStat";
 import DataTable from "../components/DataTable";
 import LoadingSpinner from "../components/LoadingSpinner";
 import EmptyState from "../components/EmptyState";
-import * as api from "../services/apiMock";
+import { gestionnaireBoutiqueAPI } from "@/services/api";
+import { toast } from "sonner";
 
 const Transferts = () => {
   const [transferts, setTransferts] = useState([]);
@@ -17,13 +18,35 @@ const Transferts = () => {
 
   useEffect(() => {
     let mounted = true;
-    setLoading(true);
-    api.fetchTransferts().then((res) => {
-      if (!mounted) return;
-      setTransferts(res);
-      setLoading(false);
-    });
-    return () => (mounted = false);
+    const load = async () => {
+      try {
+        setLoading(true);
+        const [pending, valides] = await Promise.all([
+          gestionnaireBoutiqueAPI.getProduitsTransfer(),
+          gestionnaireBoutiqueAPI.getTransfertsValides(),
+        ]);
+        if (!mounted) return;
+        // Harmoniser structure pour l'affichage
+        const mapItem = (it) => ({
+          id: it.id,
+          produit: it.nom || it.produit || it.designation || `#${it.id}`,
+          source: it.source || it.origine || 'Dépôt',
+          destination: it.destination || 'Boutique',
+          quantite: it.quantite || it.qty || 0,
+          statut: it.statut || it.status || 'en_attente',
+        });
+        const pendingRows = Array.isArray(pending?.data) ? pending.data.map(mapItem) : [];
+        const validesRows = Array.isArray(valides?.data) ? valides.data.map((x) => ({ ...mapItem(x), statut: 'validé' })) : [];
+        setTransferts([...pendingRows, ...validesRows]);
+      } catch (error) {
+        console.error('❌ Erreur chargement transferts:', error);
+        toast.error('Erreur de chargement', { description: 'Impossible de charger les transferts' });
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    load();
+    return () => { mounted = false; };
   }, []);
 
   const transfertsFiltres = transferts.filter(
@@ -46,17 +69,13 @@ const Transferts = () => {
   };
 
   const ajouterTransfert = () => {
-    if (!nouveau.produit || !nouveau.source || !nouveau.destination) return;
-    setTransferts(prev => [...prev, { id: Date.now(), ...nouveau, statut: "en_attente" }]);
-    setNouveau({ produit: "", source: "", destination: "", quantite: "" });
+    toast.info('Fonction non disponible', { description: 'La création se fait côté dépôt.' });
     setShowModal(false);
   };
 
   const supprimerTransfert = async () => {
-    const id = confirmDelete;
+    toast.info('Suppression non disponible', { description: 'La suppression se gère au niveau du dépôt.' });
     setConfirmDelete(null);
-    const res = await api.deleteTransfert(id);
-    if (res && res.ok) setTransferts(prev => prev.filter(t => t.id !== id));
   };
 
   return (
