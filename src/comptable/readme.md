@@ -61,4 +61,4 @@ GET           api/produits            | affiche les produits du depot et leurs e
 GET           api/produits-controle   | affiche les produits du boutique et leurs etat de stock
 
 # reitialiser un mot de passe puis envoyer un mail
-POST          api/utilisateurs/{utilisateur}/reset-password
+POST          api/utilisateurs/{utilisateur_id}/reset-password
