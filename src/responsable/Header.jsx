@@ -34,8 +34,8 @@ import {
   Info,
 } from "lucide-react";
 import { AnimatePresence } from "framer-motion";
-import { instance } from "../utils/axios";
-import { authAPI } from "../utils/api";
+import useAuth from "../hooks/useAuth";
+import profileAPI from "@/services/api/profile";
 
 // ==========================================================
 // 🧩 Utils
@@ -147,7 +147,7 @@ function Toasts({ toasts, remove }) {
 // 🔐 Modal — Changer mot de passe (Connectée au backend !)
 // ==========================================================
 
-function PasswordModal({ open, onClose, onSuccess, addToast }) {
+function PasswordModal({ open, onClose, onSuccess, addToast, changePassword }) {
   const [oldPwd, setOldPwd] = useState("");
   const [newPwd, setNewPwd] = useState("");
   const [confirmPwd, setConfirmPwd] = useState("");
@@ -171,7 +171,7 @@ function PasswordModal({ open, onClose, onSuccess, addToast }) {
     setLoading(true);
 
     try {
-      await authAPI.changePassword(oldPwd, newPwd, confirmPwd);
+      await changePassword(oldPwd, newPwd, confirmPwd);
       addToast("success", "Mot de passe modifié", "Vos identifiants ont été mis à jour.");
       onSuccess();
     } catch (err) {
@@ -312,13 +312,13 @@ function ProfileModal({ open, onClose, user, onUpdate, addToast }) {
 
   const handleSave = async () => {
     try {
-      const res = await instance.put("/mon-profil", {
+      const res = await profileAPI.updateProfile({
         prenom,
         nom,
         photo: preview,
       });
 
-      onUpdate(res.data);
+      onUpdate(res);
       addToast("success", "Profil mis à jour", "Modification enregistrée.");
       onClose();
     } catch (err) {
@@ -435,17 +435,23 @@ export default function Header() {
   const navigate = useNavigate();
   const location = useLocation();
   const menuRef = useRef();
+  const { user: authUser, logout, changePassword } = useAuth();
 
   // UI
   const [showMenu, setShowMenu] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
   const [showQuick, setShowQuick] = useState(false);
   const [showPwdModal, setShowPwdModal] = useState(false);
-  const [showProfileModal, setShowProfileModal] = useState(false);
-
+  
   // Data
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => authUser || null);
   const [toasts, setToasts] = useState([]);
+
+  useEffect(() => {
+    if (authUser) {
+      setUser(authUser);
+    }
+  }, [authUser]);
 
   // 🔔 Notifications venant de l'API
   const [notifications, setNotifications] = useState([]); // items[]
@@ -505,12 +511,25 @@ export default function Header() {
   useEffect(() => {
     const loadUser = async () => {
       try {
-        const { data } = await instance.get("/mon-profil");
+        const data = await profileAPI.getProfile();
         setUser(data);
         localStorage.setItem("lpd_current_user", JSON.stringify(data));
       } catch (err) {
         console.error("Erreur profil :", err);
-        navigate("/login");
+        // Ne rediriger que si c'est une vraie erreur d'auth (401), pas un timeout
+        if (err?.response?.status === 401) {
+          navigate("/login");
+        } else {
+          // Charger depuis localStorage en cas de timeout/erreur réseau
+          const savedUser = localStorage.getItem("lpd_current_user");
+          if (savedUser) {
+            try {
+              setUser(JSON.parse(savedUser));
+            } catch (e) {
+              console.error("Erreur parsing user:", e);
+            }
+          }
+        }
       }
     };
     loadUser();
@@ -525,7 +544,7 @@ export default function Header() {
 
     const fetchNotifications = async () => {
       try {
-        const { data } = await instance.get("/notifications");
+        const data = await profileAPI.getNotifications();
         setNotifications(data.items || []);
         setUnreadTotal(data.unread_total || 0);
         setModuleCounts(data.per_module || {});
@@ -554,7 +573,7 @@ export default function Header() {
 
     const markModuleAsRead = async () => {
       try {
-        await instance.post("/notifications/mark-module", { module });
+        await profileAPI.markNotificationModule(module);
 
         // Mettre à jour l'état local : toutes les notifs de ce module passent en "read: true"
         setNotifications((prev) =>
@@ -599,14 +618,10 @@ export default function Header() {
 
   const handleLogout = async () => {
     try {
-      await instance.post("/auth/logout");
-    } catch {}
-
-    localStorage.removeItem("token");
-    localStorage.removeItem("lpd_current_user");
-    
-
-    navigate("/login");
+      await logout();
+    } finally {
+      navigate("/login");
+    }
   };
 
   // ==========================================================
@@ -891,16 +906,6 @@ export default function Header() {
                 {showMenu && (
                   <div className="absolute right-0 mt-2 w-48 bg-white border shadow-lg rounded-lg p-2">
                     <ul className="text-sm">
-                      {/* Profil (si tu veux l'activer, enlève les commentaires) */}
-                      {/* <li
-                        onClick={() => {
-                          setShowProfileModal(true);
-                          setShowMenu(false);
-                        }}
-                        className="px-3 py-2 hover:bg-gray-50 cursor-pointer flex gap-2 items-center"
-                      >
-                        <User size={14} /> Mon Profil
-                      </li> */}
 
                       <li
                         onClick={() => {
@@ -933,17 +938,7 @@ export default function Header() {
         onClose={() => setShowPwdModal(false)}
         onSuccess={() => setShowPwdModal(false)}
         addToast={addToast}
-      />
-
-      <ProfileModal
-        open={showProfileModal}
-        onClose={() => setShowProfileModal(false)}
-        user={user}
-        onUpdate={(updatedUser) => {
-          setUser(updatedUser);
-          localStorage.setItem("lpd_current_user", JSON.stringify(updatedUser));
-        }}
-        addToast={addToast}
+        changePassword={changePassword}
       />
 
       <Toasts toasts={toasts} remove={removeToast} />

@@ -1,20 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Card, { CardHeader } from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import Modal from '../../components/ui/Modal';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
-import { formatCurrency, formatDateTime, calculateTVA } from '../../utils/formatters';
+import { formatCurrency, formatDateTime } from '../../utils/formatters';
 import { printInvoice } from '../components/InvoicePrint';
 import QRScanner from '../components/QRScanner';
+import caissierApi from '../services/caissierApi';
+import { toast } from 'sonner';
+import { initializeEcho, getEcho, disconnectEcho } from '../../utils/echo';
 
 const CaissePage = () => {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [ticketToCancel, setTicketToCancel] = useState(null);
   const [filterText, setFilterText] = useState('');
   const [showArticleDetails, setShowArticleDetails] = useState({});
   const [paymentData, setPaymentData] = useState({
@@ -24,142 +30,232 @@ const CaissePage = () => {
     tauxTVA: 18,
   });
 
-  // Simuler des tickets en temps réel (à remplacer par une vraie connexion WebSocket/API)
-  useEffect(() => {
-    // Simuler le polling ou WebSocket pour les tickets en temps réel
-    const fetchTickets = async () => {
-      setLoading(true);
-      // TODO: Remplacer par un vrai appel API
-      // const response = await api.get('/tickets/pending');
-      
-      // Données simulées
-      setTimeout(() => {
-        setTickets([
-          {
-            id: 1,
-            commande_id: 101,
-            numero: 'TKT-2024-001',
-            date_ticket: new Date().toISOString(),
-            vendeur_nom: 'Amadou Diop',
-            total_ht: 50000,
-            tva: 9000,
-            total_ttc: 59000,
-            moyen_paiement: null,
-            statut: 'en_attente',
-            client_special: false,
-            lignes: [
-              { produit: 'Produit A', quantite: 2, prix: 25000 },
-            ],
-          },
-          {
-            id: 2,
-            commande_id: 102,
-            numero: 'TKT-2024-002',
-            date_ticket: new Date().toISOString(),
-            vendeur_nom: 'Fatou Sarr',
-            total_ht: 75000,
-            tva: 13500,
-            total_ttc: 88500,
-            moyen_paiement: null,
-            statut: 'en_attente',
-            client_special: true,
-            client_nom: 'Client VIP',
-            lignes: [
-              { produit: 'Produit B', quantite: 3, prix: 25000 },
-            ],
-          },
-        ]);
-        setLoading(false);
-      }, 500);
+  // Fonction pour transformer une commande en ticket
+  const transformCommandeToTicket = (commande, paiements = []) => {
+    // Calculer le total HT et TVA (le total du backend inclut déjà la TVA)
+    // On suppose une TVA de 18% par défaut
+    const tauxTVA = 0.18;
+    const totalTTC = commande.total || 0;
+    const totalHT = totalTTC / (1 + tauxTVA);
+    const tva = totalTTC - totalHT;
+
+    // Calculer le reste dû à partir des paiements
+    const totalPaye = paiements.reduce((sum, p) => sum + (p.montant || 0), 0);
+    const resteDu = totalTTC - totalPaye;
+
+    // Pour les clients spéciaux, récupérer le moyen de paiement depuis le premier paiement en attente
+    // (créé par le responsable)
+    const isClientSpecial = commande.client?.type_client === 'special' || false;
+    let moyenPaiementDefini = null;
+    if (isClientSpecial && paiements.length > 0) {
+      // Le premier paiement en attente contient le moyen de paiement défini par le responsable
+      const premierPaiement = paiements[0];
+      moyenPaiementDefini = premierPaiement.type_paiement;
+    }
+
+    // Transformer les détails en lignes
+    const lignes = (commande.details || []).map(detail => ({
+      produit: detail.produit?.nom || 'Produit',
+      quantite: detail.quantite || 0,
+      prix: detail.prix_unitaire || 0,
+      prix_unitaire: detail.prix_unitaire || 0,
+    }));
+
+    return {
+      id: commande.id,
+      commande_id: commande.id,
+      numero: `CMD-${commande.id.substring(0, 8).toUpperCase()}`,
+      date_ticket: commande.date || commande.created_at,
+      vendeur_nom: commande.vendeur ? `${commande.vendeur.prenom || ''} ${commande.vendeur.nom || ''}`.trim() : 'N/A',
+      total_ht: totalHT,
+      tva: tva,
+      total_ttc: totalTTC,
+      moyen_paiement: moyenPaiementDefini, // Pour les clients spéciaux, récupéré depuis les paiements
+      statut: resteDu > 0 ? (totalPaye > 0 ? 'partiellement_paye' : 'en_attente') : 'encaissé',
+      client_special: isClientSpecial,
+      client_nom: commande.client ? `${commande.client.prenom || ''} ${commande.client.nom || ''}`.trim() : null,
+      lignes: lignes,
+      montant_deja_paye: totalPaye,
+      reste_du: resteDu,
+      paiements: paiements,
     };
+  };
 
+  // Fonction pour charger les tickets
+  const fetchTickets = async () => {
+    try {
+      setLoading(true);
+      const response = await caissierApi.getCommandesAttente();
+      const commandes = response.data || [];
+      
+      // Les paiements sont maintenant inclus dans la réponse (via with('paiements'))
+      // Plus besoin de faire des appels API supplémentaires pour chaque commande
+      const ticketsTransformes = commandes.map(commande => {
+        const paiements = commande.paiements || [];
+        return transformCommandeToTicket(commande, paiements);
+      });
+      
+      setTickets(ticketsTransformes);
+    } catch (error) {
+      // Erreur silencieuse - ne pas afficher de message localhost
+      toast.error('Erreur', {
+        description: 'Impossible de charger les tickets en attente'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Référence pour stocker les abonnements WebSocket
+  const echoRef = useRef(null);
+  const subscriptionsRef = useRef([]);
+
+  // Charger les tickets au montage et configurer WebSockets
+  useEffect(() => {
+    // Chargement initial - priorité absolue
     fetchTickets();
-    // Polling toutes les 5 secondes
-    const interval = setInterval(fetchTickets, 5000);
 
-    return () => clearInterval(interval);
-  }, []);
+    // Initialiser WebSocket de manière asynchrone pour ne pas bloquer le rendu
+    // Utiliser setTimeout pour différer l'initialisation
+    const timeoutId = setTimeout(() => {
+      try {
+        const echo = initializeEcho();
+        if (echo) {
+          echoRef.current = echo;
+        }
+      } catch (e) {
+        // Ignorer les erreurs WebSocket - ne pas bloquer l'application
+      }
+    }, 2000); // Démarrer après 2 secondes pour ne pas ralentir le chargement initial
+
+    return () => {
+      clearTimeout(timeoutId);
+      // Nettoyage WebSocket si nécessaire
+      if (echoRef.current) {
+        try {
+          subscriptionsRef.current.forEach(sub => {
+            if (sub.channel && echoRef.current) {
+              echoRef.current.leave(sub.channel);
+            }
+          });
+        } catch (e) {
+          // Ignorer les erreurs de nettoyage
+        }
+        subscriptionsRef.current = [];
+      }
+    };
+  }, []); // Seulement au montage
 
   const handleEncaisse = (ticket) => {
     setSelectedTicket(ticket);
+    
     // Pour les clients spéciaux, le moyen de paiement est déjà défini par le responsable
-    // Le montant est toujours le total TTC (pas de paiement par tranche)
+    // Il est dans ticket.moyen_paiement (récupéré depuis les paiements existants)
     const moyenPaiementParDefaut = ticket.client_special 
       ? (ticket.moyen_paiement || 'especes')
       : 'especes';
     
+    // Pour les paiements partiels, utiliser le reste dû au lieu du total
+    const montantParDefaut = ticket.reste_du || ticket.total_ttc;
+    
     setPaymentData({
       moyenPaiement: moyenPaiementParDefaut,
       autreMoyenPaiement: moyenPaiementParDefaut === 'autre' ? (ticket.moyen_paiement || '') : '',
-      montantPaye: ticket.total_ttc.toString(),
+      montantPaye: montantParDefaut.toString(),
       tauxTVA: 18,
     });
     setIsPaymentModalOpen(true);
   };
 
   const handlePaymentSubmit = async () => {
-    if (!selectedTicket) return;
+    if (!selectedTicket || isProcessingPayment) return;
 
     const montant = parseFloat(paymentData.montantPaye);
+    const resteDu = selectedTicket.reste_du || selectedTicket.total_ttc;
     
-    // Validation pour tous les clients
-    if (montant < selectedTicket.total_ttc) {
-      alert('Le montant payé ne peut pas être inférieur au total TTC');
+    // Validation
+    if (montant <= 0) {
+      toast.error('Erreur', { description: 'Le montant payé doit être supérieur à 0' });
       return;
     }
 
-    if (montant <= 0) {
-      alert('Le montant payé doit être supérieur à 0');
+    if (montant > resteDu) {
+      toast.error('Erreur', { 
+        description: `Le montant payé (${formatCurrency(montant)}) ne peut pas être supérieur au reste dû (${formatCurrency(resteDu)})` 
+      });
       return;
     }
 
     // Pour les clients spéciaux, le moyen de paiement est déjà défini par le responsable
-    // On utilise celui du ticket, pas celui du formulaire
+    // On utilise celui du ticket (récupéré depuis les paiements existants créés par le responsable)
     const moyenPaiementFinal = selectedTicket.client_special
-      ? selectedTicket.moyen_paiement
+      ? (selectedTicket.moyen_paiement || selectedTicket.paiements?.[0]?.type_paiement || 'especes')
       : (paymentData.moyenPaiement === 'autre' 
           ? (paymentData.autreMoyenPaiement || 'Autre')
           : paymentData.moyenPaiement);
 
-    // Mettre à jour la liste des tickets
-    setTickets(prevTickets => 
-      prevTickets.map(t => 
-        t.id === selectedTicket.id 
-          ? {
-              ...t,
-              statut: 'encaissé',
-              moyen_paiement: moyenPaiementFinal,
-            }
-          : t
-      ).filter(t => t.statut === 'en_attente' || t.statut === 'partiellement_paye')
-    );
-
-    setIsPaymentModalOpen(false);
-    
-    // Formater le ticket pour l'impression
-    const ticketEncaisse = {
-      ...selectedTicket,
-      moyen_paiement: moyenPaiementFinal,
-      montant_paye: montant,
-      statut: 'encaissé',
-    };
-    
-    // Proposer l'impression de la facture
-    if (window.confirm('Encaissement confirmé avec succès. Voulez-vous imprimer la facture ?')) {
-      printInvoice(ticketEncaisse);
+    // Validation : pour les clients spéciaux, le moyen de paiement doit être défini
+    if (selectedTicket.client_special && !moyenPaiementFinal) {
+      toast.error('Erreur', { 
+        description: 'Le moyen de paiement n\'a pas été défini par le responsable. Veuillez contacter le responsable.' 
+      });
+      return;
     }
-    
-    setSelectedTicket(null);
-  };
 
-  const handlePrintInvoice = (ticket) => {
-    // TODO: Implémenter l'impression de la facture
-    window.print();
+    setIsProcessingPayment(true);
+    try {
+      // Appel API pour créer le paiement
+      await caissierApi.creerPaiement(selectedTicket.commande_id, {
+        montant: montant,
+        type_paiement: moyenPaiementFinal || 'especes'
+      });
+
+      toast.success('Encaissement réussi', {
+        description: `Paiement de ${formatCurrency(montant)} enregistré`
+      });
+
+      // Fermer le modal immédiatement
+      setIsPaymentModalOpen(false);
+      setSelectedTicket(null);
+
+      // Recharger les tickets pour que le ticket disparaisse immédiatement
+      await fetchTickets();
+
+      // Proposer l'impression de la facture
+      setTimeout(() => {
+        if (window.confirm('Voulez-vous imprimer la facture ?')) {
+          const ticketEncaisse = {
+            ...selectedTicket,
+            moyen_paiement: moyenPaiementFinal,
+            montant_paye: montant,
+            statut: 'encaissé',
+          };
+          printInvoice(ticketEncaisse);
+        }
+      }, 500);
+    } catch (error) {
+      // Vérifier si le paiement a quand même été créé (code 200 ou 201)
+      const statusCode = error.response?.status;
+      if (statusCode === 200 || statusCode === 201) {
+        toast.success('Encaissement réussi', {
+          description: `Paiement de ${formatCurrency(montant)} enregistré`
+        });
+        setIsPaymentModalOpen(false);
+        setSelectedTicket(null);
+        await fetchTickets();
+      } else {
+        toast.error('Erreur', {
+          description: error.response?.data?.message || 'Impossible d\'enregistrer le paiement'
+        });
+      }
+    } finally {
+      setIsProcessingPayment(false);
+    }
   };
 
   const handleQRScan = async (qrData) => {
     try {
-      console.log('QR Code scanné:', qrData);
+      // QR Code scanné - silencieux
       const ticketTrouve = tickets.find(t => 
         t.numero === qrData || 
         t.id === qrData || 
@@ -175,7 +271,7 @@ const CaissePage = () => {
         alert(`Ticket non trouvé pour le QR code: ${qrData}\n\nVérifiez que le ticket existe dans la liste.`);
       }
     } catch (error) {
-      console.error('Erreur lors du scan QR:', error);
+      // Erreur lors du scan QR - silencieux
       alert('Erreur lors du traitement du QR code. Veuillez réessayer.');
     }
   };
@@ -204,6 +300,15 @@ const CaissePage = () => {
     { value: 'cheque', label: 'Chèque' },
     { value: 'autre', label: 'Autre' },
   ];
+
+  const moyensPaiementLabels = {
+    especes: 'Espèces',
+    carte: 'Carte bancaire',
+    wave: 'Wave',
+    om: 'Orange Money',
+    cheque: 'Chèque',
+    autre: 'Autre',
+  };
 
   return (
     <div className="space-y-6 relative z-10">
@@ -344,14 +449,14 @@ const CaissePage = () => {
                       </div>
                       <div className="min-w-0">
                         <span className="text-gray-500">
-                          {ticket.client_special && ticket.montant_deja_paye > 0 ? 'Reste dû:' : 'Total TTC:'}
+                          {ticket.reste_du && ticket.reste_du < ticket.total_ttc ? 'Reste dû:' : 'Total TTC:'}
                         </span>
                         <p className="font-bold text-[#472EAD]">
-                          {formatCurrency(ticket.client_special && ticket.reste_du ? ticket.reste_du : ticket.total_ttc)}
+                          {formatCurrency(ticket.reste_du && ticket.reste_du < ticket.total_ttc ? ticket.reste_du : ticket.total_ttc)}
                         </p>
-                        {ticket.client_special && ticket.montant_deja_paye > 0 && (
+                        {ticket.reste_du && ticket.reste_du < ticket.total_ttc && (
                           <p className="text-xs text-gray-500 mt-0.5">
-                            (Total: {formatCurrency(ticket.total_ttc)}, Payé: {formatCurrency(ticket.montant_deja_paye)})
+                            (Total: {formatCurrency(ticket.total_ttc)}, Payé: {formatCurrency(ticket.montant_deja_paye || 0)})
                           </p>
                         )}
                       </div>
@@ -439,9 +544,8 @@ const CaissePage = () => {
                     <Button
                       variant="secondary"
                       onClick={() => {
-                        if (window.confirm(`Voulez-vous vraiment annuler le ticket ${ticket.numero} ?`)) {
-                          setTickets(prevTickets => prevTickets.filter(t => t.id !== ticket.id));
-                        }
+                        setTicketToCancel(ticket);
+                        setIsCancelModalOpen(true);
                       }}
                       className="shadow-md hover:shadow-lg transition-shadow text-sm px-3 py-1.5 border border-gray-300 hover:bg-gray-50"
                       size="sm"
@@ -496,9 +600,20 @@ const CaissePage = () => {
             <Button 
               variant="primary" 
               onClick={handlePaymentSubmit}
-              className="bg-[#472EAD] hover:bg-[#3d2888] text-white font-semibold shadow-md hover:shadow-lg w-full py-3"
+              disabled={isProcessingPayment}
+              className="bg-[#472EAD] hover:bg-[#3d2888] text-white font-semibold shadow-md hover:shadow-lg w-full py-3 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {selectedTicket?.client_special ? 'Confirmer l\'encaissement' : 'Valider l\'encaissement'}
+              {isProcessingPayment ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Enregistrement...
+                </>
+              ) : (
+                selectedTicket?.client_special ? 'Confirmer l\'encaissement' : 'Valider l\'encaissement'
+              )}
             </Button>
           </>
         }
@@ -600,8 +715,15 @@ const CaissePage = () => {
                   Moyen de paiement (défini par le responsable)
                 </p>
                 <p className="text-lg font-bold text-blue-900">
-                  {selectedTicket.moyen_paiement || 'Non défini'}
+                  {moyensPaiementLabels[selectedTicket.moyen_paiement] || selectedTicket.moyen_paiement || 'Non défini'}
                 </p>
+                {!selectedTicket.moyen_paiement && (
+                  <div className="mt-2 p-2 bg-yellow-100 border border-yellow-300 rounded">
+                    <p className="text-xs text-yellow-800">
+                      ⚠️ Le moyen de paiement n'a pas été défini par le responsable. Veuillez contacter le responsable avant de procéder à l'encaissement.
+                    </p>
+                  </div>
+                )}
                 <p className="text-xs text-blue-700 mt-2">
                   Ce moyen de paiement a été défini par le responsable. Vous devez seulement confirmer l'encaissement.
                 </p>
@@ -639,16 +761,28 @@ const CaissePage = () => {
                 type="number"
                 value={paymentData.montantPaye}
                 onChange={(e) => setPaymentData({ ...paymentData, montantPaye: e.target.value })}
-                helperText={`Total à payer: ${formatCurrency(selectedTicket.total_ttc)}`}
+                helperText={
+                  selectedTicket.reste_du && selectedTicket.reste_du < selectedTicket.total_ttc
+                    ? `Reste dû: ${formatCurrency(selectedTicket.reste_du)} (Total: ${formatCurrency(selectedTicket.total_ttc)}, Déjà payé: ${formatCurrency(selectedTicket.montant_deja_paye || 0)})`
+                    : `Total à payer: ${formatCurrency(selectedTicket.total_ttc)}`
+                }
                 required
                 className="w-full"
               />
             </div>
 
-            {parseFloat(paymentData.montantPaye || 0) > selectedTicket.total_ttc && (
+            {selectedTicket.reste_du && selectedTicket.reste_du < selectedTicket.total_ttc && (
+              <div className="bg-blue-50 border-2 border-blue-300 rounded-lg p-4">
+                <p className="text-sm text-blue-800 font-semibold">
+                  Paiement partiel : {formatCurrency(selectedTicket.montant_deja_paye || 0)} déjà payé sur {formatCurrency(selectedTicket.total_ttc)}
+                </p>
+              </div>
+            )}
+
+            {parseFloat(paymentData.montantPaye || 0) > (selectedTicket.reste_du || selectedTicket.total_ttc) && (
               <div className="bg-green-50 border-2 border-green-300 rounded-lg p-4">
                 <p className="text-sm text-green-800 font-semibold">
-                  Monnaie à rendre: {formatCurrency(parseFloat(paymentData.montantPaye || 0) - selectedTicket.total_ttc)}
+                  Monnaie à rendre: {formatCurrency(parseFloat(paymentData.montantPaye || 0) - (selectedTicket.reste_du || selectedTicket.total_ttc))}
                 </p>
               </div>
             )}
@@ -667,6 +801,109 @@ const CaissePage = () => {
           onScan={handleQRScan}
           onClose={() => setIsQRScannerOpen(false)}
         />
+      </Modal>
+
+      {/* Modal de confirmation d'annulation */}
+      <Modal
+        isOpen={isCancelModalOpen}
+        onClose={() => {
+          setIsCancelModalOpen(false);
+          setTicketToCancel(null);
+        }}
+        title="Confirmer l'annulation"
+        size="md"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setIsCancelModalOpen(false);
+                setTicketToCancel(null);
+              }}
+              className="border border-gray-300 font-semibold hover:bg-gray-100"
+            >
+              Non, garder le ticket
+            </Button>
+            <Button
+              variant="primary"
+              onClick={async () => {
+                if (!ticketToCancel) return;
+                
+                try {
+                  // Appel API pour annuler la commande
+                  await caissierApi.annulerCommande(ticketToCancel.commande_id);
+                  
+                  toast.success('Ticket annulé', {
+                    description: `Le ticket ${ticketToCancel.numero} a été annulé`
+                  });
+
+                  // Recharger les tickets
+                  await fetchTickets();
+                  
+                  setIsCancelModalOpen(false);
+                  setTicketToCancel(null);
+                } catch (error) {
+                  // Erreur lors de l'annulation - silencieux
+                  toast.error('Erreur', {
+                    description: 'Impossible d\'annuler le ticket'
+                  });
+                }
+              }}
+              className="bg-red-600 hover:bg-red-700 text-white font-semibold shadow-md hover:shadow-lg"
+            >
+              Oui, annuler le ticket
+            </Button>
+          </>
+        }
+      >
+        {ticketToCancel && (
+          <div className="space-y-4">
+            <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <svg className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <div>
+                  <h4 className="font-semibold text-red-900 mb-1">
+                    Attention : Annulation du ticket
+                  </h4>
+                  <p className="text-sm text-red-800">
+                    Vous êtes sur le point d'annuler le ticket <strong>{ticketToCancel.numero}</strong>.
+                    Cette action est irréversible.
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+              <h5 className="font-semibold text-gray-900 mb-3">Détails du ticket</h5>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Numéro:</span>
+                  <span className="font-medium">{ticketToCancel.numero}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Vendeur:</span>
+                  <span className="font-medium">{ticketToCancel.vendeur_nom}</span>
+                </div>
+                {ticketToCancel.client_nom && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Client:</span>
+                    <span className="font-medium">{ticketToCancel.client_nom}</span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Total TTC:</span>
+                  <span className="font-bold text-[#472EAD]">{formatCurrency(ticketToCancel.total_ttc)}</span>
+                </div>
+              </div>
+            </div>
+            
+            <p className="text-sm text-gray-600 text-center">
+              Êtes-vous sûr de vouloir annuler ce ticket ?
+            </p>
+          </div>
+        )}
       </Modal>
 
     </div>

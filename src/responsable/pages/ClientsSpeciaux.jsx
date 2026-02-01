@@ -21,7 +21,7 @@ import {
 import FormModal from "../components/FormModal.jsx";
 import DataTable from "../components/DataTable.jsx";
 import VoirDetailClient from "../components/VoirDetailClient.jsx";
-import { instance as axios } from "../../utils/axios.jsx";
+import { clientsAPI, commandesAPI, paiementsAPI } from '@/services/api';
 
 const cls = (...a) => a.filter(Boolean).join(" ");
 const formatFCFA = (n) =>
@@ -751,13 +751,13 @@ export default function ClientsSpeciaux() {
       setLoading(true);
 
       const [clientsRes, commandesRes] = await Promise.all([
-        axios.get("/clients", { params: { type_client: "special" } }),
-        axios.get("/commandes"),
+        clientsAPI.getAll({ type_client: "special" }),
+        commandesAPI.getAll(),
       ]);
 
-      const clientsPayload = Array.isArray(clientsRes.data?.data)
-        ? clientsRes.data.data
-        : clientsRes.data;
+      const clientsPayload = Array.isArray(clientsRes?.data)
+        ? clientsRes.data
+        : clientsRes;
 
       const normalizedClients = (clientsPayload || []).map((c) => ({
         id: c.id,
@@ -891,8 +891,7 @@ export default function ClientsSpeciaux() {
         contact: data.contact,
       };
 
-      const res = await axios.post("/clients", payload);
-      const c = res.data;
+      const c = await clientsAPI.create(payload);
 
       const newClient = {
         id: c.id,
@@ -952,7 +951,7 @@ export default function ClientsSpeciaux() {
         contact: data.contact,
       };
 
-      await axios.put(`/clients/${editTarget.id}`, payload);
+      await clientsAPI.update(editTarget.id, payload);
 
       setClients((prev) =>
         prev.map((c) =>
@@ -987,7 +986,7 @@ export default function ClientsSpeciaux() {
     setSubmitting(true);
 
     try {
-      await axios.delete(`/clients/${deleteTarget.id}`);
+      await clientsAPI.delete(deleteTarget.id);
 
       setClients((prev) => prev.filter((c) => c.id !== deleteTarget.id));
 
@@ -1020,10 +1019,7 @@ export default function ClientsSpeciaux() {
       await Promise.all(
         commandesClient.map(async (cmd) => {
           try {
-            const res = await axios.get(`/commandes/${cmd.id}/paiements`);
-            const payload = Array.isArray(res.data?.data)
-              ? res.data.data
-              : res.data;
+            const payload = await paiementsAPI.getByCommande(cmd.id);
 
             const paiements = (payload || []).map((p) => ({
               id: p.id,
@@ -1078,7 +1074,7 @@ export default function ClientsSpeciaux() {
   // 🔗 Enregistrement d'une nouvelle tranche côté API (préparation Responsable)
   const handleTrancheSubmit = async (commande, tranche) => {
     try {
-      const res = await axios.post(`/commandes/${commande.id}/paiements`, {
+      const res = await paiementsAPI.create(commande.id, {
         montant: tranche.montant,
         mode_paiement: tranche.mode,
         date_paiement: tranche.date,
@@ -1156,7 +1152,7 @@ export default function ClientsSpeciaux() {
   // 🔄 Édition de tranche depuis VoirDetailClient (modal interne)
   const handleVoirDetailEditTranche = async (commande, updatedPaiement) => {
     try {
-      await axios.put(`/paiements/${updatedPaiement.id}`, {
+      await paiementsAPI.update(updatedPaiement.id, {
         montant: updatedPaiement.montant,
         mode_paiement: updatedPaiement.mode,
         date_paiement: updatedPaiement.date,
@@ -1213,7 +1209,7 @@ export default function ClientsSpeciaux() {
   // 🔄 Suppression de tranche depuis VoirDetailClient
   const handleVoirDetailDeleteTranche = async (commande, paiement) => {
     try {
-      await axios.delete(`/paiements/${paiement.id}`);
+      await paiementsAPI.delete(paiement.id);
 
       setCommandes((prev) =>
         prev.map((c) =>

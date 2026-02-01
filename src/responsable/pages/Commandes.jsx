@@ -26,7 +26,7 @@ import jsPDF from "jspdf";
 import { QRCodeCanvas as QRCode } from "qrcode.react";
 import "jspdf-autotable";
 import { useLocation } from "react-router-dom";
-import { instance as axios } from "../../utils/axios.jsx";
+import { commandesAPI, produitsAPI, clientsAPI } from '@/services/api';
 
 // === Utils ===
 const formatFCFA = (n) =>

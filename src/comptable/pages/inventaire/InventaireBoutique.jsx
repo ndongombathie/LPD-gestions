@@ -34,7 +34,7 @@ const ventes = [
     date: "2025-01-13",
     quantite: 5,
     prixVente: 80,
-    vendeur: "responsable", // autorisé
+    vendeur: "responsable",
   },
 ];
 
@@ -154,12 +154,21 @@ export default function InventaireBoutique() {
 
   /* ================= IMPRESSION PDF ================= */
   const imprimerInventaire = () => {
+    // ✅ VALIDATION
+    if (!dateDebut || !dateFin) {
+      alert("Veuillez renseigner une date de début et une date de fin.");
+      return;
+    }
+
+    if (dateDebut > dateFin) {
+      alert("La date de début ne peut pas être supérieure à la date de fin.");
+      return;
+    }
+
     const doc = new jsPDF();
     let y = 20;
 
-    const periode = `${dateDebut ? formatDate(dateDebut) : "Début"} → ${
-      dateFin ? formatDate(dateFin) : "Aujourd’hui"
-    }`;
+    const periode = `${formatDate(dateDebut)} → ${formatDate(dateFin)}`;
 
     doc.setFontSize(14);
     doc.text("INVENTAIRE BOUTIQUE", 14, y);
@@ -218,9 +227,22 @@ export default function InventaireBoutique() {
 
       {/* FILTRES */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <input type="date" className="border px-3 py-2" value={dateDebut} onChange={(e) => setDateDebut(e.target.value)} />
-        <input type="date" className="border px-3 py-2" value={dateFin} onChange={(e) => setDateFin(e.target.value)} />
-        <button onClick={imprimerInventaire} className="bg-indigo-600 text-white px-4 py-2 flex items-center gap-2 justify-center">
+        <input
+          type="date"
+          className="border px-3 py-2"
+          value={dateDebut}
+          onChange={(e) => setDateDebut(e.target.value)}
+        />
+        <input
+          type="date"
+          className="border px-3 py-2"
+          value={dateFin}
+          onChange={(e) => setDateFin(e.target.value)}
+        />
+        <button
+          onClick={imprimerInventaire}
+          className="bg-indigo-600 text-white px-4 py-2 flex items-center gap-2 justify-center"
+        >
           <Printer size={18} /> Imprimer inventaire
         </button>
       </div>
@@ -228,13 +250,16 @@ export default function InventaireBoutique() {
       {/* ALERTES */}
       <div className="space-y-2">
         {alertes.map((a, i) => (
-          <div key={i} className={`p-3 rounded ${
-            a.type === "danger"
-              ? "bg-red-100 text-red-700"
-              : a.type === "warning"
-              ? "bg-yellow-100 text-yellow-700"
-              : "bg-blue-100 text-blue-700"
-          }`}>
+          <div
+            key={i}
+            className={`p-3 rounded ${
+              a.type === "danger"
+                ? "bg-red-100 text-red-700"
+                : a.type === "warning"
+                ? "bg-yellow-100 text-yellow-700"
+                : "bg-blue-100 text-blue-700"
+            }`}
+          >
             {a.message}
           </div>
         ))}
@@ -262,7 +287,11 @@ export default function InventaireBoutique() {
               <td className="p-2 text-center">{p.restant}</td>
               <td className="p-2 text-center">{p.nbReappro}</td>
               <td className="p-2 text-right">{fcfa(p.totalVentes)}</td>
-              <td className={`p-2 text-right font-semibold ${p.resultat < 0 ? "text-red-600" : "text-green-600"}`}>
+              <td
+                className={`p-2 text-right font-semibold ${
+                  p.resultat < 0 ? "text-red-600" : "text-green-600"
+                }`}
+              >
                 {fcfa(p.resultat)}
               </td>
             </tr>

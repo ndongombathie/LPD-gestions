@@ -1,76 +1,75 @@
 // ==========================================================
-// 🔝 Header.jsx — Comptable LPD (SIMPLIFIÉ & PRO)
-// - Sans Raccourcis
-// - Sans Notifications
-// - Sans Mon Profil
-// - Avec Changer mot de passe + Déconnexion
+// 🔝 HeaderComptable.jsx — Comptable LPD (AVEC NOTIFICATIONS)
+// DESIGN IDENTIQUE AU GESTIONNAIRE
 // ==========================================================
 
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronDown, LogOut, Key, X, Eye, EyeOff } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
-import { instance } from "../utils/axios";
+import {
+  Bell,
+  ChevronDown,
+  LogOut,
+  Key,
+  X,
+  Eye,
+  EyeOff,
+} from "lucide-react";
+import { AnimatePresence } from "framer-motion";
+import useAuth from "../hooks/useAuth";
 
-// ==========================================================
-// 🔧 Utils
-// ==========================================================
+/* ===================== Utils ===================== */
 const getInitials = (prenom = "", nom = "") =>
   (`${prenom?.[0] || ""}${nom?.[0] || ""}` || "U").toUpperCase();
 
-// ==========================================================
-// 🔐 Modal — Changer mot de passe
-// ==========================================================
-function PasswordModal({ open, onClose }) {
+/* ===================== MODAL MOT DE PASSE ===================== */
+function PasswordModal({ open, onClose, changePassword }) {
   const [oldPwd, setOldPwd] = useState("");
   const [newPwd, setNewPwd] = useState("");
   const [confirmPwd, setConfirmPwd] = useState("");
   const [show, setShow] = useState(false);
-  const [loading, setLoading] = useState(false);
 
   if (!open) return null;
 
   const submit = async (e) => {
     e.preventDefault();
 
-    if (!oldPwd || !newPwd || !confirmPwd) return alert("Tous les champs sont requis");
-    if (newPwd !== confirmPwd) return alert("Les mots de passe ne correspondent pas");
+    if (!oldPwd || !newPwd || !confirmPwd) {
+      alert("Tous les champs sont requis");
+      return;
+    }
 
-    setLoading(true);
+    if (newPwd !== confirmPwd) {
+      alert("Les mots de passe ne correspondent pas");
+      return;
+    }
+
     try {
-      await instance.put("/auth/change-password", {
-        old_password: oldPwd,
-        new_password: newPwd,
-        new_password_confirmation: confirmPwd,
-      });
+      await changePassword(oldPwd, newPwd, confirmPwd);
       alert("Mot de passe modifié avec succès");
       onClose();
-    } catch (e) {
+    } catch (error) {
+      console.error("[HeaderComptable] Erreur changement mot de passe :", error);
       alert("Erreur lors du changement de mot de passe");
-    } finally {
-      setLoading(false);
     }
   };
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
-      <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        className="bg-white w-[400px] rounded-xl p-5 shadow-xl"
-      >
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="font-semibold text-[#472EAD] flex items-center gap-2">
+      <div className="bg-white w-[400px] rounded-xl p-5 shadow-xl">
+        <div className="flex justify-between mb-4">
+          <h2 className="font-semibold text-[#472EAD] flex gap-2">
             <Key size={18} /> Changer mot de passe
           </h2>
-          <button onClick={onClose}><X size={18} /></button>
+          <button onClick={onClose}>
+            <X size={18} />
+          </button>
         </div>
 
         <form onSubmit={submit} className="space-y-3">
           <input
             type="password"
             placeholder="Ancien mot de passe"
-            className="w-full border px-3 py-2 rounded"
+            className="w-full px-3 py-2 rounded border"
             value={oldPwd}
             onChange={(e) => setOldPwd(e.target.value)}
           />
@@ -79,7 +78,7 @@ function PasswordModal({ open, onClose }) {
             <input
               type={show ? "text" : "password"}
               placeholder="Nouveau mot de passe"
-              className="w-full border px-3 py-2 rounded pr-10"
+              className="w-full px-3 py-2 rounded border pr-10"
               value={newPwd}
               onChange={(e) => setNewPwd(e.target.value)}
             />
@@ -95,134 +94,189 @@ function PasswordModal({ open, onClose }) {
           <input
             type="password"
             placeholder="Confirmer mot de passe"
-            className="w-full border px-3 py-2 rounded"
+            className="w-full px-3 py-2 rounded border"
             value={confirmPwd}
             onChange={(e) => setConfirmPwd(e.target.value)}
           />
 
           <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 border rounded">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 border rounded"
+            >
               Annuler
             </button>
             <button
               type="submit"
-              disabled={loading}
               className="px-4 py-2 bg-[#472EAD] text-white rounded"
             >
-              {loading ? "..." : "Confirmer"}
+              Confirmer
             </button>
           </div>
         </form>
-      </motion.div>
+      </div>
     </div>
   );
 }
 
-// ==========================================================
-// 🔝 HEADER PRINCIPAL
-// ==========================================================
-export default function Header() {
+/* ===================== HEADER ===================== */
+export default function HeaderComptable() {
   const navigate = useNavigate();
+  const { user, logout, changePassword } = useAuth();
+
   const menuRef = useRef(null);
+  const notifRef = useRef(null);
 
   const [showMenu, setShowMenu] = useState(false);
   const [showPwdModal, setShowPwdModal] = useState(false);
-  const [user, setUser] = useState(null);
+  const [showNotif, setShowNotif] = useState(false);
+  const [notifications, setNotifications] = useState([]);
 
-  // Charger utilisateur
   useEffect(() => {
-    instance
-      .get("/mon-profil")
-      .then((res) => setUser(res.data))
-      .catch(() => navigate("/login"));
+    try {
+      const data =
+        JSON.parse(
+          sessionStorage.getItem("notificationsComptable")
+        ) || [
+          { id: 1, text: "Nouvelle demande de décaissement (Boutique)" },
+          { id: 2, text: "Vente spéciale validée (Dépôt)" },
+        ];
+      setNotifications(data);
+    } catch (error) {
+      console.error("[HeaderComptable] Erreur chargement notifications :", error);
+    }
   }, []);
 
-  // Fermer menu au clic extérieur
   useEffect(() => {
     const handler = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) {
+      if (
+        !menuRef.current?.contains(e.target) &&
+        !notifRef.current?.contains(e.target)
+      ) {
         setShowMenu(false);
+        setShowNotif(false);
       }
     };
+
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  // Déconnexion
-  const handleLogout = async () => {
-    try {
-      await instance.post("/auth/logout");
-    } catch {}
-    localStorage.clear();
-    navigate("/login");
-  };
+  }, [navigate]);
 
   if (!user) return null;
 
   return (
     <>
-      <header className="bg-white border-b shadow-sm px-6 h-16 flex items-center justify-between">
-        {/* LOGO */}
-        <div className="flex items-center gap-2">
-          <span className="text-xl font-extrabold text-[#472EAD]">LP</span>
-          <span className="text-xl font-extrabold text-[#F58020]">D</span>
-          <span className="text-sm text-gray-500 ml-2">Interface Comptable</span>
+      {/* HEADER */}
+      <header className="bg-white h-16 px-6 flex items-center justify-between shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="text-xl font-extrabold text-[#472EAD]">
+            LP<span className="text-[#F58020]">D</span>
+          </div>
+          <div>
+            <p className="font-semibold text-[#472EAD]">Interface Comptable</p>
+            <p className="text-xs text-gray-500">
+              Suivi financier & mouvements
+            </p>
+          </div>
         </div>
 
-        {/* USER MENU */}
-        <div className="relative" ref={menuRef}>
-          <button
-            onClick={() => setShowMenu(!showMenu)}
-            className="flex items-center gap-2 border rounded-full px-3 py-1.5"
-          >
-            <div className="w-8 h-8 rounded-full bg-[#472EAD] text-white flex items-center justify-center">
-              {getInitials(user.prenom, user.nom)}
-            </div>
+        <div className="flex items-center gap-4">
+          {/* NOTIFICATIONS */}
+          <div className="relative" ref={notifRef}>
+            <button
+              onClick={() => setShowNotif(!showNotif)}
+              className="relative p-2 rounded-full hover:bg-gray-100"
+            >
+              <Bell size={20} />
+              {notifications.length > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs px-1.5 rounded-full">
+                  {notifications.length}
+                </span>
+              )}
+            </button>
 
-            <div className="hidden sm:flex flex-col text-left">
-              <span className="text-xs font-semibold">
-                {user.prenom} {user.nom}
-              </span>
-              <span className="text-[10px] text-gray-500">{user.role}</span>
-            </div>
+            <AnimatePresence>
+              {showNotif && (
+                <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-lg p-3 z-50">
+                  <h4 className="font-semibold mb-2 text-[#472EAD]">
+                    Notifications
+                  </h4>
 
-            <ChevronDown size={14} />
-          </button>
+                  {notifications.length === 0 ? (
+                    <p className="text-sm text-gray-500">Aucune alerte</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {notifications.map((n) => (
+                        <li
+                          key={n.id}
+                          className="text-sm p-2 rounded bg-gray-50"
+                        >
+                          {n.text}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </AnimatePresence>
+          </div>
 
-          <AnimatePresence>
-            {showMenu && (
-              <motion.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 8 }}
-                className="absolute right-0 mt-2 w-48 bg-white border rounded-lg shadow-lg p-2"
-              >
-                <button
-                  onClick={() => {
-                    setShowPwdModal(true);
-                    setShowMenu(false);
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-sm"
-                >
-                  <Key size={14} /> Changer mot de passe
-                </button>
+          {/* USER MENU */}
+          <div className="relative" ref={menuRef}>
+            <button
+              onClick={() => setShowMenu(!showMenu)}
+              className="flex items-center gap-3 border rounded-full px-3 py-1.5"
+            >
+              <div className="w-8 h-8 rounded-full bg-[#472EAD] text-white flex items-center justify-center">
+                {getInitials(user.prenom, user.nom)}
+              </div>
 
-                <button
-                  onClick={handleLogout}
-                  className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-sm text-[#F58020]"
-                >
-                  <LogOut size={14} /> Déconnexion
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
+              <div className="hidden sm:block text-left">
+                <p className="text-sm font-semibold">
+                  {user.prenom} {user.nom}
+                </p>
+                <p className="text-xs text-gray-500">{user.role}</p>
+              </div>
+
+              <ChevronDown size={14} />
+            </button>
+
+            <AnimatePresence>
+              {showMenu && (
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg p-2">
+                  <button
+                    onClick={() => {
+                      setShowPwdModal(true);
+                      setShowMenu(false);
+                    }}
+                    className="w-full px-3 py-2 text-sm hover:bg-gray-50 flex gap-2"
+                  >
+                    <Key size={14} /> Changer mot de passe
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      logout();
+                      navigate("/login");
+                    }}
+                    className="w-full px-3 py-2 text-sm hover:bg-gray-50 text-[#F58020] flex gap-2"
+                  >
+                    <LogOut size={14} /> Déconnexion
+                  </button>
+                </div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
       </header>
 
-      {/* MODAL */}
+      <div className="h-[1px] bg-gradient-to-r from-[#472EAD] via-[#5A3BE6] to-[#F58020]" />
+
       <PasswordModal
         open={showPwdModal}
         onClose={() => setShowPwdModal(false)}
+        changePassword={changePassword}
       />
     </>
   );

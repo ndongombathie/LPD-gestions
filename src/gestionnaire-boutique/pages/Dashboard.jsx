@@ -72,13 +72,13 @@ const Dashboard = () => {
           </div>
           <div className="flex gap-2">
             <button
-              onClick={() => (window.location.href = "/gestionnaire/historique")}
+              onClick={() => (window.location.href = "/gestionnaire_boutique/historique")}
               className="px-4 py-2 bg-white text-[#472EAD] border border-[#472EAD] rounded-lg hover:bg-[#F7F5FF] font-medium shadow-sm"
             >
               Voir l'historique
             </button>
             <button
-              onClick={() => (window.location.href = "/gestionnaire/alertes")}
+              onClick={() => (window.location.href = "/gestionnaire_boutique/alertes")}
               className="px-4 py-2 bg-[#F58020] text-white rounded-lg hover:bg-[#e67e1a] font-medium shadow-sm"
             >
               Voir les alertes
@@ -134,7 +134,7 @@ const Dashboard = () => {
                 Alertes & Notifications
               </h3>
               <button
-                onClick={() => (window.location.href = "/gestionnaire/alertes")}
+                onClick={() => (window.location.href = "/gestionnaire_boutique/alertes")}
                 className="text-sm px-3 py-1 bg-[#F58020] text-white rounded hover:bg-[#e67e1a] transition"
               >
                 Ouvrir
@@ -152,7 +152,7 @@ const Dashboard = () => {
                   {alertes.map((alert, idx) => (
                     <button
                       key={idx}
-                      onClick={() => (window.location.href = "/gestionnaire/alertes")}
+                      onClick={() => (window.location.href = "/gestionnaire_boutique/alertes")}
                       className="w-full text-left p-3 border-l-4 border-[#F58020] bg-orange-50 rounded hover:bg-orange-100 transition"
                     >
                       <div className="text-gray-900 font-medium text-sm flex items-center gap-2">

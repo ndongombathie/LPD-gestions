@@ -1,6 +1,7 @@
 // src/gestionnaire-depot/pages/Products.jsx
 
 import React, { useEffect, useState } from "react";
+import "../styles/depot-fix.css";
 import {
   FaSearch,
   FaPlus,
@@ -35,10 +36,14 @@ import {
   FaFilter,
   FaSortAmountDown,
   FaChevronDown,
+  FaAngleLeft,
+  FaAngleRight,
+  FaAngleDoubleLeft,
+  FaAngleDoubleRight,
 } from "react-icons/fa";
 
 /* =========================================================================
-   1) DONNÉES DE BASE + LOCALSTORAGE
+   1) DONNÉES DE BASE + LOCALSTORAGE - VERSION CORRIGÉE
    ========================================================================= */
 
 const INITIAL_PRODUCTS = [
@@ -97,46 +102,86 @@ const STORAGE_KEY_PRODUCTS = "lpd_products";
 const STORAGE_KEY_HISTORY = "lpd_products_history";
 const STORAGE_KEY_CATEGORIES = "lpd_categories";
 
+// Fonctions de chargement CORRIGÉES - Ne réinitialisent JAMAIS si des données existent
 const loadProducts = () => {
   const raw = localStorage.getItem(STORAGE_KEY_PRODUCTS);
-  if (!raw) return INITIAL_PRODUCTS;
+  
+  // Si aucune donnée n'existe, retourner les données initiales
+  if (!raw) {
+    return INITIAL_PRODUCTS;
+  }
+  
   try {
-    return JSON.parse(raw);
-  } catch {
+    const parsed = JSON.parse(raw);
+    
+    // Vérifier que c'est un tableau non vide
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return parsed;
+    } else {
+      return INITIAL_PRODUCTS;
+    }
+  } catch (error) {
     return INITIAL_PRODUCTS;
   }
 };
 
 const saveProducts = (list) => {
-  localStorage.setItem(STORAGE_KEY_PRODUCTS, JSON.stringify(list));
+  try {
+    localStorage.setItem(STORAGE_KEY_PRODUCTS, JSON.stringify(list));
+  } catch (error) {
+    console.error("Erreur lors de la sauvegarde des produits:", error);
+  }
 };
 
 const loadHistory = () => {
   const raw = localStorage.getItem(STORAGE_KEY_HISTORY);
-  if (!raw) return [];
+  if (!raw) {
+    return [];
+  }
   try {
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
   }
 };
 
 const saveHistory = (list) => {
-  localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(list));
+  try {
+    localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(list));
+  } catch (error) {
+    console.error("Erreur lors de la sauvegarde de l'historique:", error);
+  }
 };
 
 const loadCategories = () => {
   const raw = localStorage.getItem(STORAGE_KEY_CATEGORIES);
-  if (!raw) return INITIAL_CATEGORIES;
+  
+  // Si aucune donnée n'existe, retourner les données initiales
+  if (!raw) {
+    return INITIAL_CATEGORIES;
+  }
+  
   try {
-    return JSON.parse(raw);
-  } catch {
+    const parsed = JSON.parse(raw);
+    
+    // Vérifier que c'est un tableau non vide
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return parsed;
+    } else {
+      return INITIAL_CATEGORIES;
+    }
+  } catch (error) {
     return INITIAL_CATEGORIES;
   }
 };
 
 const saveCategories = (list) => {
-  localStorage.setItem(STORAGE_KEY_CATEGORIES, JSON.stringify(list));
+  try {
+    localStorage.setItem(STORAGE_KEY_CATEGORIES, JSON.stringify(list));
+  } catch (error) {
+    console.error("Erreur lors de la sauvegarde des catégories:", error);
+  }
 };
 
 /* =========================================================================
@@ -202,6 +247,7 @@ export default function Products() {
   const [products, setProducts] = useState([]);
   const [history, setHistory] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
 
   const [activeTab, setActiveTab] = useState("liste"); // "liste" | "ajustement" | "historique" | "categories"
 
@@ -224,8 +270,6 @@ export default function Products() {
 
   // Historique
   const [historySearch, setHistorySearch] = useState("");
-  const [historyPage, setHistoryPage] = useState(1);
-  const HISTORY_PAGE_SIZE = 10;
 
   // Gestion des catégories
   const [categoryModal, setCategoryModal] = useState(null); // "add" | "edit" | null
@@ -234,34 +278,66 @@ export default function Products() {
   const [searchCategory, setSearchCategory] = useState("");
   const [categorySearchText, setCategorySearchText] = useState("");
 
-  /* ------------------ Chargement & sauvegarde ------------------ */
+  /* ==================== PAGINATION ==================== */
+  const [pageSize, setPageSize] = useState(10);
+  
+  // Pagination pour l'onglet Liste des Produits
+  const [productsPage, setProductsPage] = useState(1);
+  
+  // Pagination pour l'onglet Ajustement (tous les produits)
+  const [adjustmentPage, setAdjustmentPage] = useState(1);
+  
+  // Pagination pour l'onglet Historique
+  const [historyPage, setHistoryPage] = useState(1);
+  
+  // Pagination pour l'onglet Catégories
+  const [categoriesPage, setCategoriesPage] = useState(1);
 
+  /* ------------------ Chargement des données - CORRIGÉ ------------------ */
   useEffect(() => {
-    setProducts(loadProducts());
-    setHistory(loadHistory());
-    setCategories(loadCategories());
+    // Charger les données depuis localStorage
+    const loadedProducts = loadProducts();
+    const loadedCategories = loadCategories();
+    const loadedHistory = loadHistory();
+    
+    // Mettre à jour l'état
+    setProducts(loadedProducts);
+    setCategories(loadedCategories);
+    setHistory(loadedHistory);
+    
+    // Marquer comme chargé
+    setIsDataLoaded(true);
   }, []);
 
+  /* ------------------ Sauvegarde automatique ------------------ */
   useEffect(() => {
-    saveProducts(products);
-  }, [products]);
+    if (isDataLoaded) {
+      saveProducts(products);
+    }
+  }, [products, isDataLoaded]);
 
   useEffect(() => {
-    saveHistory(history);
-  }, [history]);
+    if (isDataLoaded) {
+      saveHistory(history);
+    }
+  }, [history, isDataLoaded]);
 
   useEffect(() => {
-    saveCategories(categories);
-  }, [categories]);
+    if (isDataLoaded) {
+      saveCategories(categories);
+    }
+  }, [categories, isDataLoaded]);
 
   /* ------------------ Mise à jour du compteur de produits par catégorie ------------------ */
   useEffect(() => {
-    const updatedCategories = categories.map(cat => {
-      const productCount = products.filter(p => p.category === cat.name).length;
-      return { ...cat, productCount };
-    });
-    setCategories(updatedCategories);
-  }, [products]);
+    if (isDataLoaded && products.length > 0) {
+      const updatedCategories = categories.map(cat => {
+        const productCount = products.filter(p => p.category === cat.name).length;
+        return { ...cat, productCount };
+      });
+      setCategories(updatedCategories);
+    }
+  }, [products, isDataLoaded]);
 
   /* ------------------ Enrichissement produits ------------------ */
 
@@ -410,12 +486,6 @@ export default function Products() {
     setDeleteCategoryId(null);
   };
 
-  // Filtrer les catégories pour la recherche
-  const filteredCategories = categories.filter((cat) =>
-    cat.name.toLowerCase().includes(searchCategory.toLowerCase()) ||
-    (cat.description && cat.description.toLowerCase().includes(searchCategory.toLowerCase()))
-  );
-
   /* =========================================================================
      6) ONGLET 1 : LISTE DES PRODUITS
      ========================================================================= */
@@ -441,6 +511,13 @@ export default function Products() {
         return b.name.localeCompare(a.name, "fr", { sensitivity: "base" });
       return 0;
     });
+
+  // Calculs de pagination pour les produits
+  const totalProductsPages = Math.max(1, Math.ceil(filteredProducts.length / pageSize));
+  const currentProductsPage = Math.min(productsPage, totalProductsPages);
+  const startProductsIndex = (currentProductsPage - 1) * pageSize;
+  const endProductsIndex = startProductsIndex + pageSize;
+  const paginatedProducts = filteredProducts.slice(startProductsIndex, endProductsIndex);
 
   const openAddModal = () => {
     setModalType("add");
@@ -598,6 +675,13 @@ export default function Products() {
     );
   });
 
+  // Pagination pour l'ajustement
+  const totalAdjustmentPages = Math.max(1, Math.ceil(allAdjustFiltered.length / pageSize));
+  const currentAdjustmentPage = Math.min(adjustmentPage, totalAdjustmentPages);
+  const startAdjustmentIndex = (currentAdjustmentPage - 1) * pageSize;
+  const endAdjustmentIndex = startAdjustmentIndex + pageSize;
+  const paginatedAdjustment = allAdjustFiltered.slice(startAdjustmentIndex, endAdjustmentIndex);
+
   const openAdjust = (product, action) => {
     setAdjustProduct(product);
     setAdjustAction(action); // "reappro" | "diminue"
@@ -687,32 +771,163 @@ export default function Products() {
     );
   });
 
-  const totalHistoryPages = Math.max(
-    1,
-    Math.ceil(filteredHistory.length / HISTORY_PAGE_SIZE)
+  // Pagination pour l'historique
+  const totalHistoryPages = Math.max(1, Math.ceil(filteredHistory.length / pageSize));
+  const currentHistoryPage = Math.min(historyPage, totalHistoryPages);
+  const startHistoryIndex = (currentHistoryPage - 1) * pageSize;
+  const endHistoryIndex = startHistoryIndex + pageSize;
+  const paginatedHistory = filteredHistory.slice(startHistoryIndex, endHistoryIndex);
+
+  /* =========================================================================
+     9) ONGLET 4 : GESTION DES CATÉGORIES
+     ========================================================================= */
+
+  const filteredCategories = categories.filter((cat) =>
+    cat.name.toLowerCase().includes(searchCategory.toLowerCase()) ||
+    (cat.description && cat.description.toLowerCase().includes(searchCategory.toLowerCase()))
   );
 
-  const page = Math.min(historyPage, totalHistoryPages);
-  const startIndex = (page - 1) * HISTORY_PAGE_SIZE;
-  const visibleHistory = filteredHistory.slice(
-    startIndex,
-    startIndex + HISTORY_PAGE_SIZE
-  );
+  // Pagination pour les catégories
+  const totalCategoriesPages = Math.max(1, Math.ceil(filteredCategories.length / pageSize));
+  const currentCategoriesPage = Math.min(categoriesPage, totalCategoriesPages);
+  const startCategoriesIndex = (currentCategoriesPage - 1) * pageSize;
+  const endCategoriesIndex = startCategoriesIndex + pageSize;
+  const paginatedCategories = filteredCategories.slice(startCategoriesIndex, endCategoriesIndex);
 
-  const goPrevHistoryPage = () => {
-    setHistoryPage((prev) => Math.max(1, prev - 1));
-  };
+  /* =========================================================================
+     10) FONCTIONS UTILES DE PAGINATION
+     ========================================================================= */
 
-  const goNextHistoryPage = () => {
-    setHistoryPage((prev) => Math.min(totalHistoryPages, prev + 1));
+  // Fonction générique pour le composant de pagination
+  const Pagination = ({ currentPage, totalPages, onPageChange, itemsCount, filteredCount, pageSize }) => {
+    const startItem = (currentPage - 1) * pageSize + 1;
+    const endItem = Math.min(currentPage * pageSize, filteredCount);
+    
+    const getPageNumbers = () => {
+      const pages = [];
+      const maxVisible = 5;
+      
+      if (totalPages <= maxVisible) {
+        for (let i = 1; i <= totalPages; i++) pages.push(i);
+      } else {
+        if (currentPage <= 3) {
+          for (let i = 1; i <= 4; i++) pages.push(i);
+          pages.push('...');
+          pages.push(totalPages);
+        } else if (currentPage >= totalPages - 2) {
+          pages.push(1);
+          pages.push('...');
+          for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
+        } else {
+          pages.push(1);
+          pages.push('...');
+          pages.push(currentPage - 1);
+          pages.push(currentPage);
+          pages.push(currentPage + 1);
+          pages.push('...');
+          pages.push(totalPages);
+        }
+      }
+      
+      return pages;
+    };
+
+    return (
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 p-3 bg-gray-50 rounded-lg">
+        <div className="text-sm text-gray-600">
+          Affichage de <span className="font-semibold">{startItem}</span> à <span className="font-semibold">{endItem}</span> sur <span className="font-semibold">{filteredCount}</span> éléments
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => onPageChange(1)}
+            disabled={currentPage === 1}
+            className="p-2 rounded border bg-white hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Première page"
+          >
+            <FaAngleDoubleLeft className="text-sm" />
+          </button>
+          
+          <button
+            onClick={() => onPageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="p-2 rounded border bg-white hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Page précédente"
+          >
+            <FaAngleLeft className="text-sm" />
+          </button>
+          
+          <div className="flex items-center gap-1">
+            {getPageNumbers().map((page, index) => (
+              page === '...' ? (
+                <span key={`ellipsis-${index}`} className="px-2 text-gray-400">...</span>
+              ) : (
+                <button
+                  key={page}
+                  onClick={() => onPageChange(page)}
+                  className={`w-8 h-8 rounded border flex items-center justify-center text-sm ${
+                    currentPage === page
+                      ? 'bg-[#472EAD] text-white border-[#472EAD]'
+                      : 'bg-white text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  {page}
+                </button>
+              )
+            ))}
+          </div>
+          
+          <button
+            onClick={() => onPageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="p-2 rounded border bg-white hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Page suivante"
+          >
+            <FaAngleRight className="text-sm" />
+          </button>
+          
+          <button
+            onClick={() => onPageChange(totalPages)}
+            disabled={currentPage === totalPages}
+            className="p-2 rounded border bg-white hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Dernière page"
+          >
+            <FaAngleDoubleRight className="text-sm" />
+          </button>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-600">Éléments par page :</span>
+          <select
+            value={pageSize}
+            onChange={(e) => {
+              const newSize = Number(e.target.value);
+              setPageSize(newSize);
+              // Réinitialiser à la page 1 quand on change la taille
+              if (activeTab === "liste") setProductsPage(1);
+              if (activeTab === "ajustement") setAdjustmentPage(1);
+              if (activeTab === "historique") setHistoryPage(1);
+              if (activeTab === "categories") setCategoriesPage(1);
+            }}
+            className="text-sm border rounded px-2 py-1 bg-white"
+          >
+            <option value="5">5</option>
+            <option value="10">10</option>
+            <option value="20">20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+        </div>
+      </div>
+    );
   };
 
   /* =========================================================================
-     9) RENDER
+     11) RENDER
      ========================================================================= */
 
   return (
-    <div className="space-y-6">
+    <div className="depot-page space-y-6">
       {/* HEADER + ONGLETS */}
       <div className="flex justify-between items-center">
         <h1 className="text-xl font-semibold text-[#472EAD] flex items-center gap-2">
@@ -743,7 +958,10 @@ export default function Products() {
 
       <div className="flex items-center gap-6 border-b pb-2 text-sm font-medium overflow-x-auto">
         <button
-          onClick={() => setActiveTab("liste")}
+          onClick={() => {
+            setActiveTab("liste");
+            setProductsPage(1); // Réinitialiser à la page 1
+          }}
           className={`pb-2 whitespace-nowrap ${
             activeTab === "liste"
               ? "text-[#472EAD] border-b-2 border-[#472EAD]"
@@ -757,7 +975,10 @@ export default function Products() {
         </button>
 
         <button
-          onClick={() => setActiveTab("ajustement")}
+          onClick={() => {
+            setActiveTab("ajustement");
+            setAdjustmentPage(1); // Réinitialiser à la page 1
+          }}
           className={`pb-2 whitespace-nowrap ${
             activeTab === "ajustement"
               ? "text-[#472EAD] border-b-2 border-[#472EAD]"
@@ -771,7 +992,10 @@ export default function Products() {
         </button>
 
         <button
-          onClick={() => setActiveTab("historique")}
+          onClick={() => {
+            setActiveTab("historique");
+            setHistoryPage(1); // Réinitialiser à la page 1
+          }}
           className={`pb-2 whitespace-nowrap ${
             activeTab === "historique"
               ? "text-[#472EAD] border-b-2 border-[#472EAD]"
@@ -785,7 +1009,10 @@ export default function Products() {
         </button>
 
         <button
-          onClick={() => setActiveTab("categories")}
+          onClick={() => {
+            setActiveTab("categories");
+            setCategoriesPage(1); // Réinitialiser à la page 1
+          }}
           className={`pb-2 whitespace-nowrap ${
             activeTab === "categories"
               ? "text-[#472EAD] border-b-2 border-[#472EAD]"
@@ -812,34 +1039,49 @@ export default function Products() {
               placeholder="Nom, code-barre ou catégorie..."
               className="flex-1 text-sm outline-none"
               value={searchProducts}
-              onChange={(e) => setSearchProducts(e.target.value)}
+              onChange={(e) => {
+                setSearchProducts(e.target.value);
+                setProductsPage(1); // Réinitialiser à la page 1 quand on recherche
+              }}
             />
           </div>
 
           {/* Filtres */}
-          <div className="flex justify-end gap-3 text-sm">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="border rounded px-3 py-2 bg-white shadow-sm focus:ring-2 focus:ring-[#472EAD] focus:border-[#472EAD]"
-            >
-              <option value="Tous">Tous</option>
-              <option value="Normal">Normal</option>
-              <option value="Faible">Faible</option>
-              <option value="Critique">Critique</option>
-              <option value="Rupture">Rupture</option>
-            </select>
-
-            <div className="flex items-center border rounded px-3 py-2 bg-white shadow-sm gap-2">
-              <FaSortAlphaDown className="text-[#472EAD]" />
+          <div className="flex justify-between items-center gap-3 text-sm">
+            <div className="flex gap-3">
               <select
-                value={sortMode}
-                onChange={(e) => setSortMode(e.target.value)}
-                className="outline-none text-sm bg-transparent"
+                value={statusFilter}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value);
+                  setProductsPage(1); // Réinitialiser à la page 1 quand on change le filtre
+                }}
+                className="border rounded px-3 py-2 bg-white shadow-sm focus:ring-2 focus:ring-[#472EAD] focus:border-[#472EAD]"
               >
-                <option value="name-asc">Nom (A-Z)</option>
-                <option value="name-desc">Nom (Z-A)</option>
+                <option value="Tous">Tous</option>
+                <option value="Normal">Normal</option>
+                <option value="Faible">Faible</option>
+                <option value="Critique">Critique</option>
+                <option value="Rupture">Rupture</option>
               </select>
+
+              <div className="flex items-center border rounded px-3 py-2 bg-white shadow-sm gap-2">
+                <FaSortAlphaDown className="text-[#472EAD]" />
+                <select
+                  value={sortMode}
+                  onChange={(e) => {
+                    setSortMode(e.target.value);
+                    setProductsPage(1); // Réinitialiser à la page 1 quand on change le tri
+                  }}
+                  className="outline-none text-sm bg-transparent"
+                >
+                  <option value="name-asc">Nom (A-Z)</option>
+                  <option value="name-desc">Nom (Z-A)</option>
+                </select>
+              </div>
+            </div>
+            
+            <div className="text-sm text-gray-600">
+              {filteredProducts.length} produit(s) trouvé(s)
             </div>
           </div>
 
@@ -953,7 +1195,7 @@ export default function Products() {
               </thead>
 
               <tbody>
-                {filteredProducts.map((p) => (
+                {paginatedProducts.map((p) => (
                   <tr key={p.id} className="border-t hover:bg-[#F7F5FF] transition-colors">
                     <td className="p-3 font-medium text-[#472EAD]">{p.name}</td>
                     <td className="p-3 text-center">{p.barcode}</td>
@@ -996,19 +1238,33 @@ export default function Products() {
                   </tr>
                 ))}
 
-                {filteredProducts.length === 0 && (
+                {paginatedProducts.length === 0 && (
                   <tr>
                     <td
                       colSpan={10}
                       className="p-4 text-center text-gray-400 italic"
                     >
-                      Aucun produit trouvé.
+                      {filteredProducts.length === 0 
+                        ? "Aucun produit trouvé avec les filtres actuels." 
+                        : "Aucun produit sur cette page."}
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
+
+          {/* Pagination pour les produits */}
+          {filteredProducts.length > 0 && (
+            <Pagination
+              currentPage={currentProductsPage}
+              totalPages={totalProductsPages}
+              onPageChange={setProductsPage}
+              itemsCount={filteredProducts.length}
+              filteredCount={filteredProducts.length}
+              pageSize={pageSize}
+            />
+          )}
         </>
       )}
 
@@ -1025,7 +1281,10 @@ export default function Products() {
               placeholder="Rechercher un produit (alerte / tous les produits)..."
               className="flex-1 text-sm outline-none"
               value={searchProducts}
-              onChange={(e) => setSearchProducts(e.target.value)}
+              onChange={(e) => {
+                setSearchProducts(e.target.value);
+                setAdjustmentPage(1); // Réinitialiser à la page 1 quand on recherche
+              }}
             />
           </div>
 
@@ -1034,6 +1293,9 @@ export default function Products() {
             <h2 className="text-sm font-semibold text-[#472EAD] mb-2 flex items-center gap-2">
               <FaExclamationTriangle className="text-[#F58020]" />
               <span>Produits en alerte (Rupture, Critique, Faible)</span>
+              <span className="text-xs text-gray-500 ml-auto">
+                {alertFiltered.length} produit(s) en alerte
+              </span>
             </h2>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1250,10 +1512,15 @@ export default function Products() {
 
           {/* Tableau tous les produits */}
           <div className="mt-6">
-            <h2 className="text-sm font-semibold text-[#472EAD] mb-2 flex items-center gap-2">
-              <FaBoxes className="text-[#472EAD]" />
-              <span>Tous les produits</span>
-            </h2>
+            <div className="flex justify-between items-center mb-2">
+              <h2 className="text-sm font-semibold text-[#472EAD] flex items-center gap-2">
+                <FaBoxes className="text-[#472EAD]" />
+                <span>Tous les produits</span>
+              </h2>
+              <div className="text-sm text-gray-600">
+                {allAdjustFiltered.length} produit(s) trouvé(s)
+              </div>
+            </div>
             <div className="bg-white rounded-xl shadow-sm border overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-[#F7F5FF] border-b text-gray-600">
@@ -1297,7 +1564,7 @@ export default function Products() {
                   </tr>
                 </thead>
                 <tbody>
-                  {allAdjustFiltered.map((p) => (
+                  {paginatedAdjustment.map((p) => (
                     <tr key={p.id} className="border-t hover:bg-[#F7F5FF] transition-colors">
                       <td className="p-3 font-medium text-[#472EAD]">{p.name}</td>
                       <td className="p-3 text-center">{p.barcode}</td>
@@ -1329,13 +1596,15 @@ export default function Products() {
                     </tr>
                   ))}
 
-                  {allAdjustFiltered.length === 0 && (
+                  {paginatedAdjustment.length === 0 && (
                     <tr>
                       <td
                         colSpan={6}
                         className="p-4 text-center text-gray-400 italic"
                       >
-                        Aucun produit trouvé.
+                        {allAdjustFiltered.length === 0 
+                          ? "Aucun produit trouvé avec les filtres actuels." 
+                          : "Aucun produit sur cette page."}
                       </td>
                     </tr>
                   )}
@@ -1343,6 +1612,18 @@ export default function Products() {
               </table>
             </div>
           </div>
+
+          {/* Pagination pour l'ajustement */}
+          {allAdjustFiltered.length > 0 && (
+            <Pagination
+              currentPage={currentAdjustmentPage}
+              totalPages={totalAdjustmentPages}
+              onPageChange={setAdjustmentPage}
+              itemsCount={allAdjustFiltered.length}
+              filteredCount={allAdjustFiltered.length}
+              pageSize={pageSize}
+            />
+          )}
         </>
       )}
 
@@ -1361,9 +1642,52 @@ export default function Products() {
               value={historySearch}
               onChange={(e) => {
                 setHistorySearch(e.target.value);
-                setHistoryPage(1);
+                setHistoryPage(1); // Réinitialiser à la page 1 quand on recherche
               }}
             />
+          </div>
+
+          {/* Statistiques historique */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="bg-white rounded-xl shadow-sm border p-4 hover:shadow-md transition">
+              <p className="text-xs text-gray-500 flex items-center gap-1">
+                <FaHistory className="text-[#472EAD]" />
+                <span>Total Historique</span>
+              </p>
+              <p className="text-2xl font-semibold mt-2 text-[#472EAD]">
+                {history.length}
+              </p>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border p-4 hover:shadow-md transition">
+              <p className="text-xs text-gray-500 flex items-center gap-1">
+                <FaPlus className="text-green-600" />
+                <span>Créations</span>
+              </p>
+              <p className="text-2xl font-semibold mt-2 text-green-600">
+                {history.filter(h => h.type === "Création").length}
+              </p>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border p-4 hover:shadow-md transition">
+              <p className="text-xs text-gray-500 flex items-center gap-1">
+                <FaArrowUp className="text-green-600" />
+                <span>Réapprovisionnements</span>
+              </p>
+              <p className="text-2xl font-semibold mt-2 text-green-600">
+                {history.filter(h => h.type === "Réapprovisionnement").length}
+              </p>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border p-4 hover:shadow-md transition">
+              <p className="text-xs text-gray-500 flex items-center gap-1">
+                <FaArrowDown className="text-orange-500" />
+                <span>Diminutions</span>
+              </p>
+              <p className="text-2xl font-semibold mt-2 text-orange-500">
+                {history.filter(h => h.type === "Diminution").length}
+              </p>
+            </div>
           </div>
 
           {/* Tableau historique */}
@@ -1422,7 +1746,7 @@ export default function Products() {
                 </tr>
               </thead>
               <tbody>
-                {visibleHistory.map((h) => (
+                {paginatedHistory.map((h) => (
                   <tr key={h.id} className="border-t hover:bg-[#F7F5FF] transition-colors">
                     <td className="p-3 font-medium text-[#472EAD]">{h.productName}</td>
                     <td className="p-3 text-center">
@@ -1446,13 +1770,15 @@ export default function Products() {
                   </tr>
                 ))}
 
-                {visibleHistory.length === 0 && (
+                {paginatedHistory.length === 0 && (
                   <tr>
                     <td
                       colSpan={8}
                       className="p-4 text-center text-gray-400 italic"
                     >
-                      Aucun historique pour l'instant.
+                      {filteredHistory.length === 0 
+                        ? "Aucun historique trouvé avec les filtres actuels." 
+                        : "Aucun historique sur cette page."}
                     </td>
                   </tr>
                 )}
@@ -1461,28 +1787,16 @@ export default function Products() {
           </div>
 
           {/* Pagination historique */}
-          <div className="flex justify-between items-center mt-3 text-sm">
-            <p className="text-gray-500">
-              Page {page} / {totalHistoryPages} —{" "}
-              {filteredHistory.length} enregistrements
-            </p>
-            <div className="flex gap-2">
-              <button
-                className="px-3 py-1 border rounded disabled:opacity-50 hover:bg-[#F7F5FF]"
-                onClick={goPrevHistoryPage}
-                disabled={page === 1}
-              >
-                Précédent
-              </button>
-              <button
-                className="px-3 py-1 border rounded disabled:opacity-50 hover:bg-[#F7F5FF]"
-                onClick={goNextHistoryPage}
-                disabled={page === totalHistoryPages}
-              >
-                Suivant
-              </button>
-            </div>
-          </div>
+          {filteredHistory.length > 0 && (
+            <Pagination
+              currentPage={currentHistoryPage}
+              totalPages={totalHistoryPages}
+              onPageChange={setHistoryPage}
+              itemsCount={filteredHistory.length}
+              filteredCount={filteredHistory.length}
+              pageSize={pageSize}
+            />
+          )}
         </>
       )}
 
@@ -1499,7 +1813,10 @@ export default function Products() {
               placeholder="Rechercher une catégorie par nom ou description..."
               className="flex-1 text-sm outline-none"
               value={searchCategory}
-              onChange={(e) => setSearchCategory(e.target.value)}
+              onChange={(e) => {
+                setSearchCategory(e.target.value);
+                setCategoriesPage(1); // Réinitialiser à la page 1 quand on recherche
+              }}
             />
             <FaFilter className="text-[#472EAD]" />
           </div>
@@ -1573,7 +1890,7 @@ export default function Products() {
                 </tr>
               </thead>
               <tbody>
-                {filteredCategories.map((cat) => (
+                {paginatedCategories.map((cat) => (
                   <tr key={cat.id} className="border-t hover:bg-[#F7F5FF] transition-colors">
                     <td className="p-3 font-medium text-[#472EAD]">{cat.name}</td>
                     <td className="p-3 text-gray-600">
@@ -1615,19 +1932,33 @@ export default function Products() {
                   </tr>
                 ))}
 
-                {filteredCategories.length === 0 && (
+                {paginatedCategories.length === 0 && (
                   <tr>
                     <td
                       colSpan={4}
                       className="p-4 text-center text-gray-400 italic"
                     >
-                      Aucune catégorie trouvée.
+                      {filteredCategories.length === 0 
+                        ? "Aucune catégorie trouvée avec les filtres actuels." 
+                        : "Aucune catégorie sur cette page."}
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
+
+          {/* Pagination pour les catégories */}
+          {filteredCategories.length > 0 && (
+            <Pagination
+              currentPage={currentCategoriesPage}
+              totalPages={totalCategoriesPages}
+              onPageChange={setCategoriesPage}
+              itemsCount={filteredCategories.length}
+              filteredCount={filteredCategories.length}
+              pageSize={pageSize}
+            />
+          )}
 
           <div className="mt-4 text-sm text-gray-500">
             <p className="flex items-center gap-2">

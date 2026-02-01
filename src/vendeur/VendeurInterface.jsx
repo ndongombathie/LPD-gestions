@@ -7,7 +7,7 @@ import HistoriqueCommandes from './pages/HistoriqueCommandes';
 import Footer from './Footer'; // Import du footer
 import './css/VendeurInterface.css';
 import { useNavigate } from 'react-router-dom';
-import { authAPI } from '../utils/api';
+import useAuth from '../hooks/useAuth';
 
 const VendeurInterface = () => {
   const [sectionActive, setSectionActive] = useState('tableau-de-bord');
@@ -17,6 +17,7 @@ const VendeurInterface = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
   const navigate = useNavigate();
+  const { logout } = useAuth();
 
   // Simuler la récupération des produits depuis l'API du gestionnaire de stock
   useEffect(() => {
@@ -299,7 +300,7 @@ const VendeurInterface = () => {
   const handleLogout = async () => {
     if (window.confirm('Êtes-vous sûr de vouloir vous déconnecter ?')) {
       try {
-        await authAPI.logout();
+        await logout();
       } catch (error) {
         console.error('Erreur lors de la déconnexion:', error);
       }

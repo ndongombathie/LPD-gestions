@@ -21,7 +21,7 @@ import {
   AlertCircle,
   X,
 } from "lucide-react";
-import { instance } from "../../utils/axios";
+import { stockAPI, produitsAPI } from '@/services/api';
 import {
   ResponsiveContainer,
   BarChart,

@@ -5,7 +5,7 @@ import { formatCurrency, formatDateTime } from '../../utils/formatters';
  * Composant pour l'impression de facture
  * À utiliser avec window.print() pour l'impression
  */
-const InvoicePrint = ({ ticket, onClose }) => {
+const InvoicePrint = ({ ticket }) => {
   if (!ticket) return null;
 
   return (

@@ -11,19 +11,35 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { instance } from "../../utils/axios";
-import { authAPI } from "../../utils/api";
+import useAuth from "../../hooks/useAuth";
 
 /* ==========================================================
-   CURRENT USER (depuis localStorage ou API)
+   CURRENT USER (depuis sessionStorage ou API)
 ========================================================== */
 const getCurrentUser = () => {
   try {
-    const u = localStorage.getItem("user");
+    const u = sessionStorage.getItem("user");
     return u ? JSON.parse(u) : null;
   } catch {
     return null;
   }
+};
+
+/* ==========================================================
+   VALIDATION UTILISATEUR
+========================================================== */
+const validateUser = (user) => {
+  if (!user) return null;
+  
+  const requiredFields = ['id', 'prenom', 'nom', 'role'];
+  const missingFields = requiredFields.filter(field => !user[field]);
+  
+  if (missingFields.length > 0) {
+    console.warn(`Utilisateur invalide : champs manquants ${missingFields.join(', ')}`);
+    return null;
+  }
+  
+  return user;
 };
 
 /* ==========================================================
@@ -55,7 +71,7 @@ const RACCOURCIS = [
 /* ==========================================================
    MODAL CHANGEMENT MOT DE PASSE
 ========================================================== */
-function PasswordModal({ isOpen, onClose, onSubmit }) {
+function PasswordModal({ isOpen, onClose, onSubmit, changePassword }) {
   const [formData, setFormData] = useState({
     currentPassword: "",
     newPassword: "",
@@ -93,14 +109,13 @@ function PasswordModal({ isOpen, onClose, onSubmit }) {
     setLoading(true);
     
     try {
-      await authAPI.changePassword(
+      await changePassword(
         formData.currentPassword,
         formData.newPassword,
         formData.confirmPassword
       );
       onSubmit({ success: true, message: "Mot de passe modifié avec succès" });
       
-      // Réinitialiser le formulaire
       setFormData({
         currentPassword: "",
         newPassword: "",
@@ -122,7 +137,6 @@ function PasswordModal({ isOpen, onClose, onSubmit }) {
       ...prev,
       [name]: value
     }));
-    // Effacer l'erreur quand l'utilisateur tape
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: "" }));
     }
@@ -191,7 +205,7 @@ function PasswordModal({ isOpen, onClose, onSubmit }) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-xs font-medium text-gray-700 mb-1">
                 Confirmer le nouveau mot de passe
               </label>
               <input
@@ -280,15 +294,26 @@ function Toasts({ toasts, remove }) {
 export default function Header() {
   const menuRef = useRef(null);
   const navigate = useNavigate();
+  const { user: authUser, logout, changePassword } = useAuth();
 
   const [showMenu, setShowMenu] = useState(false);
   const [showQuick, setShowQuick] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [showProfileModal, setShowProfileModal] = useState(false);
   const [toasts, setToasts] = useState([]);
-  const [user, setUser] = useState(() => getCurrentUser());
-  const [profileData, setProfileData] = useState({ prenom: user?.prenom || "", nom: user?.nom || "" });
+  
+  const [user, setUser] = useState(() => validateUser(authUser || getCurrentUser()));
+
+  useEffect(() => {
+    if (authUser) {
+      const validatedUser = validateUser(authUser);
+      setUser(validatedUser);
+      
+      if (validatedUser) {
+        sessionStorage.setItem("user", JSON.stringify(validatedUser));
+      }
+    }
+  }, [authUser]);
 
   const addToast = (type, title, message) => {
     const id = Date.now();
@@ -299,7 +324,6 @@ export default function Header() {
   const removeToast = (id) =>
     setToasts((prev) => prev.filter((t) => t.id !== id));
 
-  // Navigation vers une route
   const handleNavigate = (path, available) => {
     if (!available) {
       addToast("error", "Page non disponible", "Cette page n'est pas encore implémentée");
@@ -310,32 +334,29 @@ export default function Header() {
     setShowQuick(false);
   };
 
-  // Gestion de la déconnexion
+  // =============================================
+  // CORRECTION : DÉCONNEXION QUI FONCTIONNE
+  // =============================================
   const handleLogout = async () => {
     try {
-      await authAPI.logout();
+      await logout();
     } catch (e) {
       console.warn('Erreur déconnexion:', e);
     }
+    
+    // Nettoyage complet
+    sessionStorage.removeItem("user");
+    sessionStorage.removeItem("token");
+    localStorage.removeItem("user");
+    localStorage.removeItem("token");
+    
     addToast("success", "Déconnexion", "Vous avez été déconnecté avec succès");
     setShowMenu(false);
-    navigate("/login");
+    
+    // Redirection qui fonctionne toujours
+    window.location.href = "/";
   };
 
-  const handleSaveProfile = async () => {
-    try {
-      await instance.put('/mon-profil', { prenom: profileData.prenom, nom: profileData.nom });
-      const updated = { ...(user || {}), prenom: profileData.prenom, nom: profileData.nom };
-      localStorage.setItem('user', JSON.stringify(updated));
-      setUser(updated);
-      setShowProfileModal(false);
-      addToast('success', 'Profil', 'Profil mis à jour');
-    } catch (e) {
-      addToast('error', 'Profil', "Erreur lors de la mise à jour");
-    }
-  };
-
-  // Gestion du changement de mot de passe
   const handlePasswordSubmit = (result) => {
     setShowPasswordModal(false);
     addToast(
@@ -345,7 +366,6 @@ export default function Header() {
     );
   };
 
-  // Fermer menus au clic extérieur
   useEffect(() => {
     const handler = (e) => {
       if (menuRef.current && !menuRef.current.contains(e.target)) {
@@ -361,11 +381,9 @@ export default function Header() {
   return (
     <>
       <header ref={menuRef} className="sticky top-0 z-20 bg-white">
-        {/* Bande couleur */}
         <div className="h-[6px] bg-gradient-to-r from-[#472EAD] to-[#F58020]" />
 
         <div className="h-16 border-b shadow-sm px-6 flex items-center justify-between">
-          {/* LOGO */}
           <div className="flex items-center gap-3">
             <div 
               className="text-xl font-extrabold cursor-pointer"
@@ -388,22 +406,19 @@ export default function Header() {
             </div>
           </div>
 
-          {/* ACTIONS */}
           <div className="flex items-center gap-3">
-            {/* RACCOURCIS - seulement Produits, Mouvements, Fournisseurs, Rapports */}
             <div className="relative">
               <button
                 onClick={() => {
                   setShowQuick(!showQuick);
-                  setShowNotif(false);
                   setShowMenu(false);
+                  setShowNotif(false);
                 }}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg border text-sm hover:bg-[#F7F5FF]"
+                className="p-2 rounded-lg hover:bg-gray-100"
               >
-                <LayoutGrid size={18} className="text-[#472EAD]" />
-                <span className="hidden sm:inline">Raccourcis</span>
+                <LayoutGrid className="text-[#472EAD]" />
               </button>
-
+              
               {showQuick && (
                 <div className="absolute right-0 mt-2 w-64 bg-white border rounded-xl shadow-lg z-30 p-2 text-sm">
                   <p className="text-xs text-gray-500 px-3 py-2 mb-1 border-b">
@@ -436,7 +451,6 @@ export default function Header() {
               )}
             </div>
 
-            {/* NOTIFS (FAKE) */}
             <div className="relative">
               <button
                 onClick={() => {
@@ -467,7 +481,6 @@ export default function Header() {
               )}
             </div>
 
-            {/* PROFIL */}
             <div className="relative">
               <button
                 onClick={() => {
@@ -477,7 +490,9 @@ export default function Header() {
                 }}
                 className="flex items-center gap-2 px-2 py-1.5 rounded-full border hover:bg-gray-50"
               >
-                <div className="w-8 h-8 rounded-full bg-[#472EAD] text-white flex items-center justify-center font-bold">{(user?.prenom?.[0] || '')}{(user?.nom?.[0] || '')}</div>
+                <div className="w-8 h-8 rounded-full bg-[#472EAD] text-white flex items-center justify-center font-bold">
+                  {(user?.prenom?.[0] || '')}{(user?.nom?.[0] || '')}
+                </div>
 
                 <div className="hidden sm:flex flex-col text-left">
                   <span className="text-xs font-semibold">
@@ -493,13 +508,6 @@ export default function Header() {
 
               {showMenu && (
                 <div className="absolute right-0 mt-2 w-48 bg-white border shadow-lg rounded-lg p-2 text-sm z-30">
-                  <button
-                    onClick={() => { setProfileData({ prenom: user?.prenom || '', nom: user?.nom || '' }); setShowProfileModal(true); setShowMenu(false); }}
-                    className="w-full px-3 py-2 hover:bg-gray-50 flex gap-2 items-center rounded-md hover:bg-[#F7F5FF]"
-                  >
-                    <svg className="w-4 h-4 text-[#472EAD]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5.121 17.804A4 4 0 018 16h8a4 4 0 012.879 1.804M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                    <span>Mon profil</span>
-                  </button>
                   <button
                     onClick={() => {
                       setShowPasswordModal(true);
@@ -527,44 +535,12 @@ export default function Header() {
         </div>
       </header>
 
-      {/* MODAL CHANGEMENT MOT DE PASSE */}
       <PasswordModal
         isOpen={showPasswordModal}
         onClose={() => setShowPasswordModal(false)}
         onSubmit={handlePasswordSubmit}
+        changePassword={changePassword}
       />
-
-      {/* Modal Profil */}
-      {showProfileModal && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black bg-opacity-50">
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-bold text-gray-800">Mon profil</h2>
-                <button onClick={() => setShowProfileModal(false)} className="p-1 hover:bg-gray-100 rounded-full"><X size={20} /></button>
-              </div>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Prénom</label>
-                  <input className="w-full px-3 py-2 border rounded-lg" value={profileData.prenom} onChange={(e)=>setProfileData({ ...profileData, prenom: e.target.value })} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nom</label>
-                  <input className="w-full px-3 py-2 border rounded-lg" value={profileData.nom} onChange={(e)=>setProfileData({ ...profileData, nom: e.target.value })} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                  <input className="w-full px-3 py-2 border rounded-lg bg-gray-50" value={user?.email || ''} disabled />
-                </div>
-              </div>
-              <div className="flex justify-end gap-3 pt-6">
-                <button onClick={() => setShowProfileModal(false)} className="px-4 py-2 border rounded-lg">Annuler</button>
-                <button onClick={handleSaveProfile} className="px-4 py-2 bg-[#472EAD] text-white rounded-lg">Enregistrer</button>
-              </div>
-            </div>
-          </motion.div>
-        </div>
-      )}
 
       <Toasts toasts={toasts} remove={removeToast} />
     </>

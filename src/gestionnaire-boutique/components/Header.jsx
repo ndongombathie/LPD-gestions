@@ -30,8 +30,8 @@ import {
   Banknote,
 } from "lucide-react";
 // framer-motion removed to avoid optional peer dep on react/jsx-runtime in dev
-import { instance } from "../../utils/axios.jsx";
-import { authAPI } from "../../utils/api";
+import useAuth from "../../hooks/useAuth";
+import profileAPI from "@/services/api/profile";
 
 // ==========================================================
 // 🧩 Utils
@@ -130,7 +130,7 @@ function Toasts({ toasts, remove }) {
 // 🔐 Modal — Changer mot de passe (Connectée au backend !)
 // ==========================================================
 
-function PasswordModal({ open, onClose, onSuccess, addToast }) {
+function PasswordModal({ open, onClose, onSuccess, addToast, changePassword }) {
   const [oldPwd, setOldPwd] = useState("");
   const [newPwd, setNewPwd] = useState("");
   const [confirmPwd, setConfirmPwd] = useState("");
@@ -154,7 +154,7 @@ function PasswordModal({ open, onClose, onSuccess, addToast }) {
     setLoading(true);
 
     try {
-      await authAPI.changePassword(oldPwd, newPwd, confirmPwd);
+      await changePassword(oldPwd, newPwd, confirmPwd);
       addToast("success", "Mot de passe modifié", "Vos identifiants ont été mis à jour.");
       onSuccess();
     } catch (err) {
@@ -267,139 +267,6 @@ function PasswordModal({ open, onClose, onSuccess, addToast }) {
   );
 }
 
-// ==========================================================
-// 🧑‍💼 Modal Profil — 100% connecté (update Laravel)
-// ==========================================================
-
-function ProfileModal({ open, onClose, user, onUpdate, addToast }) {
-  const [preview, setPreview] = useState(user?.photo || null);
-  const [prenom, setPrenom] = useState(user?.prenom || "");
-  const [nom, setNom] = useState(user?.nom || "");
-
-  useEffect(() => {
-    if (open) {
-      setPreview(user?.photo || null);
-      setPrenom(user?.prenom || "");
-      setNom(user?.nom || "");
-    }
-  }, [open, user]);
-
-  if (!open) return null;
-
-  const handleSave = async () => {
-    try {
-      const res = await instance.put("/mon-profil", {
-        prenom,
-        nom,
-        photo: preview,
-      });
-
-      onUpdate(res.data);
-
-      addToast("success", "Profil mis à jour", "Modification enregistrée.");
-      onClose();
-    } catch (err) {
-      addToast(
-        "error",
-        "Erreur",
-        err?.response?.data?.message || "Impossible de mettre à jour le profil."
-      );
-      console.error(err);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-200 bg-black/40 flex items-center justify-center">
-      <div className="bg-white w-[95%] sm:w-[520px] rounded-2xl shadow-2xl p-5">
-        <div className="flex justify-between items-center border-b pb-2 mb-4">
-          <h2 className="text-lg font-semibold text-[#472EAD] flex items-center gap-2">
-            <User className="w-5 h-5" /> Mon Profil
-          </h2>
-          <button onClick={onClose}>
-            <X size={18} className="text-gray-500" />
-          </button>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            {preview ? (
-              <img src={preview} className="w-16 h-16 rounded-full object-cover" />
-            ) : (
-              <div className="w-16 h-16 rounded-full bg-[#472EAD] text-white flex items-center justify-center font-semibold text-lg">
-                {getInitials(user?.prenom, user?.nom)}
-              </div>
-            )}
-
-            <label className="absolute -bottom-1 -right-1 bg-white border rounded-full p-1 shadow cursor-pointer">
-              <Camera size={16} className="text-[#472EAD]" />
-              <input
-                type="file"
-                className="hidden"
-                accept="image/*"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-
-                  const reader = new FileReader();
-                  reader.onload = () => setPreview(reader.result);
-                  reader.readAsDataURL(file);
-                }}
-              />
-            </label>
-          </div>
-
-          <div>
-            <div className="font-semibold text-[15px]">
-              {user?.prenom} {user?.nom}
-            </div>
-            <div className="text-sm text-gray-600">{user?.email}</div>
-
-            <div className="text-xs mt-1 inline-flex px-2 py-0.5 rounded bg-[#F7F5FF] border text-[#472EAD]">
-              {user?.role}
-            </div>
-          </div>
-        </div>
-
-        {/* Champs */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-5">
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Prénom</label>
-            <input
-              className="w-full border rounded-lg px-3 py-2"
-              value={prenom}
-              onChange={(e) => setPrenom(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Nom</label>
-            <input
-              className="w-full border rounded-lg px-3 py-2"
-              value={nom}
-              onChange={(e) => setNom(e.target.value)}
-            />
-          </div>
-        </div>
-
-        <div className="flex justify-end gap-3 mt-6">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 border rounded-lg"
-          >
-            Annuler
-          </button>
-
-          <button
-            onClick={handleSave}
-            className="px-4 py-2 text-white rounded-lg bg-[#472EAD]"
-          >
-            Enregistrer
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ==========================================================
 // 🧠 HEADER PRINCIPAL (connecté au backend !)
@@ -409,13 +276,13 @@ export default function Header() {
   const navigate = useNavigate();
   const location = useLocation();
   const menuRef = useRef();
+  const { user: authUser, logout, changePassword } = useAuth();
 
   // UI
   const [showMenu, setShowMenu] = useState(false);
   const [showNotif, setShowNotif] = useState(false);
   const [showQuick, setShowQuick] = useState(false);
   const [showPwdModal, setShowPwdModal] = useState(false);
-  const [showProfileModal, setShowProfileModal] = useState(false);
 
   // Data
   const defaultUser = loadJSON("user", {
@@ -426,7 +293,10 @@ export default function Header() {
     photo: null,
   });
 
-  const [user, setUser] = useState(() => defaultUser);
+  const [user, setUser] = useState(() => authUser || defaultUser);
+  useEffect(() => {
+    if (authUser) setUser(authUser);
+  }, [authUser]);
   const [toasts, setToasts] = useState([]);
   const [notifications, setNotifications] = useState(
     loadJSON("lpd_notifications", [
@@ -440,10 +310,10 @@ export default function Header() {
     const saved = loadJSON(RECENTS_KEY, null);
     if (saved && Array.isArray(saved) && saved.length) return saved;
     return [
-      "/gestionnaire/dashboard",
-      "/gestionnaire/utilisateurs",
-      "/gestionnaire/inventaire",
-      "/gestionnaire/rapports",
+      "/gestionnaire_boutique/dashboard",
+      "/gestionnaire_boutique/produits",
+      "/gestionnaire_boutique/stock",
+      "/gestionnaire_boutique/rapports",
     ];
   });
 
@@ -491,7 +361,7 @@ export default function Header() {
     const loadUser = async () => {
       // Si `instance` (axios) est disponible sur globalThis, on l'utilise ; sinon on charge un utilisateur mock depuis localStorage
       try {
-        const { data } = await instance.get("/mon-profil");
+        const data = await profileAPI.getProfile();
         const normalized = normalizeUser(data);
         setUser(normalized);
         localStorage.setItem("user", JSON.stringify(normalized));
@@ -534,15 +404,7 @@ export default function Header() {
   // ==========================================================
 
   const handleLogout = async () => {
-    try {
-      await instance.post("/auth/logout");
-    } catch (err) {
-      console.warn('Logout request failed:', err);
-    }
-
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-
+    await logout();
     navigate("/login");
   };
 
@@ -589,7 +451,7 @@ export default function Header() {
                 <h1 className="text-base font-semibold text-[#472EAD]">
                   LPD Manager
                   <span className="text-gray-500 font-normal text-sm">
-                    {" "} | Interface Gestionnaire
+                    {" "} | Interface Gestionnaire Boutique
                   </span>
                 </h1>
                 <p className="hidden sm:block text-xs text-gray-400">
@@ -601,45 +463,6 @@ export default function Header() {
             {/* ACTIONS */}
             <div className="flex items-center gap-4">
 
-              {/* 🆕 RACCOURCIS */}
-              <div className="relative hidden sm:block">
-                <button
-                  onClick={() => {
-                    setShowQuick((v) => !v);
-                    setShowNotif(false);
-                    setShowMenu(false);
-                  }}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-[#F7F5FF] hover:text-[#472EAD] transition"
-                >
-                  <LayoutGrid size={18} className="text-[#472EAD]" />
-                  <span>Raccourcis</span>
-                </button>
-
-                {showQuick && (
-                  <div className="absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-lg shadow-lg p-2 z-30">
-                    <p className="text-xs font-semibold text-gray-500 px-2 py-1">
-                      Accès rapide (4 dernières pages)
-                    </p>
-                    <ul className="text-sm text-gray-700">
-                      {recentPaths.map((path) => {
-                        const item = SHORTCUT_ITEMS.find((i) => i.path === path);
-                        if (!item) return null;
-                        const Icon = item.icon;
-                        return (
-                          <li
-                            key={path}
-                            onClick={() => handleGoShortcut(path)}
-                            className="flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer hover:bg-[#F7F5FF]"
-                          >
-                            <Icon size={16} className="text-[#472EAD]" />
-                            <span>{item.name}</span>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-                )}
-              </div>
 
               {/* NOTIFS */}
               <div className="relative">
@@ -718,16 +541,6 @@ export default function Header() {
                     <ul className="text-sm">
                       <li
                         onClick={() => {
-                          setShowProfileModal(true);
-                          setShowMenu(false);
-                        }}
-                        className="px-3 py-2 hover:bg-gray-50 cursor-pointer flex gap-2 items-center"
-                      >
-                        <User size={14} /> Mon Profil
-                      </li>
-
-                      <li
-                        onClick={() => {
                           setShowPwdModal(true);
                           setShowMenu(false);
                         }}
@@ -757,18 +570,7 @@ export default function Header() {
         onClose={() => setShowPwdModal(false)}
         onSuccess={() => setShowPwdModal(false)}
         addToast={addToast}
-      />
-
-      <ProfileModal
-        open={showProfileModal}
-        onClose={() => setShowProfileModal(false)}
-        user={user}
-        onUpdate={(updatedUser) => {
-          const normalized = normalizeUser(updatedUser);
-          setUser(normalized);
-          localStorage.setItem("user", JSON.stringify(normalized));
-        }}
-        addToast={addToast}
+        changePassword={changePassword}
       />
 
       <Toasts toasts={toasts} remove={removeToast} />

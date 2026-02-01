@@ -41,7 +41,6 @@ const sampleStocks = [
 ];
 
 // === Transferts (de dépôt vers boutique) ===
-let transferAutoId = 100;
 const sampleTransferts = [
   { id: 101, nom: "Savon OMO", code: "T001", categorie: "Hygiène", quantite: 10, source: "Dépôt Principal", statut: "en_attente", dateCreation: new Date(Date.now() - 2*24*60*60*1000).toISOString() },
   { id: 102, nom: "Riz Royal 50kg", code: "T002", categorie: "Alimentation", quantite: 5, source: "Dépôt Principal", statut: "en_attente", dateCreation: new Date(Date.now() - 1*24*60*60*1000).toISOString() },

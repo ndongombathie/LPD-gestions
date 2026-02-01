@@ -1,8 +1,11 @@
 // src/gestionnaire-depot/pages/Reports.jsx
-import React, { useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef, useState, useEffect } from "react";
+import "../styles/depot-fix.css";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
-import { Activity, FileText, DownloadCloud, PieChart, BarChart2, TrendingUp, Search, Filter, BarChart3, LineChart, TrendingDown, TrendingUp as TrendUp } from "lucide-react";
+import { Activity, FileText, DownloadCloud, PieChart, BarChart2, TrendingUp, Search, Filter, BarChart3, LineChart, TrendingDown, TrendingUp as TrendUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
+// Ajoutez cette ligne après les autres imports
+import DOMPurify from 'dompurify';
 
 /**
  * Rapport fusionné
@@ -25,6 +28,13 @@ const FAKE_PRODUCTS = [
   { id: 3, name: "Ramette A4", category: "Papeterie", cartons: 20, unitsPerCarton: 40, barcode: "598444444444", pricePerCarton: 1750, stockMin: 30 },
   { id: 4, name: "Stylo Bleu", category: "Fournitures", cartons: 2, unitsPerCarton: 12, barcode: "598976543210", pricePerCarton: 300, stockMin: 10 },
   { id: 5, name: "Gomme Blanche", category: "Fournitures", cartons: 0, unitsPerCarton: 20, barcode: "598222222222", pricePerCarton: 500, stockMin: 5 },
+  { id: 6, name: "Crayon HB", category: "Fournitures", cartons: 8, unitsPerCarton: 50, barcode: "598333333333", pricePerCarton: 250, stockMin: 10 },
+  { id: 7, name: "Agrapheuse", category: "Bureau", cartons: 3, unitsPerCarton: 6, barcode: "598777777777", pricePerCarton: 3500, stockMin: 5 },
+  { id: 8, name: "Taille-crayon", category: "Fournitures", cartons: 1, unitsPerCarton: 24, barcode: "598888888888", pricePerCarton: 200, stockMin: 8 },
+  { id: 9, name: "Règle 30cm", category: "Papeterie", cartons: 12, unitsPerCarton: 20, barcode: "598999999999", pricePerCarton: 450, stockMin: 15 },
+  { id: 10, name: "Marqueur", category: "Fournitures", cartons: 6, unitsPerCarton: 30, barcode: "598000000000", pricePerCarton: 600, stockMin: 12 },
+  { id: 11, name: "Chemises", category: "Papeterie", cartons: 15, unitsPerCarton: 25, barcode: "598111111111", pricePerCarton: 1200, stockMin: 20 },
+  { id: 12, name: "Pochette plastique", category: "Papeterie", cartons: 25, unitsPerCarton: 100, barcode: "598222222223", pricePerCarton: 800, stockMin: 30 },
 ];
 
 const FAKE_MOVEMENTS = [
@@ -35,9 +45,117 @@ const FAKE_MOVEMENTS = [
   { id: 5, type: "Entrée", productId: 1, productName: "Cahier 96 pages", barcode: "594123456789", qty: 8, before: 10, after: 18, cost: 6400, date: "2025-12-10T09:15:00", manager: "Amina Sow" },
   { id: 6, type: "Sortie", productId: 3, productName: "Ramette A4", barcode: "598444444444", qty: 5, before: 20, after: 15, cost: 8750, date: "2025-12-11T16:30:00", manager: "Modou Ndiaye" },
   { id: 7, type: "Entrée", productId: 2, productName: "Classeur A4", barcode: "594555555555", qty: 12, before: 5, after: 17, cost: 18000, date: "2025-12-12T14:20:00", manager: "Amina Sow" },
+  { id: 8, type: "Sortie", productId: 5, productName: "Gomme Blanche", barcode: "598222222222", qty: 1, before: 2, after: 1, cost: 250, date: "2025-12-09T10:30:00", manager: "Modou Ndiaye" },
+  { id: 9, type: "Entrée", productId: 6, productName: "Crayon HB", barcode: "598333333333", qty: 10, before: 15, after: 25, cost: 2500, date: "2025-12-13T11:45:00", manager: "Amina Sow" },
+  { id: 10, type: "Sortie", productId: 7, productName: "Agrapheuse", barcode: "598777777777", qty: 2, before: 5, after: 3, cost: 7000, date: "2025-12-14T09:20:00", manager: "Modou Ndiaye" },
+  { id: 11, type: "Entrée", productId: 8, productName: "Taille-crayon", barcode: "598888888888", qty: 5, before: 3, after: 8, cost: 1000, date: "2025-12-15T14:15:00", manager: "Amina Sow" },
+  { id: 12, type: "Sortie", productId: 9, productName: "Règle 30cm", barcode: "598999999999", qty: 8, before: 20, after: 12, cost: 3600, date: "2025-12-16T16:40:00", manager: "Modou Ndiaye" },
 ];
 
 const formatNumber = (n) => n.toLocaleString("fr-FR");
+
+// Composant de pagination réutilisable
+const Pagination = ({ currentPage, totalPages, totalItems, itemsPerPage, onPageChange, onItemsPerPageChange }) => {
+  const startItem = (currentPage - 1) * itemsPerPage + 1;
+  const endItem = Math.min(currentPage * itemsPerPage, totalItems);
+  
+  const goToPage = (page) => {
+    if (page >= 1 && page <= totalPages) {
+      onPageChange(page);
+    }
+  };
+
+  return (
+    <div className="flex flex-col sm:flex-row justify-between items-center gap-3 px-4 py-3 border-t">
+      <div className="text-xs text-gray-500">
+        Affichage de {startItem} à {endItem} sur {totalItems} éléments
+      </div>
+      
+      <div className="flex items-center gap-2">
+        {/* Sélecteur d'éléments par page */}
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-gray-500">Afficher :</span>
+          <select
+            value={itemsPerPage}
+            onChange={(e) => onItemsPerPageChange(parseInt(e.target.value))}
+            className="border rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-[#472EAD]"
+          >
+            <option value="5">5</option>
+            <option value="10">10</option>
+            <option value="20">20</option>
+            <option value="50">50</option>
+          </select>
+          <span className="text-gray-500">par page</span>
+        </div>
+        
+        {/* Boutons de navigation */}
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => goToPage(1)}
+            disabled={currentPage === 1}
+            className={`p-1 rounded-md ${currentPage === 1 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600 hover:bg-gray-100'}`}
+            title="Première page"
+          >
+            <ChevronsLeft size={16} />
+          </button>
+          
+          <button
+            onClick={() => goToPage(currentPage - 1)}
+            disabled={currentPage === 1}
+            className={`p-1 rounded-md ${currentPage === 1 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600 hover:bg-gray-100'}`}
+            title="Page précédente"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          
+          {/* Indicateur de page */}
+          <div className="flex items-center gap-1 text-xs">
+            <span className="text-gray-700">Page</span>
+            <span className="font-semibold text-[#472EAD]">{currentPage}</span>
+            <span className="text-gray-700">sur</span>
+            <span className="font-semibold">{totalPages}</span>
+          </div>
+          
+          <button
+            onClick={() => goToPage(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className={`p-1 rounded-md ${currentPage === totalPages ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600 hover:bg-gray-100'}`}
+            title="Page suivante"
+          >
+            <ChevronRight size={16} />
+          </button>
+          
+          <button
+            onClick={() => goToPage(totalPages)}
+            disabled={currentPage === totalPages}
+            className={`p-1 rounded-md ${currentPage === totalPages ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600 hover:bg-gray-100'}`}
+            title="Dernière page"
+          >
+            <ChevronsRight size={16} />
+          </button>
+        </div>
+        
+        {/* Sélecteur de page directe */}
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-gray-500">Aller à :</span>
+          <input
+            type="number"
+            min="1"
+            max={totalPages}
+            value={currentPage}
+            onChange={(e) => {
+              const page = parseInt(e.target.value);
+              if (page >= 1 && page <= totalPages) {
+                goToPage(page);
+              }
+            }}
+            className="w-12 border rounded-md px-2 py-1 text-center focus:outline-none focus:ring-1 focus:ring-[#472EAD]"
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // Nouveaux composants de graphiques professionnels
 const ProfessionalLineChart = ({ data, title, color = PALETTE.violet, height = 200 }) => {
@@ -392,6 +510,27 @@ const PieChartComponent = ({ data, title, height = 200 }) => {
 
 export default function Reports() {
   const [tab, setTab] = useState("resume");
+  
+  // Nouvel état pour les sous-onglets d'alertes
+  const [alertSubTab, setAlertSubTab] = useState("rupture");
+  
+  // États de pagination
+  const [productPage, setProductPage] = useState(1);
+  const [productItemsPerPage, setProductItemsPerPage] = useState(10);
+  
+  const [movementPage, setMovementPage] = useState(1);
+  const [movementItemsPerPage, setMovementItemsPerPage] = useState(10);
+  
+  // États de pagination pour chaque sous-onglet d'alertes
+  const [rupturePage, setRupturePage] = useState(1);
+  const [ruptureItemsPerPage, setRuptureItemsPerPage] = useState(5);
+  
+  const [critiquePage, setCritiquePage] = useState(1);
+  const [critiqueItemsPerPage, setCritiqueItemsPerPage] = useState(5);
+  
+  const [faiblePage, setFaiblePage] = useState(1);
+  const [faibleItemsPerPage, setFaibleItemsPerPage] = useState(5);
+  
   const reportRef = useRef(null);
   
   const [productFilters, setProductFilters] = useState({
@@ -474,6 +613,53 @@ export default function Reports() {
     });
   }, [movements, movementFilters]);
 
+  // Données paginées pour les produits
+  const productStartIndex = (productPage - 1) * productItemsPerPage;
+  const productEndIndex = productStartIndex + productItemsPerPage;
+  const paginatedProducts = filteredProducts.slice(productStartIndex, productEndIndex);
+  const productTotalPages = Math.ceil(filteredProducts.length / productItemsPerPage);
+
+  // Données paginées pour les mouvements
+  const movementStartIndex = (movementPage - 1) * movementItemsPerPage;
+  const movementEndIndex = movementStartIndex + movementItemsPerPage;
+  const paginatedMovements = filteredMovements.slice(movementStartIndex, movementEndIndex);
+  const movementTotalPages = Math.ceil(filteredMovements.length / movementItemsPerPage);
+
+  // Données filtrées par statut pour les alertes
+  const ruptureProducts = useMemo(() => 
+    enriched.filter(p => p.status === "Rupture"), [enriched]);
+  
+  const critiqueProducts = useMemo(() => 
+    enriched.filter(p => p.status === "Critique"), [enriched]);
+  
+  const faibleProducts = useMemo(() => 
+    enriched.filter(p => p.status === "Faible"), [enriched]);
+
+  // Données paginées pour chaque sous-onglet d'alertes
+  const ruptureStartIndex = (rupturePage - 1) * ruptureItemsPerPage;
+  const ruptureEndIndex = ruptureStartIndex + ruptureItemsPerPage;
+  const paginatedRupture = ruptureProducts.slice(ruptureStartIndex, ruptureEndIndex);
+  const ruptureTotalPages = Math.ceil(ruptureProducts.length / ruptureItemsPerPage);
+
+  const critiqueStartIndex = (critiquePage - 1) * critiqueItemsPerPage;
+  const critiqueEndIndex = critiqueStartIndex + critiqueItemsPerPage;
+  const paginatedCritique = critiqueProducts.slice(critiqueStartIndex, critiqueEndIndex);
+  const critiqueTotalPages = Math.ceil(critiqueProducts.length / critiqueItemsPerPage);
+
+  const faibleStartIndex = (faiblePage - 1) * faibleItemsPerPage;
+  const faibleEndIndex = faibleStartIndex + faibleItemsPerPage;
+  const paginatedFaible = faibleProducts.slice(faibleStartIndex, faibleEndIndex);
+  const faibleTotalPages = Math.ceil(faibleProducts.length / faibleItemsPerPage);
+
+  // Réinitialiser la pagination lorsque les filtres changent
+  useEffect(() => {
+    setProductPage(1);
+  }, [productFilters]);
+
+  useEffect(() => {
+    setMovementPage(1);
+  }, [movementFilters]);
+
   const totalValue = enriched.reduce((s, p) => s + p.totalPrice, 0);
   const totalProducts = enriched.length;
   const counts = enriched.reduce((o, p) => {
@@ -548,7 +734,7 @@ export default function Reports() {
         </div>
       `;
       
-      pdfContainer.innerHTML = header;
+      pdfContainer.innerHTML =  DOMPurify.sanitize(header);
       
       const createPDFContent = () => {
         const enriched = FAKE_PRODUCTS.map((p) => {
@@ -688,7 +874,7 @@ export default function Reports() {
         `;
       };
       
-      pdfContainer.innerHTML += createPDFContent();
+      pdfContainer.innerHTML += DOMPurify.sanitize(createPDFContent());
       
       pdfContainer.style.position = 'absolute';
       pdfContainer.style.left = '-9999px';
@@ -729,6 +915,7 @@ export default function Reports() {
       category: "all",
       status: "all"
     });
+    setProductPage(1);
   };
 
   const resetMovementFilters = () => {
@@ -738,10 +925,11 @@ export default function Reports() {
       startDate: "",
       endDate: ""
     });
+    setMovementPage(1);
   };
 
   return (
-    <div className="p-6" style={{ color: PALETTE.text }}>
+    <div className="depot-page p-6" style={{ color: PALETTE.text }}>
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>
           <div className="flex items-center gap-3">
@@ -1019,56 +1207,221 @@ export default function Reports() {
 
         {tab === "alerts" && (
           <section>
-            <h2 className="text-lg font-semibold mb-3">Alertes Stock (Trello view)</h2>
-
-            <div className="flex gap-4 overflow-x-auto pb-3">
-              <div className="min-w-[320px] bg-gray-50 border rounded-lg p-3">
-                <h4 className="flex items-center gap-2 font-semibold text-sm text-red-600">Rupture</h4>
-                <div className="mt-2 space-y-2">
-                  {enriched.filter(p => p.status === "Rupture").length === 0 && <div className="text-xs text-gray-500">Aucune rupture</div>}
-                  {enriched.filter(p => p.status === "Rupture").map(p => (
-                    <div key={p.id} className="bg-white border rounded p-2 flex items-center justify-between">
-                      <div>
-                        <div className="text-sm font-medium">{p.name}</div>
-                        <div className="text-xs text-gray-500">{p.category} • {p.barcode}</div>
-                      </div>
-                      <div className="text-sm font-semibold text-red-600">{p.cartons} caisses</div>
-                    </div>
-                  ))}
-                </div>
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold mb-3">Alertes Stock</h2>
+              
+              {/* Sous-onglets pour les alertes */}
+              <div className="flex border-b mb-4">
+                {[
+                  { key: "rupture", label: "Rupture", count: ruptureProducts.length, color: "red" },
+                  { key: "critique", label: "Critique", count: critiqueProducts.length, color: "orange" },
+                  { key: "faible", label: "Faible", count: faibleProducts.length, color: "yellow" }
+                ].map((subTab) => (
+                  <button
+                    key={subTab.key}
+                    onClick={() => setAlertSubTab(subTab.key)}
+                    className={`px-4 py-2 text-sm font-medium ${
+                      alertSubTab === subTab.key 
+                        ? `border-b-2 text-${subTab.color}-600 border-${subTab.color}-500` 
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    {subTab.label} ({subTab.count})
+                  </button>
+                ))}
               </div>
 
-              <div className="min-w-[320px] bg-gray-50 border rounded-lg p-3">
-                <h4 className="flex items-center gap-2 font-semibold text-sm text-orange-600">Critique</h4>
-                <div className="mt-2 space-y-2">
-                  {enriched.filter(p => p.status === "Critique").length === 0 && <div className="text-xs text-gray-500">Aucun produit critique</div>}
-                  {enriched.filter(p => p.status === "Critique").map(p => (
-                    <div key={p.id} className="bg-white border rounded p-2 flex items-center justify-between">
-                      <div>
-                        <div className="text-sm font-medium">{p.name}</div>
-                        <div className="text-xs text-gray-500">{p.category} • {p.barcode}</div>
-                      </div>
-                      <div className="text-sm font-semibold text-orange-600">{p.cartons} caisses</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              {/* Contenu des sous-onglets */}
+              {alertSubTab === "rupture" && (
+                <div>
+                  <div className="mb-4 p-4 border rounded-lg bg-red-50">
+                    <h3 className="text-sm font-semibold text-red-700 mb-2">Produits en Rupture de Stock</h3>
+                    <p className="text-xs text-red-600">
+                      Ces produits sont complètement épuisés. Action requise immédiatement.
+                    </p>
+                  </div>
 
-              <div className="min-w-[320px] bg-gray-50 border rounded-lg p-3">
-                <h4 className="flex items-center gap-2 font-semibold text-sm text-yellow-600">Faible</h4>
-                <div className="mt-2 space-y-2">
-                  {enriched.filter(p => p.status === "Faible").length === 0 && <div className="text-xs text-gray-500">Aucun produit faible</div>}
-                  {enriched.filter(p => p.status === "Faible").map(p => (
-                    <div key={p.id} className="bg-white border rounded p-2 flex items-center justify-between">
-                      <div>
-                        <div className="text-sm font-medium">{p.name}</div>
-                        <div className="text-xs text-gray-500">{p.category} • {p.barcode}</div>
-                      </div>
-                      <div className="text-sm font-semibold text-yellow-700">{p.cartons} caisses</div>
-                    </div>
-                  ))}
+                  <div className="overflow-x-auto border rounded">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 text-gray-600">
+                        <tr>
+                          <th className="p-3 text-left">Produit</th>
+                          <th className="p-3 text-center">Code-barre</th>
+                          <th className="p-3 text-center">Catégorie</th>
+                          <th className="p-3 text-center">Stock Minimum</th>
+                          <th className="p-3 text-center">Prix/Carton</th>
+                          <th className="p-3 text-center">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {paginatedRupture.map(p => (
+                          <tr key={p.id} className="border-t hover:bg-gray-50">
+                            <td className="p-3 font-medium">{p.name}</td>
+                            <td className="p-3 text-center font-mono text-xs">{p.barcode}</td>
+                            <td className="p-3 text-center">{p.category}</td>
+                            <td className="p-3 text-center">{p.stockMin} cartons</td>
+                            <td className="p-3 text-center">{formatNumber(p.pricePerCarton)} F</td>
+                            <td className="p-3 text-center">
+                              <button className="text-xs bg-red-100 text-red-700 px-3 py-1 rounded hover:bg-red-200">
+                                Commander
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                        {paginatedRupture.length === 0 && (
+                          <tr>
+                            <td colSpan={6} className="p-6 text-center text-gray-500">
+                              Aucun produit en rupture de stock
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                    
+                    {/* Pagination pour rupture */}
+                    {ruptureProducts.length > 0 && (
+                      <Pagination
+                        currentPage={rupturePage}
+                        totalPages={ruptureTotalPages}
+                        totalItems={ruptureProducts.length}
+                        itemsPerPage={ruptureItemsPerPage}
+                        onPageChange={setRupturePage}
+                        onItemsPerPageChange={setRuptureItemsPerPage}
+                      />
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {alertSubTab === "critique" && (
+                <div>
+                  <div className="mb-4 p-4 border rounded-lg bg-orange-50">
+                    <h3 className="text-sm font-semibold text-orange-700 mb-2">Produits en Stock Critique</h3>
+                    <p className="text-xs text-orange-600">
+                      Ces produits sont en dessous du seuil critique. Réapprovisionnement urgent recommandé.
+                    </p>
+                  </div>
+
+                  <div className="overflow-x-auto border rounded">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 text-gray-600">
+                        <tr>
+                          <th className="p-3 text-left">Produit</th>
+                          <th className="p-3 text-center">Code-barre</th>
+                          <th className="p-3 text-center">Stock Actuel</th>
+                          <th className="p-3 text-center">Stock Minimum</th>
+                          <th className="p-3 text-center">Déficit</th>
+                          <th className="p-3 text-center">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {paginatedCritique.map(p => (
+                          <tr key={p.id} className="border-t hover:bg-gray-50">
+                            <td className="p-3 font-medium">{p.name}</td>
+                            <td className="p-3 text-center font-mono text-xs">{p.barcode}</td>
+                            <td className="p-3 text-center">{p.cartons} cartons</td>
+                            <td className="p-3 text-center">{p.stockMin} cartons</td>
+                            <td className="p-3 text-center">
+                              <span className="text-orange-600 font-semibold">
+                                {p.stockMin - p.cartons} cartons
+                              </span>
+                            </td>
+                            <td className="p-3 text-center">
+                              <button className="text-xs bg-orange-100 text-orange-700 px-3 py-1 rounded hover:bg-orange-200">
+                                Planifier
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                        {paginatedCritique.length === 0 && (
+                          <tr>
+                            <td colSpan={6} className="p-6 text-center text-gray-500">
+                              Aucun produit en stock critique
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                    
+                    {/* Pagination pour critique */}
+                    {critiqueProducts.length > 0 && (
+                      <Pagination
+                        currentPage={critiquePage}
+                        totalPages={critiqueTotalPages}
+                        totalItems={critiqueProducts.length}
+                        itemsPerPage={critiqueItemsPerPage}
+                        onPageChange={setCritiquePage}
+                        onItemsPerPageChange={setCritiqueItemsPerPage}
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {alertSubTab === "faible" && (
+                <div>
+                  <div className="mb-4 p-4 border rounded-lg bg-yellow-50">
+                    <h3 className="text-sm font-semibold text-yellow-700 mb-2">Produits en Stock Faible</h3>
+                    <p className="text-xs text-yellow-600">
+                      Ces produits approchent du seuil minimum. Surveillance recommandée.
+                    </p>
+                  </div>
+
+                  <div className="overflow-x-auto border rounded">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 text-gray-600">
+                        <tr>
+                          <th className="p-3 text-left">Produit</th>
+                          <th className="p-3 text-center">Code-barre</th>
+                          <th className="p-3 text-center">Stock Actuel</th>
+                          <th className="p-3 text-center">Stock Minimum</th>
+                          <th className="p-3 text-center">Marge</th>
+                          <th className="p-3 text-center">Statut</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {paginatedFaible.map(p => (
+                          <tr key={p.id} className="border-t hover:bg-gray-50">
+                            <td className="p-3 font-medium">{p.name}</td>
+                            <td className="p-3 text-center font-mono text-xs">{p.barcode}</td>
+                            <td className="p-3 text-center">{p.cartons} cartons</td>
+                            <td className="p-3 text-center">{p.stockMin} cartons</td>
+                            <td className="p-3 text-center">
+                              <span className="text-yellow-600">
+                                {p.cartons - p.stockMin} cartons
+                              </span>
+                            </td>
+                            <td className="p-3 text-center">
+                              <span className="px-2 py-1 rounded-full text-xs bg-yellow-100 text-yellow-700">
+                                À surveiller
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                        {paginatedFaible.length === 0 && (
+                          <tr>
+                            <td colSpan={6} className="p-6 text-center text-gray-500">
+                              Aucun produit en stock faible
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                    
+                    {/* Pagination pour faible */}
+                    {faibleProducts.length > 0 && (
+                      <Pagination
+                        currentPage={faiblePage}
+                        totalPages={faibleTotalPages}
+                        totalItems={faibleProducts.length}
+                        itemsPerPage={faibleItemsPerPage}
+                        onPageChange={setFaiblePage}
+                        onItemsPerPageChange={setFaibleItemsPerPage}
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </section>
         )}
@@ -1111,6 +1464,7 @@ export default function Reports() {
                     <option value="all">Toutes les catégories</option>
                     <option value="Papeterie">Papeterie</option>
                     <option value="Fournitures">Fournitures</option>
+                    <option value="Bureau">Bureau</option>
                   </select>
                 </div>
                 
@@ -1159,7 +1513,7 @@ export default function Reports() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredProducts.map(p => (
+                  {paginatedProducts.map(p => (
                     <tr key={p.id} className="border-t hover:bg-gray-50">
                       <td className="p-3">{p.name}</td>
                       <td className="p-3 text-center font-mono text-xs">{p.barcode}</td>
@@ -1170,7 +1524,7 @@ export default function Reports() {
                       <td className="p-3 text-center">{formatNumber(p.totalPrice)} F</td>
                       <td className="p-3 text-center">{p.stockMin}</td>
                       <td className="p-3 text-center">
-                        <span className={`inline-flex px-2 py-1 rounded-full text-xs font-semibold ${p.status === "Rupture" ? "bg-gray-200 text-gray-700" : p.status === "Critique" ? "bg-red-100 text-red-700" : p.status === "Faible" ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}`}>
+                        <span className={`inline-flex px-2 py-1 rounded-full text-xs font-semibold ${p.status === "Rupture" ? "bg-red-100 text-red-700" : p.status === "Critique" ? "bg-orange-100 text-orange-700" : p.status === "Faible" ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}`}>
                           {p.status}
                         </span>
                       </td>
@@ -1178,10 +1532,22 @@ export default function Reports() {
                   ))}
                 </tbody>
               </table>
-              {filteredProducts.length === 0 && (
+              {paginatedProducts.length === 0 && (
                 <div className="p-6 text-center text-gray-500">
                   Aucun produit ne correspond aux critères de recherche
                 </div>
+              )}
+              
+              {/* Pagination pour les produits */}
+              {filteredProducts.length > 0 && (
+                <Pagination
+                  currentPage={productPage}
+                  totalPages={productTotalPages}
+                  totalItems={filteredProducts.length}
+                  itemsPerPage={productItemsPerPage}
+                  onPageChange={setProductPage}
+                  onItemsPerPageChange={setProductItemsPerPage}
+                />
               )}
             </div>
           </section>
@@ -1277,14 +1643,14 @@ export default function Reports() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredMovements.map(m => (
+                  {paginatedMovements.map(m => (
                     <tr key={m.id} className="border-t hover:bg-gray-50">
                       <td className="p-3">
                         <span className={`px-3 py-1 rounded-full text-xs ${m.type === "Entrée" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>{m.type}</span>
                       </td>
                       <td className="p-3">{m.productName}</td>
                       <td className="p-3 font-mono text-xs">{m.barcode}</td>
-                      <td className="p-3 text-center">{m.qty} {m.unit || "cartons"}</td>
+                      <td className="p-3 text-center">{m.qty} cartons</td>
                       <td className="p-3 text-center">{m.before} → {m.after}</td>
                       <td className="p-3 text-center">{m.cost ? `${formatNumber(m.cost)} F` : "-"}</td>
                       <td className="p-3 text-center">{new Date(m.date).toLocaleString("fr-FR")}</td>
@@ -1293,10 +1659,22 @@ export default function Reports() {
                   ))}
                 </tbody>
               </table>
-              {filteredMovements.length === 0 && (
+              {paginatedMovements.length === 0 && (
                 <div className="p-6 text-center text-gray-500">
                   Aucun mouvement ne correspond aux critères de recherche
                 </div>
+              )}
+              
+              {/* Pagination pour les mouvements */}
+              {filteredMovements.length > 0 && (
+                <Pagination
+                  currentPage={movementPage}
+                  totalPages={movementTotalPages}
+                  totalItems={filteredMovements.length}
+                  itemsPerPage={movementItemsPerPage}
+                  onPageChange={setMovementPage}
+                  onItemsPerPageChange={setMovementItemsPerPage}
+                />
               )}
             </div>
           </section>

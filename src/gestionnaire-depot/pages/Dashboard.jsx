@@ -2,6 +2,7 @@
 
 import React from "react";
 import { NavLink } from "react-router-dom";
+import "../styles/depot-fix.css";  // <-- IMPORT AJOUTÉ
 
 import {
   MdShoppingCart,
@@ -25,7 +26,7 @@ const Dashboard = () => {
   const dateFormatted = today.toLocaleDateString("fr-FR", options);
 
   return (
-    <div className="space-y-6">
+    <div className="depot-page space-y-6">  {/* <-- CLASSE AJOUTÉE */}
 
       {/* HEADER */}
       <div className="flex items-baseline justify-between">
@@ -193,7 +194,7 @@ const Dashboard = () => {
 
           {/* ➤ Redirection vers Produits */}
           <NavLink
-            to="/depot/products"
+            to="/gestionnaire_depot/products"
             className="flex items-center justify-between border rounded-lg px-6 py-4 text-left 
              transition hover:bg-purple-100 hover:border-purple-400"
           >
@@ -208,7 +209,7 @@ const Dashboard = () => {
 
           {/* ➤ Redirection vers Mouvements */}
           <NavLink
-            to="/depot/movementStock"
+            to="/gestionnaire_depot/movementStock"
             className="flex items-center justify-between border rounded-lg px-6 py-4 text-left 
              transition hover:bg-orange-100 hover:border-orange-400"
           >

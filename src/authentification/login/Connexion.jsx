@@ -5,8 +5,8 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
-import { instance } from "../../utils/axios";
 import { Toaster, toast } from "sonner";
+import useAuth from "../../hooks/useAuth";
 
 // ----------- Normalisation des rôles ----------
 const normalizeRole = (role) => {
@@ -55,6 +55,7 @@ const redirectByRole = (role = "") => {
 
 export default function Connexion() {
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -76,30 +77,11 @@ export default function Connexion() {
     try {
       const trimmedEmail = email.trim();
 
-      // 🔹 APPEL API NORMAL → /api/auth/login
-      const { data } = await instance.post("auth/login", {
-        email: trimmedEmail,
-        password,
-      });
-
-      if (!data?.token || !data?.user) {
-        setLoading(false);
-        toast.error("Réponse inattendue", { description: "Le serveur n'a pas retourné les bonnes données." });
-        return setMessage("❌ Réponse inattendue du serveur.");
-      }
-
-      // 🔹 Normaliser le rôle
-      const normalizedRole = normalizeRole(data.user.role);
-
-      // 🔹 Sauvegarder token + user
-      localStorage.setItem("token", data.token);
-      instance.defaults.headers.common["Authorization"] = `Bearer ${data.token}`;
-
-      const userToStore = { ...data.user, role: normalizedRole };
-      localStorage.setItem("user", JSON.stringify(userToStore));
+      const { user } = await login(trimmedEmail, password);
+      const normalizedRole = normalizeRole(user?.role);
 
       toast.success("Connexion réussie", {
-        description: `Bienvenue ${userToStore?.prenom ?? ""} ${userToStore?.nom ?? ""}`.trim(),
+        description: `Bienvenue ${user?.prenom ?? ""} ${user?.nom ?? ""}`.trim(),
       });
       setMessage("✅ Connexion réussie !");
 

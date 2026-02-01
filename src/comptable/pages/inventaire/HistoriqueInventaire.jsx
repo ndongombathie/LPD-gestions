@@ -5,7 +5,6 @@ import autoTable from "jspdf-autotable";
 
 /* ======================================================
    DONNÉES SIMULÉES
-   (CES DONNÉES VIENDRONT DES INVENTAIRES BOUTIQUE & DEPOT)
 ====================================================== */
 
 const historiquesInitiaux = [
@@ -43,28 +42,31 @@ const fcfa = (v) =>
    COMPOSANT
 ====================================================== */
 export default function HistoriqueInventaires() {
-  const [historiques, setHistoriques] = useState(historiquesInitiaux);
+  const [historiques] = useState(historiquesInitiaux);
   const [filtreType, setFiltreType] = useState("tous");
   const [search, setSearch] = useState("");
 
   /* ================= FILTRAGE ================= */
   const historiquesFiltres = useMemo(() => {
+    const q = search.trim().toLowerCase();
+
     return historiques.filter((h) => {
       const matchType =
         filtreType === "tous" ? true : h.type === filtreType;
 
       const texte =
         `${h.type} ${h.periode} ${h.dateImpression}`.toLowerCase();
-      const matchSearch = texte.includes(search.toLowerCase());
+
+      const matchSearch = !q || texte.includes(q);
 
       return matchType && matchSearch;
     });
   }, [historiques, filtreType, search]);
 
-  /* ================= IMPRESSION HISTORIQUE ================= */
+  /* ================= IMPRESSION ================= */
   const imprimerHistorique = (liste) => {
-    if (!liste.length) {
-      alert("Aucun historique à imprimer");
+    if (!liste || liste.length === 0) {
+      alert("Aucun historique à imprimer.");
       return;
     }
 

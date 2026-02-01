@@ -5,7 +5,7 @@
 // ==========================================================
 
 import React, { useEffect, useMemo, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import {  AnimatePresence } from "framer-motion";
 import {
   Search,
   Loader2,
@@ -18,7 +18,7 @@ import {
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 import DataTable from "../components/DataTable.jsx";
-import { instance } from "../../utils/axios"; // ✅
+import { utilisateursAPI } from "../../services/api";
 
 const ROLES = [
   "Vendeur",
@@ -114,22 +114,22 @@ export default function Utilisateurs() {
       try {
         setLoading(true);
 
-        const { data } = await instance.get("/utilisateurs");
+        const response = await utilisateursAPI.getAll();
 
-        // data peut être un tableau brut OU data.data (Resource Laravel)
-        const rawUsers = Array.isArray(data) ? data : data.data || [];
+        // response peut être un tableau brut OU response.data (Resource Laravel)
+        const rawUsers = Array.isArray(response) ? response : response.data || [];
 
         const normalized = rawUsers.map((u) => {
           // Présence : priorité à un booléen is_online si dispo,
           // sinon estimation via last_login_at (ex: connecté il y a < 30 min).
-          let is_online = false;
+          let isOnline = false;
 
           if (typeof u.is_online !== "undefined") {
-            is_online = Boolean(u.is_online);
+            isOnline = Boolean(u.is_online);
           } else if (u.last_login_at) {
             const last = new Date(u.last_login_at);
             const diffMin = (Date.now() - last.getTime()) / 60000;
-            is_online = diffMin <= 30; // 30 minutes = considéré comme "en ligne"
+            isOnline = diffMin <= 30; // 30 minutes = considéré comme "en ligne"
           }
 
           return {
@@ -141,7 +141,7 @@ export default function Utilisateurs() {
             adresse: u.adresse || "",
             cni: u.numero_cni || u.cni || "",
             role: ROLE_LABELS[u.role] || u.role || "",
-            is_online,
+            isOnline,
           };
         });
 
@@ -164,7 +164,7 @@ export default function Utilisateurs() {
   // Stats rapides (pour les petits badges)
   const stats = useMemo(() => {
     const total = users.length;
-    const enLigne = users.filter((u) => u.is_online).length;
+    const enLigne = users.filter((u) => u.isOnline).length;
     const horsLigne = total - enLigne;
 
     return { total, enLigne, horsLigne };
@@ -352,12 +352,12 @@ export default function Utilisateurs() {
                 { label: "CNI", key: "cni" },
                 {
                   label: "Présence",
-                  key: "is_online",
+                  key: "isOnline",
                   render: (_, r) => (
                     <span
                       className={cls(
                         "inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold rounded-full border",
-                        r.is_online
+                        r.isOnline
                           ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                           : "bg-gray-50 text-gray-600 border-gray-200"
                       )}
@@ -365,13 +365,13 @@ export default function Utilisateurs() {
                       <Circle
                         className={cls(
                           "w-3 h-3",
-                          r.is_online
+                          r.isOnline
                             ? "text-emerald-500"
                             : "text-gray-400"
                         )}
                         fill="currentColor"
                       />
-                      {r.is_online ? "En ligne" : "Hors ligne"}
+                      {r.isOnline ? "En ligne" : "Hors ligne"}
                     </span>
                   ),
                 },

@@ -24,7 +24,7 @@ import {
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 
-import { instance } from "../../utils/axios"; // 🔗 Appel API
+import { decaissementsAPI } from '@/services/api';
 import FormModal from "../components/FormModal";
 import DecaissementForm from "../components/DecaissementForm";
 import { Toaster, toast } from "sonner";
