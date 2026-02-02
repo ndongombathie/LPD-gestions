@@ -23,8 +23,8 @@ const Dashboard = () => {
       try {
         setLoading(true);
         
-        // Charger les statistiques
-        const [statsData, produitsTransfer, transfertsValides, produitsSousSeuil] = await Promise.all([
+        // Charger les statistiques avec Promise.allSettled pour une meilleure gestion d'erreurs
+        const results = await Promise.allSettled([
           gestionnaireBoutiqueAPI.getStatistiquesBoutique(),
           gestionnaireBoutiqueAPI.getProduitsTransfer(),
           gestionnaireBoutiqueAPI.getTransfertsValides(),
@@ -33,16 +33,29 @@ const Dashboard = () => {
         
         if (!mounted) return;
         
+        const [statsResult, produitsTransferResult, transfertsValidesResult, produitsSousSeuilResult] = results;
+        
+        const statsData = statsResult.status === 'fulfilled' ? statsResult.value : {
+          nombreProduits: 0,
+          quantiteTotale: 0,
+          produitsSousSeuil: 0,
+          alertes: []
+        };
+        
+        const produitsTransferData = produitsTransferResult.status === 'fulfilled' ? produitsTransferResult.value : { data: [], total: 0 };
+        const transfertsValidesData = transfertsValidesResult.status === 'fulfilled' ? transfertsValidesResult.value : { data: [], total: 0 };
+        const produitsSousSeuilData = produitsSousSeuilResult.status === 'fulfilled' ? produitsSousSeuilResult.value : { data: [] };
+        
         setStats({
-          nombreProduits: statsData.nombreProduits || 0,
-          quantiteTotale: statsData.quantiteTotale || 0,
-          produitsSousSeuil: statsData.produitsSousSeuil || 0,
-          transfertsEnAttente: produitsTransfer?.data?.length || 0,
-          transfertsValides: transfertsValides?.total || 0
+          nombreProduits: parseInt(statsData.nombreProduits) || 0,
+          quantiteTotale: parseInt(statsData.quantiteTotale) || 0,
+          produitsSousSeuil: parseInt(statsData.produitsSousSeuil) || 0,
+          transfertsEnAttente: produitsTransferData?.total || produitsTransferData?.data?.length || 0,
+          transfertsValides: transfertsValidesData?.total || transfertsValidesData?.data?.length || 0
         });
         
-        setAlertes(Array.isArray(produitsSousSeuil) ? produitsSousSeuil.slice(0, 5) : []);
-        setTransfertsPending(produitsTransfer?.data || []);
+        setAlertes(produitsSousSeuilData?.data?.slice(0, 3) || []);
+        setTransfertsPending((produitsTransferData?.data || []).slice(0, 3));
         
       } catch (error) {
         console.error('❌ Erreur chargement dashboard:', error);
@@ -74,13 +87,13 @@ const Dashboard = () => {
           </div>
           <div className="flex gap-2">
             <button
-              onClick={() => (window.location.href = "/gestionnaire-boutique/historique")}
+              onClick={() => (window.location.href = "/gestionnaire_boutique/historique")}
               className="px-4 py-2 bg-white text-[#472EAD] border border-[#472EAD] rounded-lg hover:bg-[#F7F5FF] font-medium shadow-sm"
             >
               Voir l'historique
             </button>
             <button
-              onClick={() => (window.location.href = "/gestionnaire-boutique/alertes")}
+              onClick={() => (window.location.href = "/gestionnaire_boutique/alertes")}
               className="px-4 py-2 bg-[#F58020] text-white rounded-lg hover:bg-[#e67e1a] font-medium shadow-sm"
             >
               Voir les alertes
@@ -124,7 +137,7 @@ const Dashboard = () => {
           <div className="bg-white p-5 rounded-lg shadow border border-gray-200">
             <h3 className="text-lg font-semibold text-[#111827] mb-4 flex items-center gap-2">
               <Activity size={20} className="text-[#472EAD]" />
-              Transferts en attente
+              3 derniers transferts en attente
             </h3>
             {loading ? (
               <p className="text-gray-600 text-sm">Chargement...</p>
@@ -132,14 +145,17 @@ const Dashboard = () => {
               <p className="text-gray-600 text-sm">Aucun transfert en attente</p>
             ) : (
               <ul className="space-y-3">
-                {transfertsPending.slice(0, 5).map((transfert, idx) => (
+                {transfertsPending.map((transfert, idx) => (
                   <li key={idx} className="p-3 bg-gray-50 rounded-lg border-l-4 border-[#472EAD]">
                     <div className="flex-1">
                       <p className="text-gray-900 text-sm font-medium">
-                        {transfert.nom || `Produit #${transfert.id}`}
+                        {transfert.produit?.nom || transfert.nom || 'Produit sans nom'}
                       </p>
                       <p className="text-xs text-gray-500 mt-1">
-                        Quantité: {transfert.quantite || 0}
+                        Code: {transfert.produit?.code || 'N/A'}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Quantité: {transfert.quantite} | Cartons: {transfert.nombre_carton}
                       </p>
                     </div>
                   </li>
@@ -153,10 +169,10 @@ const Dashboard = () => {
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-[#111827] flex items-center gap-2">
                 <AlertTriangle size={20} className="text-[#F58020]" />
-                Alertes & Notifications
+                3 dernières alertes
               </h3>
               <button
-                onClick={() => (window.location.href = "/gestionnaire-boutique/alertes")}
+                onClick={() => (window.location.href = "/gestionnaire_boutique/alertes")}
                 className="text-sm px-3 py-1 bg-[#F58020] text-white rounded hover:bg-[#e67e1a] transition"
               >
                 Ouvrir
@@ -174,15 +190,15 @@ const Dashboard = () => {
                   {alertes.map((alert, idx) => (
                     <button
                       key={idx}
-                      onClick={() => (window.location.href = "/gestionnaire-boutique/alertes")}
+                      onClick={() => (window.location.href = "/gestionnaire_boutique/alertes")}
                       className="w-full text-left p-3 border-l-4 border-[#F58020] bg-orange-50 rounded hover:bg-orange-100 transition"
                     >
                       <div className="text-gray-900 font-medium text-sm flex items-center gap-2">
                         <AlertTriangle size={16} className="text-[#F58020]" />
-                        {alert.nom || alert.text || 'Produit'}
+                        {alert.produit?.nom || alert.nom || 'Produit'}
                       </div>
                       <div className="text-xs text-gray-600 mt-1">
-                        Quantité: {alert.quantite || 0} / Seuil: {alert.seuil || 0}
+                        Code: {alert.produit?.code || 'N/A'} | Qté: {alert.quantite || 0} / Seuil: {alert.seuil || 0}
                       </div>
                     </button>
                   ))}
@@ -203,7 +219,7 @@ const Dashboard = () => {
               Vous avez <span className="font-bold text-[#F58020]">{stats.transfertsEnAttente}</span> transfert(s) à compléter
             </p>
             <button
-              onClick={() => window.location.href = "/gestionnaire-boutique/produits"}
+              onClick={() => window.location.href = "/gestionnaire_boutique/produits"}
               className="px-4 py-2 bg-[#F58020] text-white rounded-lg hover:bg-[#e67e1a] transition font-medium"
             >
               Aller aux transferts

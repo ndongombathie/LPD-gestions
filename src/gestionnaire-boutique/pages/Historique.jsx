@@ -19,31 +19,47 @@ const Historique = () => {
     const load = async () => {
       try {
         setLoading(true);
-        const [pend, val] = await Promise.all([
+        
+        // Utiliser Promise.allSettled pour mieux gérer les erreurs
+        const results = await Promise.allSettled([
           gestionnaireBoutiqueAPI.getProduitsTransfer(),
           gestionnaireBoutiqueAPI.getTransfertsValides(),
         ]);
+        
         if (!mounted) return;
-        const pending = Array.isArray(pend?.data) ? pend.data : [];
-        const valides = Array.isArray(val?.data) ? val.data : [];
+        
+        const [pendingResult, validesResult] = results;
+        
+        const pendingData = pendingResult.status === 'fulfilled' ? pendingResult.value : { data: [], total: 0 };
+        const validesData = validesResult.status === 'fulfilled' ? validesResult.value : { data: [], total: 0 };
+        
+        const pending = Array.isArray(pendingData?.data) ? pendingData.data : [];
+        const valides = Array.isArray(validesData?.data) ? validesData.data : [];
+        
         const mapPending = pending.map((t) => ({
           id: `p-${t.id}`,
           date: t.created_at || new Date().toISOString(),
           action: 'Transfert reçu',
-          produit: t.nom || t.produit || `#${t.id}`,
+          produit: t.produit?.nom || t.nom || `#${t.produit_id}`,
+          code_produit: t.produit?.code || 'N/A',
           quantite: t.quantite,
+          cartons: t.nombre_carton,
           utilisateur: 'Gestionnaire dépôt',
           statut: 'en_attente',
         }));
+        
         const mapValides = valides.map((t) => ({
           id: `v-${t.id}`,
           date: t.updated_at || t.created_at || new Date().toISOString(),
           action: 'Produit validé',
-          produit: t.nom || t.produit || `#${t.id}`,
+          produit: t.produit?.nom || t.nom || `#${t.produit_id}`,
+          code_produit: t.produit?.code || 'N/A',
           quantite: t.quantite,
+          cartons: t.nombre_carton,
           utilisateur: 'Gestionnaire boutique',
           statut: 'validé',
         }));
+        
         const merged = [...mapPending, ...mapValides].sort((a, b) => new Date(b.date) - new Date(a.date));
         setHistorique(merged);
       } catch (error) {
@@ -127,6 +143,34 @@ const Historique = () => {
           </button>
         </div>
 
+        {/* Résumé statistiques */}
+        {historiqueFiltres.length > 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 mb-6">
+            <div className="bg-blue-50 rounded-lg p-4 border-l-4 border-blue-600">
+              <h4 className="text-sm text-gray-600 font-medium">Total d'entrées</h4>
+              <p className="text-2xl font-bold text-blue-600 mt-1">{historiqueFiltres.length}</p>
+            </div>
+            <div className="bg-green-50 rounded-lg p-4 border-l-4 border-green-600">
+              <h4 className="text-sm text-gray-600 font-medium">Validés</h4>
+              <p className="text-2xl font-bold text-green-600 mt-1">
+                {historiqueFiltres.filter((h) => h.statut === "validé").length}
+              </p>
+            </div>
+            <div className="bg-yellow-50 rounded-lg p-4 border-l-4 border-yellow-600">
+              <h4 className="text-sm text-gray-600 font-medium">En attente</h4>
+              <p className="text-2xl font-bold text-yellow-600 mt-1">
+                {historiqueFiltres.filter((h) => h.statut === "en_attente").length}
+              </p>
+            </div>
+            <div className="bg-purple-50 rounded-lg p-4 border-l-4 border-[#472EAD]">
+              <h4 className="text-sm text-gray-600 font-medium">Total reçu</h4>
+              <p className="text-2xl font-bold text-[#472EAD] mt-1">
+                {historiqueFiltres.reduce((sum, h) => sum + (h.quantite || 0), 0)}
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Filtres */}
         <div className="bg-white rounded-lg shadow p-4">
           <div className="flex items-center gap-4 flex-wrap">
@@ -176,10 +220,16 @@ const Historique = () => {
                   ),
                 },
                 { label: "Produit", key: "produit" },
+                { label: "Code", key: "code_produit" },
                 {
                   label: "Quantité",
                   key: "quantite",
                   render: (q) => q ? `${q} unités` : "-",
+                },
+                {
+                  label: "Cartons",
+                  key: "cartons",
+                  render: (c) => c ? `${c}` : "-",
                 },
                 { label: "Utilisateur", key: "utilisateur" },
                 {
@@ -202,33 +252,7 @@ const Historique = () => {
           )}
         </div>
 
-        {/* Résumé statistiques */}
-        {historiqueFiltres.length > 0 && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-blue-50 rounded-lg p-4 border-l-4 border-blue-600">
-              <h4 className="text-sm text-gray-600 font-medium">Total d'entrées</h4>
-              <p className="text-2xl font-bold text-blue-600 mt-1">{historiqueFiltres.length}</p>
-            </div>
-            <div className="bg-green-50 rounded-lg p-4 border-l-4 border-green-600">
-              <h4 className="text-sm text-gray-600 font-medium">Validés</h4>
-              <p className="text-2xl font-bold text-green-600 mt-1">
-                {historiqueFiltres.filter((h) => h.statut === "validé").length}
-              </p>
-            </div>
-            <div className="bg-yellow-50 rounded-lg p-4 border-l-4 border-yellow-600">
-              <h4 className="text-sm text-gray-600 font-medium">En attente</h4>
-              <p className="text-2xl font-bold text-yellow-600 mt-1">
-                {historiqueFiltres.filter((h) => h.statut === "en_attente").length}
-              </p>
-            </div>
-            <div className="bg-purple-50 rounded-lg p-4 border-l-4 border-[#472EAD]">
-              <h4 className="text-sm text-gray-600 font-medium">Total reçu</h4>
-              <p className="text-2xl font-bold text-[#472EAD] mt-1">
-                {historiqueFiltres.reduce((sum, h) => sum + (h.quantite || 0), 0)}
-              </p>
-            </div>
-          </div>
-        )}
+
 
         {/* Modal détails */}
         {detailEntry && (
@@ -250,10 +274,20 @@ const Historique = () => {
                   <p className="text-gray-600">Produit</p>
                   <p className="font-semibold text-[#111827] mt-1">{detailEntry.produit}</p>
                 </div>
+                <div className="border-b pb-3">
+                  <p className="text-gray-600">Code Produit</p>
+                  <p className="font-semibold text-[#111827] mt-1">{detailEntry.code_produit}</p>
+                </div>
                 {detailEntry.quantite && (
                   <div className="border-b pb-3">
                     <p className="text-gray-600">Quantité</p>
                     <p className="font-semibold text-[#111827] mt-1">{detailEntry.quantite} unités</p>
+                  </div>
+                )}
+                {detailEntry.cartons && (
+                  <div className="border-b pb-3">
+                    <p className="text-gray-600">Cartons</p>
+                    <p className="font-semibold text-[#111827] mt-1">{detailEntry.cartons}</p>
                   </div>
                 )}
                 <div className="border-b pb-3">
@@ -264,12 +298,6 @@ const Historique = () => {
                   <div className="border-b pb-3">
                     <p className="text-gray-600">Statut</p>
                     <p className={`font-semibold mt-1 ${getStatutColor(detailEntry.statut)}`}>{detailEntry.statut}</p>
-                  </div>
-                )}
-                {detailEntry.prix && (
-                  <div>
-                    <p className="text-gray-600">Prix de vente</p>
-                    <p className="font-semibold text-[#111827] mt-1">{detailEntry.prix} FCFA</p>
                   </div>
                 )}
               </div>

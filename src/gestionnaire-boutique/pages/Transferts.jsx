@@ -29,11 +29,15 @@ const Transferts = () => {
         // Harmoniser structure pour l'affichage
         const mapItem = (it) => ({
           id: it.id,
-          produit: it.nom || it.produit || it.designation || `#${it.id}`,
+          produit: it.produit?.nom || it.nom || it.designation || `#${it.id}`,
+          code: it.produit?.code || it.code || 'N/A',
+          quantite: it.quantite || it.qty || 0,
+          nombre_carton: it.nombre_carton || 0,
+          seuil: it.seuil || 0,
           source: it.source || it.origine || 'Dépôt',
           destination: it.destination || 'Boutique',
-          quantite: it.quantite || it.qty || 0,
           statut: it.statut || it.status || 'en_attente',
+          created_at: it.created_at || new Date().toISOString(),
         });
         const pendingRows = Array.isArray(pending?.data) ? pending.data.map(mapItem) : [];
         const validesRows = Array.isArray(valides?.data) ? valides.data.map((x) => ({ ...mapItem(x), statut: 'validé' })) : [];
@@ -120,11 +124,12 @@ const Transferts = () => {
             <DataTable
               columns={[
                 { label: 'Produit', key: 'produit' },
-                { label: 'Source', key: 'source' },
-                { label: 'Destination', key: 'destination' },
+                { label: 'Code', key: 'code' },
                 { label: 'Quantité', key: 'quantite' },
+                { label: 'Cartons', key: 'nombre_carton' },
+                { label: 'Seuil', key: 'seuil' },
                 { label: 'Statut', key: 'statut', render: (_, row) => (
-                    <span className={row.statut === 'validé' ? 'text-green-600' : row.statut === 'rejeté' ? 'text-red-600' : 'text-[#F58020]'}>{row.statut}</span>
+                    <span className={row.statut === 'validé' ? 'text-green-600 font-medium' : row.statut === 'rejeté' ? 'text-red-600 font-medium' : 'text-[#F58020] font-medium'}>{row.statut}</span>
                   )
                 },
               ]}
@@ -170,10 +175,11 @@ const Transferts = () => {
               <h3 className="text-xl font-bold text-[#111827]">Détails de la demande</h3>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <p><span className="font-medium">Produit :</span> {detailTransfert.produit}</p>
-                <p><span className="font-medium">Source :</span> {detailTransfert.source}</p>
-                <p><span className="font-medium">Destination :</span> {detailTransfert.destination}</p>
-                <p><span className="font-medium">Quantité :</span> {detailTransfert.quantite}</p>
-                <p><span className="font-medium">Statut :</span> {detailTransfert.statut}</p>
+                <p><span className="font-medium">Code :</span> {detailTransfert.code}</p>
+                <p><span className="font-medium">Quantité :</span> {detailTransfert.quantite} unités</p>
+                <p><span className="font-medium">Cartons :</span> {detailTransfert.nombre_carton}</p>
+                <p><span className="font-medium">Seuil :</span> {detailTransfert.seuil}</p>
+                <p><span className="font-medium">Statut :</span> <span className={detailTransfert.statut === 'validé' ? 'text-green-600 font-medium' : 'text-[#F58020] font-medium'}>{detailTransfert.statut}</span></p>
               </div>
               <div className="flex justify-end pt-4">
                 <button onClick={() => setDetailTransfert(null)} className="px-4 py-2 bg-[#472EAD] text-white rounded">Fermer</button>

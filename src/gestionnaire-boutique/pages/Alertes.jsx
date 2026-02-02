@@ -14,8 +14,9 @@ const Alertes = () => {
   const loadAlertes = async () => {
     try {
       setLoading(true);
-      const produitsSousSeuil = await gestionnaireBoutiqueAPI.getProduitsSousSeuil();
-      setAlertes(Array.isArray(produitsSousSeuil) ? produitsSousSeuil : []);
+      const produitsSousSeuilData = await gestionnaireBoutiqueAPI.getProduitsSousSeuil();
+      const produits = produitsSousSeuilData?.data || [];
+      setAlertes(Array.isArray(produits) ? produits : []);
     } catch (error) {
       console.error('❌ Erreur chargement alertes:', error);
       toast.error('Erreur de chargement', {
@@ -48,10 +49,12 @@ const Alertes = () => {
           ) : (
             <DataTable
               columns={[
-                { label: 'Nom', key: 'nom' },
-                { label: 'Catégorie', key: 'categorie' },
+                { label: 'Produit', key: 'produit', render: (p) => p?.nom || 'N/A' },
+                { label: 'Code', key: 'produit', render: (p) => p?.code || 'N/A' },
                 { label: 'Quantité', key: 'quantite' },
                 { label: 'Seuil', key: 'seuil' },
+                { label: 'Cartons', key: 'nombre_carton' },
+                { label: 'Statut', key: 'status', render: (s) => <span className={`px-2 py-1 rounded text-xs font-medium ${s === 'en_attente' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>{s || 'N/A'}</span> },
               ]}
               data={alertes}
               actions={[
@@ -69,12 +72,12 @@ const Alertes = () => {
             <div className="relative z-50 bg-white w-[600px] rounded-lg shadow-lg p-6 space-y-4">
               <h3 className="text-xl font-bold text-[#111827]">Détails du produit</h3>
               <div className="grid grid-cols-2 gap-4 text-sm">
-                <p><span className="font-medium">Nom :</span> {produitDetail.nom}</p>
-                <p><span className="font-medium">Code :</span> {produitDetail.code}</p>
-                <p><span className="font-medium">Catégorie :</span> {produitDetail.categorie}</p>
+                <p><span className="font-medium">Produit :</span> {produitDetail.produit?.nom || produitDetail.nom || 'N/A'}</p>
+                <p><span className="font-medium">Code :</span> {produitDetail.produit?.code || produitDetail.code || 'N/A'}</p>
                 <p><span className="font-medium">Quantité :</span> {produitDetail.quantite}</p>
                 <p><span className="font-medium">Seuil :</span> {produitDetail.seuil}</p>
-                <p><span className="font-medium">Fournisseur :</span> {produitDetail.fournisseur}</p>
+                <p><span className="font-medium">Cartons :</span> {produitDetail.nombre_carton || 'N/A'}</p>
+                <p><span className="font-medium">Statut :</span> {produitDetail.status || 'N/A'}</p>
               </div>
               <div className="flex justify-end pt-4">
                 <button onClick={() => setProduitDetail(null)} className="px-4 py-2 bg-[#472EAD] text-white rounded">Fermer</button>

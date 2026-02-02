@@ -78,15 +78,15 @@ const normalizeUser = (u) => {
 
 // 🔗 Pages éligibles aux raccourcis (mêmes infos que la Sidebar)
 const SHORTCUT_ITEMS = [
-  { name: "Tableau de bord", path: "/gestionnaire-boutique/dashboard", icon: LayoutDashboard },
-  { name: "Utilisateurs", path: "/gestionnaire-boutique/utilisateurs", icon: Users },
-  { name: "Fournisseurs", path: "/gestionnaire-boutique/fournisseurs", icon: Truck },
-  { name: "Clients spéciaux", path: "/gestionnaire-boutique/clients-speciaux", icon: ClipboardList },
-  { name: "Commandes", path: "/gestionnaire-boutique/commandes", icon: ShoppingCart },
-  { name: "Inventaire", path: "/gestionnaire-boutique/inventaire", icon: BarChart2 },
-  { name: "Rapports", path: "/gestionnaire-boutique/rapports", icon: FileText },
-  { name: "Décaissements", path: "/gestionnaire-boutique/decaissements", icon: Banknote },
-  { name: "Journal d’activités", path: "/gestionnaire-boutique/journal-activites", icon: Clock },
+  { name: "Tableau de bord", path: "/gestionnaire_boutique/dashboard", icon: LayoutDashboard },
+  { name: "Utilisateurs", path: "/gestionnaire_boutique/utilisateurs", icon: Users },
+  { name: "Fournisseurs", path: "/gestionnaire_boutique/fournisseurs", icon: Truck },
+  { name: "Clients spéciaux", path: "/gestionnaire_boutique/clients-speciaux", icon: ClipboardList },
+  { name: "Commandes", path: "/gestionnaire_boutique/commandes", icon: ShoppingCart },
+  { name: "Inventaire", path: "/gestionnaire_boutique/inventaire", icon: BarChart2 },
+  { name: "Rapports", path: "/gestionnaire_boutique/rapports", icon: FileText },
+  { name: "Décaissements", path: "/gestionnaire_boutique/decaissements", icon: Banknote },
+  { name: "Journal d'activités", path: "/gestionnaire_boutique/journal-activites", icon: Clock },
 ];
 
 // ==========================================================

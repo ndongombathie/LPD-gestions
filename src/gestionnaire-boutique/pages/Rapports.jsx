@@ -39,11 +39,15 @@ const Rapports = () => {
           gestionnaireBoutiqueAPI.getTransfertsValides(),
         ]);
         if (!mounted) return;
-        setNombreProduits(Number(nb || 0));
-        setQuantiteTotale(Number(qty || 0));
-        setSousSeuil(Array.isArray(ss) ? ss : []);
-        setPending(Array.isArray(pend?.data) ? pend.data : []);
-        setValides(Array.isArray(val?.data) ? val.data : []);
+        
+        const nbValue = typeof nb === 'object' ? (nb.total || nb.nombre || 0) : (Number(nb) || 0);
+        const qtyValue = typeof qty === 'object' ? (qty.total_quantity || qty.quantite || 0) : (Number(qty) || 0);
+        
+        setNombreProduits(nbValue);
+        setQuantiteTotale(qtyValue);
+        setSousSeuil(ss?.data || []);
+        setPending(pend?.data || []);
+        setValides(val?.data || []);
       } catch (error) {
         console.error('❌ Erreur chargement rapports:', error);
         toast.error('Erreur de chargement', { description: 'Impossible de charger les données des rapports' });
@@ -138,12 +142,12 @@ const Rapports = () => {
       return {
         rows: [...pending, ...valides].map((t) => ({
           id: t.id,
-          produit: t.nom || t.produit,
-          code: t.code,
-          statut: t.statut || (valides.find(v => v.id === t.id) ? 'validé' : 'en_attente'),
-          quantite: t.quantite,
+          produit: t.produit?.nom || t.nom || 'N/A',
+          code: t.produit?.code || t.code || 'N/A',
+          statut: t.status || t.statut || (valides.find(v => v.id === t.id) ? 'validé' : 'en_attente'),
+          quantite: t.quantite || 0,
           source: t.source || 'Dépôt',
-          date: t.updated_at || t.created_at,
+          date: t.updated_at || t.created_at || '-',
         })),
         columns: [
           { label: "Produit", key: "produit" },
@@ -174,11 +178,11 @@ const Rapports = () => {
     return {
       rows: sousSeuil.map((p) => ({
         id: p.id,
-        nom: p.nom,
-        code: p.code,
-        categorie: p.categorie,
-        quantite: p.quantite,
-        seuil: p.seuil,
+        nom: p.produit?.nom || p.nom || 'N/A',
+        code: p.produit?.code || p.code || 'N/A',
+        categorie: p.produit?.categorie || p.categorie || '-',
+        quantite: p.quantite || p.stock_global || 0,
+        seuil: p.seuil || p.stock_seuil || 0,
       })),
       columns: [
         { label: "Produit", key: "nom" },
@@ -274,45 +278,6 @@ const Rapports = () => {
                 <CardStat title="Valeur stock" value={`${formatNumber(rapport.valeurStock)} FCFA`} color="bg-gray-800" subtitle="estimée (prix gros)" />
               </>
             )}
-          </div>
-        )}
-
-        {/* Compléments */}
-        {rapport && typeRapport === "produits" && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-white p-4 rounded shadow">
-              <h4 className="font-semibold mb-2">Répartition par catégorie</h4>
-              <ul className="space-y-2 text-sm">
-                {rapport.categoryDistribution.map((c) => (
-                  <li key={c.category} className="flex justify-between items-center">
-                    <span>{c.category}</span>
-                    <span className="font-semibold">{c.value}%</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="bg-white p-4 rounded shadow">
-              <h4 className="font-semibold mb-2">Alertes stock</h4>
-              {rapport.produitsSousSeuil.length === 0 ? (
-                <p className="text-sm text-green-600">Aucune alerte</p>
-              ) : (
-                <ul className="text-sm space-y-1">
-                  {rapport.produitsSousSeuil.slice(0, 6).map((p) => (
-                    <li key={p.id} className="flex items-center justify-between">
-                      <span>{p.nom}</span>
-                      <span className="text-[#F58020] font-semibold">{p.quantite * p.nbr_pieces} u</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <div className="bg-white p-4 rounded shadow flex flex-col justify-center">
-              <h4 className="font-semibold mb-2 flex items-center gap-2"><TrendingUp size={18} /> Synthèse</h4>
-              <p className="text-sm text-gray-700">{formatNumber(rapport.quantiteTotale)} unités en stock pour {rapport.totalProduits} produits.</p>
-              <p className="text-sm text-gray-700 mt-1">{formatNumber(rapport.produitsSousSeuil.length)} produit(s) à surveiller.</p>
-            </div>
           </div>
         )}
 

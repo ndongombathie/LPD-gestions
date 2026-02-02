@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Search, Eye, AlertTriangle, Filter, BarChart3 } from "lucide-react";
+import { Search, Eye, Filter, BarChart3 } from "lucide-react";
 import CardStat from "../components/CardStat";
 import DataTable from "../components/DataTable";
 import LoadingSpinner from "../components/LoadingSpinner";
@@ -11,7 +11,8 @@ const Stock = () => {
   const [recherche, setRecherche] = useState("");
   const [categorieFiltre, setCategorieFiltre] = useState("Toutes");
   const [produitDetail, setProduitDetail] = useState(null);
-  const [stocks, setStocks] = useState([]); // Utilisé pour afficher les produits sous seuil
+  const [produits, setProduits] = useState([]); // Produits validés
+  const [stocksFaibles, setStocksFaibles] = useState([]); // Produits sous seuil
   const [nombreProduits, setNombreProduits] = useState(0);
   const [quantiteTotale, setQuantiteTotale] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -20,26 +21,50 @@ const Stock = () => {
   const stats = {
     totalProduits: nombreProduits,
     totalQuantite: quantiteTotale,
-    faible: stocks.length,
-    horsAlerte: Math.max(nombreProduits - stocks.length, 0),
+    faible: stocksFaibles.length,
+    horsAlerte: Math.max(nombreProduits - stocksFaibles.length, 0),
   };
 
-  const categories = ["Toutes", ...new Set(stocks.map(s => s.categorie))];
+  const categories = ["Toutes", ...new Set(produits.map(p => p.categorie).filter(Boolean))];
 
   useEffect(() => {
     let mounted = true;
     const load = async () => {
       try {
         setLoading(true);
-        const [nb, qty, sousSeuil] = await Promise.all([
+        const [nb, qty, sousSeuil, produitsDispo] = await Promise.all([
           gestionnaireBoutiqueAPI.getNombreProduitsTotal(),
           gestionnaireBoutiqueAPI.getQuantiteTotaleProduit(),
           gestionnaireBoutiqueAPI.getProduitsSousSeuil(),
+          gestionnaireBoutiqueAPI.getProduitsDisponiblesBoutique(),
         ]);
         if (!mounted) return;
-        setNombreProduits(Number(nb || 0));
-        setQuantiteTotale(Number(qty || 0));
-        setStocks(Array.isArray(sousSeuil) ? sousSeuil : []);
+        
+        const nbValue = typeof nb === 'object' ? (nb.total || nb.nombre || 0) : (Number(nb) || 0);
+        const qtyValue = typeof qty === 'object' ? (qty.total_quantity || qty.quantite || 0) : (Number(qty) || 0);
+        
+        setNombreProduits(nbValue);
+        setQuantiteTotale(qtyValue);
+        setStocksFaibles(sousSeuil?.data || []);
+        
+        // Extraire les produits depuis la réponse paginée ou array direct
+        console.log('📦 Produits disponibles boutique - structure:', produitsDispo);
+        let produitsData = Array.isArray(produitsDispo) 
+          ? produitsDispo 
+          : (produitsDispo?.data || []);
+        
+        // Normaliser: si chaque item a une propriété 'produit', l'extraire
+        produitsData = produitsData.map(item => {
+          if (item.produit) {
+            // Fusionner les données du produit avec les autres champs (quantite, cartons, etc.)
+            return { ...item.produit, ...item };
+          }
+          return item;
+        });
+        
+        console.log('📦 Produits extraits:', produitsData.length, 'produits');
+        console.log('📦 Premier produit:', produitsData[0]);
+        setProduits(produitsData);
       } catch (error) {
         console.error('❌ Erreur chargement stock:', error);
         toast.error('Erreur de chargement', { description: 'Impossible de charger les informations de stock' });
@@ -51,9 +76,9 @@ const Stock = () => {
     return () => { mounted = false; };
   }, []);
 
-  const stocksFiltres = stocks.filter(s => {
+  const stocksFiltres = produits.filter(s => {
     const q = recherche.trim().toLowerCase();
-    const matchRecherche = !q || s.nom.toLowerCase().includes(q) || s.code.toLowerCase().includes(q);
+    const matchRecherche = !q || s.nom?.toLowerCase().includes(q) || s.code?.toLowerCase().includes(q);
     const matchCategorie = categorieFiltre === "Toutes" || s.categorie === categorieFiltre;
     return matchRecherche && matchCategorie;
   });
@@ -77,7 +102,7 @@ const Stock = () => {
         {/* Card Statistiques principales */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <CardStat title="Nombre de produits" value={stats.totalProduits} color="bg-[#472EAD]" />
-          <CardStat title="Quantité totale" value={stats.totalQuantite.toLocaleString("fr-FR")} color="bg-blue-600" subtitle="unités" />
+          <CardStat title="Quantité totale" value={stats.totalQuantite.toLocaleString("fr-FR")} color="bg-blue-600" subtitle="unités (globale)" />
           <CardStat title="Hors alerte" value={stats.horsAlerte} color="bg-green-600" />
           <CardStat title="Stock faible" value={stats.faible} color="bg-[#F58020]" />
         </div>
@@ -120,9 +145,10 @@ const Stock = () => {
             <DataTable
               columns={[
                 { label: "Produit", key: "nom" },
-                { label: "Catégorie", key: "categorie" },
-                { label: "Quantité", key: "quantite" },
-                { label: "Seuil", key: "seuil" },
+                { label: "Code", key: "code" },
+                { label: "Quantité", key: "stock_global", render: (v, row) => row.stock_global ?? row.quantite ?? '-' },
+                { label: "Seuil", key: "stock_seuil", render: (v, row) => row.stock_seuil ?? row.seuil ?? '-' },
+                { label: "Cartons", key: "nombre_carton", render: (v, row) => row.nombre_carton ?? '-' },
               ]}
               data={stocksFiltres}
               actions={[
@@ -154,51 +180,31 @@ const Stock = () => {
                   <p className="text-[#111827] font-semibold mt-1">{produitDetail.code}</p>
                 </div>
                 <div className="border-b pb-3">
-                  <p className="text-gray-600 font-medium">Catégorie</p>
-                  <p className="text-[#111827] font-semibold mt-1">{produitDetail.categorie}</p>
-                </div>
-                <div className="border-b pb-3">
-                  <p className="text-gray-600 font-medium">Fournisseur</p>
-                  <p className="text-[#111827] font-semibold mt-1">{produitDetail.fournisseur}</p>
-                </div>
-                <div className="border-b pb-3">
                   <p className="text-gray-600 font-medium">Quantité (unités)</p>
-                  <p className="text-[#111827] font-semibold mt-1">{produitDetail.quantite}</p>
+                  <p className="text-[#111827] font-semibold mt-1">{produitDetail.stock_global ?? produitDetail.quantite ?? '-'}</p>
                 </div>
-                {produitDetail.nbr_pieces != null && (
-                  <>
-                    <div className="border-b pb-3">
-                      <p className="text-gray-600 font-medium">Nombre de pièces</p>
-                      <p className="text-[#111827] font-semibold mt-1">{produitDetail.nbr_pieces}</p>
-                    </div>
-                    <div className="border-b pb-3">
-                      <p className="text-gray-600 font-medium">Quantité totale</p>
-                      <p className="text-[#111827] font-semibold mt-1">{produitDetail.quantite * produitDetail.nbr_pieces}</p>
-                    </div>
-                  </>
-                )}
                 <div className="border-b pb-3">
                   <p className="text-gray-600 font-medium">Seuil d'alerte</p>
-                  <p className="text-[#111827] font-semibold mt-1">{produitDetail.seuil}</p>
+                  <p className="text-[#111827] font-semibold mt-1">{produitDetail.stock_seuil ?? produitDetail.seuil ?? '-'}</p>
                 </div>
-                {produitDetail.prix_gros != null && (
+                {produitDetail.nombre_carton != null && (
                   <div className="border-b pb-3">
-                    <p className="text-gray-600 font-medium">Prix gros</p>
-                    <p className="text-[#111827] font-semibold mt-1">{Number(produitDetail.prix_gros).toLocaleString("fr-FR")} FCFA</p>
+                    <p className="text-gray-600 font-medium">Cartons</p>
+                    <p className="text-[#111827] font-semibold mt-1">{produitDetail.nombre_carton}</p>
                   </div>
                 )}
-                {produitDetail.prix_detail != null && (
+                {produitDetail.prix_vente_gros != null && (
                   <div className="border-b pb-3">
-                    <p className="text-gray-600 font-medium">Prix détail</p>
-                    <p className="text-[#111827] font-semibold mt-1">{Number(produitDetail.prix_detail).toLocaleString("fr-FR")} FCFA</p>
+                    <p className="text-gray-600 font-medium">Prix vente gros</p>
+                    <p className="text-[#111827] font-semibold mt-1">{Number(produitDetail.prix_vente_gros).toLocaleString("fr-FR")} FCFA</p>
                   </div>
                 )}
-                <div className="col-span-2 border-b pb-3">
-                  <p className="text-gray-600 font-medium">Valeur du stock</p>
-                  <p className="text-[#472EAD] font-bold text-lg mt-1">
-                    {(produitDetail.quantite * produitDetail.nbr_pieces * produitDetail.prix_gros).toLocaleString("fr-FR")} FCFA
-                  </p>
-                </div>
+                {produitDetail.prix_vente_detail != null && (
+                  <div className="border-b pb-3">
+                    <p className="text-gray-600 font-medium">Prix vente détail</p>
+                    <p className="text-[#111827] font-semibold mt-1">{Number(produitDetail.prix_vente_detail).toLocaleString("fr-FR")} FCFA</p>
+                  </div>
+                )}
               </div>
               <div className="flex justify-end pt-4">
                 <button

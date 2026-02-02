@@ -55,18 +55,19 @@ export const validerProduitTransfer = async (data) => {
 };
 
 /**
- * Récupère la liste des produits en sous-seuil
- * @returns {Promise<Array>} Liste des produits en alerte
+ * Récupère la liste des produits en sous-seuil (paginée)
+ * @returns {Promise<Object>} Données paginées avec structure Laravel
  */
 export const getProduitsSousSeuil = async () => {
   try {
     const response = await httpClient.get('/produits-sous-seuil');
+    // Le backend retourne {current_page, data: [], total, per_page, ...}
     return response.data;
   } catch (error) {
     console.error('❌ Erreur getProduitsSousSeuil:', error);
     if (error.code === 'ECONNABORTED' || error.response?.status === 401 || error.response?.status === 404) {
       console.warn('⚠️ MODE DÉGRADÉ activé pour produits-sous-seuil');
-      return [];
+      return { current_page: 1, data: [], last_page: 1, total: 0, per_page: 20 };
     }
     throw error;
   }
@@ -97,7 +98,9 @@ export const getNombreProduitsTotal = async () => {
 export const getQuantiteTotaleProduit = async () => {
   try {
     const response = await httpClient.get('/quantite-totale-produit');
-    return response.data;
+    // Le backend retourne {total_quantity: "739"}
+    const totalQuantity = response.data?.total_quantity ? parseInt(response.data.total_quantity) : 0;
+    return totalQuantity;
   } catch (error) {
     console.error('❌ Erreur getQuantiteTotaleProduit:', error);
     if (error.code === 'ECONNABORTED' || error.response?.status === 401 || error.response?.status === 404) {
@@ -115,6 +118,17 @@ export const getQuantiteTotaleProduit = async () => {
 export const getTransfertsValides = async () => {
   try {
     const response = await httpClient.get('/transfers/valide');
+    // Le backend retourne directement un array: [...]
+    // On le normalise en structure paginée pour compatibilité
+    if (Array.isArray(response.data)) {
+      return {
+        current_page: 1,
+        data: response.data,
+        last_page: 1,
+        total: response.data.length,
+        per_page: response.data.length
+      };
+    }
     return response.data;
   } catch (error) {
     console.error('❌ Erreur getTransfertsValides:', error);
@@ -168,19 +182,26 @@ export const getMontantTotalStock = async () => {
  */
 export const getStatistiquesBoutique = async () => {
   try {
-    const [nombreProduits, quantiteTotale, produitsSousSeuil, montantTotal] = await Promise.all([
+    // Utiliser Promise.allSettled pour ne pas échouer si un appel échoue
+    const results = await Promise.allSettled([
       getNombreProduitsTotal(),
       getQuantiteTotaleProduit(),
       getProduitsSousSeuil(),
       getMontantTotalStock()
     ]);
     
+    const [nombreProduitsResult, quantiteTotaleResult, produitsSousSeuilResult, montantTotalResult] = results;
+    
+    // Extraire les produits sous seuil correctement
+    const produitsSousSeuilData = produitsSousSeuilResult.status === 'fulfilled' ? produitsSousSeuilResult.value : { data: [], total: 0 };
+    const produitsSousSeuilArray = produitsSousSeuilData?.data || [];
+    
     return {
-      nombreProduits,
-      quantiteTotale,
-      produitsSousSeuil: Array.isArray(produitsSousSeuil) ? produitsSousSeuil.length : 0,
-      alertes: produitsSousSeuil,
-      montantTotal
+      nombreProduits: nombreProduitsResult.status === 'fulfilled' ? nombreProduitsResult.value : 0,
+      quantiteTotale: quantiteTotaleResult.status === 'fulfilled' ? quantiteTotaleResult.value : 0,
+      produitsSousSeuil: produitsSousSeuilArray.length,
+      alertes: produitsSousSeuilArray,
+      montantTotal: montantTotalResult.status === 'fulfilled' ? montantTotalResult.value : 0
     };
   } catch (error) {
     console.error('❌ Erreur getStatistiquesBoutique:', error);

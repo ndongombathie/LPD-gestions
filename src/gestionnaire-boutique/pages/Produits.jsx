@@ -14,22 +14,24 @@ const Produits = () => {
   
   const [selectedTransfert, setSelectedTransfert] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [detailTransfert, setDetailTransfert] = useState(null);
   const [formData, setFormData] = useState({
     prix_vente_detail: "",
     prix_vente_gros: "",
     prix_seuil_detail: "",
     prix_seuil_gros: "",
+    seuil: "",
   });
 
   const loadTransferts = async () => {
     try {
       setLoading(true);
-      const [produitsTransfer, transfertsValidesData] = await Promise.all([
+      const [produitsTransferData, transfertsValidesData] = await Promise.all([
         gestionnaireBoutiqueAPI.getProduitsTransfer(),
         gestionnaireBoutiqueAPI.getTransfertsValides()
       ]);
-      
-      setTransferts(produitsTransfer?.data || []);
+
+      setTransferts(produitsTransferData?.data || []);
       setTransfertsValides(transfertsValidesData?.data || []);
     } catch (error) {
       console.error('❌ Erreur chargement transferts:', error);
@@ -50,8 +52,9 @@ const Produits = () => {
     setFormData({
       prix_vente_detail: "",
       prix_vente_gros: "",
-      prix_seuil_detail: "5",
-      prix_seuil_gros: "3",
+      prix_seuil_detail: "",
+      prix_seuil_gros: "",
+      seuil: transfert.seuil || "",
     });
     setShowModal(true);
   };
@@ -65,7 +68,8 @@ const Produits = () => {
     }
 
     const payload = {
-      produit_id: selectedTransfert.id,
+      id: selectedTransfert.id,
+      seuil: parseFloat(formData.seuil || selectedTransfert.seuil || 0),
       prix_vente_detail: parseFloat(formData.prix_vente_detail),
       prix_vente_gros: parseFloat(formData.prix_vente_gros),
       prix_seuil_detail: parseFloat(formData.prix_seuil_detail || 0),
@@ -77,12 +81,12 @@ const Produits = () => {
       await gestionnaireBoutiqueAPI.validerProduitTransfer(payload);
       
       toast.success('Produit validé', {
-        description: `${selectedTransfert.nom || 'Produit'} a été validé et ajouté au stock`
+        description: `${selectedTransfert.produit?.nom || 'Produit'} a été validé et ajouté au stock`
       });
       
       setShowModal(false);
       setSelectedTransfert(null);
-      
+
       // Recharger les données
       await loadTransferts();
     } catch (error) {
@@ -116,11 +120,11 @@ const Produits = () => {
             ) : (
               <DataTable
                 columns={[
-                  { label: "Produit", key: "nom" },
-                  { label: "Code", key: "code" },
-                  { label: "Catégorie", key: "categorie" },
+                  { label: "Produit", key: "produit", render: (p) => p?.nom || 'N/A' },
+                  { label: "Code", key: "produit", render: (p) => p?.code || 'N/A' },
                   { label: "Quantité reçue", key: "quantite" },
-                  { label: "Source", key: "source" },
+                  { label: "Cartons", key: "nombre_carton" },
+                  { label: "Seuil", key: "seuil" },
                   { label: "Date réception", key: "created_at", render: (d) => d ? new Date(d).toLocaleDateString("fr-FR") : '-' },
                 ]}
                 data={transferts}
@@ -138,11 +142,11 @@ const Produits = () => {
           </div>
         </div>
 
-        {/* Transferts validés */}
+        {/* Derniers transferts validés */}
         <div>
           <div className="flex items-center gap-2 mb-4">
             <CheckCircle2 className="text-green-600" size={24} />
-            <h3 className="text-xl font-semibold text-[#111827]">Complétés et validés ({transfertsValides.length})</h3>
+            <h3 className="text-xl font-semibold text-[#111827]">5 derniers transferts validés</h3>
           </div>
           <div className="bg-white rounded-lg shadow p-4 overflow-auto">
             {transfertsValides.length === 0 ? (
@@ -150,20 +154,21 @@ const Produits = () => {
             ) : (
               <DataTable
                 columns={[
-                  { label: "Produit", key: "nom" },
-                  { label: "Code", key: "code" },
-                  { label: "Catégorie", key: "categorie" },
+                  { label: "Produit", key: "produit", render: (p) => p?.nom || 'N/A' },
+                  { label: "Code", key: "produit", render: (p) => p?.code || 'N/A' },
                   { label: "Quantité", key: "quantite" },
+                  { label: "Cartons", key: "nombre_carton" },
+                  { label: "Seuil", key: "seuil" },
                   { label: "Date validation", key: "updated_at", render: (d, row) => new Date(d || row.created_at).toLocaleDateString("fr-FR") },
                 ]}
-                data={transfertsValides}
+                data={transfertsValides.slice(0, 5)}
                 actions={[
                   {
                     title: "Voir détails",
                     icon: <Eye size={16} />,
                     color: "text-blue-600",
                     hoverBg: "bg-blue-50",
-                    onClick: (row) => {},
+                    onClick: (row) => setDetailTransfert(row),
                   },
                 ]}
               />
@@ -179,15 +184,31 @@ const Produits = () => {
               
               {/* Infos pré-remplies du transfert */}
               <div className="bg-gray-50 rounded p-4 space-y-2 border-l-4 border-[#472EAD]">
-                <p><span className="font-semibold">Produit:</span> {selectedTransfert.nom}</p>
-                <p><span className="font-semibold">Code:</span> {selectedTransfert.code}</p>
-                <p><span className="font-semibold">Catégorie:</span> {selectedTransfert.categorie}</p>
+                <p><span className="font-semibold">Produit:</span> {selectedTransfert.produit?.nom || 'N/A'}</p>
+                <p><span className="font-semibold">Code:</span> {selectedTransfert.produit?.code || 'N/A'}</p>
                 <p><span className="font-semibold">Quantité reçue:</span> {selectedTransfert.quantite} unités</p>
-                <p><span className="font-semibold">Source:</span> {selectedTransfert.source}</p>
+                <p><span className="font-semibold">Cartons:</span> {selectedTransfert.nombre_carton}</p>
+                <p><span className="font-semibold">Seuil:</span> {selectedTransfert.seuil}</p>
               </div>
 
               {/* Formulaire de complétion */}
               <div className="space-y-4">
+                {/* Ligne 1: Seuil de stock */}
+                <div className="grid grid-cols-1 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-[#111827] mb-1">Seuil de Stock Minimum *</label>
+                    <input
+                      type="number"
+                      className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-[#472EAD]"
+                      value={formData.seuil}
+                      onChange={(e) => setFormData({ ...formData, seuil: e.target.value })}
+                      placeholder={selectedTransfert.seuil || "10"}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Seuil actuel: {selectedTransfert.seuil} unités</p>
+                  </div>
+                </div>
+
+                {/* Ligne 2: Prix de vente */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-sm font-medium text-[#111827] mb-1">Prix Vente Détail (FCFA) *</label>
@@ -209,24 +230,28 @@ const Produits = () => {
                       placeholder="900"
                     />
                   </div>
+                </div>
+
+                {/* Ligne 3: Seuils de prix */}
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-[#111827] mb-1">Seuil Détail</label>
+                    <label className="block text-sm font-medium text-[#111827] mb-1">Seuil Prix Détail (FCFA)</label>
                     <input
                       type="number"
                       className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-[#472EAD]"
                       value={formData.prix_seuil_detail}
                       onChange={(e) => setFormData({ ...formData, prix_seuil_detail: e.target.value })}
-                      placeholder="5"
+                      placeholder="Prix minimum détail"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-[#111827] mb-1">Seuil Gros</label>
+                    <label className="block text-sm font-medium text-[#111827] mb-1">Seuil Prix Gros (FCFA)</label>
                     <input
                       type="number"
                       className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-[#472EAD]"
                       value={formData.prix_seuil_gros}
                       onChange={(e) => setFormData({ ...formData, prix_seuil_gros: e.target.value })}
-                      placeholder="3"
+                      placeholder="Prix minimum gros"
                     />
                   </div>
                 </div>
@@ -249,6 +274,50 @@ const Produits = () => {
                   className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
                 >
                   {validating ? 'Validation...' : 'Valider et ajouter au stock'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal détails transfert validé */}
+        {detailTransfert && (
+          <div className="fixed inset-0 z-200 bg-black/40 flex justify-center items-center">
+            <div className="relative z-50 bg-white w-[600px] rounded-lg shadow-lg p-6 space-y-4">
+              <h3 className="text-xl font-bold text-[#111827]">Détails du transfert validé</h3>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="border-b pb-3">
+                  <p className="text-gray-600 font-medium">Produit</p>
+                  <p className="text-[#111827] font-semibold mt-1">{detailTransfert.produit?.nom || 'N/A'}</p>
+                </div>
+                <div className="border-b pb-3">
+                  <p className="text-gray-600 font-medium">Code</p>
+                  <p className="text-[#111827] font-semibold mt-1">{detailTransfert.produit?.code || 'N/A'}</p>
+                </div>
+                <div className="border-b pb-3">
+                  <p className="text-gray-600 font-medium">Quantité</p>
+                  <p className="text-[#111827] font-semibold mt-1">{detailTransfert.quantite} unités</p>
+                </div>
+                <div className="border-b pb-3">
+                  <p className="text-gray-600 font-medium">Cartons</p>
+                  <p className="text-[#111827] font-semibold mt-1">{detailTransfert.nombre_carton}</p>
+                </div>
+                <div className="border-b pb-3">
+                  <p className="text-gray-600 font-medium">Seuil</p>
+                  <p className="text-[#111827] font-semibold mt-1">{detailTransfert.seuil}</p>
+                </div>
+                <div className="border-b pb-3">
+                  <p className="text-gray-600 font-medium">Date validation</p>
+                  <p className="text-[#111827] font-semibold mt-1">{new Date(detailTransfert.updated_at || detailTransfert.created_at).toLocaleDateString('fr-FR')}</p>
+                </div>
+                <div className="border-b pb-3">
+                  <p className="text-gray-600 font-medium">Statut</p>
+                  <p className="text-green-600 font-semibold mt-1">Validé</p>
+                </div>
+              </div>
+              <div className="flex justify-end pt-4">
+                <button onClick={() => setDetailTransfert(null)} className="px-4 py-2 bg-[#472EAD] text-white rounded hover:bg-[#3b2594]">
+                  Fermer
                 </button>
               </div>
             </div>
