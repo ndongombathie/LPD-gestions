@@ -2,7 +2,7 @@
 // 🧠 Header.jsx — LPD Manager (Vendeur)
 // ==========================================================
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   ChevronDown,
   LogOut,
@@ -14,6 +14,8 @@ import {
   User,
 } from "lucide-react";
 import useAuth from "../hooks/useAuth";
+import { statsAPI } from "../services/api/stats"; // API des statistiques
+import profileAPI from "../services/api/profile"; // API du profil utilisateur
 
 // ================= Utils =================
 const getDisplayName = (user) => {
@@ -23,8 +25,16 @@ const getDisplayName = (user) => {
     return `${user.prenom} ${user.nom}`;
   }
   
+  if (user.first_name && user.last_name) {
+    return `${user.first_name} ${user.last_name}`;
+  }
+  
   if (user.name) {
     return user.name;
+  }
+  
+  if (user.username) {
+    return user.username;
   }
   
   if (user.email) {
@@ -34,13 +44,16 @@ const getDisplayName = (user) => {
   return "Utilisateur";
 };
 
-const getInitials = (name = "") =>
-  name
+const getInitials = (name = "") => {
+  if (!name || name === "Utilisateur") return "U";
+  
+  return name
     .split(" ")
     .map((n) => n[0])
     .join("")
     .toUpperCase()
-    .slice(0, 2);
+    .slice(0, 2) || "U";
+};
 
 // ================= Password Validation =================
 const validatePassword = (password) => {
@@ -140,6 +153,15 @@ function PasswordModal({ open, onClose }) {
         setError("L'ancien mot de passe est incorrect");
       } else if (err.response?.status === 400) {
         setError(err.response.data?.message || "Données invalides");
+      } else if (err.response?.status === 422) {
+        const errors = err.response.data?.errors;
+        if (errors?.current_password) {
+          setError(errors.current_password[0]);
+        } else if (errors?.new_password) {
+          setError(errors.new_password[0]);
+        } else {
+          setError("Erreur de validation");
+        }
       } else if (err.response?.status === 429) {
         setError("Trop de tentatives. Veuillez réessayer plus tard");
       } else {
@@ -308,8 +330,84 @@ function PasswordModal({ open, onClose }) {
 export default function Header({ user, commandes = [], onLogout }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [pwdOpen, setPwdOpen] = useState(false);
+  const [loading, setLoading] = useState({
+    stats: false,
+    profile: false
+  });
+  const [todayStats, setTodayStats] = useState({
+    total_sales: 0,
+    total_orders: 0
+  });
+  const [userProfile, setUserProfile] = useState(null);
 
+  // Récupérer les statistiques du jour via API
+  const fetchTodayStats = async () => {
+    try {
+      setLoading(prev => ({ ...prev, stats: true }));
+      const stats = await statsAPI.getTodaySales();
+      
+      setTodayStats({
+        total_sales: stats?.total_sales || stats?.today_sales || 0,
+        total_orders: stats?.total_orders || stats?.today_orders || 0
+      });
+    } catch (error) {
+      console.error("Erreur chargement des stats:", error);
+      // Fallback sur les commandes locales
+      const localSales = commandes
+        .filter(
+          (c) =>
+            c.statut === "complétée" &&
+            new Date(c.created_at).toDateString() ===
+              new Date().toDateString()
+        )
+        .reduce((s, c) => s + (c.total_ttc || 0), 0);
+      
+      setTodayStats({
+        total_sales: localSales,
+        total_orders: commandes.filter(c => 
+          new Date(c.created_at).toDateString() === new Date().toDateString()
+        ).length
+      });
+    } finally {
+      setLoading(prev => ({ ...prev, stats: false }));
+    }
+  };
+
+  // Récupérer le profil utilisateur via API profileAPI
+  const fetchUserProfile = async () => {
+    try {
+      setLoading(prev => ({ ...prev, profile: true }));
+      const profile = await profileAPI.getProfile();
+      console.log("Profil utilisateur récupéré:", profile);
+      setUserProfile(profile);
+    } catch (error) {
+      console.error("Erreur chargement du profil:", error);
+      // Utiliser les données de base si l'API échoue
+      setUserProfile(user);
+    } finally {
+      setLoading(prev => ({ ...prev, profile: false }));
+    }
+  };
+
+  // Charger les données au montage et périodiquement
+  useEffect(() => {
+    fetchTodayStats();
+    fetchUserProfile();
+    
+    // Rafraîchir les stats toutes les minutes
+    const interval = setInterval(fetchTodayStats, 60000);
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  // Calcul des ventes du jour (avec priorité API, fallback local)
   const ventesDuJour = useMemo(() => {
+    // Utiliser d'abord les stats API
+    if (todayStats.total_sales > 0) {
+      return todayStats.total_sales;
+    }
+    
+    // Fallback sur les commandes locales
     return commandes
       .filter(
         (c) =>
@@ -318,14 +416,32 @@ export default function Header({ user, commandes = [], onLogout }) {
             new Date().toDateString()
       )
       .reduce((s, c) => s + (c.total_ttc || 0), 0);
-  }, [commandes]);
+  }, [todayStats.total_sales, commandes]);
 
   const formatMoney = (v) =>
     new Intl.NumberFormat("fr-FR").format(v) + " FCFA";
 
-  // Récupérer le nom complet
-  const displayName = getDisplayName(user);
-  const initials = getInitials(displayName);
+  // Récupérer le nom complet (priorité au profil API, fallback user local)
+  const displayName = useMemo(() => {
+    const userData = userProfile || user;
+    return getDisplayName(userData);
+  }, [userProfile, user]);
+
+  const initials = useMemo(() => getInitials(displayName), [displayName]);
+
+  // Déconnexion
+  const handleLogout = async () => {
+    if (window.confirm("Voulez-vous vous déconnecter ?")) {
+      try {
+        const { logout } = useAuth();
+        await logout();
+        if (onLogout) onLogout();
+      } catch (error) {
+        console.error("Erreur déconnexion:", error);
+      }
+    }
+    setMenuOpen(false);
+  };
 
   return (
     <>
@@ -360,9 +476,14 @@ export default function Header({ user, commandes = [], onLogout }) {
                 <span className="text-xs text-gray-500 flex items-center gap-1 justify-end">
                   <Banknote size={12} /> Ventes du jour
                 </span>
-                <span className="font-semibold text-emerald-600">
-                  {formatMoney(ventesDuJour)}
-                </span>
+                <div className="flex items-center gap-2 justify-end">
+                  <span className="font-semibold text-emerald-600">
+                    {formatMoney(ventesDuJour)}
+                  </span>
+                  {loading.stats && (
+                    <div className="w-3 h-3 border border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+                  )}
+                </div>
               </div>
 
               <div className="relative">
@@ -383,7 +504,7 @@ export default function Header({ user, commandes = [], onLogout }) {
                       {displayName}
                     </span>
                     <span className="text-xs text-gray-500 leading-tight">
-                      {user?.role === 'vendeur' ? 'Vendeur' : 'Utilisateur'}
+                      {(userProfile?.role || user?.role) === 'vendeur' ? 'Vendeur' : 'Utilisateur'}
                     </span>
                   </div>
                   <ChevronDown 
@@ -402,12 +523,14 @@ export default function Header({ user, commandes = [], onLogout }) {
                     />
                     <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 shadow-lg rounded-lg p-2 z-20">
                       <div className="px-3 py-2 border-b mb-2">
-                        <p className="font-medium text-gray-900">{displayName}</p>
-                        <p className="text-xs text-gray-500 truncate">{user?.email || 'Aucun email'}</p>
+                        <p className="font-medium text-gray-900 truncate">{displayName}</p>
+                        <p className="text-xs text-gray-500 truncate">
+                          {(userProfile?.email || user?.email) || 'Aucun email'}
+                        </p>
                         <div className="flex items-center gap-1 mt-1">
                           <User size={10} className="text-gray-400" />
-                          <span className="text-xs text-gray-600">
-                            {user?.store || 'Boutique par défaut'}
+                          <span className="text-xs text-gray-600 truncate">
+                            {userProfile?.store_name || user?.store || userProfile?.boutique_nom || 'Boutique'}
                           </span>
                         </div>
                       </div>
@@ -423,12 +546,7 @@ export default function Header({ user, commandes = [], onLogout }) {
                       </button>
 
                       <button
-                        onClick={() => {
-                          if (window.confirm("Voulez-vous vous déconnecter ?")) {
-                            onLogout();
-                          }
-                          setMenuOpen(false);
-                        }}
+                        onClick={handleLogout}
                         className="w-full px-3 py-2 text-sm text-[#F58020] hover:bg-orange-50 flex gap-2 items-center rounded-md mt-1"
                       >
                         <LogOut size={14} /> Déconnexion
@@ -442,7 +560,10 @@ export default function Header({ user, commandes = [], onLogout }) {
         </div>
       </header>
 
-      <PasswordModal open={pwdOpen} onClose={() => setPwdOpen(false)} />
+      <PasswordModal 
+        open={pwdOpen} 
+        onClose={() => setPwdOpen(false)} 
+      />
     </>
   );
 }
