@@ -146,14 +146,12 @@ const Rapports = () => {
           code: t.produit?.code || t.code || 'N/A',
           statut: t.status || t.statut || (valides.find(v => v.id === t.id) ? 'validé' : 'en_attente'),
           quantite: t.quantite || 0,
-          source: t.source || 'Dépôt',
           date: t.updated_at || t.created_at || '-',
         })),
         columns: [
           { label: "Produit", key: "produit" },
           { label: "Code", key: "code" },
           { label: "Quantité", key: "quantite" },
-          { label: "Source", key: "source" },
           {
             label: "Statut",
             key: "statut",
@@ -174,7 +172,7 @@ const Rapports = () => {
       };
     }
 
-    // défaut: produits / stock
+    // Produits sous seuil
     return {
       rows: sousSeuil.map((p) => ({
         id: p.id,
@@ -183,13 +181,18 @@ const Rapports = () => {
         categorie: p.produit?.categorie || p.categorie || '-',
         quantite: p.quantite || p.stock_global || 0,
         seuil: p.seuil || p.stock_seuil || 0,
+        date: p.updated_at || p.created_at || '-',
       })),
       columns: [
         { label: "Produit", key: "nom" },
         { label: "Code", key: "code" },
-        { label: "Catégorie", key: "categorie" },
         { label: "Quantité", key: "quantite" },
         { label: "Seuil", key: "seuil" },
+        {
+          label: "Date",
+          key: "date",
+          render: (d) => d ? new Date(d).toLocaleDateString("fr-FR") : "-",
+        },
       ],
     };
   };

@@ -26,13 +26,25 @@ const Produits = () => {
   const loadTransferts = async () => {
     try {
       setLoading(true);
-      const [produitsTransferData, transfertsValidesData] = await Promise.all([
+      const [produitsTransferData, transfertsValidesData, produitsDispoData] = await Promise.all([
         gestionnaireBoutiqueAPI.getProduitsTransfer(),
-        gestionnaireBoutiqueAPI.getTransfertsValides()
+        gestionnaireBoutiqueAPI.getTransfertsValides(),
+        gestionnaireBoutiqueAPI.getProduitsDisponiblesBoutique()
       ]);
 
-      setTransferts(produitsTransferData?.data || []);
-      setTransfertsValides(transfertsValidesData?.data || []);
+      const produitsList = Array.isArray(produitsDispoData) ? produitsDispoData : (produitsDispoData?.data || []);
+      const map = produitsList.reduce((acc, produit) => {
+        if (produit?.id) acc[produit.id] = produit;
+        return acc;
+      }, {});
+
+      const enrich = (t) => ({
+        ...t,
+        produit: map[t.produit_id] || t.produit
+      });
+
+      setTransferts((produitsTransferData?.data || []).map(enrich));
+      setTransfertsValides((transfertsValidesData?.data || []).map(enrich));
     } catch (error) {
       console.error('❌ Erreur chargement transferts:', error);
       toast.error('Erreur de chargement', {
@@ -76,9 +88,11 @@ const Produits = () => {
       prix_seuil_gros: parseFloat(formData.prix_seuil_gros || 0),
     };
 
+    console.log('📤 Payload envoyé au backend:', payload);
     setValidating(true);
     try {
-      await gestionnaireBoutiqueAPI.validerProduitTransfer(payload);
+      const response = await gestionnaireBoutiqueAPI.validerProduitTransfer(payload);
+      console.log('✅ Réponse du backend:', response);
       
       toast.success('Produit validé', {
         description: `${selectedTransfert.produit?.nom || 'Produit'} a été validé et ajouté au stock`
@@ -295,6 +309,14 @@ const Produits = () => {
                   <p className="text-[#111827] font-semibold mt-1">{detailTransfert.produit?.code || 'N/A'}</p>
                 </div>
                 <div className="border-b pb-3">
+                  <p className="text-gray-600 font-medium">Catégorie</p>
+                  <p className="text-[#111827] font-semibold mt-1">{detailTransfert.produit?.categorie_id || 'N/A'}</p>
+                </div>
+                <div className="border-b pb-3">
+                  <p className="text-gray-600 font-medium">Unité par carton</p>
+                  <p className="text-[#111827] font-semibold mt-1">{detailTransfert.produit?.unite_carton ?? '-'}</p>
+                </div>
+                <div className="border-b pb-3">
                   <p className="text-gray-600 font-medium">Quantité</p>
                   <p className="text-[#111827] font-semibold mt-1">{detailTransfert.quantite} unités</p>
                 </div>
@@ -307,8 +329,44 @@ const Produits = () => {
                   <p className="text-[#111827] font-semibold mt-1">{detailTransfert.seuil}</p>
                 </div>
                 <div className="border-b pb-3">
+                  <p className="text-gray-600 font-medium">Stock global</p>
+                  <p className="text-[#111827] font-semibold mt-1">{detailTransfert.produit?.stock_global ?? '-'}</p>
+                </div>
+                <div className="border-b pb-3">
+                  <p className="text-gray-600 font-medium">Stock seuil</p>
+                  <p className="text-[#111827] font-semibold mt-1">{detailTransfert.produit?.stock_seuil ?? '-'}</p>
+                </div>
+                <div className="border-b pb-3">
+                  <p className="text-gray-600 font-medium">Prix achat</p>
+                  <p className="text-[#111827] font-semibold mt-1">{Number(detailTransfert.produit?.prix_achat || 0).toLocaleString('fr-FR')} FCFA</p>
+                </div>
+                <div className="border-b pb-3">
+                  <p className="text-gray-600 font-medium">Prix unité carton</p>
+                  <p className="text-[#111827] font-semibold mt-1">{Number(detailTransfert.produit?.prix_unite_carton || 0).toLocaleString('fr-FR')} FCFA</p>
+                </div>
+                <div className="border-b pb-3">
+                  <p className="text-gray-600 font-medium">Prix vente détail</p>
+                  <p className="text-[#111827] font-semibold mt-1">{Number(detailTransfert.produit?.prix_vente_detail || 0).toLocaleString('fr-FR')} FCFA</p>
+                </div>
+                <div className="border-b pb-3">
+                  <p className="text-gray-600 font-medium">Prix vente gros</p>
+                  <p className="text-[#111827] font-semibold mt-1">{Number(detailTransfert.produit?.prix_vente_gros || 0).toLocaleString('fr-FR')} FCFA</p>
+                </div>
+                <div className="border-b pb-3">
+                  <p className="text-gray-600 font-medium">Seuil prix détail</p>
+                  <p className="text-[#111827] font-semibold mt-1">{Number(detailTransfert.produit?.prix_seuil_detail || 0).toLocaleString('fr-FR')} FCFA</p>
+                </div>
+                <div className="border-b pb-3">
+                  <p className="text-gray-600 font-medium">Seuil prix gros</p>
+                  <p className="text-[#111827] font-semibold mt-1">{Number(detailTransfert.produit?.prix_seuil_gros || 0).toLocaleString('fr-FR')} FCFA</p>
+                </div>
+                <div className="border-b pb-3">
                   <p className="text-gray-600 font-medium">Date validation</p>
                   <p className="text-[#111827] font-semibold mt-1">{new Date(detailTransfert.updated_at || detailTransfert.created_at).toLocaleDateString('fr-FR')}</p>
+                </div>
+                <div className="border-b pb-3">
+                  <p className="text-gray-600 font-medium">Date réception</p>
+                  <p className="text-[#111827] font-semibold mt-1">{new Date(detailTransfert.created_at).toLocaleDateString('fr-FR')}</p>
                 </div>
                 <div className="border-b pb-3">
                   <p className="text-gray-600 font-medium">Statut</p>

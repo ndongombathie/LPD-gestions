@@ -180,6 +180,14 @@ const Stock = () => {
                   <p className="text-[#111827] font-semibold mt-1">{produitDetail.code}</p>
                 </div>
                 <div className="border-b pb-3">
+                  <p className="text-gray-600 font-medium">Catégorie</p>
+                  <p className="text-[#111827] font-semibold mt-1">{produitDetail.categorie_id || produitDetail.categorie || '-'}</p>
+                </div>
+                <div className="border-b pb-3">
+                  <p className="text-gray-600 font-medium">Unité par carton</p>
+                  <p className="text-[#111827] font-semibold mt-1">{produitDetail.unite_carton ?? '-'}</p>
+                </div>
+                <div className="border-b pb-3">
                   <p className="text-gray-600 font-medium">Quantité (unités)</p>
                   <p className="text-[#111827] font-semibold mt-1">{produitDetail.stock_global ?? produitDetail.quantite ?? '-'}</p>
                 </div>
@@ -193,6 +201,18 @@ const Stock = () => {
                     <p className="text-[#111827] font-semibold mt-1">{produitDetail.nombre_carton}</p>
                   </div>
                 )}
+                {produitDetail.prix_unite_carton != null && (
+                  <div className="border-b pb-3">
+                    <p className="text-gray-600 font-medium">Prix unité carton</p>
+                    <p className="text-[#111827] font-semibold mt-1">{Number(produitDetail.prix_unite_carton).toLocaleString("fr-FR")} FCFA</p>
+                  </div>
+                )}
+                {produitDetail.prix_achat != null && (
+                  <div className="border-b pb-3">
+                    <p className="text-gray-600 font-medium">Prix achat</p>
+                    <p className="text-[#111827] font-semibold mt-1">{Number(produitDetail.prix_achat).toLocaleString("fr-FR")} FCFA</p>
+                  </div>
+                )}
                 {produitDetail.prix_vente_gros != null && (
                   <div className="border-b pb-3">
                     <p className="text-gray-600 font-medium">Prix vente gros</p>
@@ -203,6 +223,30 @@ const Stock = () => {
                   <div className="border-b pb-3">
                     <p className="text-gray-600 font-medium">Prix vente détail</p>
                     <p className="text-[#111827] font-semibold mt-1">{Number(produitDetail.prix_vente_detail).toLocaleString("fr-FR")} FCFA</p>
+                  </div>
+                )}
+                {produitDetail.prix_seuil_detail != null && (
+                  <div className="border-b pb-3">
+                    <p className="text-gray-600 font-medium">Seuil prix détail</p>
+                    <p className="text-[#111827] font-semibold mt-1">{Number(produitDetail.prix_seuil_detail).toLocaleString("fr-FR")} FCFA</p>
+                  </div>
+                )}
+                {produitDetail.prix_seuil_gros != null && (
+                  <div className="border-b pb-3">
+                    <p className="text-gray-600 font-medium">Seuil prix gros</p>
+                    <p className="text-[#111827] font-semibold mt-1">{Number(produitDetail.prix_seuil_gros).toLocaleString("fr-FR")} FCFA</p>
+                  </div>
+                )}
+                {produitDetail.created_at && (
+                  <div className="border-b pb-3">
+                    <p className="text-gray-600 font-medium">Créé le</p>
+                    <p className="text-[#111827] font-semibold mt-1">{new Date(produitDetail.created_at).toLocaleDateString("fr-FR")}</p>
+                  </div>
+                )}
+                {produitDetail.updated_at && (
+                  <div className="border-b pb-3">
+                    <p className="text-gray-600 font-medium">Mis à jour le</p>
+                    <p className="text-[#111827] font-semibold mt-1">{new Date(produitDetail.updated_at).toLocaleDateString("fr-FR")}</p>
                   </div>
                 )}
               </div>
