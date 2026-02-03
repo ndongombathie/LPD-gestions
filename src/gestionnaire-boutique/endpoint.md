@@ -17,3 +17,9 @@ GET       api/quantite-totale-produit
 
 # la liste des transfert validee
  GET|HEAD        api/transfers/valide
+
+# la liste des produits disponible dans le stock
+GET             api/produits-disponibles-boutique
+
+# montant total du stock
+GET             api/montant-total-stock
