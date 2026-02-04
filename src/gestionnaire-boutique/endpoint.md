@@ -11,12 +11,8 @@ PUT       api/valider-produits-transfer
 
 # montant total du stock
 GET             api/montant-total-stock
-
-# les produits en sous seuils
+# les produits en sous seuils 
 GET        api/produits-sous-seuil
-
-# les produits en ruptures
-GET         /produits-rupture
 
 # nombre de produits total dans le boutique
 GET|HEAD        api/nombre-produits-total
@@ -35,7 +31,3 @@ GET             api/all-produits-transfer
 
 =======
 GET             api/produits-disponibles-boutique
-
-# historique des actons
-GET             api/all-produits-transfer
->>>>>>> a80e8ae (ajout des recherches sur les endpoints de boutiques controller)
