@@ -110,7 +110,7 @@ export const caissierApi = {
       
       // Ajouter les décaisements
       (decaissements.data?.data || []).forEach(dec => {
-        if (dec.statut === 'fait') {
+        if (dec.statut === 'valide') {
           activites.push({
             type: 'decaissement',
             montant: dec.montant || 0,
@@ -248,7 +248,7 @@ export const caissierApi = {
   async validerDecaissement(decaissementId, data = {}) {
     try {
       const response = await httpClient.put(`/decaissements/${decaissementId}/statut`, {
-        statut: 'fait',
+        statut: 'valide',
         ...(data?.methode_paiement ? { methode_paiement: data.methode_paiement } : {})
       });
       return response.data;
@@ -340,7 +340,7 @@ export const caissierApi = {
           created_at: c.updated_at || c.created_at,
           commande: c,
         })),
-        ...decaissements.filter(d => d.statut?.toLowerCase() === 'fait').map(d => ({
+        ...decaissements.filter(d => d.statut?.toLowerCase() === 'valide').map(d => ({
           id: `decaissement_${d.id}`,
           type: 'decaissement',
           // Utiliser updated_at pour les décaissements validés (heure exacte de validation)
