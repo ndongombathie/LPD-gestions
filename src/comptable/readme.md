@@ -65,3 +65,6 @@ POST          api/utilisateurs/{utilisateur_id}/reset-password
 
 # inventaire depot 
 GET          api/mouvements-stock/inventaire-depot  
+
+# les journals caissier 
+GET         api/paiements-rapport-journalier
