@@ -61,6 +61,7 @@ POST          api/utilisateurs/{utilisateur_id}/reset-password
 # inventaire depot 
 GET          api/mouvements-stock/inventaire-depot  
 
+<<<<<<< HEAD
 # vous aussi pouvez filtrer pa date_debut et date_fin
 # les journals caissier 
 GET            api/caissier/caisses-journals
@@ -104,3 +105,7 @@ GET    api/enregistrer-inventaire-boutique | en donnant les deux intevalle de da
 
 # tous les decaissement en attente et valide
 GET             api/decaissements-all
+=======
+# les journals caissier 
+GET         api/paiements-rapport-journalier
+>>>>>>> 1a87140 (url api)
