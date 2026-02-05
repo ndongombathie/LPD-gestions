@@ -8,7 +8,6 @@ export const caissierApi = {
    * Récupère les statistiques du jour
    */
   async getDashboardStats(date = null) {
-    try {
       const today = date || new Date().toISOString().split('T')[0];
       const response = await httpClient.get('/caissier/dashboard/stats', { params: { date: today } });
       const data = response.data || {};
@@ -21,10 +20,6 @@ export const caissierApi = {
         ticketsEnAttente: data.tickets_en_attente ?? 0,
         ticketsTraites: data.tickets_traites ?? 0,
       };
-    } catch (error) {
-      // Erreur silencieuse - gérée par le composant
-      throw error;
-    }
   },
 
   /**
@@ -35,7 +30,7 @@ export const caissierApi = {
       const today = date || new Date().toISOString().split('T')[0];
       const response = await httpClient.get('/caissier/dashboard/ventes-par-moyen', { params: { date: today } });
       return response.data?.ventes || [];
-    } catch (error) {
+    } catch {
       // Erreur silencieuse - retourner tableau vide
       return [];
     }
@@ -49,7 +44,7 @@ export const caissierApi = {
       const today = date || new Date().toISOString().split('T')[0];
       const response = await httpClient.get('/caissier/dashboard/ventes-par-heure', { params: { date: today } });
       return response.data?.ventes || [];
-    } catch (error) {
+    } catch {
       // Erreur silencieuse - retourner tableau vide
       return [];
     }
@@ -124,7 +119,7 @@ export const caissierApi = {
       activites.sort((a, b) => new Date(b.date) - new Date(a.date));
       
       return activites.slice(0, limit);
-    } catch (error) {
+    } catch {
       // Erreur silencieuse - retourner tableau vide
       return [];
     }
@@ -136,51 +131,32 @@ export const caissierApi = {
    * Récupère les commandes en attente
    */
   async getCommandesAttente(filters = {}) {
-    try {
       const response = await httpClient.get('/commandes-attente', { params: filters });
       return response.data;
-    } catch (error) {
-      // Erreur silencieuse - gérée par le composant
-      throw error;
-    }
   },
 
   /**
    * Récupère les commandes payées (historique des ventes)
    */
   async getCommandesPayees(filters = {}) {
-    try {
       const response = await httpClient.get('/commandes-payees', { params: filters });
       return response.data;
-    } catch (error) {
-      throw error;
-    }
   },
 
   /**
    * Récupère les détails d'une commande
    */
   async getCommandeDetails(commandeId) {
-    try {
       const response = await httpClient.get(`/commandes/${commandeId}`);
       return response.data;
-    } catch (error) {
-      // Erreur silencieuse - gérée par le composant
-      throw error;
-    }
   },
 
   /**
    * Annule une commande
    */
   async annulerCommande(commandeId) {
-    try {
       const response = await httpClient.post(`/commandes/${commandeId}/annuler`);
       return response.data;
-    } catch (error) {
-      // Erreur silencieuse - gérée par le composant
-      throw error;
-    }
   },
 
   // ==================== PAIEMENTS ====================
@@ -189,29 +165,19 @@ export const caissierApi = {
    * Crée un paiement (encaissement)
    */
   async creerPaiement(commandeId, data) {
-    try {
       const response = await httpClient.post(`/commandes/${commandeId}/paiements`, {
         montant: data.montant,
         type_paiement: data.type_paiement
       });
       return response.data;
-    } catch (error) {
-      // Erreur silencieuse - gérée par le composant
-      throw error;
-    }
   },
 
   /**
    * Récupère les paiements d'une commande
    */
   async getPaiements(commandeId) {
-    try {
       const response = await httpClient.get(`/commandes/${commandeId}/paiements`);
       return response.data;
-    } catch (error) {
-      // Erreur silencieuse - gérée par le composant
-      throw error;
-    }
   },
 
   // ==================== DÉCAISSEMENTS ====================
@@ -220,55 +186,35 @@ export const caissierApi = {
    * Récupère les décaissements en attente
    */
   async getDecaissementsAttente() {
-    try {
       const response = await httpClient.get('/decaissements-attente');
       return response.data;
-    } catch (error) {
-      // Erreur silencieuse - gérée par le composant
-      throw error;
-    }
   },
 
   /**
    * Récupère les décaisements
    */
   async getDecaissements(filters = {}) {
-    try {
       const response = await httpClient.get('/decaissements', { params: filters });
       return response.data;
-    } catch (error) {
-      // Erreur silencieuse - gérée par le composant
-      throw error;
-    }
   },
 
   /**
    * Valide un décaisement
    */
   async validerDecaissement(decaissementId, data = {}) {
-    try {
       const response = await httpClient.put(`/decaissements/${decaissementId}/statut`, {
         statut: 'valide',
         ...(data?.methode_paiement ? { methode_paiement: data.methode_paiement } : {})
       });
       return response.data;
-    } catch (error) {
-      // Erreur silencieuse - gérée par le composant
-      throw error;
-    }
   },
 
   /**
    * Annule un décaisement
    */
   async annulerDecaissement(decaissementId) {
-    try {
       const response = await httpClient.delete(`/decaissements/${decaissementId}`);
       return response.data;
-    } catch (error) {
-      // Erreur silencieuse - gérée par le composant
-      throw error;
-    }
   },
 
   // ==================== HISTORIQUE ====================
@@ -277,7 +223,6 @@ export const caissierApi = {
    * Récupère l'historique complet (paiements + décaisements + annulations)
    */
   async getHistoriqueComplet(filters = {}) {
-    try {
       // Récupérer les commandes payées avec leurs paiements (optimisé)
       const commandesPayeesResponse = await httpClient.get('/commandes-payees', { 
         params: { per_page: 100, ...filters } 
@@ -365,10 +310,6 @@ export const caissierApi = {
       });
       
       return historique;
-    } catch (error) {
-      // Erreur silencieuse - gérée par le composant
-      throw error;
-    }
   }
 };
 
