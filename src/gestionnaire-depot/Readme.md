@@ -29,7 +29,10 @@ GET             api/produits_en_rupture | les produits en rupture de stock
 
 
  # la liste de l'historique des actions
-GET  api/historique-actions
+GET     api/historique-actions
+
+# Reduction de stock d'un produit
+PUT     api/produits/{produit}/reduire-stock
 
 
 
