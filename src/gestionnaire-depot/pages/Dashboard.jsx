@@ -122,7 +122,7 @@ const Dashboard = () => {
             Tableau de bord Dépôt
           </h1>
           <p className="text-xs text-gray-500">
-            Bienvenue, Modou Ndiaye – Gestionnaire Dépôt
+            Bienvenue, Modou Ndiaye et – Gestionnaire Dépôt
           </p>
         </div>
         <p className="text-xs text-gray-400">

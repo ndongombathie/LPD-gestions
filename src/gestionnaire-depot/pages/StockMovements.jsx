@@ -255,7 +255,6 @@ const loadPendingSortiesFromStorage = () => {
 export default function StockMovements() {
   /* ------------------------- données ------------------------- */
   const [products] = useState(PRODUCTS_LIST); // Produits fixes
-  const [fournisseurs] = useState(FOURNISSEURS_LIST); // Fournisseurs fixes
   const [movements, setMovements] = useState(() => loadMovementsFromStorage());
   const [pendingSorties, setPendingSorties] = useState(() => loadPendingSortiesFromStorage());
 
@@ -272,11 +271,11 @@ export default function StockMovements() {
   const [modalOpen, setModalOpen] = useState(false);
   const [formError, setFormError] = useState("");
   const [formData, setFormData] = useState({
-    type: "Entrée",
+    type: "Sortie",
     productId: "",
     product: "",
     barcode: "",
-    source: "",
+    source: "Boutique Colobane",
     quantity: "",
     stockBefore: "",
     stockAfter: "",
@@ -285,15 +284,12 @@ export default function StockMovements() {
 
   /* dropdowns ouverts/fermés */
   const [productDropdownOpen, setProductDropdownOpen] = useState(false);
-  const [fournisseurDropdownOpen, setFournisseurDropdownOpen] = useState(false);
   
   /* termes de recherche pour les dropdowns */
   const [productSearch, setProductSearch] = useState("");
-  const [fournisseurSearch, setFournisseurSearch] = useState("");
 
   /* refs pour fermer les dropdowns en cliquant à l'extérieur */
   const productDropdownRef = useRef(null);
-  const fournisseurDropdownRef = useRef(null);
 
   /* modals détails */
   const [selectedMovement, setSelectedMovement] = useState(null);
@@ -324,9 +320,6 @@ export default function StockMovements() {
     const handleClickOutside = (event) => {
       if (productDropdownRef.current && !productDropdownRef.current.contains(event.target)) {
         setProductDropdownOpen(false);
-      }
-      if (fournisseurDropdownRef.current && !fournisseurDropdownRef.current.contains(event.target)) {
-        setFournisseurDropdownOpen(false);
       }
     };
 
@@ -540,25 +533,14 @@ export default function StockMovements() {
     );
   }, [products, productSearch]);
 
-  const filteredFournisseurs = useMemo(() => {
-    const term = fournisseurSearch.trim().toLowerCase();
-    if (!term) return fournisseurs;
-    
-    return fournisseurs.filter((f) => 
-      String(f.nom).toLowerCase().includes(term) ||
-      String(f.contact || "").toLowerCase().includes(term) ||
-      String(f.email || "").toLowerCase().includes(term)
-    );
-  }, [fournisseurs, fournisseurSearch]);
-
-  /* ================== open/close modal avec type prédéfini ================== */
-  const openModal = (type = "Entrée") => {
+  /* ================== open/close modal ================== */
+  const openModal = () => {
     setFormData({
-      type: type,
+      type: "Sortie",
       productId: "",
       product: "",
       barcode: "",
-      source: type === "Entrée" ? "" : "Boutique Colobane",
+      source: "Boutique Colobane",
       quantity: "",
       stockBefore: "",
       stockAfter: "",
@@ -566,9 +548,7 @@ export default function StockMovements() {
     });
     setFormError("");
     setProductSearch("");
-    setFournisseurSearch("");
     setProductDropdownOpen(false);
-    setFournisseurDropdownOpen(false);
     setModalOpen(true);
   };
 
@@ -576,17 +556,14 @@ export default function StockMovements() {
     setModalOpen(false);
     setFormError("");
     setProductSearch("");
-    setFournisseurSearch("");
     setProductDropdownOpen(false);
-    setFournisseurDropdownOpen(false);
   };
 
   /* ================== Selection produit ================== */
   const handleProductSelect = (product) => {
     const before = Number(product.cartons || 0);
     const qty = Number(formData.quantity || 0);
-    const after =
-      formData.type === "Sortie" ? Math.max(0, before - qty) : before + qty;
+    const after = Math.max(0, before - qty);
 
     setFormData((prev) => ({
       ...prev,
@@ -601,25 +578,13 @@ export default function StockMovements() {
     setProductDropdownOpen(false);
   };
 
-  /* ================== Selection fournisseur ================== */
-  const handleFournisseurSelect = (fournisseur) => {
-    setFormData((prev) => ({
-      ...prev,
-      source: fournisseur.nom
-    }));
-    
-    setFournisseurSearch(fournisseur.nom);
-    setFournisseurDropdownOpen(false);
-  };
-
   /* ================== recalc stockAfter ================== */
   const recalcAfter = (newPartial = {}) => {
-    const type = newPartial.type ?? formData.type;
     const qty = Number(newPartial.quantity ?? formData.quantity ?? 0);
     const before = Number(
       newPartial.stockBefore ?? formData.stockBefore ?? 0
     );
-    const after = type === "Sortie" ? Math.max(0, before - qty) : before + qty;
+    const after = Math.max(0, before - qty);
     setFormData((prev) => ({ ...prev, ...newPartial, stockAfter: String(after) }));
   };
 
@@ -627,17 +592,6 @@ export default function StockMovements() {
   const handleFormChange = (e) => {
     const { name, value } = e.target;
 
-    if (name === "type") {
-      const newType = value;
-      setFormData((prev) => ({ 
-        ...prev, 
-        type: newType,
-        source: newType === "Entrée" ? "" : "Boutique Colobane"
-      }));
-      recalcAfter({ type: newType });
-      return;
-    }
-    
     if (name === "quantity") {
       const sanitized = value === "" ? "" : String(Math.max(0, Number(value)));
       setFormData((prev) => ({ ...prev, quantity: sanitized }));
@@ -679,73 +633,33 @@ export default function StockMovements() {
     const beforeNum = Number(stockBefore || 0);
     const afterNum = Number(stockAfter || 0);
 
-    // Pour une ENTREE : traitement immédiat
-    if (type === "Entrée") {
-      if (!source) {
-        setFormError("Sélectionne un fournisseur.");
-        return;
-      }
-
-      const movement = {
-        id: Date.now(),
-        type,
-        productId,
-        product,
-        barcode,
-        source: source,
-        quantity: qtyNum,
-        stockBefore: beforeNum,
-        stockAfter: afterNum,
-        date: date ? new Date(date).toISOString() : new Date().toISOString(),
-        status: "completed",
-      };
-
-      // Mise à jour immédiate du stock
-      setMovements((prev) => [movement, ...prev]);
-      
-      // Mettre à jour le produit dans la liste locale
-      const updatedProducts = products.map((p) => {
-        if (String(p.id) === String(productId)) {
-          return { ...p, cartons: movement.stockAfter };
-        }
-        return p;
-      });
-      // Note: on ne sauvegarde pas dans localStorage car products est fixe
-      // Mais on met à jour l'affichage
-      
-      // Si vous voulez persister, il faudrait un autre système
-      // Pour l'instant, on met juste à jour l'affichage
+    // Vérification pour les sorties
+    if (qtyNum > beforeNum) {
+      setFormError("Impossible : la sortie est supérieure au stock disponible.");
+      return;
     }
     
-    // Pour une SORTIE : création d'une sortie en attente
-    if (type === "Sortie") {
-      if (qtyNum > beforeNum) {
-        setFormError("Impossible : la sortie est supérieure au stock disponible.");
-        return;
-      }
-      
-      const pendingSortie = {
-        id: Date.now(),
-        type: "Sortie",
-        productId,
-        product,
-        barcode,
-        source: "Boutique Colobane",
-        quantity: qtyNum,
-        stockBefore: beforeNum,
-        stockAfter: afterNum,
-        date: date ? new Date(date).toISOString() : new Date().toISOString(),
-        status: "pending",
-        createdAt: new Date().toISOString(),
-        createdBy: "Dépôt",
-      };
+    const pendingSortie = {
+      id: Date.now(),
+      type: "Sortie",
+      productId,
+      product,
+      barcode,
+      source: "Boutique Colobane",
+      quantity: qtyNum,
+      stockBefore: beforeNum,
+      stockAfter: afterNum,
+      date: date ? new Date(date).toISOString() : new Date().toISOString(),
+      status: "pending",
+      createdAt: new Date().toISOString(),
+      createdBy: "Dépôt",
+    };
 
-      // Ajout à la liste des sorties en attente
-      setPendingSorties((prev) => [pendingSortie, ...prev]);
-      
-      // Afficher un message de confirmation
-      alert(`Sortie créée avec succès !\n\nElle est maintenant en attente de validation par la Boutique Colobane.\n\nVous pouvez suivre son statut dans l'onglet "Sorties en attente".`);
-    }
+    // Ajout à la liste des sorties en attente
+    setPendingSorties((prev) => [pendingSortie, ...prev]);
+    
+    // Afficher un message de confirmation
+    alert(`Sortie créée avec succès !\n\nElle est maintenant en attente de validation par la Boutique Colobane.\n\nVous pouvez suivre son statut dans l'onglet "Sorties en attente".`);
 
     closeModal();
   };
@@ -855,78 +769,6 @@ export default function StockMovements() {
     </div>
   );
 
-  /* ================== Composant Dropdown pour fournisseurs ================== */
-  const FournisseurDropdown = () => (
-    <div ref={fournisseurDropdownRef} className="relative">
-      <label className="block text-xs font-semibold text-gray-700 mb-2">
-        Sélectionner un fournisseur
-      </label>
-      <div className="relative">
-        <div
-          className="w-full border rounded-lg px-3 py-2.5 text-sm flex items-center justify-between cursor-pointer hover:bg-gray-50"
-          onClick={() => setFournisseurDropdownOpen(!fournisseurDropdownOpen)}
-        >
-          <div className="flex items-center gap-2">
-            <User size={16} className="text-gray-400" />
-            <span className={formData.source ? "text-gray-900" : "text-gray-400"}>
-              {formData.source || "Cliquez pour sélectionner un fournisseur"}
-            </span>
-          </div>
-          <ChevronDown size={16} className="text-gray-400" />
-        </div>
-        
-        {fournisseurDropdownOpen && (
-          <div className="absolute z-50 w-full mt-1 bg-white border rounded-lg shadow-lg max-h-64 overflow-hidden">
-            {/* Barre de recherche dans le dropdown */}
-            <div className="p-2 border-b">
-              <div className="relative">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Rechercher un fournisseur..."
-                  className="w-full border rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#472EAD]"
-                  value={fournisseurSearch}
-                  onChange={(e) => setFournisseurSearch(e.target.value)}
-                  onClick={(e) => e.stopPropagation()}
-                  autoFocus
-                />
-              </div>
-            </div>
-            
-            {/* Liste des fournisseurs */}
-            <div className="overflow-y-auto max-h-48">
-              {filteredFournisseurs.map((fournisseur) => (
-                <div
-                  key={fournisseur.id}
-                  className={`p-3 border-b hover:bg-gray-50 cursor-pointer ${
-                    formData.source === fournisseur.nom ? "bg-blue-50" : ""
-                  }`}
-                  onClick={() => handleFournisseurSelect(fournisseur)}
-                >
-                  <div className="font-medium text-sm">{fournisseur.nom}</div>
-                  <div className="text-xs text-gray-500 mt-1 flex flex-col gap-1">
-                    {fournisseur.contact && (
-                      <div className="flex items-center gap-1">
-                        <span>📞</span>
-                        <span>{fournisseur.contact}</span>
-                      </div>
-                    )}
-                    {fournisseur.email && (
-                      <div className="flex items-center gap-1">
-                        <span>✉️</span>
-                        <span>{fournisseur.email}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-
   return (
     <div className="depot-page space-y-8">
       {/* HEADER */}
@@ -987,17 +829,10 @@ export default function StockMovements() {
         </div>
       </div>
 
-      {/* BOUTONS NOUVEAU MOUVEMENT */}
+      {/* BOUTON NOUVELLE SORTIE SEULEMENT */}
       <div className="flex justify-end gap-3">
         <button
-          onClick={() => openModal("Entrée")}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-green-600 to-green-700 text-white text-sm font-medium shadow hover:shadow-md"
-        >
-          <ArrowDownRight size={18} />
-          Nouvelle Entrée
-        </button>
-        <button
-          onClick={() => openModal("Sortie")}
+          onClick={openModal}
           className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-[#472EAD] to-[#f97316] text-white text-sm font-medium shadow hover:shadow-md"
         >
           <ArrowUpRight size={18} />
@@ -1410,7 +1245,7 @@ export default function StockMovements() {
         </>
       )}
 
-      {/* MODALE NOUVEAU MOUVEMENT - AVEC DROPDOWNS AMÉLIORÉS */}
+      {/* MODALE NOUVELLE SORTIE */}
       {modalOpen && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-lg w-full max-w-2xl p-0 overflow-hidden">
@@ -1418,12 +1253,10 @@ export default function StockMovements() {
             <div className="flex items-center justify-between p-6 border-b">
               <div>
                 <h3 className="text-lg font-semibold">
-                  {formData.type === "Entrée" ? "Nouvelle entrée de stock" : "Nouvelle sortie de stock"}
+                  Nouvelle sortie de stock
                 </h3>
                 <p className="text-sm text-gray-500 mt-1">
-                  {formData.type === "Entrée" 
-                    ? "Ajouter des produits au stock du dépôt" 
-                    : "Transférer des produits vers la Boutique Colobane"}
+                  Transférer des produits vers la Boutique Colobane
                 </p>
               </div>
               <button 
@@ -1449,51 +1282,36 @@ export default function StockMovements() {
                 {/* Type de mouvement (affichage seulement) */}
                 <div>
                   <div className="flex items-center gap-3 mb-4">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                      formData.type === "Entrée" ? "bg-green-100" : "bg-red-100"
-                    }`}>
-                      {formData.type === "Entrée" 
-                        ? <ArrowDownRight className="text-green-600" size={20} />
-                        : <ArrowUpRight className="text-red-600" size={20} />
-                      }
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center bg-red-100">
+                      <ArrowUpRight className="text-red-600" size={20} />
                     </div>
                     <div>
-                      <h4 className="font-medium text-gray-900">
-                        {formData.type === "Entrée" ? "Entrée de stock" : "Sortie de stock"}
-                      </h4>
+                      <h4 className="font-medium text-gray-900">Sortie de stock</h4>
                       <p className="text-sm text-gray-500">
-                        {formData.type === "Entrée" 
-                          ? "Produits entrants dans le dépôt"
-                          : "Produits sortants vers la Boutique Colobane"}
+                        Transfert de produits vers la Boutique Colobane
                       </p>
                     </div>
                   </div>
                 </div>
 
-                {/* Section : Source/Destination */}
+                {/* Section : Destination */}
                 <div className="space-y-4">
                   <div className="border-l-4 border-[#472EAD] pl-4 py-1">
-                    <h4 className="font-medium text-gray-900 text-sm">
-                      {formData.type === "Entrée" ? "Fournisseur" : "Destination"}
-                    </h4>
+                    <h4 className="font-medium text-gray-900 text-sm">Destination</h4>
                   </div>
                   
-                  {formData.type === "Entrée" ? (
-                    <FournisseurDropdown />
-                  ) : (
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-700 mb-2">
-                        Destination
-                      </label>
-                      <div className="w-full border bg-blue-50 rounded-lg px-3 py-2.5 text-sm flex items-center gap-2">
-                        <Store className="text-blue-500" size={16} />
-                        <span className="font-medium text-blue-700">Boutique Colobane</span>
-                      </div>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Toutes les sorties du dépôt sont destinées à la Boutique Colobane
-                      </p>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-2">
+                      Boutique Destinataire
+                    </label>
+                    <div className="w-full border bg-blue-50 rounded-lg px-3 py-2.5 text-sm flex items-center gap-2">
+                      <Store className="text-blue-500" size={16} />
+                      <span className="font-medium text-blue-700">Boutique Colobane</span>
                     </div>
-                  )}
+                    <p className="text-xs text-gray-500 mt-1">
+                      Toutes les sorties du dépôt sont destinées à la Boutique Colobane
+                    </p>
+                  </div>
                 </div>
 
                 {/* Section : Sélection du produit */}
@@ -1521,7 +1339,7 @@ export default function StockMovements() {
                 {/* Section : Quantité */}
                 <div className="space-y-4">
                   <div className="border-l-4 border-purple-500 pl-4 py-1">
-                    <h4 className="font-medium text-gray-900 text-sm">Quantité</h4>
+                    <h4 className="font-medium text-gray-900 text-sm">Quantité à transférer</h4>
                   </div>
                   
                   <div>
@@ -1535,15 +1353,16 @@ export default function StockMovements() {
                         value={formData.quantity} 
                         onChange={handleFormChange}
                         min="1" 
+                        max={formData.stockBefore || 0}
                         required
                         className="w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-                        placeholder="Ex: 5"
+                        placeholder={`Ex: 5 (max: ${formData.stockBefore || 0})`}
                       />
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500 font-medium">
                         cartons
                       </span>
                     </div>
-                    {formData.type === "Sortie" && formData.stockBefore && (
+                    {formData.stockBefore && (
                       <p className="text-xs text-gray-500 mt-1">
                         Disponible: <span className="font-bold">{formData.stockBefore}</span> cartons
                       </p>
@@ -1567,20 +1386,13 @@ export default function StockMovements() {
                         </div>
                       </div>
                       
-                      <div className={`p-3 rounded-lg ${
-                        formData.type === "Entrée" ? "bg-green-50" : "bg-red-50"
-                      }`}>
-                        <p className="text-xs text-gray-500 mb-1">Stock après</p>
+                      <div className="p-3 bg-red-50 rounded-lg">
+                        <p className="text-xs text-gray-500 mb-1">Stock après transfert</p>
                         <div className="flex items-center justify-between">
-                          <p className={`text-lg font-bold ${
-                            formData.type === "Entrée" ? "text-green-700" : "text-red-700"
-                          }`}>
+                          <p className="text-lg font-bold text-red-700">
                             {formData.stockAfter || "0"}
                           </p>
-                          {formData.type === "Entrée" 
-                            ? <ArrowDownRight className="text-green-600" size={16} />
-                            : <ArrowUpRight className="text-red-600" size={16} />
-                          }
+                          <ArrowUpRight className="text-red-600" size={16} />
                         </div>
                       </div>
                     </div>
@@ -1590,7 +1402,7 @@ export default function StockMovements() {
                 {/* Section : Date */}
                 <div className="space-y-4">
                   <div className="border-l-4 border-indigo-500 pl-4 py-1">
-                    <h4 className="font-medium text-gray-900 text-sm">Date du mouvement</h4>
+                    <h4 className="font-medium text-gray-900 text-sm">Date du transfert</h4>
                   </div>
                   
                   <div>
@@ -1621,17 +1433,10 @@ export default function StockMovements() {
                     
                     <button
                       type="submit"
-                      className={`px-5 py-2.5 text-sm font-medium text-white rounded-lg transition-colors flex items-center gap-2 ${
-                        formData.type === "Entrée" 
-                          ? "bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800" 
-                          : "bg-gradient-to-r from-[#472EAD] to-[#f97316] hover:from-[#3b2491] hover:to-[#ea580c]"
-                      }`}
+                      className="px-5 py-2.5 text-sm font-medium text-white rounded-lg transition-colors flex items-center gap-2 bg-gradient-to-r from-[#472EAD] to-[#f97316] hover:from-[#3b2491] hover:to-[#ea580c]"
                     >
                       <Save size={16} />
-                      {formData.type === "Entrée" 
-                        ? "Enregistrer l'entrée" 
-                        : "Envoyer à la boutique"
-                      }
+                      Envoyer à la boutique
                     </button>
                   </div>
                 </div>

@@ -6,7 +6,7 @@ const ENDPOINTS = {
   CREATE: '/produits',
   UPDATE: '/produits/:id',
   DELETE: '/produits/:id',
-  RUPTURES: '/produits-ruptures',
+  RUPTURES: '/produits_en_rupture',  // Correction : c'est 'produits_en_rupture' selon vos endpoints
   REAPPRO: '/stocks/reapprovisionner',
   TRANSFER: '/stocks/transfer',
 };
@@ -105,5 +105,35 @@ export const produitsAPI = {
       console.error('❌ Erreur transferToBoutique:', error.response?.data || error.message);
       throw error;
     }
+  },
+
+  // --- NOUVELLES FONCTIONS ---
+  
+  /**
+   * Récupère les produits en rupture (alias pour getRuptures)
+   */
+  getProduitsEnRupture: async () => {
+    try {
+      const response = await httpClient.get('/produits_en_rupture');
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erreur getProduitsEnRupture:', error.message);
+      throw error;
+    }
+  },
+  
+  /**
+   * Ajustement de stock (augmentation ou diminution)
+   * @param {Object} data - { produit_id: number, quantite: number, type: 'entree'|'sortie', raison: string }
+   */
+  ajusterStock: async (data) => {
+    try {
+      const response = await httpClient.post('/stocks/ajuster', data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erreur ajusterStock:', error.response?.data || error.message);
+      throw error;
+    }
   }
+  
 };
