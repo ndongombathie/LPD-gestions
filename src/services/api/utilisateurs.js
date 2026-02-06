@@ -1,64 +1,72 @@
 /**
- * 👤 Utilisateurs API
+ * 👤 Utilisateurs API — ALIGNÉE AVEC LARAVEL
+ * CRUD + Reset mot de passe
  */
-import httpClient from '../http/client';
 
+import httpClient from "../http/client";
+
+// =======================
+// ENDPOINTS
+// =======================
 const ENDPOINTS = {
-  GET_ALL: '/utilisateurs',
-  GET_BY_ID: '/utilisateurs/:id',
-  CREATE: '/utilisateurs',
-  UPDATE: '/utilisateurs/:id',
-  DELETE: '/utilisateurs/:id',
+  GET_ALL: "/utilisateurs",
+  GET_BY_ID: (id) => `/utilisateurs/${id}`,
+  CREATE: "/utilisateurs",
+  UPDATE: (id) => `/utilisateurs/${id}`,
+  DELETE: (id) => `/utilisateurs/${id}`,
+  RESET_PASSWORD: (id) => `/utilisateurs/${id}/reset-password`,
 };
 
-export const utilisateursAPI = {
-  getAll: async (params = {}) => {
-    try {
-      const response = await httpClient.get(ENDPOINTS.GET_ALL, { params });
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erreur getAll utilisateurs:', error.message);
-      throw error;
-    }
+// =======================
+// API
+// =======================
+const utilisateursAPI = {
+  /* 📥 LISTE */
+  async getAll(params = {}) {
+    const res = await httpClient.get(ENDPOINTS.GET_ALL, { params });
+    return res.data;
   },
 
-  getById: async (id) => {
-    try {
-      const response = await httpClient.get(ENDPOINTS.GET_BY_ID.replace(':id', id));
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erreur getById utilisateur:', error.message);
-      throw error;
-    }
+  /* 🔍 DÉTAIL */
+  async getById(id) {
+    if (!id) throw new Error("ID utilisateur requis");
+    const res = await httpClient.get(ENDPOINTS.GET_BY_ID(id));
+    return res.data;
   },
 
-  create: async (data) => {
-    try {
-      const response = await httpClient.post(ENDPOINTS.CREATE, data);
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erreur create utilisateur:', error.response?.data || error.message);
-      throw error;
-    }
+  /* ➕ CRÉATION
+     ⚠️ Le mot de passe est généré côté BACKEND
+     ⚠️ Email envoyé par Laravel
+  */
+  async create(data) {
+    const res = await httpClient.post(ENDPOINTS.CREATE, data);
+    return res.data;
   },
 
-  update: async (id, data) => {
-    try {
-      const response = await httpClient.put(ENDPOINTS.UPDATE.replace(':id', id), data);
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erreur update utilisateur:', error.response?.data || error.message);
-      throw error;
-    }
+  /* ✏️ MISE À JOUR */
+  async update(id, data) {
+    if (!id) throw new Error("ID utilisateur requis");
+    const res = await httpClient.put(ENDPOINTS.UPDATE(id), data);
+    return res.data;
   },
 
-  delete: async (id) => {
-    try {
-      const response = await httpClient.delete(ENDPOINTS.DELETE.replace(':id', id));
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erreur delete utilisateur:', error.response?.data || error.message);
-      throw error;
-    }
+  /* 🗑️ SUPPRESSION */
+  async remove(id) {
+    if (!id) throw new Error("ID utilisateur requis");
+    const res = await httpClient.delete(ENDPOINTS.DELETE(id));
+    return res.data;
+  },
+
+  /* 🔐 RESET MOT DE PASSE
+     - ancien mot de passe invalidé
+     - nouveau généré par Laravel
+     - envoyé par email
+  */
+  async resetPassword(id) {
+    if (!id) throw new Error("ID utilisateur requis");
+    const res = await httpClient.post(ENDPOINTS.RESET_PASSWORD(id));
+    return res.data;
   },
 };
+
+export default utilisateursAPI;

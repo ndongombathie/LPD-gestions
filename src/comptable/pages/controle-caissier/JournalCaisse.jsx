@@ -1,286 +1,277 @@
-// ==========================================================
-// 🧾 JournalCaisse.jsx — Journal de Caisse PRO (Comptable)
-// DESIGN SHADOW FINAL (SANS BORDURES)
-// ==========================================================
-
-import React, { useState, useMemo, useEffect } from "react";
-import { Printer } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
-// ===============================
-// 🔧 CONFIG
-// ===============================
-const FOND_CAISSE = 50000;
+import Card, { CardHeader } from "../../../components/ui/Card.jsx";
+import Button from "../../../components/ui/Button.jsx";
+import Input from "../../../components/ui/Input.jsx";
+import Badge from "../../../components/ui/Badge.jsx";
 
-// ===============================
-// 🔧 DONNÉES MOCK
-// ===============================
-const caissesMock = [
-  {
-    id: 1,
-    caissier: "Moussa Ndiaye",
-    date: "2025-02-22",
-    paiements: [10000, 15000, 5000],
-    encaissements: [5000],
-    decaissements: [3000],
-  },
-  {
-    id: 2,
-    caissier: "Aissatou Diop",
-    date: "2025-02-22",
-    paiements: [20000, 12000],
-    encaissements: [],
-    decaissements: [2000],
-  },
-];
+import { formatCurrency, formatDate } from "../../../utils/formatters.js";
 
-// ===============================
-// 🔧 FORMAT ÉCRAN
-// ===============================
-const fcfa = (n) =>
-  new Intl.NumberFormat("fr-FR", {
-    style: "currency",
-    currency: "XOF",
-  }).format(n || 0);
+/* =========================================================
+   ✅ FORMAT FCFA COMPATIBLE PDF (PAS DE CARACTÈRES BIZARRES)
+========================================================= */
+const formatFCFA_PDF = (value) => {
+  return (
+    Number(value || 0)
+      .toLocaleString("fr-FR")
+      .replace(/\s/g, ".") + " FCFA"
+  );
+};
 
-// ===============================
-// 🔧 FORMAT PDF (POINTS)
-// ===============================
-const fcfaPDF = (n) =>
-  n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " FCFA";
-
-// ===============================
-// 📌 COMPOSANT
-// ===============================
 export default function JournalCaisse() {
-  const [search, setSearch] = useState("");
-  const [dateExacte, setDateExacte] = useState("");
-  const [dateDebut, setDateDebut] = useState("");
-  const [dateFin, setDateFin] = useState("");
+  const [selectedDate, setSelectedDate] = useState(
+    new Date().toISOString().split("T")[0]
+  );
+  const previousDateRef = useRef(selectedDate);
 
+  // ⚠️ Données simulées (API plus tard)
+  const [rapportsParDate, setRapportsParDate] = useState({
+    [selectedDate]: {
+      fond_ouverture: 50000,
+      total_encaissements: 245000,
+      total_decaissements: 15000,
+      solde_cloture: 280000,
+      cloture: true,
+      ventes_par_moyen: {
+        especes: 120000,
+        carte: 80000,
+        wave: 25000,
+        om: 20000,
+      },
+      tickets_encaisses: [],
+      decaissements: [],
+    },
+  });
+
+  const rapport = rapportsParDate[selectedDate] || null;
+
+  // 🔄 Gestion changement de date
   useEffect(() => {
-    setDateExacte(new Date().toISOString().split("T")[0]);
-  }, []);
+    const prev = previousDateRef.current;
 
-  // ===============================
-  // 🔍 FILTRAGE + CALCUL
-  // ===============================
-  const caisses = useMemo(() => {
-    let data = [...caissesMock];
+    if (prev !== selectedDate) {
+      setRapportsParDate((prevState) => {
+        if (prevState[selectedDate]) return prevState;
 
-    if (search) {
-      data = data.filter((c) =>
-        c.caissier.toLowerCase().includes(search.toLowerCase())
-      );
-    }
-
-    if (dateDebut || dateFin) {
-      data = data.filter((c) => {
-        if (dateDebut && c.date < dateDebut) return false;
-        if (dateFin && c.date > dateFin) return false;
-        return true;
+        return {
+          ...prevState,
+          [selectedDate]: {
+            fond_ouverture: 0,
+            total_encaissements: 0,
+            total_decaissements: 0,
+            solde_cloture: 0,
+            cloture: true,
+            ventes_par_moyen: {},
+            tickets_encaisses: [],
+            decaissements: [],
+          },
+        };
       });
-    } else if (dateExacte) {
-      data = data.filter((c) => c.date === dateExacte);
     }
 
-    return data.map((c) => {
-      const sommePaiements = c.paiements.reduce((s, v) => s + v, 0);
-      const nbPaiements = c.paiements.length;
-      const totalEncaisse = c.encaissements.reduce((s, v) => s + v, 0);
-      const totalDecaisse = c.decaissements.reduce((s, v) => s + v, 0);
+    previousDateRef.current = selectedDate;
+  }, [selectedDate]);
 
-      const caisseFinale =
-        FOND_CAISSE + sommePaiements + totalEncaisse - totalDecaisse;
+  /* =========================================================
+     🖨️ EXPORT PDF PRO (CORRIGÉ)
+  ========================================================= */
+  const handleExportPDF = () => {
+    if (!rapport) return;
 
-      return {
-        ...c,
-        nbPaiements,
-        sommePaiements,
-        totalEncaisse,
-        totalDecaisse,
-        caisseFinale,
-      };
-    });
-  }, [search, dateExacte, dateDebut, dateFin]);
+    const doc = new jsPDF("p", "mm", "a4");
+    let y = 15;
 
-  // ===============================
-  // 📊 TOTAUX
-  // ===============================
-  const totalEncaissements = caisses.reduce((s, c) => s + c.totalEncaisse, 0);
-  const totalDecaissements = caisses.reduce((s, c) => s + c.totalDecaisse, 0);
-  const totalCaisses = caisses.reduce((s, c) => s + c.caisseFinale, 0);
+    // TITRE
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.text("JOURNAL DE CAISSE — COMPTABLE", 14, y);
 
-  // ===============================
-  // 🖨 PDF
-  // ===============================
-  const imprimerPDF = () => {
-    if (!caisses.length) {
-      alert("Aucune donnée à imprimer");
-      return;
-    }
+    y += 8;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
+    doc.text(`Date : ${formatDate(selectedDate)}`, 14, y);
 
-    const doc = new jsPDF();
-    doc.setFontSize(14);
-    doc.text("Journal de Caisse — Toutes les caisses", 14, 16);
+    y += 6;
+    doc.text(
+      `Statut : ${rapport.cloture ? "Clôturé" : "En cours"}`,
+      14,
+      y
+    );
 
+    y += 10;
+
+    // TABLEAU RÉSUMÉ
     autoTable(doc, {
-      startY: 30,
-      head: [
-        [
-          "Caissier",
-          "Date",
-          "Fond",
-          "Paiements",
-          "Total paiements",
-          "Décaissements",
-          "Encaissements",
-          "Caisse finale",
-        ],
+      startY: y,
+      head: [["Libellé", "Montant"]],
+      body: [
+        ["Fond d'ouverture", formatFCFA_PDF(rapport.fond_ouverture)],
+        ["Encaissements", formatFCFA_PDF(rapport.total_encaissements)],
+        ["Décaissements", formatFCFA_PDF(rapport.total_decaissements)],
+        ["Solde de clôture", formatFCFA_PDF(rapport.solde_cloture)],
       ],
-      body: caisses.map((c) => [
-        c.caissier,
-        c.date,
-        fcfaPDF(FOND_CAISSE),
-        c.nbPaiements,
-        fcfaPDF(c.sommePaiements),
-        fcfaPDF(c.totalDecaisse),
-        fcfaPDF(c.totalEncaisse),
-        fcfaPDF(c.caisseFinale),
-      ]),
-      headStyles: { fillColor: [71, 46, 173] },
+      headStyles: {
+        fillColor: [71, 46, 173],
+        textColor: 255,
+        halign: "center",
+      },
+      bodyStyles: {
+        fontSize: 11,
+      },
+      columnStyles: {
+        0: { halign: "left" },
+        1: { halign: "right" },
+      },
     });
 
-    let y = doc.lastAutoTable.finalY + 14;
-    doc.text(`Total encaissements : ${fcfaPDF(totalEncaissements)}`, 14, y);
-    doc.text(`Total décaissements : ${fcfaPDF(totalDecaissements)}`, 14, y + 12);
-    doc.text(`Total caisses : ${fcfaPDF(totalCaisses)}`, 14, y + 24);
+    y = doc.lastAutoTable.finalY + 10;
 
-    doc.save("Journal_Caisse_LPD.pdf");
+    // VENTES PAR MOYEN
+    if (Object.keys(rapport.ventes_par_moyen).length > 0) {
+      doc.setFont("helvetica", "bold");
+      doc.text("Ventes par moyen de paiement", 14, y);
+      y += 6;
+
+      autoTable(doc, {
+        startY: y,
+        head: [["Moyen de paiement", "Montant"]],
+        body: Object.entries(rapport.ventes_par_moyen).map(
+          ([moyen, montant]) => [
+            moyen.toUpperCase(),
+            formatFCFA_PDF(montant),
+          ]
+        ),
+        headStyles: {
+          fillColor: [40, 120, 180],
+          textColor: 255,
+        },
+        columnStyles: {
+          0: { halign: "left" },
+          1: { halign: "right" },
+        },
+        styles: {
+          fontSize: 11,
+        },
+      });
+    }
+
+    // PIED DE PAGE
+    doc.setFontSize(9);
+    doc.setTextColor(120);
+    doc.text(
+      `Document généré le ${new Date().toLocaleString()}`,
+      14,
+      doc.internal.pageSize.height - 10
+    );
+
+    doc.save(`Journal_Caisse_${selectedDate}.pdf`);
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 p-6">
+      {/* HEADER */}
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold text-[#472EAD]">
+              Journal de caisse — Comptable
+            </h1>
+            {rapport?.cloture && <Badge variant="success">Clôturé</Badge>}
+          </div>
+          <p className="text-gray-600 mt-1">
+            Consultation des mouvements de caisse du{" "}
+            {formatDate(selectedDate)}
+          </p>
+        </div>
 
-      {/* ================= TITRE ================= */}
-      <div>
-        <h1 className="text-xl font-semibold text-[#472EAD]">
-          Journal de Caisse
-        </h1>
-        <p className="text-sm text-gray-500">
-          Suivi détaillé des caisses journalières
-        </p>
+        <div className="flex gap-3">
+          <Input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+          />
+          <Button
+            variant="outline"
+            onClick={handleExportPDF}
+            className="border-2 border-[#472EAD] text-[#472EAD]"
+          >
+            Exporter PDF
+          </Button>
+        </div>
       </div>
 
-      {/* ================= FILTRES ================= */}
-      <div className="bg-white rounded-2xl shadow-md p-5 flex flex-wrap gap-4">
-        <input
-          className="px-3 py-2 rounded-lg bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-[#472EAD]/30"
-          placeholder="Rechercher caissier…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      {!rapport ? (
+        <Card>
+          <div className="text-center py-12 text-gray-500">
+            Aucun rapport disponible
+          </div>
+        </Card>
+      ) : (
+        <>
+          {/* RÉSUMÉ */}
+          <Card>
+            <CardHeader title={`Résumé du ${formatDate(selectedDate)}`} />
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <Resume label="Fond d'ouverture" value={rapport.fond_ouverture} />
+              <Resume
+                label="Encaissements"
+                value={rapport.total_encaissements}
+                color="green"
+              />
+              <Resume
+                label="Décaissements"
+                value={rapport.total_decaissements}
+                color="red"
+              />
+              <Resume
+                label="Solde clôture"
+                value={rapport.solde_cloture}
+                color="orange"
+              />
+            </div>
+          </Card>
 
-        <input
-          type="date"
-          className="px-3 py-2 rounded-lg bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-[#472EAD]/30"
-          value={dateExacte}
-          onChange={(e) => {
-            setDateExacte(e.target.value);
-            setDateDebut("");
-            setDateFin("");
-          }}
-        />
-
-        <input
-          type="date"
-          className="px-3 py-2 rounded-lg bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-[#472EAD]/30"
-          value={dateDebut}
-          onChange={(e) => {
-            setDateDebut(e.target.value);
-            setDateExacte("");
-          }}
-        />
-
-        <input
-          type="date"
-          className="px-3 py-2 rounded-lg bg-gray-50 text-sm focus:outline-none focus:ring-2 focus:ring-[#472EAD]/30"
-          value={dateFin}
-          onChange={(e) => {
-            setDateFin(e.target.value);
-            setDateExacte("");
-          }}
-        />
-
-        <button
-          onClick={imprimerPDF}
-          className="ml-auto flex items-center gap-2 px-4 py-2 bg-[#472EAD] text-white rounded-xl shadow hover:shadow-lg transition"
-        >
-          <Printer size={16} /> Imprimer
-        </button>
-      </div>
-
-      {/* ================= TABLE ================= */}
-      <div className="bg-white rounded-2xl shadow-md p-4 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-[#EFEAFF] text-[#472EAD]">
-            <tr>
-              <th>Caissier</th>
-              <th>Date</th>
-              <th>Fond</th>
-              <th>Paiements</th>
-              <th>Total paiements</th>
-              <th>Décaissements</th>
-              <th>Encaissements</th>
-              <th>Caisse finale</th>
-            </tr>
-          </thead>
-          <tbody>
-            {caisses.map((c) => (
-              <tr key={c.id} className="odd:bg-gray-50">
-                <td>{c.caissier}</td>
-                <td>{c.date}</td>
-                <td>{fcfa(FOND_CAISSE)}</td>
-                <td className="text-center">{c.nbPaiements}</td>
-                <td>{fcfa(c.sommePaiements)}</td>
-                <td>{fcfa(c.totalDecaisse)}</td>
-                <td>{fcfa(c.totalEncaisse)}</td>
-                <td className="font-semibold">{fcfa(c.caisseFinale)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* ================= TOTAUX ================= */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard
-          label="Total encaissements"
-          value={fcfa(totalEncaissements)}
-          color="text-green-600"
-        />
-        <StatCard
-          label="Total décaissements"
-          value={fcfa(totalDecaissements)}
-          color="text-red-600"
-        />
-        <StatCard
-          label="Total des caisses"
-          value={fcfa(totalCaisses)}
-          color="text-[#472EAD]"
-        />
-      </div>
+          {/* VENTES PAR MOYEN */}
+          <Card>
+            <CardHeader title="Ventes par moyen de paiement" />
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {Object.entries(rapport.ventes_par_moyen).map(
+                ([moyen, montant]) => (
+                  <div
+                    key={moyen}
+                    className="text-center p-4 bg-gray-50 rounded"
+                  >
+                    <p className="text-sm text-gray-600">{moyen}</p>
+                    <p className="font-bold">
+                      {formatCurrency(montant)}
+                    </p>
+                  </div>
+                )
+              )}
+            </div>
+          </Card>
+        </>
+      )}
     </div>
   );
 }
 
-/* ================== STAT CARD ================== */
-function StatCard({ label, value, color }) {
+/* 🔹 Sous-composant résumé (HTML uniquement) */
+function Resume({ label, value, color }) {
+  const colors = {
+    green: "text-green-600",
+    red: "text-red-600",
+    orange: "text-orange-600",
+  };
+
   return (
-    <div className="bg-white rounded-2xl shadow-md p-5 text-center">
-      <p className="text-sm text-gray-500">{label}</p>
-      <p className={`font-bold text-lg mt-1 ${color}`}>{value}</p>
+    <div className="text-center p-4 bg-gray-50 rounded">
+      <p className="text-sm text-gray-600">{label}</p>
+      <p className={`text-2xl font-bold ${colors[color] || ""}`}>
+        {formatCurrency(value)}
+      </p>
     </div>
   );
 }
