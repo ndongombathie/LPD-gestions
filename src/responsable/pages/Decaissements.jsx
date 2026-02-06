@@ -1,11 +1,11 @@
 // ==========================================================
 // 💸 Decaissements.jsx — Interface Responsable (LPD Manager)
-// ✅ Fix : soumission fiable + debug utile + modal robuste
-// - KPI + export PDF + modal création + modal détail
-// ✅ Option B : Pagination backend (source unique = API)
+// ✅ Architecture 100% backend : pagination, filtres, recherche, KPI
+// ✅ Debounce recherche 400ms, normalisation statuts, export aligné
+// ✅ Solution professionnelle sans calcul frontend
 // ==========================================================
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   FileDown,
@@ -38,7 +38,20 @@ const formatFCFA = (n) =>
   );
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
-const statutLabel = (s) => (s === "refusé" ? "annulé" : String(s || ""));
+
+// ✅ Normalisation des statuts pour affichage
+const statutLabel = (s) => {
+  if (s === "en_attente") return "En attente";
+  if (s === "validé") return "Validé";
+  if (s === "refusé") return "Annulé";
+  return s;
+};
+
+// ✅ Normalisation pour l'API (backend attend "en_attente")
+const statutApi = (s) => {
+  if (s === "en attente") return "en_attente";
+  return s;
+};
 
 // ——————————————————————————————————————————————————
 // 🧾 Modal de détail décaissement
@@ -165,47 +178,79 @@ export default function Decaissements() {
   const [selected, setSelected] = useState(null);
   const [openDetail, setOpenDetail] = useState(false);
 
-  // valeurs techniques : "en attente" | "validé" | "refusé"
+  // ✅ État pour les stats venant de l'API
+  const [statsFromApi, setStatsFromApi] = useState(null);
+
+  // ✅ États de filtre
   const [filterStatut, setFilterStatut] = useState("tous");
   const [filterStartDate, setFilterStartDate] = useState("");
   const [filterEndDate, setFilterEndDate] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [searchDebounced, setSearchDebounced] = useState(""); // ✅ Debounce recherche
 
-  // ✅ Pagination backend (Option b)
+  // ✅ Pagination backend
   const [page, setPage] = useState(1);
-  const [lastPage, setLastPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const [loadingPage, setLoadingPage] = useState(false);
   
   // ——————————————————————————————————————————————————
-  // 📥 Chargement initial
+  // 🔍 Debounce recherche (400ms)
   // ——————————————————————————————————————————————————
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchDebounced(searchTerm);
+    }, 400);
+    
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
-
+  // ——————————————————————————————————————————————————
+  // 📥 Chargement initial avec stats API et pagination
+  // ——————————————————————————————————————————————————
   const loadData = async () => {
     try {
-      setLoading(true);
-      const res = await decaissementsAPI.list({
+    if (demandes.length === 0 && page === 1) {
+      setLoading(true);       // vrai chargement initial
+    } else {
+      setLoading(false);     // filtres = pas d'écran vide
+      setLoadingPage(true);  // petit loader discret
+    }
+
+
+      const data = await decaissementsAPI.list({
         page,
-        statut: filterStatut !== "tous" ? filterStatut : undefined,
+        statut: filterStatut !== "tous" ? statutApi(filterStatut) : undefined,
         start_date: filterStartDate || undefined,
         end_date: filterEndDate || undefined,
-        search: searchTerm || undefined,
+        search: searchDebounced || undefined,
       });
 
-      setDemandes(res.data.data || []);
-      setPage(res.data.current_page);
-      setLastPage(res.data.last_page);
-      
+      // Pagination Laravel
+      const total = data.total || 0;
+      const pages = data.last_page || 1;
+
+      setTotalItems(total);
+      setTotalPages(pages <= 1 ? 1 : pages);
+
+      // Données paginées
+      setDemandes(data.data || []);
+
+      // KPI backend
+      setStatsFromApi(data.stats || null);
+
+    } catch (e) {
+      console.error("Erreur chargement décaissements", e);
     } finally {
       setLoading(false);
+      setLoadingPage(false);
     }
   };
 
-
-
+  // ✅ Chargement quand les filtres changent
   useEffect(() => {
     loadData();
-  }, [page, filterStatut, filterStartDate, filterEndDate, searchTerm]);
-
+  }, [page, filterStatut, filterStartDate, filterEndDate, searchDebounced]);
 
   // ——————————————————————————————————————————————————
   // 💾 Ajout (POST API) — en camelCase pour matcher le backend
@@ -216,7 +261,6 @@ export default function Decaissements() {
     // ———————————————————————————
     // ✅ VALIDATION FRONT (AVANT API)
     // ———————————————————————————
-
     const motifGlobal = String(form?.motifGlobal || "").trim();
     if (!motifGlobal || motifGlobal.length < 3) {
       toast.error("Le motif global est obligatoire (au moins 3 caractères).");
@@ -305,57 +349,32 @@ export default function Decaissements() {
     }
   };
 
-
-
   // ——————————————————————————————————————————————————
-  // 📊 Stats
+  // 📊 Stats depuis l'API backend (KPI globaux)
   // ——————————————————————————————————————————————————
-  const stats = useMemo(() => {
-    const nbTotal = demandes.length;
-    const montantTotal = demandes.reduce(
-      (sum, d) => sum + Number(d.montantTotal || 0),
-      0
-    );
-
-    const valides = demandes.filter((d) => d.statut === "validé");
-    const annules = demandes.filter((d) => d.statut === "refusé");
-    const enAttente = demandes.filter((d) => d.statut === "en attente");
-
-    return {
-      nbTotal,
-      montantTotal,
-      nbValidees: valides.length,
-      montantValide: valides.reduce((sum, d) => sum + Number(d.montantTotal || 0), 0),
-      nbAnnulees: annules.length,
-      montantAnnule: annules.reduce((sum, d) => sum + Number(d.montantTotal || 0), 0),
-      nbEnAttente: enAttente.length,
-      montantEnAttente: enAttente.reduce((sum, d) => sum + Number(d.montantTotal || 0), 0),
-    };
-  }, [demandes]);
+  const stats = statsFromApi || {
+    total: 0,
+    montant_total: 0,
+    valides: 0,
+    montant_valides: 0,
+    annules: 0,
+    montant_annules: 0,
+    attente: 0,
+    montant_attente: 0,
+  };
 
   // ——————————————————————————————————————————————————
   // 🔎 Filtres + recherche
   // ——————————————————————————————————————————————————
-
-
   // ✅ Reset page quand les filtres changent
   useEffect(() => {
     setPage(1);
-  }, [filterStatut, filterStartDate, filterEndDate, searchTerm]);
-
-
-  // ✅ Pagination calculs
-
-
-
-
-
-
+  }, [filterStatut, filterStartDate, filterEndDate, searchDebounced]);
 
   // ——————————————————————————————————————————————————
-  // 📤 Export PDF
+  // 📤 Export PDF aligné avec les filtres backend
   // ——————————————————————————————————————————————————
-  const exportPDF = () => {
+  const exportPDF = async () => {
     try {
       const doc = new jsPDF("p", "mm", "a4");
       const pageWidth = doc.internal.pageSize.getWidth();
@@ -373,19 +392,26 @@ export default function Decaissements() {
         return `${formatted} FCFA`;
       };
 
-      const totalDemandes = stats.nbTotal ?? demandes.length;
-      const montantGlobal =
-        stats.montantTotal ??
-        demandes.reduce((sum, d) => sum + Number(d.montantTotal || 0), 0);
+      // ✅ Utilisation des stats API pour le PDF (données globales)
+      const totalDemandes = stats.total;
+      const montantGlobal = stats.montant_total;
 
-      const nbValid = stats.nbValidees ?? 0;
-      const montantValide = stats.montantValide ?? 0;
+      const nbValid = stats.valides;
+      const montantValide = stats.montant_valides;
 
-      const nbAttente = stats.nbEnAttente ?? 0;
-      const montantAttente = stats.montantEnAttente ?? 0;
+      const nbAttente = stats.attente;
+      const montantAttente = stats.montant_attente;
 
-      const nbAnnulees = stats.nbAnnulees ?? 0;
-      const montantAnnule = stats.montantAnnule ?? 0;
+      const nbAnnulees = stats.annules;
+      const montantAnnule = stats.montant_annules;
+
+      // ✅ Récupération des données filtrées pour le tableau PDF
+      const allData = await decaissementsAPI.exportAll({
+        statut: filterStatut !== "tous" ? statutApi(filterStatut) : undefined,
+        start_date: filterStartDate || undefined,
+        end_date: filterEndDate || undefined,
+        search: searchDebounced || undefined,
+      });
 
       doc.setFillColor(71, 46, 173);
       doc.rect(0, 0, pageWidth, 28, "F");
@@ -473,13 +499,13 @@ export default function Decaissements() {
         startY: startTableY,
         margin: { top: startTableY, left: 14, right: 14 },
         head: [["Date", "Montant total", "Motif global", "Méthode", "Statut"]],
-        body: demandes.map((d) => [
+        body: allData.map((d) => [
           d.datePrevue,
           formatFCFAPdf(d.montantTotal),
           d.motifGlobal,
           d.methodePrevue,
           statutLabel(d.statut).toUpperCase(),
-        ]),
+        ]) || [],
         styles: { fontSize: 9, cellPadding: 2, textColor: [55, 65, 81] },
         headStyles: { fillColor: [71, 46, 173], textColor: 255, fontStyle: "bold" },
         alternateRowStyles: { fillColor: [247, 245, 255] },
@@ -489,7 +515,8 @@ export default function Decaissements() {
       doc.save(`Decaissements_LPD_${todayISO()}.pdf`);
       toast.success("Export PDF généré avec succès.");
     } catch (e) {
-      toast.error("Erreur lors de l’export PDF des décaissements.");
+      console.error("Erreur export PDF:", e);
+      toast.error("Erreur lors de l'export PDF des décaissements.");
     }
   };
 
@@ -500,11 +527,11 @@ export default function Decaissements() {
     ({
       validé: "bg-emerald-100 text-emerald-700 border border-emerald-300",
       refusé: "bg-rose-100 text-rose-700 border border-rose-300",
-      "en attente": "bg-amber-100 text-amber-700 border border-amber-300",
+      en_attente: "bg-amber-100 text-amber-700 border border-amber-300",
     }[s] || "bg-gray-100 text-gray-600 border border-gray-300");
 
   // Loader
-  if (loading)
+  if (loading && demandes.length === 0)
     return (
       <div className="flex items-center justify-center min-h-[70vh] bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white">
         <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-white/80 border border-[#E4E0FF] shadow-sm">
@@ -542,13 +569,14 @@ export default function Decaissements() {
                   Décaissements &amp; suivi budgétaire
                 </h1>
                 <p className="mt-1 text-sm text-gray-500">
-                  Gérez vos sorties d’argent, suivez leur statut et exportez vos
+                  Gérez vos sorties d'argent, suivez leur statut et exportez vos
                   rapports en un clic.
                 </p>
               </div>
+              {/* ✅ Compteur total corrigé */}
               <p className="text-[11px] text-gray-400">
-                Vue consolidée au {todayISO()} • {demandes.length} demande
-                {demandes.length > 1 && "s"}
+                Vue consolidée au {todayISO()} • {totalItems} demande
+                {totalItems > 1 && "s"}
               </p>
             </div>
 
@@ -583,12 +611,12 @@ export default function Decaissements() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-lg font-extrabold text-indigo-800">
-                  {stats.nbTotal}
+                  {stats.total}
                 </span>
                 <BadgeDollarSign className="w-5 h-5 text-indigo-700" />
               </div>
               <div className="mt-1 text-[11px] text-gray-700">
-                {formatFCFA(stats.montantTotal)}
+                {formatFCFA(stats.montant_total)}
               </div>
             </div>
 
@@ -598,12 +626,12 @@ export default function Decaissements() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-lg font-extrabold text-rose-700">
-                  {stats.nbAnnulees}
+                  {stats.annules}
                 </span>
                 <AlertCircle className="w-5 h-5 text-rose-600" />
               </div>
               <div className="mt-1 text-[11px] text-rose-800">
-                {formatFCFA(stats.montantAnnule)}
+                {formatFCFA(stats.montant_annules)}
               </div>
             </div>
 
@@ -613,12 +641,12 @@ export default function Decaissements() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-lg font-extrabold text-emerald-700">
-                  {stats.nbValidees}
+                  {stats.valides}
                 </span>
                 <CheckCircle2 className="w-5 h-5 text-emerald-600" />
               </div>
               <div className="mt-1 text-[11px] text-emerald-800">
-                {formatFCFA(stats.montantValide)}
+                {formatFCFA(stats.montant_valides)}
               </div>
             </div>
 
@@ -628,12 +656,12 @@ export default function Decaissements() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-lg font-extrabold text-amber-700">
-                  {stats.nbEnAttente}
+                  {stats.attente}
                 </span>
                 <Clock3 className="w-5 h-5 text-amber-600" />
               </div>
               <div className="mt-1 text-[11px] text-amber-800">
-                {formatFCFA(stats.montantEnAttente)}
+                {formatFCFA(stats.montant_attente)}
               </div>
             </div>
           </motion.div>
@@ -646,7 +674,8 @@ export default function Decaissements() {
                 <div className="inline-flex rounded-full bg-[#F7F5FF] border border-[#E4E0FF] p-0.5">
                   {[
                     { id: "tous", label: "Tous" },
-                    { id: "en attente", label: "En attente" },
+                    // ✅ Correction: backend attend "en_attente" pas "en attente"
+                    { id: "en_attente", label: "En attente" },
                     { id: "validé", label: "Validés" },
                     { id: "refusé", label: "Annulés" },
                   ].map((opt) => (
@@ -666,8 +695,6 @@ export default function Decaissements() {
                   ))}
                 </div>
               </div>
-
-                
 
               <div className="flex flex-col sm:flex-row sm:items-center gap-3 text-xs">
                 <div className="flex items-center gap-1">
@@ -761,7 +788,7 @@ export default function Decaissements() {
                 ) : (
                   <tr>
                     <td colSpan="6" className="text-center text-gray-400 py-6 text-sm">
-                      {demandes.length
+                      {searchTerm || filterStatut !== "tous" || filterStartDate || filterEndDate
                         ? "Aucun décaissement ne correspond aux filtres."
                         : "Aucun décaissement trouvé."}
                     </td>
@@ -770,11 +797,22 @@ export default function Decaissements() {
               </tbody>
             </table>
 
-            {/* ✅ Pagination footer */}
+            {/* ✅ Pagination footer corrigée */}
+            {loadingPage && (
+              <div className="flex justify-center py-2 text-xs text-gray-400">
+                Chargement de la page...
+              </div>
+            )}
+
             <Pagination
               page={page}
-              totalPages={lastPage}
-              onPageChange={setPage}
+              totalPages={totalPages}
+              onPageChange={(p) => {
+                if (p < 1 || p > totalPages) return;
+                if (p === page) return;
+                if (loadingPage) return;
+                setPage(p);
+              }}
             />
 
           </section>

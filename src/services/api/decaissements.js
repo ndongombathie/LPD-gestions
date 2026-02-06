@@ -10,6 +10,7 @@ const ENDPOINTS = {
   UPDATE: '/decaissements/:id',
   DELETE: '/decaissements/:id',
   VALIDATE: '/decaissements/:id/valider',
+  EXPORT_ALL: '/decaissements/export'
 };
 
 export const decaissementsAPI = {
@@ -73,4 +74,14 @@ export const decaissementsAPI = {
       throw error;
     }
   },
+  exportAll: async (params = {}) => {
+    try {
+      const response = await httpClient.get(ENDPOINTS.EXPORT_ALL, { params });
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erreur exportAll décaissements:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
 };

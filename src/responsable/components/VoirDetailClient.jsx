@@ -29,52 +29,20 @@ const getCommandeStatusClasses = (statut) => {
   return "bg-gray-100 text-gray-600";
 };
 
-// 🧠 Statut “effectif” d’un paiement
-// On supporte à la fois (type, statut, mode) et (type_paiement, statut_paiement, mode_paiement)
-const getPaiementEffectiveStatus = (paiement, commande) => {
-  const raw =
-    paiement?.statut !== undefined && paiement?.statut !== null
-      ? paiement.statut
-      : paiement?.statut_paiement;
+// 🧠 Statut "effectif" d'un paiement - CORRIGÉ (lecture directe depuis Laravel)
+const getPaiementEffectiveStatus = (paiement) =>
+  paiement?.statut_paiement || "inconnu";
 
-  if (raw && String(raw).trim() !== "") {
-    return raw; // on respecte ce que renvoie le backend
-  }
-
-  const type =
-    paiement?.type !== undefined && paiement?.type !== null
-      ? paiement.type
-      : paiement?.type_paiement;
-
-  // 🌙 Si pas de statut mais que c'est une tranche → en attente par défaut
-  if (type === "tranche") {
-    return "En attente";
-  }
-
-  // 💰 Paiement direct : on déduit par rapport au reste à payer de la commande
-  const reste = Number(commande?.resteAPayer || 0);
-
-  if (reste <= 0) return "Soldé";
-  if (reste > 0) return "Paiement partiel";
-
-  return "—";
-};
-
-// 🎨 Couleurs pour les statuts de paiements / tranches
+// 🎨 Couleurs pour les statuts de paiements / tranches - CORRIGÉ
 const getPaiementStatusClasses = (statut) => {
-  if (!statut || statut === "—") return "bg-gray-100 text-gray-600";
+  if (!statut || statut === "inconnu") return "bg-gray-100 text-gray-600";
 
   const s = String(statut).toLowerCase();
 
-  if (s.includes("attente")) return "bg-amber-50 text-amber-700"; // 🟠
+  // CORRECTION : utilisation des vrais statuts Laravel
+  if (s === "en_attente_caisse") return "bg-amber-50 text-amber-700"; // 🟠
   if (s.includes("annul")) return "bg-red-50 text-red-700"; // 🔴
-  if (
-    s.includes("sold") ||
-    s.includes("pay") ||
-    s.includes("valid") ||
-    s.includes("encaisse")
-  )
-    return "bg-emerald-50 text-emerald-700"; // 🟢
+  if (s === "payee" || s === "encaissé") return "bg-emerald-50 text-emerald-700"; // 🟢
 
   return "bg-gray-100 text-gray-600";
 };
@@ -236,34 +204,27 @@ export default function VoirDetailClient({
       const paiements = cmd.paiements || [];
       if (!paiements.length) return;
 
-      let hasFinal = false;
+      let hasPayee = false;
       let hasAttente = false;
       let hasAnnule = false;
 
       for (const p of paiements) {
-        const status = (
-          getPaiementEffectiveStatus(p, cmd) || ""
-        ).toLowerCase();
+        const status = getPaiementEffectiveStatus(p).toLowerCase();
 
-        if (status.includes("annul")) {
+        if (status === "annulee") {
           hasAnnule = true;
-        } else if (status.includes("attente")) {
+        } else if (status === "en_attente_caisse") {
           hasAttente = true;
-        } else if (
-          status.includes("sold") ||
-          status.includes("pay") ||
-          status.includes("encaisse") ||
-          status.includes("valid")
-        ) {
-          hasFinal = true;
+        } else if (status === "payee") {
+          hasPayee = true;
         }
       }
 
-      if (hasFinal && !hasAttente && !hasAnnule) {
+      if (hasPayee && !hasAttente && !hasAnnule) {
         setFilterType("paiements");
-      } else if (hasAttente && !hasFinal && !hasAnnule) {
+      } else if (hasAttente && !hasPayee && !hasAnnule) {
         setFilterType("tranches");
-      } else if (hasAnnule && !hasFinal && !hasAttente) {
+      } else if (hasAnnule && !hasPayee && !hasAttente) {
         setFilterType("annules");
       } else {
         setFilterType("tous");
@@ -271,7 +232,7 @@ export default function VoirDetailClient({
     }
   }, [searchCommandePay, sortedCmds]);
 
-  // 📊 Agrégats pour le client (pour l'écran de choix)
+  // 📊 Agrégats pour le client (pour l'écran de choix) - CORRIGÉ
   const summary = useMemo(() => {
     // ✅ On exclut toutes les commandes annulées pour le résumé
     const commandesActives = sortedCmds.filter(
@@ -284,12 +245,18 @@ export default function VoirDetailClient({
       (s, c) => s + (Number(c.totalTTC) || 0),
       0
     );
-    const totalPaye = commandesActives.reduce(
-      (s, c) => s + (Number(c.montantPaye) || 0),
-      0
-    );
+
+    // CORRECTION : Total payé = uniquement les paiements avec statut "payee"
+    const totalPaye = commandesActives.reduce((s, c) => {
+      const encaisses = (c.paiements || []).filter(p => 
+        getPaiementEffectiveStatus(p) === "payee"
+      );
+      return s + encaisses.reduce((sum, p) => sum + Number(p.montant || 0), 0);
+    }, 0);
+
+    // ✅ CORRECTION 1 CRITIQUE : Dette totale = somme des resteAPayer fournis par Laravel
     const detteTotale = commandesActives.reduce(
-      (s, c) => s + Math.max(Number(c.resteAPayer) || 0, 0),
+      (s, c) => s + Math.max(Number(c.resteAPayer || 0), 0),
       0
     );
 
@@ -297,17 +264,13 @@ export default function VoirDetailClient({
       (cmd) => cmd.paiements || []
     );
     const nbPaiements = allPaiements.length;
-    const totalEncaisse = totalPaye;
+    const totalEncaisse = totalPaye; // Déjà calculé avec seulement "payee"
 
-    // Tranches en attente : supporte statut / statut_paiement & type / type_paiement
+    // CORRECTION : Tranches en attente - utilisation du vrai statut Laravel
     const tranchesEnAttente = allPaiements.filter((p) => {
-      const type =
-        p.type !== undefined && p.type !== null ? p.type : p.type_paiement;
-      const statut =
-        p.statut !== undefined && p.statut !== null
-          ? p.statut
-          : p.statut_paiement;
-
+      const type = p.type_paiement;
+      const statut = getPaiementEffectiveStatus(p);
+      
       return (
         type === "tranche" &&
         statut === "en_attente_caisse" &&
@@ -335,11 +298,8 @@ export default function VoirDetailClient({
 
   // 🔧 handlers – ÉDITION
   const handleOpenEditTranche = (cmd, paiement) => {
-    const dateValue = paiement?.date || "";
-    const modeValue =
-      paiement?.mode !== undefined && paiement?.mode !== null
-        ? paiement.mode
-        : paiement?.mode_paiement || "";
+    const dateValue = paiement?.date_paiement || "";
+    const modeValue = paiement?.mode_paiement || "";
     const commentaireValue = paiement?.commentaire || "";
 
     setTrancheToEdit({ cmd, paiement });
@@ -378,16 +338,13 @@ export default function VoirDetailClient({
       ...paiement,
       montant:
         editForm.montant === "" ? paiement.montant : Number(editForm.montant),
-      date: editForm.date || paiement.date,
-      mode:
+      date_paiement: editForm.date || paiement.date_paiement,
+      mode_paiement:
         editForm.mode !== ""
           ? editForm.mode
-          : paiement.mode ?? paiement.mode_paiement ?? "",
-      // ✅ On ne touche pas au statut ici : toujours géré côté caisse / back
-      statut:
-        paiement.statut !== undefined && paiement.statut !== null
-          ? paiement.statut
-          : paiement.statut_paiement,
+          : paiement.mode_paiement ?? "",
+      // ✅ CORRECTION 2 : Utiliser getPaiementEffectiveStatus pour conserver le statut exact
+      statut_paiement: getPaiementEffectiveStatus(paiement),
       commentaire:
         editForm.commentaire !== ""
           ? editForm.commentaire
@@ -476,13 +433,11 @@ export default function VoirDetailClient({
 
     return filteredCommandes.map((cmd) => {
       const paiements = cmd.paiements || [];
+      
+      // CORRECTION : Utilisation du vrai statut Laravel via getPaiementEffectiveStatus
       const tranchesEnAttente = paiements.filter((p) => {
-        const type =
-          p.type !== undefined && p.type !== null ? p.type : p.type_paiement;
-        const statut =
-          p.statut !== undefined && p.statut !== null
-            ? p.statut
-            : p.statut_paiement;
+        const type = p.type_paiement;
+        const statut = getPaiementEffectiveStatus(p);
 
         return type === "tranche" && statut === "en_attente_caisse" && p.montant;
       });
@@ -708,49 +663,39 @@ export default function VoirDetailClient({
         }
 
         const paiements = (cmd.paiements || []).filter((p) => {
-          const effectiveStatus = getPaiementEffectiveStatus(p, cmd);
+          const effectiveStatus = getPaiementEffectiveStatus(p);
           const s = String(effectiveStatus || "").toLowerCase();
 
           // 🔍 Filtre date (on compare sur AAAA-MM-JJ)
           if (searchDate) {
-            const rawDate = String(p.date || "");
+            const rawDate = String(p.date_paiement || "");
             const onlyDay = rawDate.slice(0, 10); // "2025-12-11"
             if (onlyDay !== searchDate) return false;
           }
 
           // 🔎 Filtre type
-          const type =
-            p.type !== undefined && p.type !== null
-              ? p.type
-              : p.type_paiement;
+          const type = p.type_paiement;
 
           if (filterType === "tranches") {
             // Tranches non annulées
-            return type === "tranche" && !s.includes("annul");
+            return type === "tranche" && effectiveStatus === "en_attente_caisse";
           }
 
           if (filterType === "paiements") {
-            // Paiements finaux : tout ce qui est complètement encaissé
+            // Paiements finaux : uniquement "payee"
             const isTranche = type === "tranche";
-            const isFinal =
-              s.includes("sold") ||
-              s.includes("pay") ||
-              s.includes("encaisse") ||
-              s.includes("valid");
+            const isFinal = effectiveStatus === "payee";
 
             if (isTranche) {
               return isFinal;
             }
 
-            // Paiement direct : on le considère final si statut final OU commande soldée
-            if (isFinal) return true;
-
-            const resteCmd = Number(cmd.resteAPayer || 0);
-            return resteCmd <= 0;
+            // Paiement direct : seulement si statut "payee"
+            return isFinal;
           }
 
           if (filterType === "annules") {
-            return s.includes("annul");
+            return effectiveStatus === "annulee";
           }
 
           // "tous"
@@ -770,14 +715,11 @@ export default function VoirDetailClient({
     }
 
     return entries.map(({ cmd, paiements }) => {
+      // CORRECTION : Utilisation du vrai statut Laravel via getPaiementEffectiveStatus
       const tranchesEnAttente = paiements.filter((p) => {
-        const type =
-          p.type !== undefined && p.type !== null
-            ? p.type
-            : p.type_paiement;
-        const effectiveStatus = getPaiementEffectiveStatus(p, cmd);
-        const s = String(effectiveStatus || "").toLowerCase();
-        return type === "tranche" && s.includes("attente");
+        const type = p.type_paiement;
+        const effectiveStatus = getPaiementEffectiveStatus(p);
+        return type === "tranche" && effectiveStatus === "en_attente_caisse";
       });
 
       return (
@@ -859,28 +801,24 @@ export default function VoirDetailClient({
                     </tr>
                   )}
                   {paiements.map((p) => {
-                    const type =
-                      p.type !== undefined && p.type !== null
-                        ? p.type
-                        : p.type_paiement;
+                    const type = p.type_paiement;
                     const isTranche = type === "tranche";
-                    const effectiveStatus = getPaiementEffectiveStatus(p, cmd);
-                    const statusClasses =
-                      getPaiementStatusClasses(effectiveStatus);
-                    const s = String(effectiveStatus || "").toLowerCase();
-                    const isAttente = s.includes("attente");
-                    const isAnnulee = s.includes("annul");
-                    const mode =
-                      p.mode !== undefined && p.mode !== null
-                        ? p.mode
-                        : p.mode_paiement;
+                    const effectiveStatus = getPaiementEffectiveStatus(p);
+                    const statusClasses = getPaiementStatusClasses(effectiveStatus);
+                    
+                    // CORRECTION : Utilisation des vrais statuts Laravel via getPaiementEffectiveStatus
+                    const isAttente = effectiveStatus === "en_attente_caisse";
+                    const isAnnulee = effectiveStatus === "annulee";
+                    const isPayee = effectiveStatus === "payee";
+                    
+                    const mode = p.mode_paiement;
 
                     return (
                       <tr
-                        key={p.id || `${cmd.id}-${p.date}-${p.montant}`}
+                        key={p.id || `${cmd.id}-${p.date_paiement}-${p.montant}`}
                         className="border-t"
                       >
-                        <td className="px-2 py-1.5">{p.date || "—"}</td>
+                        <td className="px-2 py-1.5">{p.date_paiement || "—"}</td>
                         <td className="px-2 py-1.5 font-semibold">
                           {formatFCFA(p.montant)}
                         </td>
@@ -900,7 +838,10 @@ export default function VoirDetailClient({
                               statusClasses
                             }
                           >
-                            {effectiveStatus}
+                            {effectiveStatus === "en_attente_caisse" ? "En attente caisse" : 
+                             effectiveStatus === "payee" ? "Payée" :
+                             effectiveStatus === "annulee" ? "Annulée" :
+                             effectiveStatus}
                           </span>
                         </td>
                         {/* Actions : uniquement pour tranches en attente */}
@@ -1152,7 +1093,6 @@ export default function VoirDetailClient({
                     ))}
                   </div>
 
-                  {/* Recherche commande / QR */}
                   {/* Recherche commande / QR */}
                   <div className="flex items-center gap-2 text-[11px]">
                     <span className="hidden sm:inline text-gray-500">

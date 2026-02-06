@@ -1,15 +1,14 @@
 // ========================================================== 
 // 👥 Utilisateurs.jsx — Interface Responsable (LPD Manager)
 // Version Responsable = CONSULTATION SEULEMENT (lecture seule)
-// Connecté à l'API Laravel (/api/users) + Présence
+// Connecté à l'API Laravel (/api/users)
 // ==========================================================
 
 import React, { useEffect, useMemo, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   Search,
   Loader2,
-  Circle,
   CheckCircle2,
   AlertCircle,
   X,
@@ -17,7 +16,6 @@ import {
 import DataTable from "../components/DataTable.jsx";
 import { utilisateursAPI } from '@/services/api';
 import Pagination from "../components/Pagination.jsx";
-
 
 const ROLES = [
   "Vendeur",
@@ -28,7 +26,6 @@ const ROLES = [
   "Responsable",
 ];
 
-
 const ROLE_LABELS = {
   vendeur: "Vendeur",
   caissier: "Caissier",
@@ -37,13 +34,11 @@ const ROLE_LABELS = {
   gestionnaire_boutique: "Gestionnaire Boutique",
   responsable: "Responsable",
 };
+
 const getRoleKeyFromLabel = (label) =>
   Object.keys(ROLE_LABELS).find(
     (key) => ROLE_LABELS[key] === label
   );
-
-
-const cls = (...a) => a.filter(Boolean).join(" ");
 
 // ————————————————————————————————————————————————
 // ✅ Toasts de notification
@@ -51,44 +46,41 @@ const cls = (...a) => a.filter(Boolean).join(" ");
 function Toasts({ toasts, remove }) {
   return (
     <div className="fixed top-4 right-4 z-[120] space-y-2">
-      <AnimatePresence>
-        {toasts.map((t) => (
-          <motion.div
-            key={t.id}
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 20 }}
-            className={cls(
-              "min-w-[280px] max-w-[360px] rounded-xl border shadow-lg px-4 py-3 flex items-start gap-3 backdrop-blur-sm",
-              t.type === "success"
-                ? "bg-emerald-50/95 border-emerald-200 text-emerald-800"
-                : "bg-rose-50/95 border-rose-200 text-rose-800"
+      {toasts.map((t) => (
+        <motion.div
+          key={t.id}
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: 20 }}
+          className={`min-w-[280px] max-w-[360px] rounded-xl border shadow-lg px-4 py-3 flex items-start gap-3 backdrop-blur-sm ${
+            t.type === "success"
+              ? "bg-emerald-50/95 border-emerald-200 text-emerald-800"
+              : "bg-rose-50/95 border-rose-200 text-rose-800"
+          }`}
+        >
+          <div className="pt-0.5">
+            {t.type === "success" ? (
+              <CheckCircle2 className="w-5 h-5" />
+            ) : (
+              <AlertCircle className="w-5 h-5" />
             )}
+          </div>
+          <div className="flex-1">
+            <div className="font-semibold text-sm">{t.title}</div>
+            {t.message && (
+              <div className="text-xs mt-0.5 opacity-90">
+                {t.message}
+              </div>
+            )}
+          </div>
+          <button
+            className="opacity-60 hover:opacity-100"
+            onClick={() => remove(t.id)}
           >
-            <div className="pt-0.5">
-              {t.type === "success" ? (
-                <CheckCircle2 className="w-5 h-5" />
-              ) : (
-                <AlertCircle className="w-5 h-5" />
-              )}
-            </div>
-            <div className="flex-1">
-              <div className="font-semibold text-sm">{t.title}</div>
-              {t.message && (
-                <div className="text-xs mt-0.5 opacity-90">
-                  {t.message}
-                </div>
-              )}
-            </div>
-            <button
-              className="opacity-60 hover:opacity-100"
-              onClick={() => remove(t.id)}
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </motion.div>
-        ))}
-      </AnimatePresence>
+            <X className="w-4 h-4" />
+          </button>
+        </motion.div>
+      ))}
     </div>
   );
 }
@@ -108,49 +100,35 @@ export default function Utilisateurs() {
   const [totalItems, setTotalItems] = useState(0);
   const [loadingPage, setLoadingPage] = useState(false);
 
-
-
-
   const removeToast = (id) =>
     setToasts((t) => t.filter((x) => x.id !== id));
 
-const toast = React.useCallback((type, title, message) => {
-  const id = Date.now();
-  setToasts((t) => [...t, { id, type, title, message }]);
-  setTimeout(() => removeToast(id), 4000);
-}, []);
+  const toast = React.useCallback((type, title, message) => {
+    const id = Date.now();
+    setToasts((t) => [...t, { id, type, title, message }]);
+    setTimeout(() => removeToast(id), 4000);
+  }, []);
 
-
-  // ————————————————————————————————————————————————
-  // 🔗 Chargement des vrais utilisateurs depuis l'API
-  // GET /api/users (protégé Sanctum + role:responsable)
-  // ————————————————————————————————————————————————
+  // Réinitialiser la page quand le filtre change
   useEffect(() => {
     setPage(1);
   }, [filterRole]);
 
-
-
+  // Chargement des utilisateurs depuis l'API
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-          setLoading(page === 1);
-          setLoadingPage(page !== 1);
-
-
+        setLoading(page === 1);
+        setLoadingPage(page !== 1);
 
         const data = await utilisateursAPI.getAll({
           page,
-          role:
-            filterRole !== "Tous"
-              ? getRoleKeyFromLabel(filterRole)
-              : undefined,
+          role: filterRole !== "Tous"
+            ? getRoleKeyFromLabel(filterRole)
+            : undefined,
         });
 
-
-
-
-        // pagination Laravel (sécurisée côté front)
+        // Gestion de la pagination Laravel
         if (!Array.isArray(data)) {
           const total = data.total || 0;
           const perPage = data.per_page || 20;
@@ -161,36 +139,20 @@ const toast = React.useCallback((type, title, message) => {
           setTotalPages(pages <= 1 ? 1 : pages);
         }
 
-
-        // data Laravel paginée
+        // Données Laravel paginées
         const rawUsers = Array.isArray(data) ? data : data.data || [];
 
-
-        const normalized = rawUsers.map((u) => {
-          // Présence : priorité à un booléen is_online si dispo,
-          // sinon estimation via last_login_at (ex: connecté il y a < 30 min).
-          let is_online = false;
-
-          if (typeof u.is_online !== "undefined") {
-            is_online = Boolean(u.is_online);
-          } else if (u.last_login_at) {
-            const last = new Date(u.last_login_at);
-            const diffMin = (Date.now() - last.getTime()) / 60000;
-            is_online = diffMin <= 30; // 30 minutes = considéré comme "en ligne"
-          }
-
-          return {
-            id: u.id,
-            prenom: u.prenom || "",
-            nom: u.nom || "",
-            email: u.email || "",
-            tel: u.telephone || u.tel || "",
-            adresse: u.adresse || "",
-            cni: u.numero_cni || u.cni || "",
-            role: ROLE_LABELS[u.role] || u.role || "",
-            is_online,
-          };
-        });
+        // Normalisation des données
+        const normalized = rawUsers.map((u) => ({
+          id: u.id,
+          prenom: u.prenom || "",
+          nom: u.nom || "",
+          email: u.email || "",
+          tel: u.telephone || "",
+          adresse: u.adresse || "",
+          cni: u.numero_cni || "",
+          role: ROLE_LABELS[u.role] || u.role || "",
+        }));
 
         setUsers(normalized);
       } catch (err) {
@@ -199,7 +161,6 @@ const toast = React.useCallback((type, title, message) => {
           "Erreur",
           "Impossible de charger la liste des utilisateurs."
         );
-
       } finally {
         setLoading(false);
         setLoadingPage(false);
@@ -207,43 +168,33 @@ const toast = React.useCallback((type, title, message) => {
     };
 
     fetchUsers();
-  }, [toast, page,  filterRole]);
+  }, [toast, page, filterRole]);
+
+  // Filtrage côté client pour la recherche
   const filteredUsers = useMemo(() => {
-  const q = searchTerm.toLowerCase();
+    const q = searchTerm.toLowerCase();
 
-  return users.filter((u) => {
-    const prenom = (u.prenom || "").toLowerCase();
-    const nom = (u.nom || "").toLowerCase();
-    const email = (u.email || "").toLowerCase();
-    const tel = String(u.tel || "").toLowerCase();
-    const adresse = (u.adresse || "").toLowerCase();
+    return users.filter((u) => {
+      const prenom = (u.prenom || "").toLowerCase();
+      const nom = (u.nom || "").toLowerCase();
+      const email = (u.email || "").toLowerCase();
+      const tel = String(u.tel || "").toLowerCase();
+      const adresse = (u.adresse || "").toLowerCase();
 
-    return (
-      prenom.includes(q) ||
-      nom.includes(q) ||
-      email.includes(q) ||
-      tel.includes(q) ||
-      adresse.includes(q)
-    );
-  });
-}, [users, searchTerm]);
+      return (
+        prenom.includes(q) ||
+        nom.includes(q) ||
+        email.includes(q) ||
+        tel.includes(q) ||
+        adresse.includes(q)
+      );
+    });
+  }, [users, searchTerm]);
 
-
-
-  // Stats rapides (pour les petits badges)
-    const stats = useMemo(() => {
-      const enLigne = users.filter((u) => u.is_online).length;
-      const horsLigne = totalItems - enLigne;
-
-      return {
-        total: totalItems,
-        enLigne,
-        horsLigne,
-      };
-    }, [users, totalItems]);
-
-
-  
+  // Statistiques simples
+  const stats = useMemo(() => ({
+    total: totalItems,
+  }), [totalItems]);
 
   // ————————————————————————————————————————————————
   // ⏳ Loader harmonisé
@@ -291,8 +242,6 @@ const toast = React.useCallback((type, title, message) => {
               {stats.total > 1 && "s"} enregistrés
             </p>
           </div>
-
-
         </motion.header>
 
         {/* PETITS STATS */}
@@ -301,20 +250,6 @@ const toast = React.useCallback((type, title, message) => {
             <span className="h-1.5 w-1.5 rounded-full bg-[#472EAD]" />
             <span>
               Total : <span className="font-semibold">{stats.total}</span>
-            </span>
-          </div>
-          <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-100">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            <span>
-              En ligne :{" "}
-              <span className="font-semibold">{stats.enLigne}</span>
-            </span>
-          </div>
-          <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[#F7F5FF] border border-[#E4E0FF]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#F58020]" />
-            <span>
-              Hors ligne :{" "}
-              <span className="font-semibold">{stats.horsLigne}</span>
             </span>
           </div>
         </section>
@@ -376,6 +311,7 @@ const toast = React.useCallback((type, title, message) => {
                     { label: "Email", key: "email" },
                     { label: "Téléphone", key: "tel" },
                     { label: "Adresse", key: "adresse" },
+                    { label: "Rôle", key: "role" },
                   ]}
                   data={filteredUsers}
                   actions={[]}
@@ -396,13 +332,9 @@ const toast = React.useCallback((type, title, message) => {
                     setPage(p);
                   }}
                 />
-
               </>
             )}
           </div>
-
-
-
         </section>
 
         {/* TOASTS */}

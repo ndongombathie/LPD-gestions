@@ -1,7 +1,7 @@
-// ==========================================================   
+// ==========================================================
 // 🧍‍♂️ ClientsSpeciaux.jsx — Interface Responsable (LPD Manager)
 // Gestion des clients privilégiés (vente en gros + paiements par tranches)
-// Version ULTRA PRO (agrégats + historique + nouvelle tranche + édition tranche)
+// Version FINALE corrigée avec backend Laravel - SYNCHRONISÉ
 // ==========================================================
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -21,9 +21,9 @@ import {
 import FormModal from "../components/FormModal.jsx";
 import DataTable from "../components/DataTable.jsx";
 import VoirDetailClient from "../components/VoirDetailClient.jsx";
+import Pagination from "../components/Pagination.jsx";
 import { useClientsSpeciaux } from "@/hooks/useClientsSpeciaux";
 import { usePaiementsClients } from "@/hooks/usePaiementsClients";
-
 
 const cls = (...a) => a.filter(Boolean).join(" ");
 const formatFCFA = (n) =>
@@ -79,8 +79,9 @@ function Toasts({ toasts, remove }) {
     </div>
   );
 }
+
 // ==========================================================
-// 💸 Modal Nouvelle Tranche (côté Responsable)
+// 💸 Modal Nouvelle Tranche (côté Responsable) - CORRIGÉ AVEC STATUTS LARAVEL
 // ==========================================================
 function NouvelleTrancheModal({
   open,
@@ -90,18 +91,16 @@ function NouvelleTrancheModal({
   onSubmit,
   toast,
 }) {
-  // ✅ Commandes éligibles = reste à payer > 0, non annulées, ET aucune tranche en attente caisse déjà enregistrée
+  // ✅ CORRECTION : Commandes éligibles - SEULEMENT les commandes avec resteAPayer > 0
   const commandesEligibles = useMemo(
     () =>
       (commandes || []).filter((c) => {
-        if ((c.resteAPayer || 0) <= 0 || c.statut === "annulee") return false;
-        const hasTrancheEnAttente = (c.paiements || []).some(
-          (p) =>
-            p.type === "tranche" &&
-            p.statut === "en_attente_caisse" &&
-            p.montant
-        );
-        return !hasTrancheEnAttente;
+        // Exclure les commandes annulées
+        if (c.statut === "annulee") return false;
+        
+        // ✅ CORRECTION : Utiliser resteAPayer (source de vérité Laravel)
+        const reste = Number(c.resteAPayer || 0);
+        return reste > 0;
       }),
     [commandes]
   );
@@ -112,7 +111,7 @@ function NouvelleTrancheModal({
   const [date, setDate] = useState(todayISO());
   const [commentaire, setCommentaire] = useState("");
 
-  // 🔄 Réinitialisation propre à chaque ouverture
+  // 🔄 Réinitialisation à chaque ouverture
   useEffect(() => {
     if (!open) return;
     if (commandesEligibles.length > 0) {
@@ -146,7 +145,6 @@ function NouvelleTrancheModal({
     }
 
     const m = Number(montant);
-
     if (!m || m <= 0) {
       toast(
         "error",
@@ -156,24 +154,10 @@ function NouvelleTrancheModal({
       return;
     }
 
-    // 🔍 Calcul du reste théorique en tenant compte des tranches déjà en attente
-    const totalTTCCommande = Number(commandeSelectionnee.totalTTC || 0);
-    const montantDejaEncaisse = Number(commandeSelectionnee.montantPaye || 0);
-    const totalTranchesEnAttente = (commandeSelectionnee.paiements || [])
-      .filter(
-        (p) =>
-          p.type === "tranche" &&
-          p.statut === "en_attente_caisse" &&
-          p.montant
-      )
-      .reduce((s, p) => s + Number(p.montant || 0), 0);
+    // ✅ CORRECTION : Utiliser resteAPayer (source de vérité Laravel)
+    const resteDisponible = Number(commandeSelectionnee.resteAPayer || 0);
 
-    const resteTheorique = Math.max(
-      totalTTCCommande - montantDejaEncaisse - totalTranchesEnAttente,
-      0
-    );
-
-    if (resteTheorique <= 0) {
+    if (resteDisponible <= 0) {
       toast(
         "error",
         "Aucun reste pour nouvelle tranche",
@@ -182,13 +166,13 @@ function NouvelleTrancheModal({
       return;
     }
 
-    if (m > resteTheorique) {
+    if (m > resteDisponible) {
       toast(
         "error",
         "Montant trop élevé",
-        `La tranche ne peut pas dépasser le reste théorique disponible (${formatFCFA(
-          resteTheorique
-        )}) en tenant compte des autres tranches en attente.`
+        `La tranche ne peut pas dépasser le reste disponible (${formatFCFA(
+          resteDisponible
+        )}).`
       );
       return;
     }
@@ -248,7 +232,7 @@ function NouvelleTrancheModal({
             <span className="font-semibold">
               aucune commande éligible à une tranche
             </span>{" "}
-            (soit aucune dette, soit une tranche est déjà en attente caisse).
+            (toutes les commandes sont soldées ou annulées).
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4 text-sm">
@@ -262,67 +246,48 @@ function NouvelleTrancheModal({
                 onChange={(e) => setCommandeId(e.target.value)}
                 className={baseInput}
               >
-                {commandesEligibles.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.numero} — Date : {c.dateCommande} — Reste théorique :{" "}
-                    {formatFCFA(
-                      Math.max(
-                        (c.totalTTC || 0) -
-                          (c.montantPaye || 0) -
-                          (c.paiements || [])
-                            .filter(
-                              (p) =>
-                                p.type === "tranche" &&
-                                p.statut === "en_attente_caisse" &&
-                                p.montant
-                            )
-                            .reduce(
-                              (s, p) => s + Number(p.montant || 0),
-                              0
-                            ),
-                        0
-                      )
-                    )}
-                  </option>
-                ))}
+                {commandesEligibles.map((c) => {
+                  const reste = Number(c.resteAPayer || 0);
+                  return (
+                    <option key={c.id} value={c.id}>
+                      {c.numero} — Date : {c.dateCommande} — Reste : {formatFCFA(reste)}
+                    </option>
+                  );
+                })}
               </select>
               {commandeSelectionnee && (
-                <div className="mt-1 text-[11px] text-gray-500">
-                  Total TTC :{" "}
-                  <span className="font-semibold">
-                    {formatFCFA(commandeSelectionnee.totalTTC)}
-                  </span>{" "}
-                  — Payé (encaissé) :{" "}
-                  <span className="font-semibold text-emerald-700">
-                    {formatFCFA(commandeSelectionnee.montantPaye)}
-                  </span>{" "}
-                  — Reste théorique (avec tranches en attente) :{" "}
-                  <span className="font-semibold text-rose-700">
-                    {(() => {
-                      const total = Number(
-                        commandeSelectionnee.totalTTC || 0
-                      );
-                      const encaisse = Number(
-                        commandeSelectionnee.montantPaye || 0
-                      );
-                      const tranchesAttente = (
-                        commandeSelectionnee.paiements || []
-                      )
-                        .filter(
-                          (p) =>
-                            p.type === "tranche" &&
-                            p.statut === "en_attente_caisse" &&
-                            p.montant
-                        )
-                        .reduce(
-                          (s, p) => s + Number(p.montant || 0),
-                          0
-                        );
-                      return formatFCFA(
-                        Math.max(total - encaisse - tranchesAttente, 0)
-                      );
-                    })()}
-                  </span>
+                <div className="mt-1 text-[11px] text-gray-500 space-y-1">
+                  <div>
+                    Total TTC :{" "}
+                    <span className="font-semibold">
+                      {formatFCFA(commandeSelectionnee.totalTTC)}
+                    </span>
+                  </div>
+                  <div>
+                    Payé (encaissé) :{" "}
+                    <span className="font-semibold text-emerald-700">
+                      {formatFCFA(commandeSelectionnee.montantPaye || 0)}
+                    </span>
+                  </div>
+                  <div>
+                    Tranches en attente :{" "}
+                    <span className="font-semibold text-amber-700">
+                      {(() => {
+                        const paiements = commandeSelectionnee.paiements || [];
+                        // ✅ CORRECTION CRITIQUE : Utiliser les champs Laravel bruts
+                        const tranchesEnAttente = paiements
+                          .filter(p => p.type_paiement === "tranche" && p.statut_paiement === "en_attente_caisse")
+                          .reduce((s, p) => s + Number(p.montant || 0), 0);
+                        return formatFCFA(tranchesEnAttente);
+                      })()}
+                    </span>
+                  </div>
+                  <div>
+                    Reste disponible :{" "}
+                    <span className="font-semibold text-rose-700">
+                      {formatFCFA(commandeSelectionnee.resteAPayer || 0)}
+                    </span>
+                  </div>
                 </div>
               )}
             </div>
@@ -439,8 +404,8 @@ function ClientForm({ initial, onSubmit, onCancel, submitting }) {
     if (!form.nom.trim()) e.nom = "Le nom est requis.";
     if (!form.contact.match(/^[0-9]{9}$/))
       e.contact = "Le contact doit contenir exactement 9 chiffres.";
-    if (!form.entreprise.trim()) e.entreprise = "L’entreprise est requise.";
-    if (!form.adresse.trim()) e.adresse = "L’adresse est requise.";
+    if (!form.entreprise.trim()) e.entreprise = "L'entreprise est requise.";
+    if (!form.adresse.trim()) e.adresse = "L'adresse est requise.";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -561,10 +526,9 @@ function ClientForm({ initial, onSubmit, onCancel, submitting }) {
 }
 
 // ==========================================================
-// 📋 Page principale Clients Spéciaux
+// 📋 Page principale Clients Spéciaux - CORRIGÉE AVEC STATUTS LARAVEL
 // ==========================================================
 export default function ClientsSpeciaux() {
-
   const [searchTerm, setSearchTerm] = useState("");
   const [openAdd, setOpenAdd] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
@@ -582,12 +546,17 @@ export default function ClientsSpeciaux() {
     setTimeout(() => removeToast(id), 4000);
   };
   const removeToast = (id) => setToasts((t) => t.filter((x) => x.id !== id));
+
+  // ✅ CORRECTION 1 : Appel complet du hook avec pagination
   const {
     clients,
     commandes,
-    loading,
     clientsEnrichis,
     statsGlobales,
+    page,
+    totalPages,
+    setPage,
+    loading,
     handleAdd,
     handleEdit,
     handleDelete,
@@ -595,13 +564,33 @@ export default function ClientsSpeciaux() {
 
 
   const {
-  loadPaiementsForClient,
-  handleTrancheSubmit,
-  handleVoirDetailEditTranche,
-  handleVoirDetailDeleteTranche,
-} = usePaiementsClients(toast);
+    loadPaiementsForClient,
+    handleTrancheSubmit,
+    handleVoirDetailEditTranche,
+    handleVoirDetailDeleteTranche,
+  } = usePaiementsClients(toast);
 
+  // ✅ CORRECTION 3 : Réinitialiser la page quand on recherche
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, setPage]);
 
+  // ✅ CORRECTION 1 : Filtre correct pour la table
+  const displayedClients = useMemo(() => {
+    if (!searchTerm) return clientsEnrichis;
+
+    const q = searchTerm.toLowerCase();
+    return clientsEnrichis.filter(
+      (c) =>
+        c.nom.toLowerCase().includes(q) ||
+        (c.contact || "").toLowerCase().includes(q) ||
+        (c.entreprise || "").toLowerCase().includes(q) ||
+        (c.adresse || "").toLowerCase().includes(q)
+    );
+  }, [clientsEnrichis, searchTerm]);
+
+  // ✅ Utilisation des stats globales du hook
+  const statsReelles = statsGlobales;
 
   const openHistoriqueClient = (client) => {
     setHistoriqueClient(client);
@@ -614,20 +603,20 @@ export default function ClientsSpeciaux() {
     setOpenTranche(true);
   };
 
-
-
-
-
-  const filtered = useMemo(() => {
-    const q = searchTerm.toLowerCase();
-    return clientsEnrichis.filter(
-      (c) =>
-        c.nom.toLowerCase().includes(q) ||
-        (c.contact || "").toLowerCase().includes(q) ||
-        (c.entreprise || "").toLowerCase().includes(q) ||
-        (c.adresse || "").toLowerCase().includes(q)
+  // ✅ CORRECTION : Désactiver le bouton "Nouvelle tranche" basé sur resteAPayer
+  const isTrancheDisabled = (client) => {
+    const commandesClient = commandes.filter(cmd => 
+      cmd.clientId === client.id && cmd.statut !== "annulee"
     );
-  }, [clientsEnrichis, searchTerm]);
+
+    if (commandesClient.length === 0) return true;
+
+    // ✅ CORRECTION : Vérifier si au moins une commande a un resteAPayer > 0
+    return !commandesClient.some(cmd => {
+      const reste = Number(cmd.resteAPayer || 0);
+      return reste > 0;
+    });
+  };
 
   // Loader compact aligné
   if (loading)
@@ -674,8 +663,8 @@ export default function ClientsSpeciaux() {
                 </p>
               </div>
               <p className="text-[11px] text-gray-400">
-                {statsGlobales.nbClients} client
-                {statsGlobales.nbClients > 1 && "s"} spéciaux enregistrés
+                {statsReelles.nbClients} client
+                {statsReelles.nbClients > 1 && "s"} spéciaux enregistrés
               </p>
             </div>
 
@@ -690,7 +679,7 @@ export default function ClientsSpeciaux() {
             </div>
           </motion.header>
 
-          {/* CARTES STATS GLOBALES */}
+          {/* CARTES STATS GLOBALES - CORRIGÉES avec données Laravel */}
           <motion.div
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
@@ -703,7 +692,7 @@ export default function ClientsSpeciaux() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-lg font-extrabold text-yellow-700">
-                  {statsGlobales.nbClients}
+                  {statsReelles.nbClients}
                 </span>
                 <BadgeDollarSign className="w-5 h-5 text-yellow-600" />
               </div>
@@ -716,7 +705,7 @@ export default function ClientsSpeciaux() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm sm:text-lg font-extrabold text-emerald-700">
-                  {formatFCFA(statsGlobales.totalTTC)}
+                  {formatFCFA(statsReelles.totalTTC)}
                 </span>
               </div>
             </div>
@@ -728,7 +717,7 @@ export default function ClientsSpeciaux() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm sm:text-lg font-extrabold text-emerald-700">
-                  {formatFCFA(statsGlobales.totalPaye)}
+                  {formatFCFA(statsReelles.totalPaye)}
                 </span>
                 <CheckCircle2 className="w-5 h-5 text-emerald-600" />
               </div>
@@ -741,7 +730,7 @@ export default function ClientsSpeciaux() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm sm:text-lg font-extrabold text-rose-700">
-                  {formatFCFA(statsGlobales.detteTotale)}
+                  {formatFCFA(statsReelles.detteTotale)}
                 </span>
                 <AlertCircle className="w-5 h-5 text-rose-600" />
               </div>
@@ -762,7 +751,7 @@ export default function ClientsSpeciaux() {
               />
             </div>
 
-            {/* TABLEAU PRINCIPAL */}
+            {/* TABLEAU PRINCIPAL - CORRIGÉ */}
             <DataTable
               columns={[
                 {
@@ -780,13 +769,12 @@ export default function ClientsSpeciaux() {
                     </div>
                   ),
                 },
-                //{ key: "contact", label: "Contact" },
                 {
                   key: "totalTTC",
                   label: "Total TTC",
                   render: (v) => (
                     <span className="text-xs font-semibold text-gray-700">
-                      {formatFCFA(v)}
+                      {formatFCFA(v || 0)}
                     </span>
                   ),
                 },
@@ -795,7 +783,7 @@ export default function ClientsSpeciaux() {
                   label: "Total payé",
                   render: (v) => (
                     <span className="text-xs font-semibold text-emerald-700">
-                      {formatFCFA(v)}
+                      {formatFCFA(v || 0)}
                     </span>
                   ),
                 },
@@ -816,21 +804,25 @@ export default function ClientsSpeciaux() {
                 {
                   key: "tranches",
                   label: "Tranches",
-                  render: (_, row) =>
-                    row.nbTranchesEnAttente > 0 ? (
+                  render: (_, row) => {
+                    const nbTranches = row.nbTranchesEnAttente || 0;
+                    const montantTranches = row.montantTranchesEnAttente || 0;
+                    
+                    return nbTranches > 0 ? (
                       <div className="flex flex-col text-xs">
                         <span className="font-semibold text-amber-700">
-                          {row.nbTranchesEnAttente} en attente
+                          {nbTranches} en attente
                         </span>
                         <span className="text-[11px] text-gray-600">
-                          {formatFCFA(row.montantTranchesEnAttente)}
+                          {formatFCFA(montantTranches)}
                         </span>
                       </div>
                     ) : (
                       <span className="text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
                         Aucune tranche en attente
                       </span>
-                    ),
+                    );
+                  },
                 },
                 {
                   key: "nbCommandes",
@@ -842,14 +834,15 @@ export default function ClientsSpeciaux() {
                   ),
                 },
               ]}
-              data={filtered}
+              data={displayedClients}
               actions={[
                 {
                   icon: <BadgeDollarSign size={16} />,
                   title: "Nouvelle tranche (en attente caisse)",
                   color: "text-emerald-700",
                   hoverBg: "bg-emerald-50",
-                  onClick: (row) => openTrancheClient(row),
+                  onClick: (row) => !isTrancheDisabled(row) && openTrancheClient(row),
+                  disabled: (row) => isTrancheDisabled(row),
                 },
                 {
                   icon: <ListChecks size={16} />,
@@ -874,6 +867,15 @@ export default function ClientsSpeciaux() {
                 },
               ]}
             />
+
+            {/* ✅ CORRECTION 2 : Pagination cachée pendant la recherche */}
+            {!searchTerm && (
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                onPageChange={setPage}
+              />
+            )}
           </section>
 
           {/* MODALES CRUD */}
@@ -927,11 +929,10 @@ export default function ClientsSpeciaux() {
               >
                 Supprimer
               </button>
-
             </div>
           </FormModal>
 
-          {/* MODALE HISTORIQUE CLIENT (VoirDetailClient.jsx) */}
+          {/* MODALE HISTORIQUE CLIENT */}
           <VoirDetailClient
             open={openHistorique}
             onClose={() => setOpenHistorique(false)}

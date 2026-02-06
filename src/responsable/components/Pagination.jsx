@@ -1,16 +1,11 @@
 import React from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-export default function Pagination({
-  page,
-  totalPages,
-  onPageChange,
-}) {
+export default function Pagination({ page, totalPages, onPageChange }) {
   if (totalPages <= 1) return null;
 
   const getPages = () => {
     const pages = new Set();
-
     pages.add(1);
     pages.add(totalPages);
 
@@ -45,20 +40,25 @@ export default function Pagination({
           const showDots = prev && p - prev > 1;
 
           return (
-            <React.Fragment key={p}>
+            <React.Fragment key={`grp-${p}`}>
               {showDots && (
-                <span className="px-2 text-gray-400 text-sm">…</span>
+                <span
+                  key={`dots-${prev}-${p}`}
+                  className="px-2 text-gray-400 text-sm"
+                >
+                  …
+                </span>
               )}
 
               <button
+                key={`page-${p}`}
                 onClick={() => onPageChange(p)}
                 disabled={p === page}
-                className={`px-3 py-1.5 rounded-lg text-sm font-semibold border
-                  ${
-                    p === page
-                      ? "bg-[#472EAD] text-white border-[#472EAD] cursor-default"
-                      : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
-                  }`}
+                className={`px-3 py-1.5 rounded-lg text-sm font-semibold border ${
+                  p === page
+                    ? "bg-[#472EAD] text-white border-[#472EAD] cursor-default"
+                    : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
+                }`}
               >
                 {p}
               </button>

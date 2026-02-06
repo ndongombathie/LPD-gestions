@@ -6,6 +6,9 @@
 
 import httpClient from '../http/client';
 
+// ======================================================
+// 🔹 Commandes (entête)
+// ======================================================
 const ENDPOINTS = {
   GET_ALL: '/commandes',
   GET_PENDING: '/commandes/pending',
@@ -18,10 +21,6 @@ const ENDPOINTS = {
 };
 
 export const commandesAPI = {
-  /**
-   * Récupérer toutes les commandes avec pagination/filtres
-   * @param {object} params - {page, perPage, status, search}
-   */
   getAll: async (params = {}) => {
     try {
       const response = await httpClient.get(ENDPOINTS.GET_ALL, { params });
@@ -32,9 +31,6 @@ export const commandesAPI = {
     }
   },
 
-  /**
-   * Récupérer les commandes en attente
-   */
   getPending: async () => {
     try {
       const response = await httpClient.get(ENDPOINTS.GET_PENDING);
@@ -45,13 +41,11 @@ export const commandesAPI = {
     }
   },
 
-  /**
-   * Obtenir une commande par ID
-   * @param {number} id - ID commande
-   */
   getById: async (id) => {
     try {
-      const response = await httpClient.get(ENDPOINTS.GET_BY_ID.replace(':id', id));
+      const response = await httpClient.get(
+        ENDPOINTS.GET_BY_ID.replace(':id', id)
+      );
       return response.data;
     } catch (error) {
       console.error('❌ Erreur getById commande:', error.message);
@@ -59,10 +53,6 @@ export const commandesAPI = {
     }
   },
 
-  /**
-   * Créer une commande
-   * @param {object} data - Données commande
-   */
   create: async (data) => {
     try {
       const response = await httpClient.post(ENDPOINTS.CREATE, data);
@@ -73,14 +63,12 @@ export const commandesAPI = {
     }
   },
 
-  /**
-   * Mettre à jour une commande
-   * @param {number} id - ID commande
-   * @param {object} data - Données à modifier
-   */
   update: async (id, data) => {
     try {
-      const response = await httpClient.put(ENDPOINTS.UPDATE.replace(':id', id), data);
+      const response = await httpClient.put(
+        ENDPOINTS.UPDATE.replace(':id', id),
+        data
+      );
       return response.data;
     } catch (error) {
       console.error('❌ Erreur update commande:', error.response?.data || error.message);
@@ -88,13 +76,11 @@ export const commandesAPI = {
     }
   },
 
-  /**
-   * Valider une commande
-   * @param {number} id - ID commande
-   */
   validate: async (id) => {
     try {
-      const response = await httpClient.post(ENDPOINTS.VALIDATE.replace(':id', id));
+      const response = await httpClient.post(
+        ENDPOINTS.VALIDATE.replace(':id', id)
+      );
       return response.data;
     } catch (error) {
       console.error('❌ Erreur validate commande:', error.response?.data || error.message);
@@ -102,13 +88,11 @@ export const commandesAPI = {
     }
   },
 
-  /**
-   * Annuler une commande
-   * @param {number} id - ID commande
-   */
   cancel: async (id) => {
     try {
-      const response = await httpClient.post(ENDPOINTS.CANCEL.replace(':id', id));
+      const response = await httpClient.post(
+        ENDPOINTS.CANCEL.replace(':id', id)
+      );
       return response.data;
     } catch (error) {
       console.error('❌ Erreur cancel commande:', error.response?.data || error.message);
@@ -116,16 +100,89 @@ export const commandesAPI = {
     }
   },
 
-  /**
-   * Supprimer une commande
-   * @param {number} id - ID commande
-   */
   delete: async (id) => {
     try {
-      const response = await httpClient.delete(ENDPOINTS.DELETE.replace(':id', id));
+      const response = await httpClient.delete(
+        ENDPOINTS.DELETE.replace(':id', id)
+      );
       return response.data;
     } catch (error) {
       console.error('❌ Erreur delete commande:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+};
+
+// ======================================================
+// 🔹 Lignes spéciales de commande (commande_lignes)
+// (utilisées par les Clients Spéciaux / Responsable)
+// ======================================================
+const LIGNES_ENDPOINTS = {
+  GET_BY_COMMANDE: '/commandes/:id/lignes',
+  CREATE: '/commandes/:id/lignes',
+  UPDATE: '/commandes/lignes/:ligneId',
+  DELETE: '/commandes/lignes/:ligneId',
+};
+
+export const lignesCommandeAPI = {
+  /**
+   * Récupérer les lignes spéciales d'une commande
+   */
+  getByCommande: async (commandeId) => {
+    try {
+      const res = await httpClient.get(
+        LIGNES_ENDPOINTS.GET_BY_COMMANDE.replace(':id', commandeId)
+      );
+      return res.data;
+    } catch (error) {
+      console.error('❌ Erreur getByCommande lignes:', error.message);
+      throw error;
+    }
+  },
+
+  /**
+   * Ajouter une ligne spéciale à une commande
+   */
+  create: async (commandeId, data) => {
+    try {
+      const res = await httpClient.post(
+        LIGNES_ENDPOINTS.CREATE.replace(':id', commandeId),
+        data
+      );
+      return res.data;
+    } catch (error) {
+      console.error('❌ Erreur create ligne:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  /**
+   * Mettre à jour une ligne spéciale
+   */
+  update: async (ligneId, data) => {
+    try {
+      const res = await httpClient.put(
+        LIGNES_ENDPOINTS.UPDATE.replace(':ligneId', ligneId),
+        data
+      );
+      return res.data;
+    } catch (error) {
+      console.error('❌ Erreur update ligne:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
+  /**
+   * Supprimer une ligne spéciale
+   */
+  delete: async (ligneId) => {
+    try {
+      const res = await httpClient.delete(
+        LIGNES_ENDPOINTS.DELETE.replace(':ligneId', ligneId)
+      );
+      return res.data;
+    } catch (error) {
+      console.error('❌ Erreur delete ligne:', error.response?.data || error.message);
       throw error;
     }
   },

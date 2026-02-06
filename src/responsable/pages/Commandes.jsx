@@ -1,6 +1,9 @@
 // ==========================================================
 // 🛒 Commandes.jsx — Interface Responsable (LPD Manager)
-// Branché sur l’API Laravel (clients, produits, commandes)
+// Branché sur l'API Laravel (clients, produits, commandes)
+// ✅ Corrections : annulation UI, stats dette, message "aucune commande"
+// ✅ Correction stats : mêmes filtres que la table
+// ✅ CORRECTION CRITIQUE : Normalisation API unique avec unwrapApi()
 // ==========================================================
 
 import React, { useEffect, useMemo, useState, useRef } from "react";
@@ -18,9 +21,9 @@ import {
   Eye,
   Search,
   Loader2,
-  Pencil, // 👈 ajouter ceci
-  Check, // 👈 et ceci
-  XCircle, // 👈 et ceci
+  Pencil,
+  Check,
+  XCircle,
 } from "lucide-react";
 import jsPDF from "jspdf";
 import { QRCodeCanvas as QRCode } from "qrcode.react";
@@ -28,7 +31,8 @@ import "jspdf-autotable";
 import { useLocation } from "react-router-dom";
 import { commandesAPI, produitsAPI, clientsAPI } from '@/services/api';
 import { logger } from "@/utils/logger";
-
+import Pagination from "@/responsable/components/Pagination";
+import { normalizeCommande } from "@/utils/normalizeCommande";
 
 
 // === Utils ===
@@ -40,6 +44,51 @@ const formatFCFA = (n) =>
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const cls = (...a) => a.filter(Boolean).join(" ");
+
+// ==========================================================
+// 🔧 FONCTION DE NORMALISATION UNIFIÉE POUR LES RÉPONSES API
+// ==========================================================
+function unwrapApi(res) {
+  if (!res) return { data: [], total: 0, current_page: 1, last_page: 1 };
+
+  // Axios response
+  if (res.data !== undefined) {
+    // Laravel pagination
+    if (res.data.data !== undefined) return res.data;
+
+    // API already unwrapped but paginated
+    if (Array.isArray(res.data) && res.total !== undefined) {
+      return {
+        data: res.data,
+        total: res.total,
+        current_page: res.current_page || 1,
+        last_page: res.last_page || 1,
+      };
+    }
+
+    // Raw array
+    if (Array.isArray(res.data)) {
+      return {
+        data: res.data,
+        total: res.data.length,
+        current_page: 1,
+        last_page: 1,
+      };
+    }
+
+    return res.data;
+  }
+
+  // Already unwrapped
+  if (res.data !== undefined) return res;
+
+  return {
+    data: [],
+    total: 0,
+    current_page: 1,
+    last_page: 1,
+  };
+}
 
 // ==========================================================
 // ✅ Toasts Premium
@@ -263,7 +312,6 @@ function QrCommandeModal({ open, onClose, commande, qrPayload }) {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8);
       doc.setTextColor(229, 231, 235);
-      // 🔹 ICI : on enlève "Ticket commande" et on garde uniquement la réf
       const title2 = `#${commande.numero}`;
       doc.text(title2, centerX, 28.5, { align: "center" });
 
@@ -306,7 +354,6 @@ function QrCommandeModal({ open, onClose, commande, qrPayload }) {
 
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9);
-      // 💡 Montant TTC volontairement retiré du ticket
       doc.text(`Date : ${commande.dateCommande}`, leftX, infoStartY + 5);
 
       // ================= TEXTE D'AIDE BAS DE TICKET =================
@@ -593,7 +640,7 @@ function FactureModal({ open, onClose, commande }) {
 // 🧩 Formulaire Commande (multi-lignes produits + branché sur API refs)
 // ======================================================================
 function CommandeForm({ clientInitial, onCreate, toast }) {
-  // Clients spéciaux & catalogue produits depuis l’API
+  // Clients spéciaux & catalogue produits depuis l'API
   const [clients, setClients] = useState([]);
   const [catalogue, setCatalogue] = useState([]);
   const [loadingRefs, setLoadingRefs] = useState(true);
@@ -663,15 +710,11 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
           produitsAPI.getAll(),
         ]);
 
-        const clientsPayload = Array.isArray(clientsRes.data?.data)
-          ? clientsRes.data.data
-          : clientsRes.data;
+        // Utiliser la fonction de normalisation unifiée
+        const clientsPayload = unwrapApi(clientsRes);
+        const produitsPayload = unwrapApi(produitsRes);
 
-        const produitsPayload = Array.isArray(produitsRes.data?.data)
-          ? produitsRes.data.data
-          : produitsRes.data;
-
-        const normalizedClients = (clientsPayload || []).map((c) => ({
+        const normalizedClients = (clientsPayload.data || []).map((c) => ({
           id: c.id,
           nom: c.nom || c.razon_social || "",
           code:
@@ -680,7 +723,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
             (c.id ? `CL-${String(c.id).padStart(3, "0")}` : ""),
         }));
 
-        const normalizedProduits = (produitsPayload || []).map((p) => {
+        const normalizedProduits = (produitsPayload.data || []).map((p) => {
           const prixDetail = Number(
             p.prix_basique_detail ??
               p.prix_vente ??
@@ -719,9 +762,10 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
               p.prix_seuil_detail != null ? Number(p.prix_seuil_detail) : null,
             prixSeuilGros:
               p.prix_seuil_gros != null ? Number(p.prix_seuil_gros) : null,
-            unitesParCarton: Number(p.unites_par_carton ?? 1),
+            unitesParCarton: Number(p.unite_carton ?? p.unites_par_carton ?? 1),
             stockGlobal: Number(p.stock_global ?? 0),
-            nombreCartons: Number(p.nombre_cartons ?? 0),
+            nombreCartons: Number(p.nombre_carton ?? p.nombre_cartons ?? 0),
+
           };
         });
 
@@ -780,7 +824,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
     }
   };
 
-  // 🧩 Appliquer la sélection d’un produit (peu importe la source : scan / saisie / modal)
+  // 🧩 Appliquer la sélection d'un produit (peu importe la source : scan / saisie / modal)
   const applyProduitSelection = (p) => {
     if (!p) return;
 
@@ -805,7 +849,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
     const value = e.target.value;
     setLigneLibelle(value);
 
-    // Tant qu’on tape, on considère qu’on n’a pas encore confirmé le produit
+    // Tant qu'on tape, on considère qu'on n'a pas encore confirmé le produit
     // (permet aussi le cas "produit hors catalogue")
     setLigneProduitId("");
 
@@ -838,7 +882,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
     const isNumeric = /^\d+$/.test(q);
 
     if (isNumeric) {
-      // Essayer d’abord un match exact sur code-barres / ref
+      // Essayer d'abord un match exact sur code-barres / ref
       const exact = catalogue.find((p) => {
         const code = (p.codeBarre || "").toString().trim();
         const ref = (p.ref || "").toString().trim();
@@ -1590,159 +1634,12 @@ function buildQrPayloadFromCommande(commande) {
 // ======================================================================
 // 🔧 Helper : normaliser une commande provenant du backend
 // ======================================================================
-function normalizeCommande(cmd) {
-  // 1) Normaliser les infos client
-  const client =
-    cmd.client ||
-    cmd.client_special ||
-    cmd.clientSpecial ||
-    cmd.client_speciale ||
-    cmd.client_speciale_detail ||
-    {};
-
-  let clientNom =
-    cmd.client_nom ||
-    cmd.nom_client ||
-    cmd.nom_client_special ||
-    cmd.client_name ||
-    cmd.customer_name ||
-    client.nom ||
-    client.nom_client ||
-    client.nom_client_special ||
-    client.raison_sociale ||
-    client.raisonSociale ||
-    client.name ||
-    client.libelle ||
-    client.intitule ||
-    "";
-
-  if (!clientNom && client && typeof client === "object") {
-    const firstStringValue = Object.values(client).find(
-      (v) => typeof v === "string" && v.trim() !== ""
-    );
-    if (firstStringValue) clientNom = firstStringValue;
-  }
-
-  const clientCode =
-    cmd.client_code ||
-    cmd.code_client ||
-    client.code_client ||
-    client.codeClient ||
-    client.code ||
-    cmd.code ||
-    undefined;
-
-  // 2) Normaliser les lignes
-  const lignesSource =
-    cmd.lignes || cmd.ligne_commandes || cmd.details || cmd.items || [];
-
-  const lignes = (lignesSource || []).map((l) => {
-    const qte = Number(l.quantite || l.qte || l.qty || 0);
-    const pu = Number(l.prix_unitaire || l.prix || l.price || 0);
-    const modeVente = l.mode_vente || l.modeVente || l.mode || "detail";
-
-    const totalHTLigne = Number(l.total_ht || l.totalHT || (qte && pu ? qte * pu : 0));
-    const totalTTCLigne = Number(
-      l.total_ttc || l.totalTTC || l.total || totalHTLigne * 1.18 || 0
-    );
-
-    const quantiteUnites = Number(
-      l.quantite_unites ||
-        l.quantiteUnites ||
-        (modeVente === "gros" ? qte * (l.unites_par_carton || 1) : qte)
-    );
-
-    return {
-      id: l.id,
-      produitId: l.produit_id || l.produitId || null,
-      libelle: l.libelle || l.nom_produit || l.designation || l.nom || "",
-      ref: l.ref || l.code_produit || l.reference || l.code || null,
-      qte,
-      prixUnitaire: pu,
-      totalHT: totalHTLigne,
-      totalTTC: totalTTCLigne,
-      modeVente,
-      quantiteUnites,
-    };
-  });
-
-  // 3) Totaux
-  let totalHT = Number(cmd.total_ht ?? cmd.totalHT ?? cmd.montant_ht ?? 0);
-  let totalTTC = Number(cmd.total_ttc ?? cmd.totalTTC ?? cmd.montant_total ?? cmd.total ?? 0);
-
-  if ((!totalHT || Number.isNaN(totalHT)) && lignes.length) {
-    totalHT = lignes.reduce(
-      (s, l) => s + (Number(l.totalHT) || l.qte * l.prixUnitaire || 0),
-      0
-    );
-  }
-
-  if ((!totalTTC || Number.isNaN(totalTTC)) && lignes.length) {
-    totalTTC = lignes.reduce(
-      (s, l) => s + (Number(l.totalTTC) || Number(l.totalHT) || 0),
-      0
-    );
-  }
-
-  let totalTVA = Number(cmd.total_tva ?? cmd.totalTVA ?? cmd.montant_tva ?? (totalTTC - totalHT));
-  if (Number.isNaN(totalTVA)) {
-    totalTVA = totalTTC - totalHT;
-  }
-
-  // 4) Paiements
-  const montantPaye = Number(cmd.montant_paye || cmd.montantPaye || cmd.total_paye || 0);
-  const resteAPayer = Number(
-    cmd.reste_a_payer ||
-      cmd.resteAPayer ||
-      cmd.montant_restant ||
-      totalTTC - montantPaye
-  );
-
-  // 5) Statut
-  const statut = cmd.statut || "en_attente_caisse";
-  const statutLabelMap = {
-    en_attente_caisse: "En attente caisse",
-    partiellement_payee: "Partiellement payée",
-    soldee: "Soldée",
-    annulee: "Annulée",
-  };
-  const statutLabel = cmd.statut_label || cmd.statutLabel || statutLabelMap[statut] || statut;
-
-  return {
-    id: cmd.id,
-    numero: cmd.numero || cmd.reference || cmd.code || `CMD-${cmd.id}`,
-    clientId: cmd.client_id || cmd.clientId || client.id || null,
-    clientNom,
-    clientCode,
-    dateCommande:
-      cmd.date_commande ||
-      cmd.dateCommande ||
-      (cmd.created_at ? String(cmd.created_at).slice(0, 10) : todayISO()),
-    lignes,
-    totalHT,
-    totalTVA,
-    totalTTC,
-    tauxTVA: totalHT ? totalTVA / totalHT : 0.18,
-    paiements: (cmd.paiements || []).map((p) => ({
-      id: p.id,
-      date: p.date_paiement || p.date || null,
-      montant: Number(p.montant || p.montant_paye || 0),
-      mode: p.mode_paiement || p.mode || "",
-      commentaire: p.commentaire || "",
-    })),
-    montantPaye,
-    resteAPayer,
-    statut,
-    statutLabel,
-  };
-}
 
 // ==========================================================
 // 📦 Page Commandes (Responsable)
 // ==========================================================
 export default function Commandes() {
   const { state } = useLocation();
-
 
   // Quand on vient depuis ClientsSpeciaux :
   // navigate("/responsable/commandes", { state: { clientId, clientNom } })
@@ -1764,11 +1661,14 @@ export default function Commandes() {
   const [lastPage, setLastPage] = useState(1);
   const [total, setTotal] = useState(0);
 
-  // map id client -> nom client pour compléter ce que le backend n’envoie pas
+  // map id client -> nom client pour compléter ce que le backend n'envoie pas
   const [clientsMap, setClientsMap] = useState({});
   // Pour le QR code de la dernière commande créée
   const [lastCreatedCommande, setLastCreatedCommande] = useState(null);
   const [showQrModal, setShowQrModal] = useState(false);
+
+  // ✅ 1️⃣ Suppression de commandesGlobales et ajout de statsFromBackend
+  const [statsFromBackend, setStatsFromBackend] = useState(null);
 
   const qrPayload = useMemo(
     () =>
@@ -1783,27 +1683,60 @@ export default function Commandes() {
   };
   const removeToast = (id) => setToasts((t) => t.filter((x) => x.id !== id));
 
-  // 🔗 Chargement des commandes depuis le backend
+  // 🔗 Chargement des commandes depuis le backend (CORRIGÉ avec mapping statuts UI ↔ DB)
   const fetchCommandes = async () => {
     try {
       setLoading(true);
 
-    const res = await commandesAPI.getAll({
-      type_client: "special",
-      page,
-      statut: filterStatut !== "tous" ? filterStatut : undefined,
-      start_date: filterStartDate || undefined,
-      end_date: filterEndDate || undefined,
-    });
+      // ✅ CORRECTION CRITIQUE : MAPPING DES VRAIS STATUTS LARAVEL
+      const statutMapToBackend = {
+        en_attente_caisse: "en_attente_caisse",
+        partiellement_payee: "partiellement_payee",
+        soldee: "soldee",
+        annulee: "annulee",
+      };
 
-    // ✅ DONNÉES
-    setCommandes((res.data || []).map(normalizeCommande));
+      // ✅ PARAMÈTRES BACKEND-COMPATIBLES
+      const params = {
+        type_client: "special",
+        page,
+        ...(filterStatut !== "tous" && { 
+          statut: statutMapToBackend[filterStatut] || filterStatut 
+        }),
+        ...(filterStartDate && { start_date: filterStartDate }),
+        ...(filterEndDate && { end_date: filterEndDate }),
+        ...(searchTerm && { search: searchTerm }),
+        ...(clientIdFromState && { client_id: clientIdFromState }),
+      };
 
-    // ✅ PAGINATION LARAVEL
-    setPage(res.current_page);
-    setLastPage(res.last_page);
-    setTotal(res.total);
+      // 🔵 TABLE : Utilisation de unwrapApi() pour la normalisation
+      const res = await commandesAPI.getAll(params);
+      const payload = unwrapApi(res);
 
+      const commandesData = payload.data || [];
+      const paginationData = {
+        current_page: Number(payload.current_page || 1),
+        last_page: Number(payload.last_page || 1),
+        total: Number(payload.total || payload.data?.length || 0),
+      };
+
+      const normalized = commandesData.map(normalizeCommande);
+      setCommandes(normalized);
+
+      setPage(paginationData.current_page);
+      setLastPage(paginationData.last_page);
+      setTotal(paginationData.total);
+
+      // ✅ 2️⃣ Récupération des stats backend
+      const backendStats = payload.stats || {
+        nb: 0,
+        annulees: 0,
+        totalTTC: 0,
+        totalPaye: 0,
+        dette: 0,
+      };
+
+      setStatsFromBackend(backendStats);
 
     } catch (error) {
       logger.error("commandes.fetch", error);
@@ -1820,22 +1753,17 @@ export default function Commandes() {
   useEffect(() => {
     fetchCommandes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, filterStatut, filterStartDate, filterEndDate]) ;
+  }, [page, filterStatut, filterStartDate, filterEndDate, searchTerm, clientIdFromState, clientNameFromState]);
 
   // 🔗 Chargement des clients spéciaux pour retrouver les noms
   useEffect(() => {
     const fetchClients = async () => {
       try {
         const res = await clientsAPI.getAll({ type_client: "special" });
-
-
-        const clientsPayload = Array.isArray(res.data?.data)
-          ? res.data.data
-          : res.data || [];
-
+        const clientsPayload = unwrapApi(res);
 
         const map = {};
-        (clientsPayload || []).forEach((c) => {
+        (clientsPayload.data || []).forEach((c) => {
           const nom =
             c.nom ||
             c.nom_client ||
@@ -1857,12 +1785,13 @@ export default function Commandes() {
     fetchClients();
   }, []);
 
-  // Compléter les commandes sans nom dès qu’on a la map des clients
+  // Compléter les commandes sans nom dès qu'on a la map des clients
   useEffect(() => {
     if (!clientsMap || !Object.keys(clientsMap).length) return;
 
     setCommandes((prev) =>
       prev.map((c) => {
+        // ✅ Seulement compléter si le nom est vraiment vide
         if (c.clientNom && c.clientNom.trim() !== "") return c;
         if (!c.clientId) return c;
 
@@ -1874,119 +1803,35 @@ export default function Commandes() {
     );
   }, [clientsMap]);
 
-  // Stats globales
+  // ✅ 3️⃣ Remplacement de statsGlobales par statsFromBackend
   const statsGlobales = useMemo(() => {
-    // On ne compte que les commandes non annulées
-    const actives = commandes.filter((c) => c.statut !== "annulee");
-
-    const nb = actives.length;
-    const totalTTC = actives.reduce((s, c) => s + (c.totalTTC || 0), 0);
-    const totalPaye = actives.reduce((s, c) => s + (c.montantPaye || 0), 0);
-    const detteTotale = actives.reduce(
-      (s, c) => s + Math.max(c.resteAPayer || 0, 0),
-      0
-    );
-
-    return { nbCommandes: nb, totalTTC, totalPaye, detteTotale };
-  }, [commandes]);
-
-  // ✅ handleCreateCommande : envoi à la caisse
-  const handleCreateCommande = async (commandeDraft) => {
-    try {
-      const payload = {
-        client_id: commandeDraft.clientId,
-        date_commande: commandeDraft.dateCommande,
-        total_ht: commandeDraft.totalHT,
-        total_tva: commandeDraft.totalTVA,
-        total_ttc: commandeDraft.totalTTC,
-        appliquer_tva: commandeDraft.appliquerTVA ? 1 : 0,
-        statut: "en_attente_caisse",
-        lignes: commandeDraft.lignes.map((l) => ({
-          produit_id: l.produitId,
-          libelle: l.libelle,
-          quantite: l.qte,
-          quantite_unites: l.quantiteUnites,
-          mode_vente: l.modeVente,
-          prix_unitaire: l.prixUnitaire,
-          total_ht: l.totalHT,
-          total_ttc: l.totalTTC,
-        })),
+    if (!statsFromBackend) {
+      return {
+        nbCommandes: 0,
+        nbAnnulees: 0,
+        totalTTC: 0,
+        totalPaye: 0,
+        detteTotale: 0,
       };
-
-      const res = await commandesAPI.create(payload);
-
-      let raw = res.data;
-      if (Array.isArray(res.data?.data)) {
-        raw = res.data.data[0];
-      } else if (res.data?.data && typeof res.data.data === "object") {
-        raw = res.data.data;
-      }
-
-      let normalized;
-
-      if (raw && !Array.isArray(raw)) {
-        normalized = normalizeCommande(raw);
-
-        if (!normalized.clientNom && commandeDraft.clientNom) {
-          normalized = {
-            ...normalized,
-            clientId: commandeDraft.clientId,
-            clientNom: commandeDraft.clientNom,
-            clientCode: commandeDraft.clientCode,
-          };
-        }
-      } else {
-        normalized = commandeDraft;
-      }
-
-      // ✅ Mémoriser la dernière commande créée pour le QR
-      setLastCreatedCommande(normalized);
-      setShowQrModal(true);
-
-      toast(
-        "success",
-        "Commande envoyée à la caisse",
-        `${normalized.clientNom || "Client"} — ${formatFCFA(normalized.totalTTC)}`
-      );
-    } catch (error) {
-      logger.error("commandes.create", error);
-      if (error.response?.status === 422 && error.response.data?.errors) {
-        const firstError =
-          Object.values(error.response.data.errors)[0]?.[0] ||
-          "Vérifiez les champs obligatoires.";
-        toast("error", "Création impossible", firstError);
-      } else {
-        toast(
-          "error",
-          "Erreur",
-          error.response?.data?.message ||
-            "Impossible de créer cette commande pour le moment."
-        );
-      }
     }
-  };
 
-  const badgeStatut = (statut) => {
-    switch (statut) {
-      case "en_attente_caisse":
-        return "bg-gray-100 text-gray-700 border border-gray-300";
-      case "partiellement_payee":
-        return "bg-amber-100 text-amber-700 border border-amber-300";
-      case "soldee":
-        return "bg-emerald-100 text-emerald-700 border border-emerald-300";
-      case "annulee":
-        return "bg-rose-100 text-rose-700 border-rose-300 border";
-      default:
-        return "bg-gray-100 text-gray-700 border border-gray-300";
-    }
-  };
+    return {
+      nbCommandes: statsFromBackend.nb,
+      nbAnnulees: statsFromBackend.annulees,
+      totalTTC: statsFromBackend.totalTTC,
+      totalPaye: statsFromBackend.totalPaye,
+      detteTotale: statsFromBackend.dette,
+    };
+  }, [statsFromBackend]);
 
+  // ✅ CORRECTION 1 : handleAnnuler aligné avec le backend (annulable tant que non soldée)
   const handleAnnuler = async (commande) => {
-    if (commande.montantPaye > 0) {
+    // ✅ CORRECTION : Vérifier seulement si la commande est déjà soldée
+    if (commande.statut === "soldee") {
       toast(
         "error",
         "Annulation impossible",
-        "Cette commande a déjà des paiements enregistrés en caisse."
+        "Une commande soldée ne peut plus être annulée."
       );
       return;
     }
@@ -2017,6 +1862,100 @@ export default function Commandes() {
     }
   };
 
+  // ✅ CORRECTION : handleCreateCommande (format Laravel compatible)
+  const handleCreateCommande = async (commandeDraft) => {
+    try {
+      // ✅ FORMAT LARAVEL-COMPATIBLE (corrigé)
+      const payload = {
+        client_id: commandeDraft.clientId,
+        type_vente: "gros",
+        tva: commandeDraft.appliquerTVA ? 0.18 : 0,
+        items: commandeDraft.lignes.map((l) => ({
+          produit_id: l.produitId,
+          quantite: l.qte,
+          prix_unitaire: l.prixUnitaire,
+        })),
+      };
+
+      const raw = await commandesAPI.create(payload);
+      const response = unwrapApi(raw);
+
+      let normalized;
+
+      if (response && typeof response === 'object' && !Array.isArray(response)) {
+        normalized = normalizeCommande(response);
+
+        // Complétion des infos client si manquantes
+        if (!normalized.clientNom && commandeDraft.clientNom) {
+          normalized = {
+            ...normalized,
+            clientId: commandeDraft.clientId,
+            clientNom: commandeDraft.clientNom,
+            clientCode: commandeDraft.clientCode,
+          };
+        }
+      } else {
+        normalized = {
+          ...commandeDraft,
+          id: Date.now(),
+          numero: `CMD-TEMP-${Date.now()}`,
+        };
+      }
+
+      // ✅ MISE À JOUR DE L'ÉTAT
+      setLastCreatedCommande(normalized);
+      setShowQrModal(true);
+
+      toast(
+        "success",
+        "Commande envoyée à la caisse",
+        `${normalized.clientNom || "Client"} — ${formatFCFA(normalized.totalTTC)}`
+      );
+      
+      // Recharger la liste des commandes
+      fetchCommandes();
+
+    } catch (error) {
+      logger.error("commandes.create", error);
+      
+      if (error.response?.status === 422 && error.response.data?.errors) {
+        const firstError = Object.values(error.response.data.errors)[0]?.[0] || 
+                          "Vérifiez les champs obligatoires.";
+        toast("error", "Création impossible", firstError);
+      } else {
+        toast(
+          "error",
+          "Erreur",
+          error.response?.data?.message || 
+          "Impossible de créer cette commande pour le moment."
+        );
+      }
+    }
+  };
+
+  const badgeStatut = (statut) => {
+    switch (statut) {
+      case "en_attente_caisse":
+        return "bg-gray-100 text-gray-700 border border-gray-300";
+      case "partiellement_payee":
+        return "bg-amber-100 text-amber-700 border border-amber-300";
+      case "soldee":
+        return "bg-emerald-100 text-emerald-700 border border-emerald-300";
+      case "annulee":
+        return "bg-rose-100 text-rose-700 border-rose-300 border";
+      default:
+        return "bg-gray-100 text-gray-700 border border-gray-300";
+    }
+  };
+
+  const handleChangeStatut = (s) => {
+    setFilterStatut(s);
+    setFilterStartDate("");
+    setFilterEndDate("");
+    setPage(1);
+  };
+
+
   const exportPDF = () => {
     const doc = new jsPDF();
     doc.text("Commandes clients spéciaux — LPD Manager", 14, 16);
@@ -2039,42 +1978,6 @@ export default function Commandes() {
     toast("success", "Export PDF", "Fichier téléchargé avec succès.");
   };
 
-  // ✅ AVISAGE (exact logique Decaissements) : filtres + recherche + pagination
-  const commandesFiltrees = useMemo(() => {
-    let list = commandes;
-
-    // 1) filtre "contexte client" (inchangé)
-    if (clientIdFromState) {
-      list = list.filter((c) => String(c.clientId) === String(clientIdFromState));
-    } else if (clientNameFromState) {
-      list = list.filter((c) => c.clientNom === clientNameFromState);
-    }
-
-
-    // 4) recherche (numero + client + statut + lignes)
-    const q = (searchTerm || "").trim().toLowerCase();
-    if (q) {
-      list = list.filter((c) => {
-        const numero = String(c.numero || "").toLowerCase();
-        const clientNom = String(c.clientNom || "").toLowerCase();
-        const statutLabel = String(c.statutLabel || "").toLowerCase();
-        const lignesText = (c.lignes || [])
-          .map((l) => `${l.libelle || ""} ${l.ref || ""}`)
-          .join(" ")
-          .toLowerCase();
-
-        return `${numero} ${clientNom} ${statutLabel} ${lignesText}`.includes(q);
-      });
-    }
-
-    return list;
-  }, [
-    commandes,
-    clientIdFromState,
-    clientNameFromState,
-    searchTerm,
-  ]);
-
   // reset page quand filtres/recherche/changement contexte changent
   useEffect(() => {
     setPage(1);
@@ -2086,7 +1989,6 @@ export default function Commandes() {
     clientIdFromState,
     clientNameFromState,
   ]);
-
 
   if (loading)
     return (
@@ -2130,7 +2032,7 @@ export default function Commandes() {
                 </p>
               </div>
               <p className="text-[11px] text-gray-400">
-                {statsGlobales.nbCommandes} commande
+                {statsGlobales.nbCommandes} commandes ({statsGlobales.nbAnnulees} annulées)
                 {statsGlobales.nbCommandes > 1 && "s"} enregistrée
                 {statsGlobales.nbCommandes > 1 && "s"}.
               </p>
@@ -2191,10 +2093,10 @@ export default function Commandes() {
               </div>
             </div>
 
-            {/* Dette globale */}
+            {/* Dette globale (commandes non soldées) */}
             <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5">
               <div className="text-[15px] text-gray-500 mb-0.5">
-                Dette globale
+                Dette globale (non soldées)
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm sm:text-lg font-extrabold text-rose-700">
@@ -2231,7 +2133,7 @@ export default function Commandes() {
                       <button
                         key={opt.id}
                         type="button"
-                        onClick={() => setFilterStatut(opt.id)}
+                        onClick={() => handleChangeStatut(opt.id)}
                         className={cls(
                           "px-3 py-1 rounded-full transition",
                           filterStatut === opt.id
@@ -2292,7 +2194,7 @@ export default function Commandes() {
               <div className="flex items-center justify-between text-[11px] text-gray-500">
                 <span>
                   Affichage :{" "}
-                  <span className="font-semibold">{commandesFiltrees.length}</span> sur{" "}
+                  <span className="font-semibold">{commandes.length}</span> sur{" "}
                   <span className="font-semibold">{total}</span>
                 </span>
                 <span>
@@ -2319,8 +2221,8 @@ export default function Commandes() {
                   </tr>
                 </thead>
                 <tbody>
-                  {commandesFiltrees.length ? (
-                    commandesFiltrees.map((c) => (
+                  {commandes.length ? (
+                    commandes.map((c) => (
                       <tr
                         key={c.id}
                         className="border-b border-gray-100 hover:bg-[#F9F9FF]"
@@ -2366,7 +2268,8 @@ export default function Commandes() {
                   ) : (
                     <tr>
                       <td colSpan={8} className="text-center text-gray-400 py-6 text-sm">
-                        {commandes.length
+                        {/* ✅ CORRECTION 3 : Message correct selon qu'il y a des filtres ou pas */}
+                        {total > 0
                           ? "Aucune commande ne correspond aux filtres."
                           : "Aucune commande enregistrée."}
                       </td>
@@ -2376,46 +2279,16 @@ export default function Commandes() {
               </table>
             </div>
 
-            {/* Pagination */}
-            <div className="flex items-center justify-between pt-2">
-              <button
-                type="button"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => p - 1)}
-
-                className={cls(
-                  "px-3 py-1.5 rounded-lg border text-xs",
-                  page <= 1
-                    ? "border-gray-200 text-gray-300 cursor-not-allowed bg-gray-50"
-                    : "border-gray-300 text-gray-700 bg-white hover:bg-gray-50"
-                )}
-
-              >
-                ← Précédent
-              </button>
-
-              <div className="text-[11px] text-gray-500">
-                Page <span className="font-semibold">{page}</span> /{" "}
-                <span className="font-semibold">{lastPage}</span>
-              </div>
-
-
-              <button
-                type="button"
-                disabled={page >= lastPage}
-                onClick={() => setPage((p) => p + 1)}
-
-              className={cls(
-                "px-3 py-1.5 rounded-lg border text-xs",
-                page >= lastPage
-                  ? "border-gray-200 text-gray-300 cursor-not-allowed bg-gray-50"
-                  : "border-gray-300 text-gray-700 bg-white hover:bg-gray-50"
-              )}
-
-              >
-                Suivant →
-              </button>
-            </div>
+            {/* ✅ PAGINATION AVEC COMPOSANT DÉDIÉ */}
+            <Pagination
+              page={page}
+              totalPages={lastPage}
+              onPageChange={(p) => {
+                if (p >= 1 && p <= lastPage) {
+                  setPage(p);
+                }
+              }}
+            />
           </section>
 
           {/* MODAL DÉTAIL / FACTURE */}
