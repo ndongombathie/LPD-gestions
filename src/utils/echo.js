@@ -13,14 +13,19 @@ export const initializeEcho = () => {
   const token = sessionStorage.getItem('token') || localStorage.getItem('token');
   
   if (!token) {
-    // Pas de token => pas de websocket (silencieux)
+  // Pas de token => pas de websocket (silencieux)
+  return null;
+  }
+
+  const wsKey = import.meta.env.VITE_REVERB_APP_KEY || '';
+  if (!wsKey || wsKey === 'your-app-key') {
     return null;
   }
 
   // Configuration pour Reverb (WebSocket Laravel)
   echoInstance = new Echo({
     broadcaster: 'reverb',
-    key: import.meta.env.VITE_REVERB_APP_KEY || 'your-app-key',
+    key: wsKey,
     wsHost: import.meta.env.VITE_REVERB_HOST || window.location.hostname,
     wsPort: import.meta.env.VITE_REVERB_PORT || 8080,
     wssPort: import.meta.env.VITE_REVERB_PORT || 8080,

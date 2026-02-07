@@ -5,8 +5,20 @@ import { formatCurrency, formatDateTime } from '../../utils/formatters';
  * Composant pour l'impression de facture
  * À utiliser avec window.print() pour l'impression
  */
-const InvoicePrint = ({ ticket }) => {
+const getBoutiqueHeaderComponent = (boutique) => {
+  if (boutique && (boutique.nom || boutique.adresse)) {
+    return {
+      nom: boutique.nom || 'LPD',
+      adresse: boutique.adresse || 'Colobane',
+      telephone: boutique.telephone || '',
+    };
+  }
+  return { nom: 'LPD', adresse: 'Colobane', telephone: '' };
+};
+
+const InvoicePrint = ({ ticket, boutique = null, caissierNom = '' }) => {
   if (!ticket) return null;
+  const header = getBoutiqueHeaderComponent(boutique);
 
   return (
     <div className="bg-white p-8 max-w-4xl mx-auto print:mx-0 print:p-4" style={{ display: 'none' }} id="invoice-print">
@@ -16,9 +28,9 @@ const InvoicePrint = ({ ticket }) => {
           <div className="flex justify-between items-start">
             <div>
               <h1 className="text-3xl font-bold text-primary-600 mb-2">LPD GESTIONS</h1>
-              <p className="text-gray-600 text-sm">Boutique: [Nom de la boutique]</p>
-              <p className="text-gray-600 text-sm">Adresse: [Adresse de la boutique]</p>
-              <p className="text-gray-600 text-sm">Téléphone: [Téléphone]</p>
+              <p className="text-gray-600 text-sm">Boutique: {header.nom}</p>
+              <p className="text-gray-600 text-sm">Adresse: {header.adresse}</p>
+              {header.telephone ? <p className="text-gray-600 text-sm">Téléphone: {header.telephone}</p> : null}
             </div>
             <div className="text-right">
               <p className="text-lg font-semibold text-gray-900">FACTURE</p>
@@ -116,19 +128,47 @@ const InvoicePrint = ({ ticket }) => {
           <p>Merci de votre visite !</p>
           <p className="mt-2">Facture générée le {formatDateTime(new Date().toISOString())}</p>
           <p>Vendeur: {ticket.vendeur_nom}</p>
+          {caissierNom ? <p>Caissier: {caissierNom}</p> : null}
         </div>
       </div>
     </div>
   );
 };
 
+/** Libellés d’en-tête pour l’impression (données réelles ou par défaut) */
+const getBoutiqueHeader = (boutique) => {
+  if (boutique && (boutique.nom || boutique.adresse)) {
+    return {
+      nom: boutique.nom || 'LPD',
+      adresse: boutique.adresse || 'Colobane',
+      telephone: boutique.telephone || '',
+    };
+  }
+  return { nom: 'LPD', adresse: 'Colobane', telephone: '' };
+};
+
+const getCaissierNom = () => {
+  try {
+    const raw = sessionStorage.getItem('user') || sessionStorage.getItem('lpd_current_user');
+    if (!raw) return '';
+    const user = JSON.parse(raw);
+    return [user.prenom, user.nom].filter(Boolean).join(' ').trim() || user.name || '';
+  } catch (_e) {
+    return '';
+  }
+};
+
 /**
- * Fonction utilitaire pour imprimer une facture
+ * Imprime une facture (données réelles du ticket).
+ * @param {Object} ticket - Données du ticket
+ * @param {Object} [boutique] - Optionnel: { nom, adresse, telephone }
+ * @param {string} [caissierNom] - Optionnel: nom du caissier (sinon lu depuis sessionStorage)
  */
-export const printInvoice = (ticket) => {
-  // Créer un élément temporaire pour l'impression
+export const printInvoice = (ticket, boutique = null, caissierNom = null) => {
+  const header = getBoutiqueHeader(boutique);
+  const caissier = (caissierNom != null && caissierNom !== '') ? caissierNom : getCaissierNom();
   const printWindow = window.open('', '_blank');
-  
+
   if (!printWindow) {
     alert('Veuillez autoriser les fenêtres popup pour imprimer la facture');
     return;
@@ -220,9 +260,9 @@ export const printInvoice = (ticket) => {
           <div class="header-info">
             <div>
               <h1>LPD GESTIONS</h1>
-              <p>Boutique: [Nom de la boutique]</p>
-              <p>Adresse: [Adresse]</p>
-              <p>Téléphone: [Téléphone]</p>
+              <p>Boutique: ${header.nom}</p>
+              <p>Adresse: ${header.adresse}</p>
+              ${header.telephone ? `<p>Téléphone: ${header.telephone}</p>` : ''}
             </div>
             <div style="text-align: right;">
               <h2 style="font-size: 20px; margin-bottom: 10px;">FACTURE</h2>
@@ -298,6 +338,7 @@ export const printInvoice = (ticket) => {
           <p>Merci de votre visite !</p>
           <p style="margin-top: 10px;">Facture générée le ${formatDateTime(new Date().toISOString())}</p>
           <p>Vendeur: ${ticket.vendeur_nom}</p>
+          ${caissier ? `<p>Caissier: ${caissier}</p>` : ''}
         </div>
       </body>
     </html>

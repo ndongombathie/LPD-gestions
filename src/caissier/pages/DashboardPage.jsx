@@ -50,13 +50,13 @@ const DashboardPage = () => {
         caissierApi.getDashboardStats(),
         caissierApi.getVentesParMoyen(),
         caissierApi.getVentesParHeure(),
-        caissierApi.getActiviteRecente(5),
+        caissierApi.getActiviteRecente(6),
       ]);
       
       setStats(statsData);
       setVentesParMoyen(ventesMoyen);
       setVentesParHeure(ventesHeure);
-      setActiviteRecente(activite);
+      setActiviteRecente(Array.isArray(activite) ? activite.slice(0, 4) : []);
     } catch (error) {
       // Erreur silencieuse
     } finally {
@@ -342,7 +342,7 @@ const DashboardPage = () => {
 
       {/* Statistiques supplémentaires */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
+        <Card className="bg-white">
           <CardHeader title="Tickets du jour" />
           <div className="mt-4 space-y-4">
             <div 
@@ -390,22 +390,22 @@ const DashboardPage = () => {
           </div>
         </Card>
 
-        <Card>
+        <Card className="bg-white">
           <CardHeader title="Activité récente" />
-          <div className="mt-4 space-y-3">
+          <div className="mt-4 space-y-4">
             {activiteRecente.length > 0 ? (
-              activiteRecente.map((activite, index) => (
+              activiteRecente.slice(0, 4).map((activite, index) => (
                 <div 
                   key={index} 
-                  className={`flex items-center justify-between p-3 ${
-                    index < activiteRecente.length - 1 ? 'border-b border-gray-200' : ''
+                  className={`flex items-center justify-between p-4 ${
+                    index < Math.min(activiteRecente.length, 4) - 1 ? 'border-b border-gray-200' : ''
                   }`}
                 >
               <div>
                     <p className="text-sm font-medium text-gray-900">
                       {activite.type === 'encaissement' ? 'Encaissement' : 'Décaissement'}
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-sm text-gray-500">
                       {formatTimeAgo(activite.date)}
               </p>
             </div>

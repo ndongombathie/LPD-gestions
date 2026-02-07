@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import Card, { CardHeader } from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
@@ -7,6 +9,21 @@ import Modal from '../../components/ui/Modal';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import caissierApi from '../services/caissierApi';
 import { toast } from 'sonner';
+
+const MOYENS_PAIEMENT_LABELS = {
+  especes: 'Espèces',
+  carte: 'Carte bancaire',
+  wave: 'Wave',
+  om: 'Orange Money',
+  cheque: 'Chèque',
+  autre: 'Autre',
+};
+
+/** Montant pour PDF : format compact sans espaces (ex: 999505 FCFA) pour éviter débordement */
+const formatCurrencyPdf = (amount) => {
+  const n = Math.round(Number(amount) || 0);
+  return `${n.toLocaleString('fr-FR', { useGrouping: false })} FCFA`;
+};
 
 const RapportCaissePage = () => {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -17,11 +34,18 @@ const RapportCaissePage = () => {
   const [isClosing, setIsClosing] = useState(false);
   const [isCloseConfirmOpen, setIsCloseConfirmOpen] = useState(false);
 
-  const getDatePart = (value) => {
+  /** Date au format YYYY-MM-DD en heure locale (pour rapport strictement journalier) */
+  const getDatePartLocal = (value) => {
     if (!value) return null;
-    if (typeof value === 'string') return value.substring(0, 10);
     try {
-      return new Date(value).toISOString().substring(0, 10);
+      const d = typeof value === 'string' && value.includes(' ') && !value.includes('T')
+        ? new Date(value.replace(' ', 'T'))
+        : new Date(value);
+      if (Number.isNaN(d.getTime())) return null;
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
     } catch (_e) {
       return null;
     }
@@ -67,7 +91,7 @@ const RapportCaissePage = () => {
         const ticketsEncaisses = [];
         (Array.isArray(commandesPayees) ? commandesPayees : []).forEach((commande) => {
           const paiements = Array.isArray(commande?.paiements) ? commande.paiements : [];
-          const paiementsDuJour = paiements.filter((p) => getDatePart(p?.date || p?.created_at) === selectedDate);
+          const paiementsDuJour = paiements.filter((p) => getDatePartLocal(p?.date || p?.created_at) === selectedDate);
           if (paiementsDuJour.length === 0) return;
 
           const vendeur = commande?.vendeur
@@ -94,7 +118,7 @@ const RapportCaissePage = () => {
         // Décaissements du jour = statut "fait" validés ce jour-là
         const decaissementsDuJour = (Array.isArray(decaissements) ? decaissements : [])
           .filter((d) => String(d?.statut || '').toLowerCase() === 'fait')
-          .filter((d) => getDatePart(d?.updated_at || d?.date || d?.created_at) === selectedDate)
+          .filter((d) => getDatePartLocal(d?.updated_at || d?.date || d?.created_at) === selectedDate)
           .map((d) => {
             const dt = d?.updated_at || d?.date || d?.created_at;
             const montant = typeof d?.montant === 'string'
@@ -186,18 +210,189 @@ const RapportCaissePage = () => {
 
 
   const handleExportPDF = () => {
-    // TODO: Implémenter l'export PDF
-    window.print();
+    if (!rapport) {
+      toast.error('Aucun rapport à exporter');
+      return;
+    }
+    try {
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pageW = doc.internal.pageSize.getWidth();
+      const margin = 14;
+      const tableWidth = pageW - margin * 2;
+      const colMontantWidth = 48;
+      let y = 18;
+
+      const tableStyles = {
+        fontSize: 10,
+        cellPadding: { top: 4, right: 6, bottom: 4, left: 6 },
+      };
+
+      doc.setFontSize(18);
+      doc.setTextColor(71, 46, 173);
+      doc.text('LPD GESTIONS - Rapport de caisse', pageW / 2, y, { align: 'center' });
+      y += 10;
+
+      doc.setFontSize(11);
+      doc.setTextColor(0, 0, 0);
+      doc.text(`Date : ${formatDate(selectedDate)}`, margin, y);
+      if (rapport.cloture) {
+        doc.text('Statut : Clôturé', pageW - margin, y, { align: 'right' });
+      }
+      y += 12;
+
+      doc.setFontSize(12);
+      doc.setFont(undefined, 'bold');
+      doc.text('Résumé', margin, y);
+      y += 8;
+      doc.setFont(undefined, 'normal');
+
+      const resume = [
+        ['Fond d\'ouverture', formatCurrencyPdf(rapport.fond_ouverture || 0)],
+        ['Total encaissements', formatCurrencyPdf(rapport.total_encaissements || 0)],
+        ['Total décaissements', formatCurrencyPdf(rapport.total_decaissements || 0)],
+        ['Solde de clôture', formatCurrencyPdf(rapport.solde_cloture ?? ((rapport.fond_ouverture || 0) + (rapport.total_encaissements || 0) - (rapport.total_decaissements || 0)))],
+      ];
+      autoTable(doc, {
+        startY: y,
+        head: [['Libellé', 'Montant']],
+        body: resume,
+        theme: 'grid',
+        margin: { left: margin, right: margin },
+        tableWidth,
+        columnStyles: {
+          0: { cellWidth: tableWidth - colMontantWidth },
+          1: { cellWidth: colMontantWidth, halign: 'right' },
+        },
+        ...tableStyles,
+      });
+      y = doc.lastAutoTable.finalY + 14;
+
+      if (Object.keys(ventesParMoyenObj || {}).length > 0) {
+        doc.setFont(undefined, 'bold');
+        doc.text('Ventes par moyen de paiement', margin, y);
+        y += 8;
+        doc.setFont(undefined, 'normal');
+        const bodyVentes = Object.entries(ventesParMoyenObj).map(([moyen, montant]) => [
+          MOYENS_PAIEMENT_LABELS[moyen] || moyen,
+          formatCurrencyPdf(montant),
+        ]);
+        autoTable(doc, {
+          startY: y,
+          head: [['Moyen', 'Montant']],
+          body: bodyVentes,
+          theme: 'grid',
+          margin: { left: margin, right: margin },
+          tableWidth,
+          columnStyles: {
+            0: { cellWidth: tableWidth - colMontantWidth },
+            1: { cellWidth: colMontantWidth, halign: 'right' },
+          },
+          ...tableStyles,
+        });
+        y = doc.lastAutoTable.finalY + 14;
+      }
+
+      if (rapport.tickets_encaisses && rapport.tickets_encaisses.length > 0) {
+        if (y > 240) { doc.addPage(); y = 18; }
+        doc.setFont(undefined, 'bold');
+        doc.text('Détail des tickets encaissés', margin, y);
+        y += 8;
+        doc.setFont(undefined, 'normal');
+        const bodyTickets = rapport.tickets_encaisses.map((t) => [
+          t.numero || '',
+          t.heure || '',
+          t.vendeur || '',
+          MOYENS_PAIEMENT_LABELS[t.moyen_paiement] || t.moyen_paiement,
+          formatCurrencyPdf(t.total_ttc),
+        ]);
+        const colW = (tableWidth - colMontantWidth) / 4;
+        autoTable(doc, {
+          startY: y,
+          head: [['N° Ticket', 'Heure', 'Vendeur', 'Moyen', 'Montant']],
+          body: bodyTickets,
+          theme: 'grid',
+          margin: { left: margin, right: margin },
+          tableWidth,
+          columnStyles: {
+            0: { cellWidth: colW * 0.9 },
+            1: { cellWidth: colW * 0.6 },
+            2: { cellWidth: colW * 1.1 },
+            3: { cellWidth: colW * 1.4 },
+            4: { cellWidth: colMontantWidth, halign: 'right' },
+          },
+          ...tableStyles,
+        });
+        const totalTickets = rapport.tickets_encaisses.reduce((s, t) => s + (t.total_ttc || 0), 0);
+        autoTable(doc, {
+          startY: doc.lastAutoTable.finalY,
+          body: [['Total', '', '', '', formatCurrencyPdf(totalTickets)]],
+          theme: 'grid',
+          margin: { left: margin, right: margin },
+          tableWidth,
+          columnStyles: {
+            0: { cellWidth: colW * 0.9 },
+            1: { cellWidth: colW * 0.6 },
+            2: { cellWidth: colW * 1.1 },
+            3: { cellWidth: colW * 1.4 },
+            4: { cellWidth: colMontantWidth, halign: 'right', fontStyle: 'bold' },
+          },
+          ...tableStyles,
+        });
+        y = doc.lastAutoTable.finalY + 14;
+      }
+
+      if (rapport.decaissements && rapport.decaissements.length > 0) {
+        if (y > 240) { doc.addPage(); y = 18; }
+        doc.setFont(undefined, 'bold');
+        doc.text('Détail des décaissements', margin, y);
+        y += 8;
+        doc.setFont(undefined, 'normal');
+        const bodyDec = rapport.decaissements.map((d) => [
+          d.heure || '',
+          (d.motif || '').substring(0, 50),
+          formatCurrencyPdf(d.montant),
+        ]);
+        const colDecMotif = tableWidth - colMontantWidth - 18;
+        autoTable(doc, {
+          startY: y,
+          head: [['Heure', 'Motif', 'Montant']],
+          body: bodyDec,
+          theme: 'grid',
+          margin: { left: margin, right: margin },
+          tableWidth,
+          columnStyles: {
+            0: { cellWidth: 18 },
+            1: { cellWidth: colDecMotif },
+            2: { cellWidth: colMontantWidth, halign: 'right' },
+          },
+          ...tableStyles,
+        });
+        const totalDec = rapport.decaissements.reduce((s, d) => s + (d.montant || 0), 0);
+        autoTable(doc, {
+          startY: doc.lastAutoTable.finalY,
+          body: [['Total', '', formatCurrencyPdf(totalDec)]],
+          theme: 'grid',
+          margin: { left: margin, right: margin },
+          tableWidth,
+          columnStyles: {
+            0: { cellWidth: 18 },
+            1: { cellWidth: colDecMotif },
+            2: { cellWidth: colMontantWidth, halign: 'right', fontStyle: 'bold' },
+          },
+          ...tableStyles,
+        });
+      }
+
+      const fileName = `rapport-caisse-${selectedDate}.pdf`;
+      doc.save(fileName);
+      toast.success('PDF exporté', { description: `Fichier ${fileName} téléchargé.` });
+    } catch (err) {
+      console.error(err);
+      toast.error('Erreur', { description: 'Impossible de générer le PDF.' });
+    }
   };
 
-  const moyensPaiementLabels = {
-    especes: 'Espèces',
-    carte: 'Carte bancaire',
-    wave: 'Wave',
-    om: 'Orange Money',
-    cheque: 'Chèque',
-    autre: 'Autre',
-  };
+  const moyensPaiementLabels = MOYENS_PAIEMENT_LABELS;
 
   if (loading) {
     return (
@@ -212,12 +407,12 @@ const RapportCaissePage = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-14">
       {/* En-tête */}
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold text-[#472EAD] dark:text-white">
+            <h1 className="text-3xl font-bold text-[#472EAD]">
               Rapport de caisse journalier
             </h1>
             {rapport && rapport.cloture && (
@@ -282,7 +477,7 @@ const RapportCaissePage = () => {
       ) : (
         <>
           {/* Formulaire de saisie du rapport */}
-          <Card>
+          <Card className="bg-white">
             <CardHeader 
               title={`Rapport du ${formatDate(selectedDate)}`}
             />
@@ -290,10 +485,10 @@ const RapportCaissePage = () => {
             {rapport.cloture && (
               <div className="mb-4 bg-green-50 border border-green-200 rounded-lg p-4">
                 <div className="flex items-center gap-2">
-                  <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <p className="text-sm font-medium text-green-800 dark:text-green-200">
+                  <p className="text-sm font-medium text-green-800">
                     Ce rapport est clôturé. Il est en lecture seule et ne peut plus être modifié.
                   </p>
                 </div>
@@ -302,7 +497,7 @@ const RapportCaissePage = () => {
             
             {!rapport.cloture && (
               <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
-                <p className="text-sm text-blue-800 dark:text-blue-200">
+                <p className="text-sm text-blue-800">
                   <strong>Note :</strong> Les montants sont calculés automatiquement à partir des encaissements et décaissements de la journée. 
                   Vous pouvez clôturer le rapport une fois tous les montants vérifiés.
                 </p>
@@ -310,30 +505,30 @@ const RapportCaissePage = () => {
             )}
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div className="text-center p-4 bg-gray-50 rounded-lg">
+                <div className="text-center p-5 bg-gray-50 rounded-lg">
                   <p className="text-sm text-gray-600">Fond d'ouverture</p>
-                  <p className="text-2xl font-bold text-[#472EAD] dark:text-primary-400 mt-2">
+                  <p className="text-2xl font-bold text-[#472EAD] mt-2">
                     {formatCurrency(rapport.fond_ouverture || 0)}
                   </p>
                 </div>
-                <div className="text-center p-4 bg-gray-50 rounded-lg">
+                <div className="text-center p-5 bg-gray-50 rounded-lg">
                   <p className="text-sm text-gray-600">Total encaissements</p>
-                  <p className="text-2xl font-bold text-green-600 dark:text-green-400 mt-2">
+                  <p className="text-2xl font-bold text-green-600 mt-2">
                     {formatCurrency(rapport.total_encaissements || 0)}
                   </p>
                 </div>
-                <div className="text-center p-4 bg-gray-50 rounded-lg">
+                <div className="text-center p-5 bg-gray-50 rounded-lg">
                   <p className="text-sm text-gray-600">Total décaissements</p>
-                  <p className="text-2xl font-bold text-red-600 dark:text-red-400 mt-2">
+                  <p className="text-2xl font-bold text-red-600 mt-2">
                     {formatCurrency(rapport.total_decaissements || 0)}
                   </p>
                 </div>
-                <div className="text-center p-4 bg-gray-50 rounded-lg">
+                <div className="text-center p-5 bg-gray-50 rounded-lg">
                   <p className="text-sm text-gray-600">Solde de clôture</p>
-                  <p className="text-2xl font-bold text-[#F58020] dark:text-accent-400 mt-2">
+                  <p className="text-2xl font-bold text-[#F58020] mt-2">
                     {formatCurrency(rapport.solde_cloture || 0)}
                   </p>
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-sm text-gray-500 mt-1">
                     Calculé: {formatCurrency((rapport.fond_ouverture || 0) + (rapport.total_encaissements || 0) - (rapport.total_decaissements || 0))}
                   </p>
                 </div>
@@ -341,11 +536,12 @@ const RapportCaissePage = () => {
           </Card>
 
           {/* Ventes par moyen de paiement */}
-          <Card>
+          <div className="pt-4">
+          <Card className="bg-white">
             <CardHeader title="Ventes par moyen de paiement" />
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-5">
               {Object.entries(ventesParMoyenObj || {}).map(([moyen, montant]) => (
-                <div key={moyen} className="text-center p-4 bg-gray-50 rounded-lg">
+                <div key={moyen} className="text-center p-5 bg-gray-50 rounded-lg">
                   <p className="text-sm text-gray-600">{moyensPaiementLabels[moyen]}</p>
                   <p className="text-lg font-bold text-gray-900 mt-1">
                     {formatCurrency(montant)}
@@ -354,9 +550,11 @@ const RapportCaissePage = () => {
               ))}
             </div>
           </Card>
+          </div>
 
           {/* Détail des tickets */}
-          <Card>
+          <div className="pt-4">
+          <Card className="bg-white">
             <CardHeader 
               title="Détail des tickets encaissés"
               subtitle={`${rapport.tickets_encaisses?.length || 0} ticket(s)`}
@@ -366,19 +564,19 @@ const RapportCaissePage = () => {
                 <table className="w-full">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      <th className="px-5 py-4 text-left text-sm font-medium text-gray-600 uppercase tracking-wider">
                         N° Ticket
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      <th className="px-5 py-4 text-left text-sm font-medium text-gray-600 uppercase tracking-wider">
                         Heure
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      <th className="px-5 py-4 text-left text-sm font-medium text-gray-600 uppercase tracking-wider">
                         Vendeur
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      <th className="px-5 py-4 text-left text-sm font-medium text-gray-600 uppercase tracking-wider">
                         Moyen de paiement
                       </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      <th className="px-5 py-4 text-right text-sm font-medium text-gray-600 uppercase tracking-wider">
                         Montant
                       </th>
                     </tr>
@@ -386,28 +584,28 @@ const RapportCaissePage = () => {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {rapport.tickets_encaisses.map((ticket) => (
                       <tr key={ticket.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                        <td className="px-5 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                           {ticket.numero}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                        <td className="px-5 py-4 whitespace-nowrap text-sm text-gray-600">
                           {ticket.heure}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                        <td className="px-5 py-4 whitespace-nowrap text-sm text-gray-600">
                           {ticket.vendeur}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                        <td className="px-5 py-4 whitespace-nowrap text-sm text-gray-600">
                           {moyensPaiementLabels[ticket.moyen_paiement]}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-semibold text-gray-900">
+                        <td className="px-5 py-4 whitespace-nowrap text-sm text-right font-semibold text-gray-900">
                           {formatCurrency(ticket.total_ttc)}
                         </td>
                       </tr>
                     ))}
                     <tr className="bg-gray-50 font-bold">
-                      <td colSpan="4" className="px-4 py-3 text-right text-sm text-gray-900">
+                      <td colSpan="4" className="px-5 py-4 text-right text-sm text-gray-900">
                         Total:
                       </td>
-                      <td className="px-4 py-3 text-right text-sm text-[#472EAD] dark:text-primary-400">
+                      <td className="px-5 py-4 text-right text-sm text-[#472EAD]">
                         {formatCurrency(
                           rapport.tickets_encaisses.reduce((sum, t) => sum + t.total_ttc, 0)
                         )}
@@ -422,9 +620,11 @@ const RapportCaissePage = () => {
               </div>
             )}
           </Card>
+          </div>
 
           {/* Détail des décaissements */}
-          <Card>
+          <div className="pt-4">
+          <Card className="bg-white">
             <CardHeader 
               title="Détail des décaissements"
               subtitle={`${rapport.decaissements?.length || 0} décaissement(s)`}
@@ -434,13 +634,13 @@ const RapportCaissePage = () => {
                 <table className="w-full">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      <th className="px-5 py-4 text-left text-sm font-medium text-gray-600 uppercase tracking-wider">
                         Heure
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      <th className="px-5 py-4 text-left text-sm font-medium text-gray-600 uppercase tracking-wider">
                         Motif
                       </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                      <th className="px-5 py-4 text-right text-sm font-medium text-gray-600 uppercase tracking-wider">
                         Montant
                       </th>
                     </tr>
@@ -448,22 +648,22 @@ const RapportCaissePage = () => {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {rapport.decaissements.map((dec) => (
                       <tr key={dec.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                        <td className="px-5 py-4 whitespace-nowrap text-sm text-gray-600">
                           {dec.heure}
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-600">
+                        <td className="px-5 py-4 text-sm text-gray-600">
                           {dec.motif}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-semibold text-red-600 dark:text-red-400">
+                        <td className="px-5 py-4 whitespace-nowrap text-sm text-right font-semibold text-red-600">
                           {formatCurrency(dec.montant)}
                         </td>
                       </tr>
                     ))}
                     <tr className="bg-gray-50 font-bold">
-                      <td colSpan="2" className="px-4 py-3 text-right text-sm text-gray-900">
+                      <td colSpan="2" className="px-5 py-4 text-right text-sm text-gray-900">
                         Total:
                       </td>
-                      <td className="px-4 py-3 text-right text-sm text-red-600 dark:text-red-400">
+                      <td className="px-5 py-4 text-right text-sm text-red-600">
                         {formatCurrency(
                           rapport.decaissements.reduce((sum, d) => sum + d.montant, 0)
                         )}
@@ -478,6 +678,7 @@ const RapportCaissePage = () => {
               </div>
             )}
           </Card>
+          </div>
         </>
       )}
 

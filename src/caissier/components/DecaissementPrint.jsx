@@ -1,13 +1,25 @@
 import { formatCurrency, formatDateTime } from '../../utils/formatters';
 
+const getBoutiqueHeader = (boutique) => {
+  if (boutique && (boutique.nom || boutique.adresse)) {
+    return {
+      nom: boutique.nom || 'LPD',
+      adresse: boutique.adresse || 'Colobane',
+      telephone: boutique.telephone || '',
+    };
+  }
+  return { nom: 'LPD', adresse: 'Colobane', telephone: '' };
+};
+
 /**
- * Fonction utilitaire pour imprimer un décaissement
- * Inclut toutes les informations et le nom du caissier pour la traçabilité
+ * Fonction utilitaire pour imprimer un décaissement (données réelles).
+ * @param {Object} decaissement - Données du décaissement (id, montant, statut, motif, cree_par, fait_par, fait_le, created_at)
+ * @param {Object} [boutique] - Optionnel: { nom, adresse, telephone } pour l'en-tête
  */
-export const printDecaissement = (decaissement) => {
-  // Créer un élément temporaire pour l'impression
+export const printDecaissement = (decaissement, boutique = null) => {
+  const header = getBoutiqueHeader(boutique);
   const printWindow = window.open('', '_blank');
-  
+
   if (!printWindow) {
     alert('Veuillez autoriser les fenêtres popup pour imprimer le décaissement');
     return;
@@ -133,9 +145,9 @@ export const printDecaissement = (decaissement) => {
           <div class="header-info">
             <div>
               <h1>LPD GESTIONS</h1>
-              <p>Boutique: [Nom de la boutique]</p>
-              <p>Adresse: [Adresse]</p>
-              <p>Téléphone: [Téléphone]</p>
+              <p>Boutique: ${header.nom}</p>
+              <p>Adresse: ${header.adresse}</p>
+              ${header.telephone ? `<p>Téléphone: ${header.telephone}</p>` : ''}
             </div>
             <div style="text-align: right;">
               <h2 style="font-size: 20px; margin-bottom: 10px;">DÉCAISSEMENT</h2>
