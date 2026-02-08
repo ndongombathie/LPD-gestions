@@ -102,13 +102,15 @@ export function normalizeCommande(cmd) {
     mode_paiement: p.mode_paiement || p.mode || "",
     commentaire: p.commentaire || "",
     statut_paiement: p.statut_paiement || p.statut || "payee",
+    type_paiement: p.type_paiement || "paiement",
   }));
 
-  const montantPaye = paiements
-    .filter((p) => p.statut_paiement === "payee")
-    .reduce((s, p) => s + (p.montant || 0), 0);
 
-  const resteAPayer = Math.max(totalTTC - montantPaye, 0);
+  const montantPaye = Number(cmd.montant_paye ?? cmd.montantPaye ?? 0);
+
+  const resteAPayer =
+    Number(cmd.reste_a_payer ?? cmd.resteAPayer ?? Math.max(totalTTC - montantPaye, 0));
+
 
   // ===============================
   // 🧠 STATUT — ON FAIT CONFIANCE À LARAVEL

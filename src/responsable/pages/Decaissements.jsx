@@ -549,7 +549,8 @@ export default function Decaissements() {
       <Toaster position="top-right" richColors />
 
       <div className="min-h-screen w-full bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white px-4 sm:px-6 lg:px-10 py-6 sm:py-8 overflow-y-auto">
-        <div className="max-w-6xl mx-auto space-y-7">
+        <div className="max-w-6xl mx-auto space-y-8"> {/* Changé de space-y-7 à space-y-8 */}
+          
           {/* HEADER */}
           <motion.header
             initial={{ opacity: 0, y: -10 }}
@@ -603,7 +604,7 @@ export default function Decaissements() {
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35 }}
-            className="w-full max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3"
+            className="w-full max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-6 mb-8" 
           >
             <div className="rounded-xl border border-indigo-200 bg-gradient-to-br from-indigo-50 via-slate-50 to-indigo-100 px-3 py-2.5 shadow-sm">
               <div className="text-[13px] sm:text-[15px] font-semibold text-indigo-900 mb-0.5">
@@ -667,7 +668,8 @@ export default function Decaissements() {
           </motion.div>
 
           {/* TABLEAU + FILTRES */}
-          <section className="bg-white/90 border border-[#E4E0FF] rounded-2xl shadow-[0_18px_45px_rgba(15,23,42,0.06)] overflow-x-auto">
+          <section className="bg-white/90 border border-[#E4E0FF] rounded-2xl shadow-[0_18px_45px_rgba(15,23,42,0.06)] overflow-x-auto mt-8"> {/* Ajout de mt-8 */}
+            
             <div className="px-4 pt-4 pb-3 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
               <div className="flex flex-wrap items-center gap-2 text-xs">
                 <span className="text-gray-500 font-medium">Filtrer par statut :</span>
@@ -722,7 +724,7 @@ export default function Decaissements() {
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       placeholder="Motif global ou libellé..."
-                      className="pl-7 pr-6 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#472EAD] focus:ring-1 focus:ring-[#472EAD] bg-white"
+                      className="pl-7 pr-6 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-[#472EAD] focus:ring-1 focus:ring-[#472EAD] bg-white text-sm" 
                     />
                     {searchTerm && (
                       <button
@@ -736,6 +738,14 @@ export default function Decaissements() {
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* Résumé affichage */}
+            <div className="px-4 mb-3 text-[11px] text-gray-500">
+              <span>
+                Affichage : <span className="font-semibold">{demandes.length}</span> sur{" "}
+                <span className="font-semibold">{totalItems}</span>
+              </span>
             </div>
 
             <table className="min-w-full text-sm">
@@ -804,16 +814,18 @@ export default function Decaissements() {
               </div>
             )}
 
-            <Pagination
-              page={page}
-              totalPages={totalPages}
-              onPageChange={(p) => {
-                if (p < 1 || p > totalPages) return;
-                if (p === page) return;
-                if (loadingPage) return;
-                setPage(p);
-              }}
-            />
+            <div className="mt-6 mb-4"> {/* Ajout de mt-6 mb-4 */}
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                onPageChange={(p) => {
+                  if (p < 1 || p > totalPages) return;
+                  if (p === page) return;
+                  if (loadingPage) return;
+                  setPage(p);
+                }}
+              />
+            </div>
 
           </section>
 

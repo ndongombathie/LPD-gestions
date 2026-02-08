@@ -1153,12 +1153,12 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35 }}
-        className="bg-white/95 border border-[#E4E0FF] rounded-2xl shadow-[0_12px_30px_rgba(15,23,42,0.06)] px-3 sm:px-4 py-3 sm:py-4 space-y-4"
+        className="bg-white/95 border border-[#E4E0FF] rounded-2xl shadow-[0_12px_30px_rgba(15,23,42,0.06)] px-3 sm:px-4 py-4 sm:py-5 space-y-5 mt-6"
       >
         <h2 className="text-lg font-semibold text-[#472EAD] mb-1 flex items-center gap-2">
           <PlusCircle size={18} /> Nouvelle commande client spécial
         </h2>
-        <p className="text-xs text-gray-500 mb-2">
+        <p className="text-xs text-gray-500 mb-3"> {/* Augmenté mb-2 à mb-3 */}
           Préparez la commande en gros ici. Elle sera ensuite{" "}
           <span className="font-semibold text-[#472EAD]">envoyée à la caisse</span>{" "}
           pour encaissement (acomptes / soldes).
@@ -1205,7 +1205,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
         </div>
 
         {/* Saisie ligne produit */}
-        <div className="border border-[#E4E0FF] rounded-xl p-4 bg-[#F9FAFF] space-y-3">
+        <div className="border border-[#E4E0FF] rounded-xl p-4 bg-[#F9FAFF] space-y-3 mt-4"> {/* Ajout de mt-4 */}
           {/* Mode de vente */}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -1266,7 +1266,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
             )}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-start mt-2">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-start mt-3"> {/* Augmenté mt-2 à mt-3 */}
             <div className="sm:col-span-2">
               <label className="block text-xs text-gray-500 mb-1">
                 Produit (nom, référence ou code-barres)
@@ -1375,7 +1375,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
         </div>
 
         {/* Tableau des lignes de la commande */}
-        <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+        <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white mt-4"> {/* Ajout de mt-4 */}
           <table className="min-w-full text-xs">
             <thead className="bg-[#F7F5FF] text-[#472EAD] uppercase text-[11px] font-semibold">
               <tr>
@@ -1502,7 +1502,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
         </div>
 
         {/* Totaux + bouton envoyer à la caisse */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mt-6"> {/* Ajout de mt-6 */}
           <div className="flex flex-col gap-2 text-xs text-gray-500">
             <span>
               Cette commande sera envoyée à la{" "}
@@ -1684,76 +1684,86 @@ export default function Commandes() {
   const removeToast = (id) => setToasts((t) => t.filter((x) => x.id !== id));
 
   // 🔗 Chargement des commandes depuis le backend (CORRIGÉ avec mapping statuts UI ↔ DB)
-  const fetchCommandes = async () => {
-    try {
-      setLoading(true);
+// 🔗 Chargement des commandes depuis le backend
+const fetchCommandes = async () => {
+  try {
+    setLoading(true);
 
-      // ✅ CORRECTION CRITIQUE : MAPPING DES VRAIS STATUTS LARAVEL
-      const statutMapToBackend = {
-        en_attente_caisse: "en_attente_caisse",
-        partiellement_payee: "partiellement_payee",
-        soldee: "soldee",
-        annulee: "annulee",
-      };
+    // ✅ Mapping statuts UI → backend
+    const statutMapToBackend = {
+      en_attente_caisse: "en_attente_caisse",
+      partiellement_payee: "partiellement_payee",
+      soldee: "soldee",
+      annulee: "annulee",
+    };
 
-      // ✅ PARAMÈTRES BACKEND-COMPATIBLES
-      const params = {
-        type_client: "special",
-        page,
-        ...(filterStatut !== "tous" && { 
-          statut: statutMapToBackend[filterStatut] || filterStatut 
-        }),
-        ...(filterStartDate && { start_date: filterStartDate }),
-        ...(filterEndDate && { end_date: filterEndDate }),
-        ...(searchTerm && { search: searchTerm }),
-        ...(clientIdFromState && { client_id: clientIdFromState }),
-      };
+    // ✅ Paramètres envoyés à Laravel
+    const params = {
+      type_client: "special",
+      page,
+      ...(filterStatut !== "tous" && {
+        statut: statutMapToBackend[filterStatut] || filterStatut,
+      }),
+      ...(filterStartDate && { start_date: filterStartDate }),
+      ...(filterEndDate && { end_date: filterEndDate }),
+      ...(searchTerm && { search: searchTerm }),
+      ...(clientIdFromState && { client_id: clientIdFromState }),
+    };
 
-      // 🔵 TABLE : Utilisation de unwrapApi() pour la normalisation
-      const res = await commandesAPI.getAll(params);
-      const payload = unwrapApi(res);
+    // ===============================
+    // ✅ APPEL API
+    // ===============================
+    const res = await commandesAPI.getAll(params);
 
-      const commandesData = payload.data || [];
-      const paginationData = {
-        current_page: Number(payload.current_page || 1),
-        last_page: Number(payload.last_page || 1),
-        total: Number(payload.total || payload.data?.length || 0),
-      };
+    // ⚠️ IMPORTANT :
+    // On récupère les stats AVANT unwrapApi()
+    const backendStatsRaw = res?.stats || null;
 
-      const normalized = commandesData.map(normalizeCommande);
-      setCommandes(normalized);
+    // Normalisation pagination/table
+    const payload = unwrapApi(res);
 
-      setPage(paginationData.current_page);
-      setLastPage(paginationData.last_page);
-      setTotal(paginationData.total);
+    const commandesData = payload.data || [];
 
-      // ✅ 2️⃣ Récupération des stats backend
-      const backendStats = payload.stats || {
-        nb: 0,
-        annulees: 0,
-        totalTTC: 0,
-        totalPaye: 0,
-        dette: 0,
-      };
+    const paginationData = {
+      current_page: Number(payload.current_page || 1),
+      last_page: Number(payload.last_page || 1),
+      total: Number(payload.total || commandesData.length || 0),
+    };
 
-      setStatsFromBackend(backendStats);
+    // ===============================
+    // ✅ NORMALISATION COMMANDES
+    // ===============================
+    const normalized = commandesData.map(normalizeCommande);
+    setCommandes(normalized);
 
-    } catch (error) {
-      logger.error("commandes.fetch", error);
-      toast(
-        "error",
-        "Erreur de chargement",
-        "Impossible de charger les commandes clients spéciaux."
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+    setPage(paginationData.current_page);
+    setLastPage(paginationData.last_page);
+    setTotal(paginationData.total);
 
-  useEffect(() => {
-    fetchCommandes();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, filterStatut, filterStartDate, filterEndDate, searchTerm, clientIdFromState, clientNameFromState]);
+    // ===============================
+    // ✅ STATS BACKEND (CORRIGÉ)
+    // ===============================
+    const backendStats = backendStatsRaw || {
+      nb: 0,
+      annulees: 0,
+      totalTTC: 0,
+      totalPaye: 0,
+      dette: 0,
+    };
+
+    setStatsFromBackend(backendStats);
+
+  } catch (error) {
+    logger.error("commandes.fetch", error);
+    toast(
+      "error",
+      "Erreur de chargement",
+      "Impossible de charger les commandes clients spéciaux."
+    );
+  } finally {
+    setLoading(false);
+  }
+};
 
   // 🔗 Chargement des clients spéciaux pour retrouver les noms
   useEffect(() => {
@@ -1805,7 +1815,7 @@ export default function Commandes() {
 
   // ✅ 3️⃣ Remplacement de statsGlobales par statsFromBackend
   const statsGlobales = useMemo(() => {
-    if (!statsFromBackend) {
+    if (!statsFromBackend || typeof statsFromBackend.nb === "undefined") {
       return {
         nbCommandes: 0,
         nbAnnulees: 0,
@@ -1990,6 +2000,20 @@ export default function Commandes() {
     clientNameFromState,
   ]);
 
+  // ✅ CHARGEMENT DES COMMANDES (OBLIGATOIRE)
+  useEffect(() => {
+    fetchCommandes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    page,
+    filterStatut,
+    filterStartDate,
+    filterEndDate,
+    searchTerm,
+    clientIdFromState,
+  ]);
+
+
   if (loading)
     return (
       <div className="flex items-center justify-center h-[60vh]">
@@ -2005,7 +2029,8 @@ export default function Commandes() {
   return (
     <>
       <div className="w-full h-full bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white px-3 sm:px-4 lg:px-6 py-4 sm:py-5 overflow-y-auto">
-        <div className="max-w-6xl mx-auto space-y-5">
+        <div className="max-w-6xl mx-auto space-y-8"> {/* Changé de space-y-5 à space-y-8 */}
+          
           {/* HEADER */}
           <motion.header
             initial={{ opacity: 0, y: -8 }}
@@ -2053,7 +2078,7 @@ export default function Commandes() {
           <motion.div
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
-            className="w-full max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3"
+            className="w-full max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-6 mb-8"
           >
             {/* Nombre de commandes */}
             <div className="rounded-xl border border-yellow-400 bg-gradient-to-br from-yellow-50 via-amber-50 to-yellow-100 px-3 py-2.5 shadow-sm">
@@ -2115,7 +2140,8 @@ export default function Commandes() {
           />
 
           {/* TABLE DES COMMANDES + FILTRES/RECHERCHE/LIMITE/PAGINATION */}
-          <section className="bg-white/95 border border-[#E4E0FF] rounded-2xl shadow-[0_12px_30px_rgba(15,23,42,0.06)] px-3 sm:px-4 py-3 sm:py-4 space-y-3">
+          <section className="bg-white/95 border border-[#E4E0FF] rounded-2xl shadow-[0_12px_30px_rgba(15,23,42,0.06)] px-3 sm:px-4 py-4 sm:py-5 space-y-4 mt-8"> {/* Ajout de mt-8 et augmentation du padding */}
+            
             {/* FILTRES + RECHERCHE + LIMITE (avisage) */}
             <div className="flex flex-col gap-3">
               <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
@@ -2169,14 +2195,14 @@ export default function Commandes() {
               </div>
 
               {/* RECHERCHE */}
-              <div className="relative">
+              <div className="relative mb-4"> {/* Ajout de mb-4 */}
                 <Search className="absolute left-3 top-2.5 text-gray-400 w-4 h-4" />
                 <input
                   type="text"
                   placeholder="Rechercher une commande (numéro, client, statut, ligne produit...)"
                   value={searchTerm || ""}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-10 py-2 border border-gray-300 rounded-xl text-sm bg-white shadow-sm focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD] placeholder:text-gray-400"
+                  className="w-full pl-9 pr-10 py-2.5 border border-gray-300 rounded-xl text-sm bg-white shadow-sm focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD] placeholder:text-gray-400"
                 />
                 {searchTerm ? (
                   <button
@@ -2202,11 +2228,10 @@ export default function Commandes() {
                   <span className="font-semibold">{lastPage}</span>
                 </span>
               </div>
-            
             </div>
 
             {/* TABLEAU */}
-            <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+            <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white mt-2"> {/* Ajout de mt-2 */}
               <table className="min-w-full text-sm">
                 <thead className="bg-[#F7F5FF] text-[#472EAD] uppercase text-xs font-semibold">
                   <tr>
@@ -2280,15 +2305,17 @@ export default function Commandes() {
             </div>
 
             {/* ✅ PAGINATION AVEC COMPOSANT DÉDIÉ */}
-            <Pagination
-              page={page}
-              totalPages={lastPage}
-              onPageChange={(p) => {
-                if (p >= 1 && p <= lastPage) {
-                  setPage(p);
-                }
-              }}
-            />
+            <div className="mt-6"> {/* Ajout de mt-6 */}
+              <Pagination
+                page={page}
+                totalPages={lastPage}
+                onPageChange={(p) => {
+                  if (p >= 1 && p <= lastPage) {
+                    setPage(p);
+                  }
+                }}
+              />
+            </div>
           </section>
 
           {/* MODAL DÉTAIL / FACTURE */}

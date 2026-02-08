@@ -99,7 +99,7 @@ function FournisseurForm({ initial, onSubmit, onCancel, submitting }) {
     if (!form.nom.trim()) e.nom = "Le nom du fournisseur est requis.";
     if (!/^[0-9]{9}$/.test(form.contact))
       e.contact = "Le contact doit contenir exactement 9 chiffres.";
-    if (!form.adresse.trim()) e.adresse = "L’adresse est requise.";
+    if (!form.adresse.trim()) e.adresse = "L'adresse est requise.";
     if (!form.typeProduit.trim())
       e.typeProduit = "Le type de produits est requis.";
     if (form.derniereLivraison) {
@@ -109,7 +109,7 @@ function FournisseurForm({ initial, onSubmit, onCancel, submitting }) {
       today.setHours(0, 0, 0, 0);
       if (d > today)
         e.derniereLivraison =
-          "La date doit être antérieure ou égale à aujourd’hui.";
+          "La date doit être antérieure ou égale à aujourd'hui.";
     }
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -256,13 +256,18 @@ function FournisseurForm({ initial, onSubmit, onCancel, submitting }) {
 export default function Fournisseurs() {
   const [fournisseurs, setFournisseurs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchInput, setSearchInput] = useState(""); // ce que tape l'utilisateur
+  const [searchTerm, setSearchTerm] = useState("");   // envoyé à l'API
   const [openAdd, setOpenAdd] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [selectedFournisseur, setSelectedFournisseur] = useState(null);
+  // Pagination backend
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
 
   const removeToast = (id) =>
     setToasts((t) => t.filter((x) => x.id !== id));
@@ -273,13 +278,39 @@ export default function Fournisseurs() {
     setTimeout(() => removeToast(id), 4000);
   };
 
+  // Debounce pour la recherche : attendre que l'utilisateur arrête de taper
+  // ET réinitialiser la page en même temps
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchInput !== searchTerm) {
+        setPage(1);
+        setSearchTerm(searchInput);
+      }
+    }, 1000); // délai 1 seconde
+
+    return () => clearTimeout(timer);
+  }, [searchInput, searchTerm]);
+
   // 🔗 Chargement depuis l'API Laravel
   useEffect(() => {
     const fetchFournisseurs = async () => {
       try {
-        setLoading(true);
-        const data = await fournisseursAPI.getAll();
+        setLoading(page === 1); // Afficher le loader seulement pour la première page
+        const data = await fournisseursAPI.getAll({
+          page,
+          search: searchTerm || undefined,
+        });
+        
         const raw = Array.isArray(data) ? data : data.data || [];
+
+        // Gestion de la pagination Laravel
+        if (!Array.isArray(data)) {
+          const total = data.total || 0;
+          const perPage = data.per_page || 20;
+
+          setTotalItems(total);
+          setTotalPages(Math.max(1, Math.ceil(total / perPage)));
+        }
 
         const normalized = raw.map((f) => ({
           id: f.id,
@@ -304,33 +335,16 @@ export default function Fournisseurs() {
     };
 
     fetchFournisseurs();
-  }, []);
+  }, [page, searchTerm]);
 
   // Stats rapides
   const stats = useMemo(() => {
-    const total = fournisseurs.length;
+    const total = totalItems;
     const avecLivraison = fournisseurs.filter(
       (f) => !!f.derniereLivraison
     ).length;
     return { total, avecLivraison };
-  }, [fournisseurs]);
-
-  // Filtre recherche
-  const filtered = useMemo(() => {
-    const q = searchTerm.toLowerCase();
-    return fournisseurs.filter((f) => {
-      const nom = (f.nom || "").toLowerCase();
-      const contact = String(f.contact || "").toLowerCase();
-      const adresse = (f.adresse || "").toLowerCase();
-      const typeProd = (f.typeProduit || "").toLowerCase();
-      return (
-        nom.includes(q) ||
-        contact.includes(q) ||
-        adresse.includes(q) ||
-        typeProd.includes(q)
-      );
-    });
-  }, [fournisseurs, searchTerm]);
+  }, [totalItems, fournisseurs]);
 
   // ➕ Ajout (POST /api/fournisseurs)
   const handleAdd = async (form) => {
@@ -393,13 +407,12 @@ export default function Fournisseurs() {
       toast(
         "error",
         "Erreur",
-        "Impossible d’ajouter le fournisseur."
+        "Impossible d'ajouter le fournisseur."
       );
     } finally {
       setSubmitting(false);
     }
   };
-
 
   // ✏️ Modification (PUT /api/fournisseurs/{id})
   const handleEdit = async (form) => {
@@ -454,7 +467,6 @@ export default function Fournisseurs() {
     }
   };
 
-
   // 🗑️ Suppression (DELETE /api/fournisseurs/{id})
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -507,13 +519,14 @@ export default function Fournisseurs() {
   return (
     <>
       <div className="min-h-screen w-full bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white px-4 sm:px-6 lg:px-10 py-6 sm:py-8 overflow-y-auto">
-        <div className="max-w-6xl mx-auto space-y-7">
+        <div className="max-w-6xl mx-auto space-y-8"> {/* Changé de space-y-7 à space-y-8 */}
+          
           {/* HEADER */}
           <motion.header
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.45 }}
-            className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+            className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mt-6 mb-8" 
           >
             <div className="space-y-2">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/70 border border-[#E4E0FF] shadow-xs">
@@ -527,7 +540,7 @@ export default function Fournisseurs() {
                   Gestion des fournisseurs
                 </h1>
                 <p className="mt-1 text-sm text-gray-500">
-                  Suivi des partenaires d’approvisionnement : ajout,
+                  Suivi des partenaires d'approvisionnement : ajout,
                   modification et suppression des fournisseurs.
                 </p>
               </div>
@@ -548,15 +561,16 @@ export default function Fournisseurs() {
           </motion.header>
 
           {/* RECHERCHE & TABLEAU */}
-          <section className="bg-white/90 border border-[#E4E0FF] rounded-2xl shadow-[0_18px_45px_rgba(15,23,42,0.06)] px-4 sm:px-5 py-4 space-y-4">
+          <section className="bg-white/90 border border-[#E4E0FF] rounded-2xl shadow-[0_18px_45px_rgba(15,23,42,0.06)] px-4 sm:px-5 py-4 sm:py-5 space-y-4"> {/* Supprimé le mt-8, gardé seulement le padding interne */}
+            
             {/* Recherche */}
-            <div className="relative mb-1">
+            <div className="relative mb-4"> {/* Ajout de mb-4 */}
               <Search className="absolute left-3 top-2.5 text-gray-400 w-4 h-4" />
               <input
                 type="text"
                 placeholder="Rechercher par nom, contact, adresse ou type de produit..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-xl text-sm bg-white/80 shadow-sm focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD] placeholder:text-gray-400"
               />
             </div>
@@ -599,7 +613,7 @@ export default function Fournisseurs() {
                     ),
                 },
               ]}
-              data={filtered}
+              data={fournisseurs}
               actions={[
                 {
                   title: "Voir la fiche",

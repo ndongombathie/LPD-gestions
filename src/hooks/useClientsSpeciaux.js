@@ -132,27 +132,48 @@ export function useClientsSpeciaux(toast) {
   const addMutation = useMutation({
     mutationFn: (data) =>
       clientsAPI.create({ ...data, type_client: "special", solde: 0 }),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries(["clients-speciaux"]);
       toast("success", "Client ajouté");
+
+      variables?.onSuccess?.();
     },
+
   });
 
   const editMutation = useMutation({
     mutationFn: ({ id, data }) => clientsAPI.update(id, data),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries(["clients-speciaux"]);
       toast("success", "Client modifié");
+
+      variables?.data?.onSuccess?.();
     },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: (id) => clientsAPI.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries(["clients-speciaux"]);
-      toast("success", "Client supprimé");
-    },
-  });
+
+const deleteMutation = useMutation({
+  mutationFn: ({ id }) => clientsAPI.delete(id),
+
+  onSuccess: (_, variables) => {
+    queryClient.invalidateQueries(["clients-speciaux"]);
+    toast("success", "Client supprimé");
+
+    variables?.onSuccess?.(); // ferme le modal
+  },
+
+  onError: (error, variables) => {
+    const message =
+      error?.response?.data?.message ||
+      "Impossible de supprimer ce client .";
+
+    toast("error", "Suppression refusée car il a des dettes ", message);
+
+    variables?.onSuccess?.(); // ✅ ferme aussi le modal en cas d’échec
+  },
+});
+
+
 
   return {
     clients,
@@ -167,7 +188,19 @@ export function useClientsSpeciaux(toast) {
     loading: query.isLoading || query.isFetching,
 
     handleAdd: addMutation.mutate,
-    handleEdit: (data) => editMutation.mutate({ id: data.id, data }),
-    handleDelete: (id) => deleteMutation.mutate(id),
+    handleEdit: (data) => {
+      if (!data?.id) {
+        console.error("ID client manquant :", data);
+        return;
+      }
+
+      editMutation.mutate({
+        id: data.id,
+        data
+      });
+    },
+    handleDelete: (id, onSuccess) =>
+    deleteMutation.mutate({ id, onSuccess }),
+
   };
 }

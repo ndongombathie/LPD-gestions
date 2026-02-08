@@ -1,4 +1,4 @@
-// ========================================================== 
+// ==========================================================
 // 👥 Utilisateurs.jsx — Interface Responsable (LPD Manager)
 // Version Responsable = CONSULTATION SEULEMENT (lecture seule)
 // Connecté à l'API Laravel (/api/users)
@@ -91,7 +91,8 @@ function Toasts({ toasts, remove }) {
 export default function Utilisateurs() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchInput, setSearchInput] = useState(""); // État temporaire pour l'input
+  const [searchTerm, setSearchTerm] = useState(""); // État final pour l'API
   const [filterRole, setFilterRole] = useState("Tous");
   const [toasts, setToasts] = useState([]);
   // Pagination backend
@@ -114,6 +115,17 @@ export default function Utilisateurs() {
     setPage(1);
   }, [filterRole]);
 
+  // Debounce pour la recherche : attendre que l'utilisateur arrête de taper
+  // ET réinitialiser la page en même temps
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setPage(1);
+      setSearchTerm(searchInput);
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
   // Chargement des utilisateurs depuis l'API
   useEffect(() => {
     const fetchUsers = async () => {
@@ -126,6 +138,7 @@ export default function Utilisateurs() {
           role: filterRole !== "Tous"
             ? getRoleKeyFromLabel(filterRole)
             : undefined,
+          search: searchTerm || undefined,
         });
 
         // Gestion de la pagination Laravel
@@ -168,28 +181,7 @@ export default function Utilisateurs() {
     };
 
     fetchUsers();
-  }, [toast, page, filterRole]);
-
-  // Filtrage côté client pour la recherche
-  const filteredUsers = useMemo(() => {
-    const q = searchTerm.toLowerCase();
-
-    return users.filter((u) => {
-      const prenom = (u.prenom || "").toLowerCase();
-      const nom = (u.nom || "").toLowerCase();
-      const email = (u.email || "").toLowerCase();
-      const tel = String(u.tel || "").toLowerCase();
-      const adresse = (u.adresse || "").toLowerCase();
-
-      return (
-        prenom.includes(q) ||
-        nom.includes(q) ||
-        email.includes(q) ||
-        tel.includes(q) ||
-        adresse.includes(q)
-      );
-    });
-  }, [users, searchTerm]);
+  }, [toast, page, filterRole, searchTerm]);
 
   // Statistiques simples
   const stats = useMemo(() => ({
@@ -213,15 +205,16 @@ export default function Utilisateurs() {
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white px-4 sm:px-6 lg:px-10 py-6 sm:py-8 overflow-y-auto">
-      <div className="max-w-6xl mx-auto space-y-7">
-        {/* HEADER */}
+      <div className="max-w-6xl mx-auto space-y-8"> {/* Changé de space-y-7 à space-y-8 */}
+        
+        {/* HEADER avec badge intégré */}
         <motion.header
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45 }}
-          className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+          className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mt-6 mb-8"
         >
-          <div className="space-y-2">
+          <div className="space-y-2 flex-1">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/70 border border-[#E4E0FF] shadow-xs">
               <span className="h-1.5 w-1.5 rounded-full bg-sky-500" />
               <span className="text-[11px] font-semibold tracking-wide text-[#472EAD] uppercase">
@@ -242,29 +235,31 @@ export default function Utilisateurs() {
               {stats.total > 1 && "s"} enregistrés
             </p>
           </div>
+
+          {/* BADGE TOTAL aligné à droite au même niveau */}
+          <div className="flex items-center justify-end">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/90 border border-[#E4E0FF] shadow-sm hover:shadow transition-shadow duration-200">
+              <span className="h-2 w-2 rounded-full bg-[#472EAD] animate-pulse" />
+              <span className="text-xs text-gray-600">
+                Total : <span className="font-semibold text-[#472EAD]">{stats.total}</span>
+              </span>
+            </div>
+          </div>
         </motion.header>
 
-        {/* PETITS STATS */}
-        <section className="flex flex-wrap gap-2 text-[11px] text-gray-500">
-          <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-white/80 border border-[#ECE9FF]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#472EAD]" />
-            <span>
-              Total : <span className="font-semibold">{stats.total}</span>
-            </span>
-          </div>
-        </section>
-
-        {/* RECHERCHE + FILTRE */}
-        <section className="bg-white/90 border border-[#E4E0FF] rounded-2xl shadow-[0_18px_45px_rgba(15,23,42,0.06)] px-4 sm:px-5 py-4 space-y-4">
+        {/* RECHERCHE + FILTRE + TABLEAU */}
+        <section className="bg-white/90 border border-[#E4E0FF] rounded-2xl shadow-[0_18px_45px_rgba(15,23,42,0.06)] px-4 sm:px-5 py-4 sm:py-5 space-y-4">
+          
+          {/* Barre de recherche + Filtre */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             {/* 🔍 Barre de recherche */}
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-2.5 text-gray-400 w-4 h-4" />
               <input
                 type="text"
-                placeholder="Rechercher par nom, email, téléphone, adresse…"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Rechercher par nom, email, téléphone, adresse..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-xl text-sm bg-white/80 shadow-sm focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD] placeholder:text-gray-400"
               />
             </div>
@@ -287,9 +282,22 @@ export default function Utilisateurs() {
             </div>
           </div>
 
+          {/* Résumé affichage */}
+          <div className="flex items-center justify-between text-[11px] text-gray-500 mb-2">
+            <span>
+              Affichage :{" "}
+              <span className="font-semibold">{users.length}</span> sur{" "}
+              <span className="font-semibold">{stats.total}</span>
+            </span>
+            <span>
+              Page <span className="font-semibold">{page}</span> /{" "}
+              <span className="font-semibold">{totalPages}</span>
+            </span>
+          </div>
+
           {/* TABLE (lecture seule, aucune action) */}
-          <div className="mt-1">
-            {filteredUsers.length === 0 ? (
+          <div className="mt-2">
+            {users.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-14 text-center text-gray-400">
                 <Search className="w-8 h-8 mb-3 opacity-60" />
                 <p className="text-sm font-medium">
@@ -313,25 +321,28 @@ export default function Utilisateurs() {
                     { label: "Adresse", key: "adresse" },
                     { label: "Rôle", key: "role" },
                   ]}
-                  data={filteredUsers}
+                  data={users}
                   actions={[]}
                 />
 
                 {loadingPage && (
-                  <div className="flex justify-center py-2 text-xs text-gray-400">
+                  <div className="flex justify-center py-2 text-xs text-gray-400 mt-2">
                     Chargement de la page...
                   </div>
                 )}
-                <Pagination
-                  page={page}
-                  totalPages={totalPages}
-                  onPageChange={(p) => {
-                    if (p < 1 || p > totalPages) return;
-                    if (p === page) return;
-                    if (loadingPage) return;
-                    setPage(p);
-                  }}
-                />
+                
+                <div className="mt-6">
+                  <Pagination
+                    page={page}
+                    totalPages={totalPages}
+                    onPageChange={(p) => {
+                      if (p < 1 || p > totalPages) return;
+                      if (p === page) return;
+                      if (loadingPage) return;
+                      setPage(p);
+                    }}
+                  />
+                </div>
               </>
             )}
           </div>
