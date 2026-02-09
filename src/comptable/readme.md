@@ -62,3 +62,9 @@ GET           api/produits-controle   | affiche les produits du boutique et leur
 
 # reitialiser un mot de passe puis envoyer un mail
 POST          api/utilisateurs/{utilisateur_id}/reset-password
+
+# inventaire depot 
+GET          api/mouvements-stock/inventaire-depot  
+
+# les journals caissier 
+GET         api/paiements-rapport-journalier
