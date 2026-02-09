@@ -534,7 +534,7 @@ export default function Products() {
 
     const catData = { 
       nom: String(currentCategory.name).trim(),
-      description: currentCategory.description || ""
+      id: currentCategory.id
     };
 
     try {
@@ -2016,20 +2016,6 @@ export default function Products() {
                   className="w-full border rounded px-3 py-2 text-sm focus:ring-2 focus:ring-[#472EAD] focus:border-[#472EAD] outline-none"
                   required
                   placeholder="Ex: Papeterie, Fournitures..."
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#472EAD] mb-1">
-                  Description (optionnel)
-                </label>
-                <textarea
-                  name="description"
-                  value={currentCategory.description || ""}
-                  onChange={handleCategoryFieldChange}
-                  className="w-full border rounded px-3 py-2 text-sm focus:ring-2 focus:ring-[#472EAD] focus:border-[#472EAD] outline-none"
-                  rows={3}
-                  placeholder="Décrivez cette catégorie..."
                 />
               </div>
 

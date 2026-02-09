@@ -1,29 +1,58 @@
 import httpClient from '../http/client';
 
-const ENDPOINT = '/categories';
+const BASE = '/categories';
 
 export const categoriesAPI = {
-  // Récupérer toutes les catégories (pour le select)
+
+  /**
+   * Liste des catégories
+   */
   getAll: async () => {
-    const response = await httpClient.get(ENDPOINT);
-    return response.data;
+    try {
+      const response = await httpClient.get(BASE);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erreur getAll categories', error);
+      throw error;
+    }
   },
 
-  // Créer une catégorie (si tu fais le modal "Gérer les catégories")
+  /**
+   * Créer une catégorie
+   */
   create: async (data) => {
-    const response = await httpClient.post(ENDPOINT, data);
-    return response.data;
+    try {
+      const response = await httpClient.post(BASE, data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erreur création catégorie', error.response?.data || error);
+      throw error;
+    }
   },
 
-  // Modifier
+  /**
+   * Modifier une catégorie
+   */
   update: async (id, data) => {
-    const response = await httpClient.put(`${ENDPOINT}/${id}`, data);
-    return response.data;
+    try {
+      const response = await httpClient.put(`${BASE}/${id}`, data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erreur modification catégorie', error.response?.data || error);
+      throw error;
+    }
   },
 
-  // Supprimer
+  /**
+   * Supprimer une catégorie
+   */
   delete: async (id) => {
-    const response = await httpClient.delete(`${ENDPOINT}/${id}`);
-    return response.data;
-  }
+    try {
+      const response = await httpClient.delete(`${BASE}/${id}`);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erreur suppression catégorie', error.response?.data || error);
+      throw error;
+    }
+  },
 };

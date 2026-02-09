@@ -21,6 +21,7 @@ export { stockAPI } from './stock';
 export { paiementsAPI } from './paiements';
 export { default as profileAPI } from './profile';
 
+
 /**
  * Objet centralisé pour accès facile
  */

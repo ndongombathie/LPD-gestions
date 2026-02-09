@@ -1,139 +1,144 @@
 import httpClient from '../http/client';
 
-const ENDPOINTS = {
-  GET_ALL: '/produits',
-  GET_BY_ID: '/produits/:id',
-  CREATE: '/produits',
-  UPDATE: '/produits/:id',
-  DELETE: '/produits/:id',
-  RUPTURES: '/produits_en_rupture',  // Correction : c'est 'produits_en_rupture' selon vos endpoints
-  REAPPRO: '/stocks/reapprovisionner',
-  TRANSFER: '/stocks/transfer',
-};
+const BASE = '/produits';
 
 export const produitsAPI = {
-  // --- GESTION CRUD PRODUITS ---
 
+  // =====================
+  // PRODUITS (CRUD)
+  // =====================
+
+  /**
+   * Récupérer la liste des produits (pagination Laravel)
+   */
   getAll: async (params = {}) => {
     try {
-      const response = await httpClient.get(ENDPOINTS.GET_ALL, { params });
+      const response = await httpClient.get(BASE, { params });
       return response.data;
     } catch (error) {
-      console.error('❌ Erreur getAll produits:', error.message);
+      console.error('❌ Erreur getAll produits', error);
       throw error;
     }
   },
 
+  /**
+   * Récupérer un produit précis
+   */
   getById: async (id) => {
     try {
-      const response = await httpClient.get(ENDPOINTS.GET_BY_ID.replace(':id', id));
+      const response = await httpClient.get(`${BASE}/${id}`);
       return response.data;
     } catch (error) {
-      console.error('❌ Erreur getById produit:', error.message);
+      console.error('❌ Erreur getById produit', error);
       throw error;
     }
   },
 
+  /**
+   * Créer un nouveau produit
+   */
   create: async (data) => {
     try {
-      const response = await httpClient.post(ENDPOINTS.CREATE, data);
+      const response = await httpClient.post(BASE, data);
       return response.data;
     } catch (error) {
-      console.error('❌ Erreur create produit:', error.response?.data || error.message);
+      console.error('❌ Erreur création produit', error.response?.data || error);
       throw error;
     }
   },
 
+  /**
+   * Modifier un produit existant
+   */
   update: async (id, data) => {
     try {
-      const response = await httpClient.put(ENDPOINTS.UPDATE.replace(':id', id), data);
+      const response = await httpClient.put(`${BASE}/${id}`, data);
       return response.data;
     } catch (error) {
-      console.error('❌ Erreur update produit:', error.response?.data || error.message);
+      console.error('❌ Erreur modification produit', error.response?.data || error);
       throw error;
     }
   },
 
+  /**
+   * Supprimer un produit
+   */
   delete: async (id) => {
     try {
-      const response = await httpClient.delete(ENDPOINTS.DELETE.replace(':id', id));
+      const response = await httpClient.delete(`${BASE}/${id}`);
       return response.data;
     } catch (error) {
-      console.error('❌ Erreur delete produit:', error.response?.data || error.message);
+      console.error('❌ Erreur suppression produit', error.response?.data || error);
       throw error;
     }
   },
 
-  // --- GESTION DES STOCKS ---
+  // =====================
+  // STOCK
+  // =====================
 
   /**
-   * Récupère la liste des produits en rupture de stock
-   */
-  getRuptures: async () => {
-    try {
-      const response = await httpClient.get(ENDPOINTS.RUPTURES);
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erreur getRuptures:', error.message);
-      throw error;
-    }
-  },
-
-  /**
-   * Réapprovisionner un produit (Augmenter le stock)
-   * @param {Object} data - { produit_id: number, quantite: number }
-   */
-  reapprovisionner: async (data) => {
-    try {
-      const response = await httpClient.post(ENDPOINTS.REAPPRO, data);
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erreur reapprovisionner stock:', error.response?.data || error.message);
-      throw error;
-    }
-  },
-
-  /**
-   * Transférer du stock vers une boutique
-   * @param {Object} data - { produit_id: number, quantite_transfert: number, boutique_id: number }
-   */
-  transferToBoutique: async (data) => {
-    try {
-      const response = await httpClient.post(ENDPOINTS.TRANSFER, data);
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erreur transferToBoutique:', error.response?.data || error.message);
-      throw error;
-    }
-  },
-
-  // --- NOUVELLES FONCTIONS ---
-  
-  /**
-   * Récupère les produits en rupture (alias pour getRuptures)
+   * Produits en rupture de stock
    */
   getProduitsEnRupture: async () => {
     try {
       const response = await httpClient.get('/produits_en_rupture');
       return response.data;
     } catch (error) {
-      console.error('❌ Erreur getProduitsEnRupture:', error.message);
+      console.error('❌ Erreur produits en rupture', error);
       throw error;
     }
   },
-  
+
   /**
-   * Ajustement de stock (augmentation ou diminution)
-   * @param {Object} data - { produit_id: number, quantite: number, type: 'entree'|'sortie', raison: string }
+   * Réapprovisionner un produit
+   * (appelé depuis un bouton, le produit est déjà connu)
    */
-  ajusterStock: async (data) => {
+  reapprovisionner: async ({ produit_id, quantite }) => {
     try {
-      const response = await httpClient.post('/stocks/ajuster', data);
+      const response = await httpClient.post('/stocks/reapprovisionner', {
+        produit_id,
+        quantite,
+      });
       return response.data;
     } catch (error) {
-      console.error('❌ Erreur ajusterStock:', error.response?.data || error.message);
+      console.error('❌ Erreur réapprovisionnement', error.response?.data || error);
       throw error;
     }
-  }
-  
+  },
+
+  /**
+   * Diminuer le stock d’un produit
+   * (endpoint à venir côté backend)
+   */
+  diminuerStock: async ({ produit_id, quantite, raison }) => {
+    try {
+      const response = await httpClient.post('/stocks/diminuer', {
+        produit_id,
+        quantite,
+        raison,
+      });
+      return response.data;
+    } catch (error) {
+      console.error('❌ Endpoint diminuer non disponible ou erreur', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Transférer du stock vers une boutique
+   */
+  transferer: async ({ produit_id, quantite, boutique_id }) => {
+    try {
+      const response = await httpClient.post('/stocks/transfer', {
+        produit_id,
+        quantite,
+        boutique_id,
+      });
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erreur transfert stock', error.response?.data || error);
+      throw error;
+    }
+  },
 };

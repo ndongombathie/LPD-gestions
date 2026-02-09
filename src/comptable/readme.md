@@ -54,5 +54,11 @@ GET|HEAD        api/inventaires-boutique | affiche l'inventaire des produits du 
 GET           api/historique-ventes  | afficher la liste de l'historique des ventes on appliquer des filtre aussi
 GET           api/total-vente-par-jour | la vente journalier
 
-# liste des produits et leurs informations
-GET           api/produits            | affiche les produits et leurs etat de stock
+# liste des produits du depot et leurs informations
+GET           api/produits            | affiche les produits du depot et leurs etat de stock
+
+# liste des produits du boutique et leurs informations
+GET           api/produits-controle   | affiche les produits du boutique et leurs etat de stock
+
+# reitialiser un mot de passe puis envoyer un mail
+POST          api/utilisateurs/{utilisateur_id}/reset-password
