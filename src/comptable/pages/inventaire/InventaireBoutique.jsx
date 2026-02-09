@@ -1,42 +1,8 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Printer } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-
-/* =========================================================
-   DONNÉES SIMULÉES (API PLUS TARD)
-========================================================= */
-
-const produits = [
-  {
-    id: 1,
-    nom: "Bic",
-    prixAchat: 50,
-    prixMin: 100,
-    seuilStock: 10,
-    reapprovisionnements: [
-      { date: "2025-01-01", quantite: 100 },
-      { date: "2025-01-10", quantite: 50 },
-    ],
-  },
-];
-
-const ventes = [
-  {
-    produitId: 1,
-    date: "2025-01-12",
-    quantite: 10,
-    prixVente: 120,
-    vendeur: "vendeur",
-  },
-  {
-    produitId: 1,
-    date: "2025-01-13",
-    quantite: 5,
-    prixVente: 80,
-    vendeur: "responsable",
-  },
-];
+import { inventaireBoutiqueAPI } from "@/services/api/inventaireBoutique";
 
 /* =========================================================
    UTILS
@@ -46,7 +12,7 @@ const fcfa = (v) =>
     .toString()
     .replace(/\B(?=(\d{3})+(?!\d))/g, ".")} FCFA`;
 
-const formatDate = (d) => d.replace(/-/g, ".");
+const formatDate = (d) => (d ? d.replace(/-/g, ".") : "");
 
 /* =========================================================
    COMPOSANT
@@ -56,56 +22,66 @@ export default function InventaireBoutique() {
   const [dateFin, setDateFin] = useState("");
   const [historique, setHistorique] = useState([]);
 
-  /* ================= FILTRAGE VENTES ================= */
-  const ventesFiltrees = useMemo(() => {
-    return ventes.filter((v) => {
-      if (!dateDebut && !dateFin) return true;
-      if (dateDebut && !dateFin) return v.date === dateDebut;
-      if (dateDebut && dateFin)
-        return v.date >= dateDebut && v.date <= dateFin;
-      return true;
-    });
-  }, [dateDebut, dateFin]);
+  const [produits, setProduits] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  /* ================= CALCULS PRODUITS ================= */
-  const statsProduits = produits.map((p) => {
-    const totalAppro = p.reapprovisionnements.reduce(
-      (s, r) => s + r.quantite,
-      0
-    );
+  /* ================= FETCH API ================= */
+  useEffect(() => {
+    const fetchInventaire = async () => {
+      try {
+        setLoading(true);
+        setError(null);
 
-    const ventesProduit = ventesFiltrees.filter(
-      (v) => v.produitId === p.id
-    );
+        const data = await inventaireBoutiqueAPI.getInventaire();
 
-    const totalVendu = ventesProduit.reduce(
-      (s, v) => s + v.quantite,
-      0
-    );
+        // ✅ GARANTIR UN TABLEAU
+        const inventaireArray = Array.isArray(data)
+          ? data
+          : data?.inventaire || data?.data || [];
 
-    const restant = totalAppro - totalVendu;
-
-    const totalVentes = ventesProduit.reduce(
-      (s, v) => s + v.quantite * v.prixVente,
-      0
-    );
-
-    const totalAchats = totalAppro * p.prixAchat;
-    const resultat = totalVentes - totalAchats;
-
-    return {
-      nom: p.nom,
-      totalAppro,
-      totalVendu,
-      restant,
-      nbReappro: p.reapprovisionnements.length,
-      totalVentes,
-      totalAchats,
-      resultat,
-      prixMin: p.prixMin,
-      seuilStock: p.seuilStock,
+        setProduits(inventaireArray);
+      } catch (err) {
+        console.error(err);
+        setError("Erreur lors du chargement de l’inventaire");
+      } finally {
+        setLoading(false);
+      }
     };
-  });
+
+    fetchInventaire();
+  }, []);
+
+  /* ================= CALCULS ================= */
+  const statsProduits = useMemo(() => {
+    if (!Array.isArray(produits)) return [];
+
+    return produits.map((p) => {
+      const totalAppro = Number(p.quantite_entree || 0);
+      const totalVendu = Number(p.quantite_vendue || 0);
+      const restant = totalAppro - totalVendu;
+
+      const prixMin = Number(p.prix_min || 0);
+      const prixAchat = Number(p.prix_achat || 0);
+
+      const totalVentes = totalVendu * prixMin;
+      const totalAchats = totalAppro * prixAchat;
+      const resultat = totalVentes - totalAchats;
+
+      return {
+        nom: p.nom || "—",
+        totalAppro,
+        totalVendu,
+        restant,
+        nbReappro: Number(p.nb_reappro || 0),
+        totalVentes,
+        totalAchats,
+        resultat,
+        prixMin,
+        seuilStock: Number(p.seuil_stock || 0),
+      };
+    });
+  }, [produits]);
 
   /* ================= TOTAUX ================= */
   const totalVentesGlobal = statsProduits.reduce(
@@ -136,91 +112,99 @@ export default function InventaireBoutique() {
     }
   });
 
-  ventesFiltrees.forEach((v) => {
-    const produit = produits.find((p) => p.id === v.produitId);
-    if (v.prixVente < produit.prixMin && v.vendeur === "vendeur") {
-      alertes.push({
-        type: "danger",
-        message: `Vente INTERDITE sous prix minimum (${produit.nom})`,
-      });
-    }
-    if (v.prixVente < produit.prixMin && v.vendeur === "responsable") {
-      alertes.push({
-        type: "info",
-        message: `Vente responsable sous prix minimum (${produit.nom})`,
-      });
-    }
+ const imprimerInventaire = () => {
+  if (!dateDebut || !dateFin) {
+    alert("Veuillez renseigner une date de début et de fin.");
+    return;
+  }
+
+  if (dateDebut > dateFin) {
+    alert("La date de début ne peut pas être supérieure à la date de fin.");
+    return;
+  }
+
+  const doc = new jsPDF();
+
+  /* ================= LOGO ENTREPRISE ================= */
+  const logoX = 14;
+  const logoY = 10;
+  const logoWidth = 180;
+  const logoHeight = 22;
+
+  // Fond dégradé simulé (violet)
+  doc.setFillColor(71, 46, 173); // #472EAD
+  doc.roundedRect(logoX, logoY, logoWidth, logoHeight, 3, 3, "F");
+
+  // Texte LPD
+  doc.setTextColor(245, 128, 32); // #F58020
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(26);
+  doc.text("LPD", logoX + logoWidth / 2, logoY + 13, {
+    align: "center",
   });
 
-  /* ================= IMPRESSION PDF ================= */
-  const imprimerInventaire = () => {
-    // ✅ VALIDATION
-    if (!dateDebut || !dateFin) {
-      alert("Veuillez renseigner une date de début et une date de fin.");
-      return;
-    }
+  // Slogan
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(9);
+  doc.text(
+    "LIBRAIRIE PAPETERIE DARADJI",
+    logoX + logoWidth / 2,
+    logoY + 19,
+    { align: "center" }
+  );
 
-    if (dateDebut > dateFin) {
-      alert("La date de début ne peut pas être supérieure à la date de fin.");
-      return;
-    }
+  /* ================= TITRE ================= */
+  let startY = logoY + logoHeight + 10;
 
-    const doc = new jsPDF();
-    let y = 20;
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(14);
+  doc.text("INVENTAIRE BOUTIQUE", 14, startY);
 
-    const periode = `${formatDate(dateDebut)} → ${formatDate(dateFin)}`;
+  doc.setFontSize(10);
+  doc.text(
+    `Période : ${formatDate(dateDebut)} → ${formatDate(dateFin)}`,
+    14,
+    startY + 6
+  );
 
-    doc.setFontSize(14);
-    doc.text("INVENTAIRE BOUTIQUE", 14, y);
-    y += 8;
-    doc.setFontSize(11);
-    doc.text(`Période : ${periode}`, 14, y);
-    y += 10;
+  /* ================= TABLE ================= */
+  autoTable(doc, {
+    startY: startY + 12,
+    head: [[
+      "Produit",
+      "Entrées",
+      "Vendus",
+      "Restant",
+      "Réappro",
+      "Total ventes",
+      "Résultat",
+    ]],
+    body: statsProduits.map((p) => [
+      p.nom,
+      p.totalAppro,
+      p.totalVendu,
+      p.restant,
+      p.nbReappro,
+      fcfa(p.totalVentes),
+      fcfa(p.resultat),
+    ]),
+  });
 
-    autoTable(doc, {
-      startY: y,
-      head: [[
-        "Produit",
-        "Entrées",
-        "Vendus",
-        "Restant",
-        "Réappro",
-        "Total ventes",
-        "Résultat",
-      ]],
-      body: statsProduits.map((p) => [
-        p.nom,
-        p.totalAppro,
-        p.totalVendu,
-        p.restant,
-        p.nbReappro,
-        fcfa(p.totalVentes),
-        fcfa(p.resultat),
-      ]),
-    });
+  doc.save("Inventaire_Boutique.pdf");
+};
 
-    y = doc.lastAutoTable.finalY + 10;
-
-    doc.text(`Total ventes : ${fcfa(totalVentesGlobal)}`, 14, y);
-    doc.text(`Total achats : ${fcfa(totalAchatsGlobal)}`, 14, y + 6);
-    doc.text(`Résultat global : ${fcfa(resultatGlobal)}`, 14, y + 12);
-
-    doc.save("Inventaire_Boutique.pdf");
-
-    setHistorique((h) => [
-      ...h,
-      {
-        date: new Date().toISOString(),
-        periode,
-        totalVentesGlobal,
-        resultatGlobal,
-      },
-    ]);
-  };
 
   /* ================= UI ================= */
+  if (loading) {
+    return <p className="p-6">Chargement de l’inventaire...</p>;
+  }
+
+  if (error) {
+    return <p className="p-6 text-red-600">{error}</p>;
+  }
+
   return (
-    <div className="p-6 space-y-8">
+    <div className="p-6 flex flex-col gap-8 min-h-screen overflow-x-auto">
       <h1 className="text-2xl font-bold text-indigo-700">
         Inventaire Boutique — Comptable
       </h1>
@@ -248,56 +232,58 @@ export default function InventaireBoutique() {
       </div>
 
       {/* ALERTES */}
-      <div className="space-y-2">
-        {alertes.map((a, i) => (
-          <div
-            key={i}
-            className={`p-3 rounded ${
-              a.type === "danger"
-                ? "bg-red-100 text-red-700"
-                : a.type === "warning"
-                ? "bg-yellow-100 text-yellow-700"
-                : "bg-blue-100 text-blue-700"
-            }`}
-          >
-            {a.message}
-          </div>
-        ))}
-      </div>
-
-      {/* TABLEAU */}
-      <table className="w-full border-collapse">
-        <thead className="bg-gray-100">
-          <tr>
-            <th className="p-2">Produit</th>
-            <th className="p-2">Entrées</th>
-            <th className="p-2">Vendus</th>
-            <th className="p-2">Restant</th>
-            <th className="p-2">Réappro</th>
-            <th className="p-2">Total ventes</th>
-            <th className="p-2">Résultat</th>
-          </tr>
-        </thead>
-        <tbody>
-          {statsProduits.map((p, i) => (
-            <tr key={i}>
-              <td className="p-2">{p.nom}</td>
-              <td className="p-2 text-center">{p.totalAppro}</td>
-              <td className="p-2 text-center">{p.totalVendu}</td>
-              <td className="p-2 text-center">{p.restant}</td>
-              <td className="p-2 text-center">{p.nbReappro}</td>
-              <td className="p-2 text-right">{fcfa(p.totalVentes)}</td>
-              <td
-                className={`p-2 text-right font-semibold ${
-                  p.resultat < 0 ? "text-red-600" : "text-green-600"
-                }`}
-              >
-                {fcfa(p.resultat)}
-              </td>
-            </tr>
+      {alertes.length > 0 && (
+        <div className="space-y-2">
+          {alertes.map((a, i) => (
+            <div
+              key={i}
+              className={`p-3 rounded ${
+                a.type === "danger"
+                  ? "bg-red-100 text-red-700"
+                  : "bg-yellow-100 text-yellow-700"
+              }`}
+            >
+              {a.message}
+            </div>
           ))}
-        </tbody>
-      </table>
+        </div>
+      )}
+
+      {/* TABLE */}
+      <div className="overflow-x-auto">
+        <table className="min-w-full border-collapse">
+          <thead className="bg-gray-100">
+            <tr>
+              <th className="p-2">Produit</th>
+              <th className="p-2">Entrées</th>
+              <th className="p-2">Vendus</th>
+              <th className="p-2">Restant</th>
+              <th className="p-2">Réappro</th>
+              <th className="p-2">Total ventes</th>
+              <th className="p-2">Résultat</th>
+            </tr>
+          </thead>
+          <tbody>
+            {statsProduits.map((p, i) => (
+              <tr key={i} className="border-t">
+                <td className="p-2">{p.nom}</td>
+                <td className="p-2 text-center">{p.totalAppro}</td>
+                <td className="p-2 text-center">{p.totalVendu}</td>
+                <td className="p-2 text-center">{p.restant}</td>
+                <td className="p-2 text-center">{p.nbReappro}</td>
+                <td className="p-2 text-right">{fcfa(p.totalVentes)}</td>
+                <td
+                  className={`p-2 text-right font-semibold ${
+                    p.resultat < 0 ? "text-red-600" : "text-green-600"
+                  }`}
+                >
+                  {fcfa(p.resultat)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
