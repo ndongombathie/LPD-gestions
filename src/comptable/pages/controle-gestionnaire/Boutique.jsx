@@ -1,19 +1,13 @@
 // ==========================================================
-// 🏪 Boutique.jsx — Contrôle Gestionnaire (PRO)
-// DESIGN SHADOW (SANS BORDURES)
+// 🏪 Boutique.jsx — Contrôle Gestionnaire / Comptable
 // ==========================================================
 
-import React, { useState, useMemo } from "react";
-import {
-  Search,
-  Printer,
-  AlertTriangle,
-  CheckCircle,
-} from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { Search, Printer, AlertTriangle, CheckCircle } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import boutiqueAPI from "@/services/api/boutique";
 
-// === 📊 GRAPHIQUE ===
 import {
   LineChart,
   Line,
@@ -25,108 +19,93 @@ import {
   Legend,
 } from "recharts";
 
-// ==========================================================
-// 📦 DONNÉES STOCK
-// ==========================================================
-const stockBoutique = [
-  {
-    id: 1,
-    produit: "Cahier 100 pages",
-    categorie: "Papeterie",
-    quantite: 14,
-    minStock: 10,
-    sorties: 36,
-    historiqueReappro: [
-      { date: "2025-02-01", avant: 5, ajout: 20 },
-      { date: "2025-02-10", avant: 25, ajout: 25 },
-    ],
-    date: "2025-02-16",
-  },
-  {
-    id: 2,
-    produit: "Bic Bleu",
-    categorie: "Papeterie",
-    quantite: 2,
-    minStock: 10,
-    sorties: 98,
-    historiqueReappro: [{ date: "2025-02-05", avant: 0, ajout: 50 }],
-    date: "2025-02-16",
-  },
-  {
-    id: 3,
-    produit: "Classeur A4",
-    categorie: "Bureau",
-    quantite: 0,
-    minStock: 5,
-    sorties: 20,
-    historiqueReappro: [],
-    date: "2025-02-15",
-  },
-];
-
-// ==========================================================
-// 🔧 ÉTAT STOCK
-// ==========================================================
+/* ================= ÉTAT STOCK ================= */
 const getEtat = (p) => {
   if (p.quantite === 0) return "rupture";
-  if (p.quantite <= p.minStock) return "faible";
+  if (p.quantite <= p.min_stock) return "faible";
   return "ok";
 };
 
-// ==========================================================
-// 📈 GRAPHIQUE ÉVOLUTION
-// ==========================================================
+/* ================= GRAPHIQUE ================= */
 function EvolutionStockGraph({ produit }) {
   if (!produit) return null;
 
-  const historique = produit.historiqueReappro.map((h) => ({
-    date: h.date,
-    entrees: h.ajout,
-    sorties: 0,
-    stock: h.avant + h.ajout,
-  }));
-
-  historique.push({
-    date: "Sorties",
-    entrees: 0,
-    sorties: produit.sorties,
-    stock: produit.quantite,
-  });
+  const data = [
+    {
+      date: "Actuel",
+      entrees: produit.entrees,
+      sorties: produit.sorties,
+      stock: produit.quantite,
+    },
+  ];
 
   return (
-    <div className="bg-white rounded-2xl shadow-md p-5 mt-6">
+    <div className="bg-white rounded-2xl shadow-md p-5">
       <h2 className="text-sm font-semibold text-[#472EAD] mb-4">
         Évolution du stock — {produit.produit}
       </h2>
 
-      <ResponsiveContainer width="100%" height={280}>
-        <LineChart data={historique}>
+      <ResponsiveContainer width="100%" height={260}>
+        <LineChart data={data}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="date" />
           <YAxis />
           <Tooltip />
           <Legend />
-          <Line dataKey="entrees" stroke="#22c55e" strokeWidth={3} name="Entrées" />
-          <Line dataKey="sorties" stroke="#ef4444" strokeWidth={3} name="Sorties" />
-          <Line dataKey="stock" stroke="#472EAD" strokeWidth={3} name="Stock restant" />
+          <Line dataKey="entrees" stroke="#22c55e" strokeWidth={3} />
+          <Line dataKey="sorties" stroke="#ef4444" strokeWidth={3} />
+          <Line dataKey="stock" stroke="#472EAD" strokeWidth={3} />
         </LineChart>
       </ResponsiveContainer>
     </div>
   );
 }
 
-// ==========================================================
-// 📌 PAGE
-// ==========================================================
+/* ================= PAGE ================= */
 export default function Boutique() {
+  const [produits, setProduits] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [dateDebut, setDateDebut] = useState("");
   const [dateFin, setDateFin] = useState("");
   const [selectedProduitId, setSelectedProduitId] = useState("");
 
-  // ==========================================================
-  // 🔍 FILTRAGE
-  // ==========================================================
+  /* ================= FETCH API ================= */
+  useEffect(() => {
+    const fetchProduits = async () => {
+      try {
+        setLoading(true);
+        const response = await boutiqueAPI.getProduitsControle();
+
+        // ✅ Sécurité absolue
+        setProduits(Array.isArray(response?.data) ? response.data : []);
+      } catch (err) {
+        setError("Erreur lors du chargement des produits boutique");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProduits();
+  }, []);
+
+  /* ================= NORMALISATION ================= */
+  const stockBoutique = useMemo(() => {
+    return produits.map((p) => ({
+      id: p.id,
+      produit: p.nom,
+      categorie: p.categorie || "-",
+      quantite: p.quantite,
+      min_stock: p.seuil_stock,
+      entrees: p.entrees || 0,
+      sorties: p.sorties || 0,
+      date: p.updated_at?.slice(0, 10),
+    }));
+  }, [produits]);
+
+  /* ================= FILTRAGE ================= */
   const filteredData = useMemo(() => {
     let data = [...stockBoutique];
 
@@ -143,40 +122,81 @@ export default function Boutique() {
     if (dateFin) data = data.filter((p) => p.date <= dateFin);
 
     return data;
-  }, [searchTerm, dateDebut, dateFin]);
+  }, [stockBoutique, searchTerm, dateDebut, dateFin]);
 
-  // ==========================================================
-  // 🖨 PDF
-  // ==========================================================
+  /* ================= PDF ================= */
   const imprimerPDF = () => {
     const doc = new jsPDF();
-    doc.text("Stock Boutique — Rapport LPD", 14, 16);
 
+    // Date & heure impression
+    const now = new Date();
+    const dateImpression = now.toLocaleDateString("fr-FR");
+    const heureImpression = now.toLocaleTimeString("fr-FR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    /* ===== En-tête ===== */
+    doc.setFillColor(71, 46, 173);
+    doc.roundedRect(14, 10, 180, 24, 3, 3, "F");
+
+    doc.setTextColor(245, 128, 32);
+    doc.setFontSize(26);
+    doc.setFont("helvetica", "bold");
+    doc.text("LPD", 105, 26, { align: "center" });
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(10);
+    doc.text("LIBRAIRIE PAPETERIE DARADJI", 105, 32, { align: "center" });
+
+    /* ===== Infos impression ===== */
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+
+    doc.text(`Date d'impression : ${dateImpression} à ${heureImpression}`, 14, 42);
+
+    if (dateDebut || dateFin) {
+      doc.text(
+        `Période filtrée : ${dateDebut || "..."} → ${dateFin || "..."}`,
+        14,
+        47
+      );
+    } else {
+      doc.text("Période filtrée : Toutes les dates", 14, 47);
+    }
+
+    /* ===== Tableau ===== */
     autoTable(doc, {
-      startY: 26,
-      head: [["Produit", "Stock", "Entrées", "Sorties", "Réappro (nb)", "Dernier"]],
-      body: filteredData.map((p) => {
-        const totalReappro = p.historiqueReappro.reduce((s, h) => s + h.ajout, 0);
-        const nbReappro = p.historiqueReappro.length;
-        const dernier = nbReappro ? p.historiqueReappro[nbReappro - 1].date : "-";
-        return [p.produit, p.quantite, totalReappro, p.sorties, nbReappro, dernier];
-      }),
+      startY: 55,
+      head: [["Produit", "Stock", "Entrées", "Sorties", "Seuil"]],
+      body: filteredData.map((p) => [
+        p.produit,
+        p.quantite,
+        p.entrees,
+        p.sorties,
+        p.min_stock,
+      ]),
       headStyles: { fillColor: [71, 46, 173] },
+      styles: { fontSize: 9 },
     });
 
     doc.save("Stock_Boutique_LPD.pdf");
   };
 
-  return (
-    <div className="space-y-8">
+  /* ================= UI ================= */
+  if (loading) return <p>Chargement…</p>;
+  if (error) return <p className="text-red-600">{error}</p>;
 
+  return (
+    <div className="flex flex-col gap-8">
       {/* TITRE */}
       <div>
         <h1 className="text-xl font-semibold text-[#472EAD]">
           Contrôle Gestionnaire — Boutique
         </h1>
         <p className="text-sm text-gray-500">
-          Suivi du stock, réapprovisionnements et évolution
+          Suivi du stock et état des produits
         </p>
       </div>
 
@@ -185,7 +205,7 @@ export default function Boutique() {
         <div className="flex items-center gap-2 flex-1">
           <Search size={18} className="text-[#472EAD]" />
           <input
-            className="w-full px-3 py-2 rounded-lg bg-gray-50 text-sm focus:ring-2 focus:ring-[#472EAD]/30"
+            className="w-full px-3 py-2 rounded-lg bg-gray-50 text-sm"
             placeholder="Rechercher produit ou catégorie…"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -199,27 +219,18 @@ export default function Boutique() {
         >
           <option value="">Tous les produits</option>
           {stockBoutique.map((p) => (
-            <option key={p.id} value={p.id}>{p.produit}</option>
+            <option key={p.id} value={p.id}>
+              {p.produit}
+            </option>
           ))}
         </select>
 
-        <input
-          type="date"
-          value={dateDebut}
-          onChange={(e) => setDateDebut(e.target.value)}
-          className="px-3 py-2 rounded-lg bg-gray-50 text-sm"
-        />
-
-        <input
-          type="date"
-          value={dateFin}
-          onChange={(e) => setDateFin(e.target.value)}
-          className="px-3 py-2 rounded-lg bg-gray-50 text-sm"
-        />
+        <input type="date" value={dateDebut} onChange={(e) => setDateDebut(e.target.value)} />
+        <input type="date" value={dateFin} onChange={(e) => setDateFin(e.target.value)} />
 
         <button
           onClick={imprimerPDF}
-          className="ml-auto px-4 py-2 bg-[#472EAD] text-white rounded-xl shadow hover:shadow-lg"
+          className="ml-auto px-4 py-2 bg-[#472EAD] text-white rounded-xl shadow flex items-center gap-2"
         >
           <Printer size={16} /> Imprimer
         </button>
@@ -228,31 +239,29 @@ export default function Boutique() {
       {/* TABLE */}
       <div className="bg-white rounded-2xl shadow-md p-4 overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="text-[#472EAD] bg-[#F5F3FF]">
+          <thead className="bg-[#F5F3FF] text-[#472EAD]">
             <tr>
-              <th className="px-3 py-2 text-left">Produit</th>
-              <th className="px-3 py-2 text-center">État</th>
-              <th className="px-3 py-2 text-center">Stock</th>
-              <th className="px-3 py-2 text-center">Entrées</th>
-              <th className="px-3 py-2 text-center">Sorties</th>
+              <th>Produit</th>
+              <th>État</th>
+              <th>Stock</th>
+              <th>Entrées</th>
+              <th>Sorties</th>
             </tr>
           </thead>
           <tbody>
             {filteredData.map((p) => {
               const etat = getEtat(p);
-              const totalReappro = p.historiqueReappro.reduce((s, h) => s + h.ajout, 0);
-
               return (
-                <tr key={p.id} className="hover:bg-gray-50">
-                  <td className="px-3 py-2">{p.produit}</td>
-                  <td className="px-3 py-2 text-center">
-                    {etat === "rupture" && <span className="text-red-600 flex justify-center gap-1"><AlertTriangle size={14}/>Rupture</span>}
+                <tr key={p.id}>
+                  <td>{p.produit}</td>
+                  <td className="text-center">
+                    {etat === "rupture" && <span className="text-red-600">Rupture</span>}
                     {etat === "faible" && <span className="text-orange-500">Stock faible</span>}
-                    {etat === "ok" && <span className="text-emerald-600 flex justify-center gap-1"><CheckCircle size={14}/>OK</span>}
+                    {etat === "ok" && <span className="text-emerald-600">OK</span>}
                   </td>
-                  <td className="px-3 py-2 text-center">{p.quantite}</td>
-                  <td className="px-3 py-2 text-center">{totalReappro}</td>
-                  <td className="px-3 py-2 text-center">{p.sorties}</td>
+                  <td className="text-center">{p.quantite}</td>
+                  <td className="text-center">{p.entrees}</td>
+                  <td className="text-center">{p.sorties}</td>
                 </tr>
               );
             })}
@@ -260,7 +269,6 @@ export default function Boutique() {
         </table>
       </div>
 
-      {/* GRAPHIQUE */}
       {selectedProduitId && (
         <EvolutionStockGraph
           produit={stockBoutique.find((p) => p.id === Number(selectedProduitId))}
