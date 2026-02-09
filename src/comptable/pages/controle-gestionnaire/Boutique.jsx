@@ -93,17 +93,23 @@ export default function Boutique() {
 
   /* ================= NORMALISATION ================= */
   const stockBoutique = useMemo(() => {
-    return produits.map((p) => ({
-      id: p.id,
-      produit: p.nom,
-      categorie: p.categorie || "-",
-      quantite: p.quantite,
-      min_stock: p.seuil_stock,
-      entrees: p.entrees || 0,
-      sorties: p.sorties || 0,
-      date: p.updated_at?.slice(0, 10),
-    }));
-  }, [produits]);
+  return produits.map((p) => ({
+    id: p.id,
+    produit:
+      p.nom ??
+      p.produit?.nom ??
+      p.produits?.nom ??
+      p.libelle ??
+      "—",
+    categorie: p.categorie?.nom ?? "-",
+    quantite: p.quantite ?? 0,
+    min_stock: p.seuil_stock ?? 0,
+    entrees: p.entrees ?? p.total_entrees ?? 0,
+    sorties: p.sorties ?? p.total_sorties ?? 0,
+    date: p.updated_at?.slice(0, 10),
+  }));
+}, [produits]);
+
 
   /* ================= FILTRAGE ================= */
   const filteredData = useMemo(() => {
