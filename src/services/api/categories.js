@@ -3,56 +3,64 @@ import httpClient from '../http/client';
 const BASE = '/categories';
 
 export const categoriesAPI = {
-
-  /**
-   * Liste des catégories
-   */
   getAll: async () => {
     try {
       const response = await httpClient.get(BASE);
       return response.data;
     } catch (error) {
-      console.error('❌ Erreur getAll categories', error);
+      console.error('❌ Erreur getAll categories:', error);
       throw error;
     }
   },
 
-  /**
-   * Créer une catégorie
-   */
   create: async (data) => {
     try {
-      const response = await httpClient.post(BASE, data);
+      const payload = {
+        nom: data.nom || data.name
+      };
+      
+      const response = await httpClient.post(BASE, payload);
       return response.data;
     } catch (error) {
-      console.error('❌ Erreur création catégorie', error.response?.data || error);
+      console.error('❌ Erreur création catégorie:', error.response?.data || error);
       throw error;
     }
   },
 
-  /**
-   * Modifier une catégorie
-   */
   update: async (id, data) => {
     try {
-      const response = await httpClient.put(`${BASE}/${id}`, data);
+      const payload = {
+        nom: data.nom || data.name
+      };
+      
+      const response = await httpClient.put(`${BASE}/${id}`, payload);
       return response.data;
     } catch (error) {
-      console.error('❌ Erreur modification catégorie', error.response?.data || error);
+      console.error('❌ Erreur modification catégorie:', error.response?.data || error);
       throw error;
     }
   },
 
-  /**
-   * Supprimer une catégorie
-   */
+  // SUPPRESSION FORCÉE POUR LES CATÉGORIES AUSSI
   delete: async (id) => {
     try {
-      const response = await httpClient.delete(`${BASE}/${id}`);
+      const response = await httpClient.delete(`${BASE}/${id}`, {
+        params: { force: true }
+      });
       return response.data;
     } catch (error) {
-      console.error('❌ Erreur suppression catégorie', error.response?.data || error);
+      console.error('❌ Erreur suppression catégorie:', error.response?.data || error);
       throw error;
     }
   },
+
+  getById: async (id) => {
+    try {
+      const response = await httpClient.get(`${BASE}/${id}`);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erreur getById catégorie:', error);
+      throw error;
+    }
+  }
 };

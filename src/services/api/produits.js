@@ -3,14 +3,10 @@ import httpClient from '../http/client';
 const BASE = '/produits';
 
 export const produitsAPI = {
-
   // =====================
   // PRODUITS (CRUD)
   // =====================
 
-  /**
-   * Récupérer la liste des produits (pagination Laravel)
-   */
   getAll: async (params = {}) => {
     try {
       const response = await httpClient.get(BASE, { params });
@@ -21,9 +17,6 @@ export const produitsAPI = {
     }
   },
 
-  /**
-   * Récupérer un produit précis
-   */
   getById: async (id) => {
     try {
       const response = await httpClient.get(`${BASE}/${id}`);
@@ -34,41 +27,64 @@ export const produitsAPI = {
     }
   },
 
-  /**
-   * Créer un nouveau produit
-   */
   create: async (data) => {
     try {
-      const response = await httpClient.post(BASE, data);
+      console.log('📤 Envoi création produit:', data);
+      
+      const formattedData = {
+        nom: data.nom || data.name,
+        code: data.code || data.code_barre || '',
+        categorie_id: data.categorie_id || data.categoryId,
+        fournisseur_id: data.fournisseur_id || null,
+        nombre_carton: parseInt(data.nombre_carton || data.cartons || 0),
+        unite_carton: String(data.unite_carton || data.unitsPerCarton || "1"), // FORCÉ EN STRING
+        prix_unite_carton: parseFloat(data.prix_unite_carton || data.pricePerCarton || 0),
+        stock_seuil: parseInt(data.stock_seuil || data.stockMin || 5),
+        stock_ideal: parseInt(data.stock_ideal || data.stockIdeal || 20)
+      };
+
+      const response = await httpClient.post(BASE, formattedData);
       return response.data;
     } catch (error) {
-      console.error('❌ Erreur création produit', error.response?.data || error);
+      console.error('❌ Erreur création produit:', error.response?.data || error);
       throw error;
     }
   },
 
-  /**
-   * Modifier un produit existant
-   */
   update: async (id, data) => {
     try {
-      const response = await httpClient.put(`${BASE}/${id}`, data);
+      console.log('📤 Envoi modification produit:', id, data);
+      
+      const formattedData = {
+        nom: data.nom || data.name,
+        code: data.code || data.code_barre || '',
+        categorie_id: data.categorie_id || data.categoryId,
+        fournisseur_id: data.fournisseur_id || null,
+        nombre_carton: parseInt(data.nombre_carton || data.cartons || 0),
+        unite_carton: String(data.unite_carton || data.unitsPerCarton || "1"), // FORCÉ EN STRING
+        prix_unite_carton: parseFloat(data.prix_unite_carton || data.pricePerCarton || 0),
+        stock_seuil: parseInt(data.stock_seuil || data.stockMin || 5),
+        stock_ideal: parseInt(data.stock_ideal || data.stockIdeal || 20)
+      };
+
+      const response = await httpClient.put(`${BASE}/${id}`, formattedData);
       return response.data;
     } catch (error) {
-      console.error('❌ Erreur modification produit', error.response?.data || error);
+      console.error('❌ Erreur modification produit:', error.response?.data || error);
       throw error;
     }
   },
 
-  /**
-   * Supprimer un produit
-   */
+  // SUPPRESSION FORCÉE SANS CONTRRAINTE
   delete: async (id) => {
     try {
-      const response = await httpClient.delete(`${BASE}/${id}`);
+      console.log('🗑️ Suppression produit (forcée):', id);
+      const response = await httpClient.delete(`${BASE}/${id}`, {
+        params: { force: true }
+      });
       return response.data;
     } catch (error) {
-      console.error('❌ Erreur suppression produit', error.response?.data || error);
+      console.error('❌ Erreur suppression produit:', error.response?.data || error);
       throw error;
     }
   },
@@ -77,68 +93,63 @@ export const produitsAPI = {
   // STOCK
   // =====================
 
-  /**
-   * Produits en rupture de stock
-   */
+  reapprovisionner: async (produitId, quantite) => {
+    try {
+      const response = await httpClient.post(`${BASE}/${produitId}/reapprovisionner`, {
+        quantite: quantite
+      });
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erreur réapprovisionnement:', error.response?.data || error);
+      
+      // Fallback: mettre à jour directement le stock
+      if (error.response?.status === 404 || error.response?.status === 405) {
+        const produit = await produitsAPI.getById(produitId);
+        const nouveauStock = (produit.nombre_carton || 0) + quantite;
+        
+        return await produitsAPI.update(produitId, {
+          ...produit,
+          nombre_carton: nouveauStock
+        });
+      }
+      throw error;
+    }
+  },
+
+  diminuerStock: async (produitId, quantite) => {
+    try {
+      const response = await httpClient.post(`${BASE}/${produitId}/diminuer`, {
+        quantite: quantite
+      });
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erreur diminution stock:', error.response?.data || error);
+      
+      // Fallback: mettre à jour directement le stock
+      if (error.response?.status === 404 || error.response?.status === 405) {
+        const produit = await produitsAPI.getById(produitId);
+        const nouveauStock = Math.max(0, (produit.nombre_carton || 0) - quantite);
+        
+        return await produitsAPI.update(produitId, {
+          ...produit,
+          nombre_carton: nouveauStock
+        });
+      }
+      throw error;
+    }
+  },
+
+  // =====================
+  // AUTRES FONCTIONS
+  // =====================
+
   getProduitsEnRupture: async () => {
     try {
-      const response = await httpClient.get('/produits_en_rupture');
+      const response = await httpClient.get(`${BASE}/en-rupture`);
       return response.data;
     } catch (error) {
       console.error('❌ Erreur produits en rupture', error);
       throw error;
     }
-  },
-
-  /**
-   * Réapprovisionner un produit
-   * (appelé depuis un bouton, le produit est déjà connu)
-   */
-  reapprovisionner: async ({ produit_id, quantite }) => {
-    try {
-      const response = await httpClient.post('/stocks/reapprovisionner', {
-        produit_id,
-        quantite,
-      });
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erreur réapprovisionnement', error.response?.data || error);
-      throw error;
-    }
-  },
-
-  /**
-   * Diminuer le stock d’un produit
-   * (endpoint à venir côté backend)
-   */
-  diminuerStock: async ({ produit_id, quantite, raison }) => {
-    try {
-      const response = await httpClient.post('/stocks/diminuer', {
-        produit_id,
-        quantite,
-        raison,
-      });
-      return response.data;
-    } catch (error) {
-      console.error('❌ Endpoint diminuer non disponible ou erreur', error);
-      throw error;
-    }
-  },
-
-  /**
-   * Transférer du stock vers une boutique
-   */
-  transferer: async ({ produit_id, quantite, boutique_id }) => {
-    try {
-      const response = await httpClient.post('/stocks/transfer', {
-        produit_id,
-        quantite,
-        boutique_id,
-      });
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erreur transfert stock', error.response?.data || error);
-      throw error;
-    }
-  },
+  }
 };
