@@ -37,15 +37,6 @@
 | **DELETE** | `/api/uilisateurs/{uilisateur}` | Supprime un utilisateur |
 
 
-## 6️⃣ Fournisseurs — CRUD complet
-
-| Méthode | Endpoint | Description |
-|----------|-----------|-------------|
-| **GET** | `/api/fournisseurs` | Liste des fournisseurs |
-| **POST** | `/api/fournisseurs` | Ajoute un nouveau fournisseur |
-| **GET** | `/api/fournisseurs/{fournisseur}` | Détails d’un fournisseur |
-| **PUT** | `/api/fournisseurs/{fournisseur}` | Met à jour un fournisseur |
-| **DELETE** | `/api/fournisseurs/{fournisseur}` | Supprime un fournisseur |
 
 # Endpoint pour l'inventaire du boutique
 GET|HEAD        api/inventaires-boutique | affiche l'inventaire des produits du boutique
@@ -72,3 +63,9 @@ GET          api/mouvements-stock/inventaire-depot
 
 # les journals caissier 
 GET         api/paiements-rapport-journalier
+
+# controle vendeur 
+GET     api/commandes-payees
+
+# Enregistrer inventaire de depot
+POST    api/enregistrer-inventaire-depot | en donnant les deux intevalle de dates
