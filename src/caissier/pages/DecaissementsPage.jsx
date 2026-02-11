@@ -121,6 +121,20 @@ const DecaissementsPage = () => {
       // Appel API pour valider le décaissement
       await caissierApi.validerDecaissement(selectedDecaissement.id, { methode_paiement: compteChoisi });
 
+      const currentUserStr = sessionStorage.getItem('user') || sessionStorage.getItem('lpd_current_user');
+      let currentUser = null;
+      try {
+        currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
+      } catch (_e) {
+        currentUser = null;
+      }
+      const decaissementForPrint = {
+        ...selectedDecaissement,
+        statut: 'fait',
+        fait_par: currentUser ? `${currentUser.prenom || ''} ${currentUser.nom || ''}`.trim() : (selectedDecaissement.fait_par || 'N/A'),
+        fait_le: new Date().toISOString(),
+      };
+
       toast.success('Décaissement validé', {
         description: `Décaissement de ${formatCurrency(selectedDecaissement.montant)} effectué avec succès`,
         action: {
@@ -129,22 +143,7 @@ const DecaissementsPage = () => {
         }
       });
 
-      // Fermer le modal immédiatement
       setIsValidationModalOpen(false);
-      const currentUserStr = sessionStorage.getItem('user') || sessionStorage.getItem('lpd_current_user');
-      let currentUser = null;
-      try {
-        currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
-      } catch (_e) {
-        currentUser = null;
-      }
-
-      const decaissementForPrint = {
-        ...selectedDecaissement,
-        statut: 'fait',
-        fait_par: currentUser ? `${currentUser.prenom || ''} ${currentUser.nom || ''}`.trim() : (selectedDecaissement.fait_par || 'N/A'),
-        fait_le: new Date().toISOString(),
-      };
       setSelectedDecaissement(null);
 
       // Recharger les décaissements (WebSocket le fera automatiquement si configuré)
@@ -204,7 +203,7 @@ const DecaissementsPage = () => {
   }, [decaissementsEnAttente.length]);
 
   return (
-    <div className="space-y-6 relative z-10">
+    <div className="space-y-8 relative z-10">
       {/* En-tête */}
       <div className="flex items-center justify-between">
         <div>
@@ -219,7 +218,7 @@ const DecaissementsPage = () => {
 
       {/* Statistiques */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card className="border-l-4 border-l-[#F58020] hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
+        <Card className="bg-white border-l-4 border-l-[#F58020] hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">En attente</p>
@@ -234,7 +233,7 @@ const DecaissementsPage = () => {
             </div>
           </div>
         </Card>
-        <Card className="border-l-4 border-l-red-500 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
+        <Card className="bg-white border-l-4 border-l-red-500 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Total en attente</p>
@@ -252,7 +251,7 @@ const DecaissementsPage = () => {
       </div>
 
       {/* Liste des décaissements en attente */}
-      <Card>
+      <Card className="bg-white">
         <CardHeader
           title="Décaissements en attente"
           subtitle={`${decaissementsEnAttente.length} décaissement(s) à valider`}
@@ -269,7 +268,7 @@ const DecaissementsPage = () => {
           <div className="overflow-x-auto">
             {totalPages > 1 && (
               <div className="flex items-center justify-between gap-3 py-2 px-4">
-                <p className="text-xs text-gray-500">
+                <p className="text-sm text-gray-600">
                   Page {currentPage} / {totalPages}
                 </p>
                 <div className="flex items-center gap-2">
@@ -278,7 +277,7 @@ const DecaissementsPage = () => {
                     size="sm"
                     onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
-                    className="border border-gray-300 font-semibold hover:bg-gray-100 disabled:opacity-50"
+                    className="bg-white border border-gray-300 text-gray-900 font-semibold hover:bg-gray-100 disabled:opacity-50"
                   >
                     Précédent
                   </Button>
@@ -287,7 +286,7 @@ const DecaissementsPage = () => {
                     size="sm"
                     onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                     disabled={currentPage === totalPages}
-                    className="border border-gray-300 font-semibold hover:bg-gray-100 disabled:opacity-50"
+                    className="bg-white border border-gray-300 text-gray-900 font-semibold hover:bg-gray-100 disabled:opacity-50"
                   >
                     Suivant
                   </Button>
@@ -297,19 +296,19 @@ const DecaissementsPage = () => {
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-5 py-4 text-left text-sm font-medium text-gray-600 uppercase tracking-wider">
                     Date de création
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-5 py-4 text-left text-sm font-medium text-gray-600 uppercase tracking-wider">
                     Motif
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-5 py-4 text-left text-sm font-medium text-gray-600 uppercase tracking-wider">
                     Créé par
                   </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-5 py-4 text-right text-sm font-medium text-gray-600 uppercase tracking-wider">
                     Montant
                   </th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-5 py-4 text-center text-sm font-medium text-gray-600 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
@@ -320,16 +319,16 @@ const DecaissementsPage = () => {
                     key={dec.id} 
                     className="hover:bg-gray-50"
                   >
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                    <td className="px-5 py-4 whitespace-nowrap text-sm text-gray-600">
                       {formatDateTime(dec.created_at)}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 font-medium">
+                    <td className="px-5 py-4 text-sm text-gray-900 font-medium">
                       {dec.motif}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                    <td className="px-5 py-4 whitespace-nowrap text-sm text-gray-600">
                       {dec.cree_par}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-semibold text-red-600">
+                    <td className="px-5 py-4 whitespace-nowrap text-sm text-right font-semibold text-red-600">
                       {formatCurrency(dec.montant)}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-center" onClick={(e) => e.stopPropagation()}>

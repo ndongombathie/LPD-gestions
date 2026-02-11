@@ -131,7 +131,7 @@ const HistoriquePage = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-14">
       {/* En-tête */}
       <div className="flex items-center justify-between">
         <div>
@@ -145,7 +145,7 @@ const HistoriquePage = () => {
       </div>
 
       {/* Filtres */}
-      <Card>
+      <Card className="bg-white">
         <CardHeader title="Filtres de recherche" />
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Select
@@ -181,8 +181,8 @@ const HistoriquePage = () => {
       </Card>
 
       {/* Statistiques */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="border-l-4 border-l-green-500">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-2">
+        <Card className="border-l-4 border-l-green-500 bg-white">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Total encaissements</p>
@@ -197,14 +197,14 @@ const HistoriquePage = () => {
                 {filteredHistorique.filter(item => item.type === 'encaissement').length} opération(s)
               </p>
             </div>
-            <div className="w-12 h-12 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center">
-              <svg className="w-6 h-6 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+              <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
               </svg>
             </div>
           </div>
         </Card>
-        <Card className="border-l-4 border-l-red-500">
+        <Card className="border-l-4 border-l-red-500 bg-white">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Total décaissements</p>
@@ -219,14 +219,14 @@ const HistoriquePage = () => {
                 {filteredHistorique.filter(item => item.type === 'decaissement').length} opération(s)
               </p>
             </div>
-            <div className="w-12 h-12 bg-red-100 dark:bg-red-900 rounded-full flex items-center justify-center">
-              <svg className="w-6 h-6 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+              <svg className="w-6 h-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
               </svg>
             </div>
           </div>
         </Card>
-        <Card className="border-l-4 border-l-[#472EAD]">
+        <Card className="border-l-4 border-l-[#472EAD] bg-white">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Solde net</p>
@@ -241,8 +241,8 @@ const HistoriquePage = () => {
                 )}
               </p>
             </div>
-            <div className="w-12 h-12 bg-[#F7F5FF] dark:bg-primary-900 rounded-full flex items-center justify-center">
-              <svg className="w-6 h-6 text-[#472EAD] dark:text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="w-12 h-12 bg-[#F7F5FF] rounded-full flex items-center justify-center">
+              <svg className="w-6 h-6 text-[#472EAD]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
             </div>
@@ -251,7 +251,8 @@ const HistoriquePage = () => {
       </div>
 
       {/* Liste de l'historique */}
-      <Card>
+      <div className="pt-2">
+      <Card className="bg-white">
         <CardHeader
           title="Historique des opérations"
           subtitle={`${filteredHistorique.length} opération(s) trouvée(s)`}
@@ -266,66 +267,74 @@ const HistoriquePage = () => {
             <p className="text-gray-500">Aucune opération trouvée</p>
           </div>
         ) : (
-          <div className="space-y-2">
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between gap-3 py-2">
-                <p className="text-xs text-gray-500">
+          <div className="space-y-4">
+            {/* Barre de pagination */}
+            <div className="flex flex-wrap items-center justify-between gap-3 py-3 px-4 bg-gray-50 rounded-lg border border-gray-200">
+              <p className="text-sm text-gray-600">
+                Affichage{' '}
+                <span className="font-medium text-gray-900">
+                  {(currentPage - 1) * PAGE_SIZE + 1}-{Math.min(currentPage * PAGE_SIZE, filteredHistorique.length)}
+                </span>
+                {' '}sur{' '}
+                <span className="font-medium text-gray-900">{filteredHistorique.length}</span>
+                {' '}opération(s)
+              </p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="bg-white border border-gray-300 text-gray-900 font-semibold hover:bg-gray-100 disabled:opacity-50"
+                >
+                  Précédent
+                </Button>
+                <span className="text-sm text-gray-600 px-2">
                   Page {currentPage} / {totalPages}
-                </p>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                    className="border border-gray-300 font-semibold hover:bg-gray-100 disabled:opacity-50"
-                  >
-                    Précédent
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={currentPage === totalPages}
-                    className="border border-gray-300 font-semibold hover:bg-gray-100 disabled:opacity-50"
-                  >
-                    Suivant
-                  </Button>
-                </div>
+                </span>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="bg-white border border-gray-300 text-gray-900 font-semibold hover:bg-gray-100 disabled:opacity-50"
+                >
+                  Suivant
+                </Button>
               </div>
-            )}
+            </div>
 
             {paginatedHistorique.map((item) => (
               <div
                 key={item.id}
-                className={`border-l-4 rounded-lg p-3 hover:shadow-md transition-all ${
+                className={`border-l-4 rounded-lg p-4 hover:shadow-md transition-all bg-white ${
                   item.type === 'encaissement'
-                    ? 'border-l-green-500 bg-gradient-to-r from-green-50 to-white dark:from-green-900/20 dark:to-gray-800'
-                    : 'border-l-red-500 bg-gradient-to-r from-red-50 to-white dark:from-red-900/20 dark:to-gray-800'
+                    ? 'border-l-green-500 bg-gradient-to-r from-green-50 to-white'
+                    : 'border-l-red-500 bg-gradient-to-r from-red-50 to-white'
                 }`}
               >
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-2">
                       <Badge
                         variant={
                           item.type === 'encaissement' ? 'success' : 
                           item.type === 'annulation' ? 'warning' : 
                           'danger'
                         }
-                        className="text-xs"
+                        className="text-sm"
                       >
                         {item.type === 'encaissement' ? 'Encaissement' : 
                          item.type === 'annulation' ? 'Annulation' : 
                          'Décaissement'}
                       </Badge>
-                      <span className="text-xs text-gray-500">
+                      <span className="text-sm text-gray-600">
                         {formatDateTime(item.created_at)}
                       </span>
                     </div>
 
                     {item.type === 'encaissement' && item.commande ? (
-                      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
                         <div className="min-w-0">
                           <span className="text-gray-500">Ticket:</span>
                           <p className="font-semibold text-gray-900 truncate">
@@ -354,13 +363,13 @@ const HistoriquePage = () => {
                         </div>
                         <div className="min-w-0">
                           <span className="text-gray-500">Total commande:</span>
-                          <p className="font-medium text-gray-600 text-xs">
+                          <p className="font-medium text-gray-600 text-sm">
                             {formatCurrency(item.commande.total || 0)}
                           </p>
                         </div>
                       </div>
                     ) : item.type === 'decaissement' && item.decaissement ? (
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
                         <div>
                           <span className="text-gray-500">Montant:</span>
                           <p className="font-bold text-red-600">
@@ -375,7 +384,7 @@ const HistoriquePage = () => {
                         </div>
                       </div>
                     ) : item.type === 'annulation' && item.commande ? (
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                         <div className="min-w-0">
                           <span className="text-gray-500">Ticket:</span>
                           <p className="font-semibold text-gray-900 truncate">
@@ -441,9 +450,39 @@ const HistoriquePage = () => {
                 </div>
               </div>
             ))}
+
+            {/* Pagination en bas de liste (si plusieurs pages) */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between gap-3 py-3 px-3 mt-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Page {currentPage} / {totalPages}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="border border-gray-300 font-semibold hover:bg-gray-100 disabled:opacity-50"
+                  >
+                    Précédent
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="border border-gray-300 font-semibold hover:bg-gray-100 disabled:opacity-50"
+                  >
+                    Suivant
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </Card>
+      </div>
     </div>
   );
 };

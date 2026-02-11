@@ -435,7 +435,7 @@ const CaissePage = () => {
   };
 
   return (
-    <div className="space-y-6 relative z-10">
+    <div className="space-y-8 relative z-10">
       {/* En-tête */}
       <div className="flex items-center justify-between">
         <div>
@@ -460,7 +460,7 @@ const CaissePage = () => {
 
       {/* Statistiques */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="border-l-4 border-l-[#F58020] hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
+        <Card className="bg-white border-l-4 border-l-[#F58020] hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Tickets en attente</p>
@@ -475,7 +475,7 @@ const CaissePage = () => {
             </div>
           </div>
         </Card>
-        <Card className="border-l-4 border-l-[#472EAD] hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
+        <Card className="bg-white border-l-4 border-l-[#472EAD] hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Total en attente</p>
@@ -490,7 +490,7 @@ const CaissePage = () => {
             </div>
           </div>
         </Card>
-        <Card className="border-l-4 border-l-green-500 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
+        <Card className="bg-white border-l-4 border-l-green-500 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Tickets traités</p>
@@ -508,7 +508,7 @@ const CaissePage = () => {
       </div>
 
       {/* Tickets en attente */}
-      <Card>
+      <Card className="bg-white">
         <CardHeader
           title="Tickets en attente d'encaissement"
           subtitle={`${filteredPendingTickets.length} ticket(s) trouvé(s) sur ${pendingTickets.length} total`}
