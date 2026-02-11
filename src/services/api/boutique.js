@@ -1,13 +1,6 @@
 /**
  * 🏪 Boutique – Contrôle des produits
- *
- * Endpoint:
- * GET api/produits-controle-boutique
- *
- * Rôle:
- * - Lister les produits du boutique
- * - Centraliser la lecture de l’API
- * - Protéger le front contre les changements backend
+ * Endpoint: GET api/produits-controle-boutique
  */
 
 import httpClient from "../http/client";
@@ -16,11 +9,16 @@ const ENDPOINT = "/produits-controle-boutique";
 
 const boutiqueAPI = {
   /**
-   * 🔎 Récupérer les produits du boutique (avec pagination & filtres)
+   * 🔎 Récupérer les produits du boutique
    */
   getProduitsControle: async (params = {}) => {
     try {
-      const res = await httpClient.get(ENDPOINT, { params });
+      const res = await httpClient.get(ENDPOINT, {
+        params: {
+          per_page: 25, // 🔥 pagination fixe 25
+          ...params,
+        },
+      });
 
       const payload = res.data;
 
@@ -29,7 +27,7 @@ const boutiqueAPI = {
         pagination: {
           currentPage: payload?.current_page ?? 1,
           lastPage: payload?.last_page ?? 1,
-          perPage: payload?.per_page ?? 20,
+          perPage: payload?.per_page ?? 25,
           total: payload?.total ?? 0,
         },
       };
