@@ -11,8 +11,6 @@ import {
   ArrowDownCircle,
   History,
   FileText,
-  Bell,
-  LayoutGrid,
   ChevronDown,
   LogOut,
   Key,
@@ -24,10 +22,6 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Toaster } from 'sonner'
 import useAuth from '../../hooks/useAuth'
 import profileAPI from '@/services/api/profile'
-import NotificationsDropdown from '../components/NotificationsDropdown'
-import ShortcutsMenu from '../components/ShortcutsMenu'
-import caissierApi from '../services/caissierApi'
-import { getEcho } from '../../utils/echo'
 
 // ==========================================================
 // 🔧 Utils
@@ -246,9 +240,6 @@ export default function CaissierLayout() {
 
   // Data
   const [user, setUser] = useState(null)
-  const [pendingTicketsCount, setPendingTicketsCount] = useState(0)
-  const echoRef = useRef(null)
-  const subscriptionsRef = useRef([])
 
   // Menu items
   const menuItems = [
@@ -283,74 +274,11 @@ export default function CaissierLayout() {
     loadUser()
   }, [navigate])
 
-  // Charger le compteur de tickets en attente (notifications)
-  useEffect(() => {
-    const loadCount = async () => {
-      try {
-        const res = await caissierApi.getCommandesAttente()
-        const commandes = res?.data || []
-        setPendingTicketsCount(Array.isArray(commandes) ? commandes.length : 0)
-      } catch (_err) {
-        setPendingTicketsCount(0)
-      }
-    }
-
-    loadCount()
-  }, [])
-
-  // Temps réel: mettre à jour le compteur via Echo (si dispo)
-  useEffect(() => {
-    if (!user?.boutique_id) return
-
-    const echo = getEcho()
-    if (!echo) return
-    echoRef.current = echo
-
-    const refresh = async () => {
-      try {
-        const res = await caissierApi.getCommandesAttente()
-        const commandes = res?.data || []
-        setPendingTicketsCount(Array.isArray(commandes) ? commandes.length : 0)
-      } catch (_err) {
-        // silencieux
-      }
-    }
-
-    try {
-      const channelName = `boutique.${user.boutique_id}`
-      const channel = echo.private(channelName)
-
-      channel.listen('.commande.validee', refresh)
-      channel.listen('.paiement.cree', refresh)
-      channel.listen('.commande.annulee', refresh)
-
-      subscriptionsRef.current.push({ channel: channelName })
-    } catch (_err) {
-      // silencieux
-    }
-
-    return () => {
-      try {
-        subscriptionsRef.current.forEach((sub) => {
-          if (echoRef.current) {
-            echoRef.current.leave(sub.channel)
-          }
-        })
-      } catch (_err) {
-        // silencieux
-      } finally {
-        subscriptionsRef.current = []
-      }
-    }
-  }, [user?.boutique_id])
-
-  // Fermer menus au clic extérieur
+  // Fermer menu au clic extérieur
   useEffect(() => {
     const handler = (e) => {
       if (menuRef.current && !menuRef.current.contains(e.target)) {
         setShowMenu(false)
-        setShowNotif(false)
-        setShowQuick(false)
       }
     }
     document.addEventListener("mousedown", handler)
@@ -505,84 +433,10 @@ export default function CaissierLayout() {
 
                 {/* ACTIONS */}
                 <div className="flex items-center gap-3 sm:gap-4">
-                  {/* RACCOURCIS */}
-                  <div className="relative">
-                    <button
-                      onClick={() => {
-                        setShowQuick((v) => !v)
-                        setShowNotif(false)
-                        setShowMenu(false)
-                      }}
-                      className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 rounded-lg border border-gray-200 text-xs sm:text-sm text-gray-700 hover:bg-[#F7F5FF] hover:text-[#472EAD] transition"
-                    >
-                      <LayoutGrid size={18} className="text-[#472EAD]" />
-                      <span className="hidden sm:inline">Raccourcis</span>
-                    </button>
-
-                    {showQuick && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.18 }}
-                        className="absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-lg shadow-lg p-2 z-30"
-                      >
-                        <p className="text-xs font-semibold text-gray-500 px-2 py-1">
-                          Accès rapide
-                        </p>
-                        <ul className="text-sm text-gray-700">
-                          {menuItems.map((item) => {
-                            const Icon = item.icon
-                            return (
-                              <li
-                                key={item.path}
-                                onClick={() => {
-                                  navigate(item.path)
-                                  setShowQuick(false)
-                                }}
-                                className="flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer hover:bg-[#F7F5FF]"
-                              >
-                                <Icon size={16} className="text-[#472EAD]" />
-                                <span>{item.name}</span>
-                              </li>
-                            )
-                          })}
-                        </ul>
-                      </motion.div>
-                    )}
-                  </div>
-
-                  {/* NOTIFS */}
-                  <div className="relative">
-                    <button
-                      onClick={() => {
-                        setShowNotif((v) => !v)
-                        setShowQuick(false)
-                        setShowMenu(false)
-                      }}
-                      className="p-2 rounded-lg hover:bg-gray-100 relative"
-                    >
-                      <Bell className="w-5 h-5 text-[#472EAD]" />
-                      {pendingTicketsCount > 0 && (
-                        <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-[#F58020] text-white text-[10px] font-bold flex items-center justify-center">
-                          {pendingTicketsCount > 99 ? '99+' : pendingTicketsCount}
-                        </span>
-                      )}
-                    </button>
-
-                    <NotificationsDropdown
-                      isOpen={showNotif}
-                      onClose={() => setShowNotif(false)}
-                    />
-                  </div>
-
                   {/* PROFIL */}
                   <div className="relative">
-                    <button
-                      onClick={() => {
-                        setShowMenu((v) => !v)
-                        setShowNotif(false)
-                        setShowQuick(false)
-                      }}
+<button
+                        onClick={() => setShowMenu((v) => !v)}
                       className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-full border bg-white hover:bg-gray-50"
                     >
                       <div className="w-8 h-8 rounded-full bg-[#472EAD] text-white flex items-center justify-center overflow-hidden">

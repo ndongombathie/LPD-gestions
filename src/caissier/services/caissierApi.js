@@ -53,6 +53,15 @@ export const caissierApi = {
   // ==================== CAISSE JOURNAL (CAISSIER) ====================
 
   /**
+   * Liste des rapports journaliers (pour comptable / export).
+   * @param {Object} params - date_debut, date_fin (Y-m-d), cloture (0|1)
+   */
+  async getCaissierCaisseJournalList(params = {}) {
+    const response = await httpClient.get('/caissier/caisses-journal', { params });
+    return response.data;
+  },
+
+  /**
    * Récupère le rapport journalier de caisse pour une date.
    */
   async getCaissierCaisseJournal(date) {
@@ -262,11 +271,16 @@ export const caissierApi = {
         }
       });
       
-      // Récupérer les décaisements
+      // Récupérer les décaissements validés pour l'historique (statut "valide")
       const decaissementsResponse = await httpClient.get('/decaissements', { 
-        params: { per_page: 100, ...filters } 
+        params: { per_page: 200, ...filters } 
       });
-      const decaissements = decaissementsResponse.data?.data || decaissementsResponse.data || [];
+      const decaissementsRaw = decaissementsResponse.data?.data ?? decaissementsResponse.data ?? [];
+      const decaissements = Array.isArray(decaissementsRaw) ? decaissementsRaw : [];
+      const isDecaissementValide = (d) => {
+        const s = (d?.statut ?? '').toString().toLowerCase();
+        return s === 'valide' || s === 'validé';
+      };
       
       // Combiner et trier par date
       const historique = [
@@ -285,16 +299,16 @@ export const caissierApi = {
           created_at: c.updated_at || c.created_at,
           commande: c,
         })),
-        ...decaissements.filter(d => d.statut?.toLowerCase() === 'valide').map(d => ({
+        ...decaissements.filter(isDecaissementValide).map(d => ({
           id: `decaissement_${d.id}`,
           type: 'decaissement',
-          // Utiliser updated_at pour les décaissements validés (heure exacte de validation)
+          // Date et heure du décaissement = moment de la validation (updated_at)
           date: d.updated_at || d.date || d.created_at,
-          created_at: d.created_at || d.date,
+          created_at: d.updated_at || d.date || d.created_at,
           decaissement: d,
         }))
       ].sort((a, b) => {
-        // Trier par date/heure exacte dans l'ordre chronologique (croissant)
+        // Trier par date/heure : plus récent en premier (ordre décroissant)
         const normalize = (v) => {
           if (!v) return null;
           const s = (typeof v === 'string' && v.includes(' ') && !v.includes('T')) ? v.replace(' ', 'T') : v;
@@ -304,9 +318,9 @@ export const caissierApi = {
         const dateA = normalize(a.date || a.created_at);
         const dateB = normalize(b.date || b.created_at);
         if (!dateA && !dateB) return 0;
-        if (!dateA) return -1;
-        if (!dateB) return 1;
-        return dateA - dateB;
+        if (!dateA) return 1;
+        if (!dateB) return -1;
+        return dateB - dateA;
       });
       
       return historique;

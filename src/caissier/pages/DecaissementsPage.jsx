@@ -130,7 +130,7 @@ const DecaissementsPage = () => {
       }
       const decaissementForPrint = {
         ...selectedDecaissement,
-        statut: 'fait',
+        statut: 'valide',
         fait_par: currentUser ? `${currentUser.prenom || ''} ${currentUser.nom || ''}`.trim() : (selectedDecaissement.fait_par || 'N/A'),
         fait_le: new Date().toISOString(),
       };
@@ -203,7 +203,7 @@ const DecaissementsPage = () => {
   }, [decaissementsEnAttente.length]);
 
   return (
-    <div className="space-y-8 relative z-10">
+    <div className="space-y-14 relative z-10">
       {/* En-tête */}
       <div className="flex items-center justify-between">
         <div>
@@ -217,7 +217,7 @@ const DecaissementsPage = () => {
       </div>
 
       {/* Statistiques */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <Card className="bg-white border-l-4 border-l-[#F58020] hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
           <div className="flex items-center justify-between">
             <div>
@@ -251,6 +251,7 @@ const DecaissementsPage = () => {
       </div>
 
       {/* Liste des décaissements en attente */}
+      <div className="pt-4">
       <Card className="bg-white">
         <CardHeader
           title="Décaissements en attente"
@@ -361,6 +362,7 @@ const DecaissementsPage = () => {
           </div>
         )}
       </Card>
+      </div>
 
       {/* Modal de validation du décaissement */}
       <Modal

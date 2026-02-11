@@ -115,9 +115,9 @@ const RapportCaissePage = () => {
 
         ticketsEncaisses.sort((a, b) => String(a.date_ticket || '').localeCompare(String(b.date_ticket || '')));
 
-        // Décaissements du jour = statut "fait" validés ce jour-là
+        // Décaissements du jour = statut "valide" validés ce jour-là
         const decaissementsDuJour = (Array.isArray(decaissements) ? decaissements : [])
-          .filter((d) => String(d?.statut || '').toLowerCase() === 'fait')
+          .filter((d) => String(d?.statut || '').toLowerCase() === 'valide')
           .filter((d) => getDatePartLocal(d?.updated_at || d?.date || d?.created_at) === selectedDate)
           .map((d) => {
             const dt = d?.updated_at || d?.date || d?.created_at;

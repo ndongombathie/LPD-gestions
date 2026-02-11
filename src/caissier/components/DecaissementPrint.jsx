@@ -94,7 +94,7 @@ export const printDecaissement = (decaissement, boutique = null) => {
             font-weight: bold;
             text-transform: uppercase;
           }
-          .statut-fait {
+          .statut-valide {
             background-color: #d1fae5;
             color: #065f46;
           }
@@ -165,8 +165,8 @@ export const printDecaissement = (decaissement, boutique = null) => {
           </div>
           <div class="info-row">
             <span class="info-label">Statut:</span>
-            <span class="statut ${decaissement.statut === 'fait' ? 'statut-fait' : 'statut-attente'}">
-              ${decaissement.statut === 'fait' ? 'Effectué' : 'En attente'}
+            <span class="statut ${decaissement.statut === 'valide' || decaissement.statut === 'validé' ? 'statut-valide' : 'statut-attente'}">
+              ${decaissement.statut === 'valide' || decaissement.statut === 'validé' ? 'Validé' : 'En attente'}
             </span>
           </div>
         </div>
@@ -190,15 +190,15 @@ export const printDecaissement = (decaissement, boutique = null) => {
           </div>
         </div>
 
-        ${decaissement.statut === 'fait' ? `
+        ${decaissement.statut === 'valide' || decaissement.statut === 'validé' ? `
         <div class="traceability">
-          <h3>Traçabilité - Effectuation</h3>
+          <h3>Traçabilité - Validation</h3>
           <div class="info-row">
-            <span class="info-label">Effectué par:</span>
+            <span class="info-label">Validé par:</span>
             <span class="info-value" style="font-weight: bold; color: #472EAD;">${decaissement.fait_par || 'N/A'}</span>
           </div>
           <div class="info-row">
-            <span class="info-label">Date d'effectuation:</span>
+            <span class="info-label">Date et heure de validation:</span>
             <span class="info-value">${decaissement.fait_le ? formatDateTime(decaissement.fait_le) : 'N/A'}</span>
           </div>
         </div>

@@ -251,7 +251,7 @@ const HistoriquePage = () => {
       </div>
 
       {/* Liste de l'historique */}
-      <div className="pt-2">
+      <div className="pt-4">
       <Card className="bg-white">
         <CardHeader
           title="Historique des opérations"
@@ -369,17 +369,31 @@ const HistoriquePage = () => {
                         </div>
                       </div>
                     ) : item.type === 'decaissement' && item.decaissement ? (
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-                        <div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                        <div className="min-w-0">
+                          <span className="text-gray-500">Date et heure:</span>
+                          <p className="font-medium text-gray-700">
+                            {formatDateTime(item.date || item.created_at)}
+                          </p>
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-gray-500">Motif:</span>
+                          <p className="font-medium text-gray-700 truncate">
+                            {item.decaissement.motif || item.decaissement.libelle || 'N/A'}
+                          </p>
+                        </div>
+                        <div className="min-w-0">
                           <span className="text-gray-500">Montant:</span>
                           <p className="font-bold text-red-600">
                             {formatCurrency(parseMontant(item.decaissement.montant))}
                           </p>
                         </div>
-                        <div className="md:col-span-2 min-w-0">
-                          <span className="text-gray-500">Motif:</span>
+                        <div className="min-w-0">
+                          <span className="text-gray-500">Validé par:</span>
                           <p className="font-medium text-gray-700 truncate">
-                            {item.decaissement.motif || item.decaissement.libelle || 'N/A'}
+                            {item.decaissement.caissier
+                              ? `${item.decaissement.caissier.prenom || ''} ${item.decaissement.caissier.nom || ''}`.trim() || 'N/A'
+                              : item.decaissement.fait_par || 'N/A'}
                           </p>
                         </div>
                       </div>

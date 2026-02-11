@@ -145,7 +145,7 @@ const DashboardPage = () => {
   }
 
   return (
-    <div className="space-y-6 relative z-10" style={{ position: 'relative', visibility: 'visible', opacity: 1, display: 'block', width: '100%', minHeight: '400px' }}>
+    <div className="space-y-14 relative z-10" style={{ position: 'relative', visibility: 'visible', opacity: 1, display: 'block', width: '100%', minHeight: '400px' }}>
       {/* En-tête */}
       <div style={{ backgroundColor: 'transparent', padding: '10px' }}>
         <h1 className="text-3xl font-bold text-[#472EAD]" style={{ color: '#472EAD', fontSize: '2rem' }}>
@@ -157,7 +157,7 @@ const DashboardPage = () => {
       </div>
 
       {/* Statistiques principales */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
         <Card className="border-l-4 border-l-[#472EAD] hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
           <div className="flex items-center justify-between">
             <div>
@@ -221,7 +221,7 @@ const DashboardPage = () => {
       </div>
 
       {/* Graphiques */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-4">
         {/* Graphique en barres - Ventes par heure */}
         <Card>
           <CardHeader title="Ventes par période de la journée" />
@@ -341,7 +341,7 @@ const DashboardPage = () => {
       </div>
 
       {/* Statistiques supplémentaires */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
         <Card className="bg-white">
           <CardHeader title="Tickets du jour" />
           <div className="mt-4 space-y-4">

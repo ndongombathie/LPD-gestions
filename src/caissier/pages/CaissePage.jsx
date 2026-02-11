@@ -435,7 +435,7 @@ const CaissePage = () => {
   };
 
   return (
-    <div className="space-y-8 relative z-10">
+    <div className="space-y-14 relative z-10">
       {/* En-tête */}
       <div className="flex items-center justify-between">
         <div>
@@ -459,7 +459,7 @@ const CaissePage = () => {
       </div>
 
       {/* Statistiques */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         <Card className="bg-white border-l-4 border-l-[#F58020] hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
           <div className="flex items-center justify-between">
             <div>
@@ -508,6 +508,7 @@ const CaissePage = () => {
       </div>
 
       {/* Tickets en attente */}
+      <div className="pt-4">
       <Card className="bg-white">
         <CardHeader
           title="Tickets en attente d'encaissement"
@@ -537,7 +538,7 @@ const CaissePage = () => {
             <p className="text-gray-500">Aucun ticket ne correspond à votre recherche</p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-4">
             {totalPages > 1 && (
               <div className="flex items-center justify-between gap-3 py-2">
                 <p className="text-xs text-gray-500">
@@ -569,7 +570,7 @@ const CaissePage = () => {
             {paginatedPendingTickets.map((ticket) => (
               <div
                 key={ticket.id}
-                className="border-l-4 border-l-[#472EAD] border border-gray-200 rounded-lg p-3 hover:shadow-lg hover:border-[#E4E0FF] transition-all bg-white"
+                className="border-l-4 border-l-[#472EAD] border border-gray-200 rounded-lg p-4 hover:shadow-lg hover:border-[#E4E0FF] transition-all bg-white"
               >
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex-1 min-w-0">
@@ -731,6 +732,7 @@ const CaissePage = () => {
           </div>
         )}
       </Card>
+      </div>
 
       {/* Modal d'encaissement */}
       <Modal
