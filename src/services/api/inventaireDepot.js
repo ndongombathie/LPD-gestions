@@ -1,6 +1,5 @@
 /**
  * 📦 Inventaire Dépôt API
- * Endpoint officiel :
  * GET api/mouvements-stock/inventaire-depot
  */
 
@@ -9,26 +8,36 @@ import httpClient from "../http/client";
 const ENDPOINT = "/mouvements-stock/inventaire-depot";
 
 const inventaireDepotAPI = {
-  async getInventaire() {
+  async getInventaire(params = {}) {
     try {
-      const res = await httpClient.get(ENDPOINT);
+      const res = await httpClient.get(ENDPOINT, { params });
+      const payload = res?.data ?? {};
 
-      // Sécurité absolue
-      if (Array.isArray(res?.data)) {
-        return res.data;
-      }
+      const items = Array.isArray(payload?.data)
+        ? payload.data.map((p) => ({
+            id: p.id,
+            nom: p.nom,
+            categorie: p.categorie,
+            total_entree: Number(p.total_entree ?? 0),
+            total_sortie: Number(p.total_sortie ?? 0),
+            stock_restant: Number(p.stock_restant ?? 0),
+            valeur_sortie: Number(p.valeur_sortie ?? 0),
+            valeur_estimee: Number(p.valeur_estimee ?? 0),
+          }))
+        : [];
 
-      if (Array.isArray(res?.data?.data)) {
-        return res.data.data;
-      }
+      const pagination = {
+        currentPage: payload.current_page ?? 1,
+        lastPage: payload.last_page ?? 1,
+        perPage: payload.per_page ?? 25,
+        total: payload.total ?? items.length,
+        nextPageUrl: payload.next_page_url ?? null,
+        prevPageUrl: payload.prev_page_url ?? null,
+      };
 
-      console.warn("⚠️ Format inventaire dépôt inattendu :", res.data);
-      return [];
+      return { items, pagination };
     } catch (error) {
-      console.error(
-        "❌ Erreur chargement inventaire dépôt :",
-        error.response?.data || error.message
-      );
+      console.error("Erreur inventaire dépôt:", error);
       throw error;
     }
   },
