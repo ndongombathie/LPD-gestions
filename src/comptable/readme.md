@@ -60,6 +60,7 @@ GET           api/produits            | affiche les produits du depot et leurs e
 
 # liste des produits du boutique et leurs informations
 GET           api/produits-controle   | affiche les produits du boutique et leurs etat de stock
+
 # les des produitd du depots et leurs informations
 GET           api/produits-controle-depots
 
