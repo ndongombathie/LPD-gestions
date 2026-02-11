@@ -34,6 +34,8 @@ GET     api/historique-actions
 # Reduction de stock d'un produit
 PUT     api/produits/{produit}/reduire-stock
 
+GET  api/fournisseurs` | Liste des fournisseurs 
+
 
 
 

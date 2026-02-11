@@ -1,39 +1,37 @@
 /**
- * 🏭 Dépôt API
- * Gestion des produits du dépôt et état de stock
+ * 🏭 Dépôt – Contrôle des produits
+ *
+ * Endpoint:
+ * GET api/produits-controle-depots
+ *
+ * Rôle:
+ * - Centraliser l’accès API
+ * - Normaliser pagination Laravel
+ * - Protéger Depot.jsx
  */
 
 import httpClient from "../http/client";
 
-const ENDPOINT = "/produits";
+const ENDPOINT = "/produits-controle-depots";
 
-export const depotAPI = {
+const depotAPI = {
   /**
-   * 📦 Récupérer la liste des produits du dépôt
-   * @returns {Promise<Array>}
+   * 📦 Récupérer les produits du dépôt
    */
-  getProduitsDepot: async () => {
+  getProduitsControle: async (params = {}) => {
     try {
-      const response = await httpClient.get(ENDPOINT);
+      const res = await httpClient.get(ENDPOINT, { params });
+      const payload = res.data;
 
-      /**
-       * ⚠️ Sécurité :
-       * On force toujours un tableau pour éviter
-       * l'erreur "map is not a function"
-       */
-      const data = response?.data;
-
-      if (Array.isArray(data)) {
-        return data;
-      }
-
-      // Cas API => { data: [...] }
-      if (Array.isArray(data?.data)) {
-        return data.data;
-      }
-
-      console.warn("⚠️ Format inattendu API produits dépôt :", data);
-      return [];
+      return {
+        data: Array.isArray(payload?.data) ? payload.data : [],
+        pagination: {
+          currentPage: payload?.current_page ?? 1,
+          lastPage: payload?.last_page ?? 1,
+          perPage: payload?.per_page ?? 15,
+          total: payload?.total ?? 0,
+        },
+      };
     } catch (error) {
       console.error(
         "❌ Erreur chargement produits dépôt :",

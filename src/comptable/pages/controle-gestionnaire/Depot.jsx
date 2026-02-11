@@ -1,88 +1,88 @@
 // ==========================================================
-// 🏪 Depot.jsx — Contrôle Gestionnaire Dépôt (STABLE + FIX)
+// 🏭 DepotControle.jsx — 100% aligné API produits-controle-depots
 // ==========================================================
 
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  Search,
-  Printer,
-  AlertTriangle,
-  CheckCircle,
-} from "lucide-react";
-
+import { Search, Printer, AlertTriangle, CheckCircle } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  CartesianGrid,
-} from "recharts";
-
-import { depotAPI } from "@/services/api/depot";
+import httpClient from "@/services/http/client";
 
 // ==========================================================
-// 🔧 UTILS
+// 🔧 ÉTAT STOCK
 // ==========================================================
-const getEtat = (p) => {
-  if (p.quantite === 0) return "rupture";
-  if (p.quantite <= p.seuil_stock) return "faible";
+const getEtat = (stock, seuil) => {
+  if (stock === 0) return "rupture";
+  if (stock <= seuil) return "faible";
   return "ok";
 };
 
 // ==========================================================
 // 📌 COMPOSANT
 // ==========================================================
-export default function Depot() {
+export default function DepotControle() {
   const [produits, setProduits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [search, setSearch] = useState("");
 
   // ================= FETCH API =================
   useEffect(() => {
-    const fetchProduits = async () => {
+    const fetchData = async () => {
       try {
         setLoading(true);
-        const data = await depotAPI.getProduitsDepot();
-        setProduits(Array.isArray(data) ? data : []);
-      } catch (err) {
-        setError("Erreur lors du chargement du stock dépôt");
+        const res = await httpClient.get("/produits-controle-depots");
+        setProduits(res.data?.data ?? []);
+      } catch (e) {
+        setError("Erreur lors du chargement des produits dépôt");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchProduits();
+    fetchData();
   }, []);
 
-  // ================= FILTRAGE =================
-  const filteredData = useMemo(() => {
-    let data = [...produits];
+  // ================= NORMALISATION =================
+  const rows = useMemo(() => {
+    return produits.map((p) => {
+      let entrees = 0;
+      let sorties = 0;
 
-    if (searchTerm.trim()) {
-      const q = searchTerm.toLowerCase();
-      data = data.filter(
-        (p) =>
-          p.nom?.toLowerCase().includes(q) ||
-          p.categorie?.toLowerCase().includes(q)
-      );
-    }
+      if (Array.isArray(p.entreees_sorties)) {
+        p.entreees_sorties.forEach((m) => {
+          if (m.quantite_apres > m.quantite_avant) {
+            entrees += m.quantite_apres - m.quantite_avant;
+          } else if (m.quantite_avant > m.quantite_apres) {
+            sorties += m.quantite_avant - m.quantite_apres;
+          }
+        });
+      }
 
-    return data;
-  }, [produits, searchTerm]);
+      return {
+        id: p.id,
+        nom: p.nom,
+        stock: p.stock_global,
+        seuil: p.stock_seuil,
+        entrees,
+        sorties,
+      };
+    });
+  }, [produits]);
+
+  // ================= FILTRE =================
+  const filtered = useMemo(() => {
+    if (!search.trim()) return rows;
+    return rows.filter((p) =>
+      p.nom.toLowerCase().includes(search.toLowerCase())
+    );
+  }, [rows, search]);
 
   // ================= PDF =================
   const imprimerPDF = () => {
     const doc = new jsPDF();
-    let y = 18;
 
-    // Bandeau logo
     doc.setFillColor(71, 46, 173);
     doc.rect(10, 8, 190, 22, "F");
 
@@ -94,138 +94,78 @@ export default function Depot() {
     doc.setFontSize(10);
     doc.text("LIBRAIRIE PAPETERIE DARADJI", 105, 28, { align: "center" });
 
-    y = 42;
-    doc.setTextColor(0);
-    doc.setFontSize(14);
-    doc.text("GESTION DU DÉPÔT", 14, y);
-
-    y += 8;
-    doc.setFontSize(11);
-    doc.text(`Date d'impression : ${new Date().toLocaleString("fr-FR")}`, 14, y);
-
     autoTable(doc, {
-      startY: y + 8,
+      startY: 40,
       head: [["Produit", "Stock", "Entrées", "Sorties", "État"]],
-      body: filteredData.map((p) => [
+      body: filtered.map((p) => [
         p.nom,
-        p.quantite,
-        p.total_entrees ?? 0,
-        p.total_sorties ?? 0,
-        getEtat(p),
+        p.stock,
+        p.entrees,
+        p.sorties,
+        getEtat(p.stock, p.seuil),
       ]),
-      headStyles: { fillColor: [71, 46, 173] },
     });
 
-    doc.save("GESTION_DEPOT_LPD.pdf");
+    doc.save("controle_depot.pdf");
   };
 
   // ================= UI =================
-  if (loading) return <p className="p-6">Chargement du stock dépôt…</p>;
+  if (loading) return <p className="p-6">Chargement…</p>;
   if (error) return <p className="p-6 text-red-600">{error}</p>;
 
   return (
-    // 🔑 CONTENEUR PRINCIPAL — FIX ABSOLU
-    <div className="flex flex-col gap-10 w-full min-h-screen p-6 overflow-x-hidden">
+    <div className="p-6 flex flex-col gap-8">
 
-      {/* ================= TITRE ================= */}
-      <div>
-        <h1 className="text-xl font-semibold text-[#472EAD]">
-          Contrôle Gestionnaire — Dépôt
-        </h1>
-        <p className="text-sm text-gray-500">
-          Suivi du stock dépôt, entrées et sorties
-        </p>
-      </div>
+      <h1 className="text-xl font-semibold text-[#472EAD]">
+        Contrôle Gestionnaire — Dépôt
+      </h1>
 
-      {/* ================= FILTRES ================= */}
-      <div className="bg-white rounded-2xl shadow-md p-4 flex flex-wrap gap-4 w-full">
-        <div className="flex items-center gap-2 flex-1 min-w-[240px]">
-          <Search size={18} className="text-[#472EAD]" />
+      {/* FILTRE */}
+      <div className="bg-white p-4 rounded-xl shadow flex gap-4">
+        <div className="flex items-center gap-2 flex-1">
+          <Search size={18} />
           <input
-            className="w-full px-3 py-2 rounded-lg bg-gray-50 text-sm"
-            placeholder="Rechercher produit ou catégorie…"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full px-3 py-2 bg-gray-50 rounded"
+            placeholder="Rechercher un produit…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
           />
         </div>
 
         <button
           onClick={imprimerPDF}
-          className="px-4 py-2 bg-[#472EAD] text-white rounded-xl shadow hover:shadow-lg flex items-center gap-2"
+          className="bg-[#472EAD] text-white px-4 py-2 rounded flex items-center gap-2"
         >
           <Printer size={16} /> Imprimer
         </button>
       </div>
 
-      {/* ================= GRAPHIQUE ================= */}
-      <div className="bg-white rounded-2xl shadow-md p-5 w-full relative">
-        <h2 className="text-sm font-semibold text-[#472EAD] mb-4">
-          Sorties par produit
-        </h2>
-
-        {filteredData.length === 0 ? (
-          <div className="h-[260px] flex items-center justify-center text-gray-400">
-            Aucune donnée disponible
-          </div>
-        ) : (
-          // 🔑 HAUTEUR EXPLICITE = FIN DES SUPERPOSITIONS
-          <div className="w-full h-[320px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={filteredData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="nom" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="total_sorties" fill="#ef4444" name="Sorties" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-      </div>
-
-      {/* ================= TABLE ================= */}
-      <div className="bg-white rounded-2xl shadow-md p-4 w-full overflow-x-auto relative">
+      {/* TABLE */}
+      <div className="bg-white rounded-xl shadow overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-[#F5F3FF] text-[#472EAD]">
             <tr>
-              <th className="px-3 py-2 text-left">Produit</th>
-              <th className="px-3 py-2 text-center">État</th>
-              <th className="px-3 py-2 text-center">Stock</th>
-              <th className="px-3 py-2 text-center">Entrées</th>
-              <th className="px-3 py-2 text-center">Sorties</th>
+              <th className="p-3 text-left">Produit</th>
+              <th className="p-3 text-center">État</th>
+              <th className="p-3 text-center">Stock</th>
+              <th className="p-3 text-center">Entrées</th>
+              <th className="p-3 text-center">Sorties</th>
             </tr>
           </thead>
-
           <tbody>
-            {filteredData.map((p) => {
-              const etat = getEtat(p);
-
+            {filtered.map((p) => {
+              const etat = getEtat(p.stock, p.seuil);
               return (
                 <tr key={p.id} className="hover:bg-gray-50">
-                  <td className="px-3 py-2">{p.nom}</td>
-
-                  <td className="px-3 py-2 text-center">
-                    {etat === "rupture" && (
-                      <span className="text-red-600 flex justify-center gap-1">
-                        <AlertTriangle size={14} /> Rupture
-                      </span>
-                    )}
-                    {etat === "faible" && (
-                      <span className="text-orange-500 font-medium">
-                        Stock faible
-                      </span>
-                    )}
-                    {etat === "ok" && (
-                      <span className="text-emerald-600 flex justify-center gap-1">
-                        <CheckCircle size={14} /> OK
-                      </span>
-                    )}
+                  <td className="p-3">{p.nom}</td>
+                  <td className="p-3 text-center">
+                    {etat === "rupture" && <AlertTriangle className="text-red-600 inline" />}
+                    {etat === "faible" && <AlertTriangle className="text-orange-500 inline" />}
+                    {etat === "ok" && <CheckCircle className="text-green-600 inline" />}
                   </td>
-
-                  <td className="px-3 py-2 text-center">{p.quantite}</td>
-                  <td className="px-3 py-2 text-center">{p.total_entrees ?? 0}</td>
-                  <td className="px-3 py-2 text-center">{p.total_sorties ?? 0}</td>
+                  <td className="p-3 text-center">{p.stock}</td>
+                  <td className="p-3 text-center">{p.entrees}</td>
+                  <td className="p-3 text-center">{p.sorties}</td>
                 </tr>
               );
             })}
