@@ -12,7 +12,7 @@
 import axios from 'axios';
 
 // ===== CONFIGURATION =====
-const API_URL = import.meta.env.VITE_API_URL || 'https://api-lpd.onrender.com/api';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
 
 /**
  * Instance Axios UNIQUE - Ne pas créer d'autres instances!
