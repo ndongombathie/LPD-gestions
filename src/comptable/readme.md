@@ -99,3 +99,5 @@ GET api/mouvement-stock-boutique/{id} | afficher les mouvement de stock d'un pro
 GET|HEAD        api/enregistrer-versements | historiques des encaissements
 
 POST            api/enregistrer-versements | enregistrer un encaissement payload(caissier_id,montant,observation,la date(optionel))
+# Enregistrer inventaire de depot
+GET    api/enregistrer-inventaire-boutique | en donnant les deux intevalle de dates
