@@ -71,3 +71,5 @@ GET     api/commandes-payees
 GET    api/enregistrer-inventaire-depot | en donnant les deux intevalle de dates
 # Enregistrer inventaire de depot
 GET    api/enregistrer-inventaire-boutique | en donnant les deux intevalle de dates
+
+GET   api/historique-inventaires   | afficher historiques des inventaires
