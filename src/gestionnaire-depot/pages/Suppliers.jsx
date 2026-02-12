@@ -1,35 +1,12 @@
 // src/gestionnaire-depot/pages/Suppliers.jsx
-import React, { useMemo, useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
+import { fournisseursAPI } from "../../services/api/fournisseurs"; // ← IMPORT DU SERVICE
 import "../styles/depot-fix.css";
-import { Package, User, Phone, Store, Search as SearchIcon, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
-
-/* =========================================================================
-   DONNÉES DE DÉPART
-   ========================================================================= */
-const suppliersData = [
-  {
-    id: 1,
-    name: "Papeterie Plus",
-    email: "contact@papeterieplus.sn",
-    contact: "M. Abdoulaye Diop",
-    phone: "+221 33 824 45 67",
-    products: "Cahiers, Stylos, Classeurs",
-    delay: "2 à 3 jours",
-    orders: "24 commandes",
-    status: "Actif",
-  },
-  {
-    id: 2,
-    name: "Papeterie Moderne",
-    email: "info@papeteriemoderne.sn",
-    contact: "Mme Aïcha Sow",
-    phone: "+221 33 822 89 10",
-    products: "Ramettes A4, Enveloppes, Chemises",
-    delay: "1-2 jours",
-    orders: "18 commandes",
-    status: "Actif",
-  },
-];
+import { 
+  Package, User, Phone, Store, Search as SearchIcon, 
+  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, 
+  Loader 
+} from "lucide-react";
 
 /* =========================================================================
    AVATAR GÉNÉRÉ AUTOMATIQUEMENT
@@ -58,8 +35,11 @@ const generateAvatar = (name) => {
    PAGE PRINCIPALE
    ========================================================================= */
 export default function Suppliers() {
-  const [suppliers] = useState(suppliersData);
-  
+  // États pour les données API
+  const [suppliers, setSuppliers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
   // État pour la pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -70,9 +50,81 @@ export default function Suppliers() {
   // modale détails
   const [selectedSupplier, setSelectedSupplier] = useState(null);
 
-  /* =========================================================================
-     RECHERCHE AUTOMATIQUE (LIVE SEARCH)
-     ========================================================================= */
+  // -----------------------------------------------------------------------
+  // 1. CHARGEMENT DES DONNÉES AVEC LE SERVICE API EXISTANT
+  // -----------------------------------------------------------------------
+  useEffect(() => {
+    const fetchSuppliers = async () => {
+      try {
+        setLoading(true);
+        
+        // Appel via le service déjà configuré
+        const data = await fournisseursAPI.getAll();
+        console.log("📦 Données brutes de l'API :", data);
+
+        // Adapter la structure selon ce que renvoie réellement le backend
+        // Par défaut, on suppose que data est un tableau
+        let suppliersArray = data;
+
+        // Si ce n'est pas un tableau, on regarde les propriétés courantes
+        if (data && !Array.isArray(data)) {
+          if (Array.isArray(data.data)) suppliersArray = data.data;
+          else if (Array.isArray(data.results)) suppliersArray = data.results;
+          else if (Array.isArray(data.fournisseurs)) suppliersArray = data.fournisseurs;
+          else if (Array.isArray(data.items)) suppliersArray = data.items;
+          else {
+            console.warn("⚠️ Structure de données non reconnue :", data);
+            suppliersArray = [];
+          }
+        }
+
+        if (!Array.isArray(suppliersArray)) {
+          throw new Error("Les données reçues ne sont pas un tableau");
+        }
+
+        // Mapping vers le format attendu par le tableau et la modale
+        const formattedSuppliers = suppliersArray.map((item) => ({
+          id: item.id,
+          name: item.name || item.nom || "Nom inconnu",
+          email: item.email || "",
+          contact: item.contactName || item.contact || "",
+          phone: item.phone || "",
+          products: item.products || item.produits || "",
+          delay: item.deliveryDelay || item.delai || "",
+          orders: item.ordersCount ? `${item.ordersCount} commandes` : "0 commande",
+          status: item.status || "Actif",
+        }));
+
+        setSuppliers(formattedSuppliers);
+        setError(null);
+      } catch (err) {
+        console.error("❌ Erreur lors du chargement des fournisseurs :", err);
+        setError("Impossible de charger la liste des fournisseurs.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSuppliers();
+  }, []); // ← pas de dépendances, exécuté au montage
+
+  // -----------------------------------------------------------------------
+  // 2. CALCUL DES STATISTIQUES DYNAMIQUES
+  // -----------------------------------------------------------------------
+  const totalSuppliers = suppliers.length;
+  const activeSuppliers = suppliers.filter((s) => s.status === "Actif").length;
+  
+  const totalOrders = suppliers.reduce((acc, s) => {
+    const match = s.orders.match(/(\d+)/);
+    const num = match ? parseInt(match[0], 10) : 0;
+    return acc + num;
+  }, 0);
+
+  const lastUpdate = new Date().toLocaleDateString("fr-FR");
+
+  // -----------------------------------------------------------------------
+  // 3. RECHERCHE, PAGINATION (inchangé)
+  // -----------------------------------------------------------------------
   const filteredSuppliers = useMemo(() => {
     const term = searchInput.trim().toLowerCase();
     if (!term) return suppliers;
@@ -88,88 +140,89 @@ export default function Suppliers() {
     });
   }, [suppliers, searchInput]);
 
-  /* =========================================================================
-     LOGIQUE DE PAGINATION
-     ========================================================================= */
   const totalItems = filteredSuppliers.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
-  
-  // S'assurer que la page actuelle est valide
   const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages || 1);
-  
-  // Calculer les indices de début et fin
   const startIndex = (safeCurrentPage - 1) * itemsPerPage;
   const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
-  
-  // Obtenir les fournisseurs pour la page actuelle
   const currentSuppliers = filteredSuppliers.slice(startIndex, endIndex);
 
-  // Fonction pour changer de page
   const goToPage = (page) => {
     const newPage = Math.max(1, Math.min(page, totalPages));
     setCurrentPage(newPage);
   };
 
-  // Fonction pour changer le nombre d'éléments par page
   const handleItemsPerPageChange = (e) => {
-    const newValue = parseInt(e.target.value);
-    setItemsPerPage(newValue);
-    setCurrentPage(1); // Retour à la première page
+    setItemsPerPage(parseInt(e.target.value));
+    setCurrentPage(1);
   };
+
+  // -----------------------------------------------------------------------
+  // 4. RENDU AVEC GESTION DU CHARGEMENT ET DES ERREURS
+  // -----------------------------------------------------------------------
+  if (loading) {
+    return (
+      <div className="depot-page flex items-center justify-center h-64">
+        <Loader className="animate-spin text-[#472EAD]" size={32} />
+        <p className="ml-3 text-gray-600">Chargement des fournisseurs...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="depot-page flex flex-col items-center justify-center h-64 text-red-600">
+        <p className="text-lg font-semibold">❌ {error}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-4 px-4 py-2 bg-[#472EAD] text-white rounded-lg hover:bg-[#3b2491]"
+        >
+          Réessayer
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="depot-page space-y-6">
-      {/* HEADER SECTION */}
+      {/* HEADER */}
       <div>
         <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
           <Store className="text-[#472EAD]" />
           Gestion des Fournisseurs
         </h2>
         <p className="text-sm text-gray-500 mt-1">
-          Gérer la liste des fournisseurs, leurs contacts et informations de
-          livraison.
+          Gérer la liste des fournisseurs, leurs contacts et informations de livraison.
         </p>
       </div>
 
-      {/* STAT CARDS */}
+      {/* STAT CARDS DYNAMIQUES */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white rounded-xl shadow-sm border p-4">
           <p className="text-xs text-gray-500">Fournisseurs</p>
-          <p className="text-2xl font-bold text-gray-900 mt-2">
-            {suppliers.length}
-          </p>
+          <p className="text-2xl font-bold text-gray-900 mt-2">{totalSuppliers}</p>
           <p className="text-xs text-gray-500">totaux</p>
         </div>
-
         <div className="bg-white rounded-xl shadow-sm border p-4">
           <p className="text-xs text-gray-500">Actifs</p>
-          <p className="text-2xl font-bold text-gray-900 mt-2">
-            {suppliers.filter((s) => s.status === "Actif").length}
-          </p>
+          <p className="text-2xl font-bold text-gray-900 mt-2">{activeSuppliers}</p>
           <p className="text-xs text-gray-500">actifs</p>
         </div>
-
         <div className="bg-white rounded-xl shadow-sm border p-4">
           <p className="text-xs text-gray-500">Commandes totales</p>
-          <p className="text-2xl font-bold text-gray-900 mt-2">42</p>
+          <p className="text-2xl font-bold text-gray-900 mt-2">{totalOrders}</p>
           <p className="text-xs text-gray-500">commandes</p>
         </div>
-
         <div className="bg-white rounded-xl shadow-sm border p-4">
           <p className="text-xs text-gray-500">Dernière maj</p>
-          <p className="text-sm font-semibold text-gray-800 mt-2">
-            04/12/2025
-          </p>
+          <p className="text-sm font-semibold text-gray-800 mt-2">{lastUpdate}</p>
         </div>
       </div>
 
       {/* BARRE DE RECHERCHE */}
       <div className="bg-white border rounded-xl shadow-sm p-4">
         <div className="relative">
-          <SearchIcon
-            size={16}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-          />
+          <SearchIcon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
             placeholder="Rechercher un fournisseur, contact, email, téléphone..."
@@ -177,7 +230,7 @@ export default function Suppliers() {
             value={searchInput}
             onChange={(e) => {
               setSearchInput(e.target.value);
-              setCurrentPage(1); // Retour à la première page lors d'une recherche
+              setCurrentPage(1);
             }}
           />
         </div>
@@ -187,8 +240,6 @@ export default function Suppliers() {
       <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
         <div className="border-b px-4 py-3 text-sm font-semibold text-gray-700 flex justify-between items-center">
           <span>Liste des Fournisseurs ({filteredSuppliers.length})</span>
-          
-          {/* Sélecteur d'éléments par page */}
           <div className="flex items-center gap-2 text-xs">
             <span className="text-gray-500">Afficher :</span>
             <select
@@ -218,7 +269,6 @@ export default function Suppliers() {
               <th className="text-center px-4 py-3">Détails</th>
             </tr>
           </thead>
-
           <tbody className="divide-y">
             {currentSuppliers.map((s) => (
               <tr key={s.id} className="hover:bg-gray-50">
@@ -234,7 +284,6 @@ export default function Suppliers() {
                     </div>
                   </div>
                 </td>
-
                 <td className="px-4 py-3">
                   <p className="font-medium text-gray-800 flex items-center gap-1">
                     <User size={14} className="text-gray-400" />
@@ -245,17 +294,14 @@ export default function Suppliers() {
                     {s.phone}
                   </p>
                 </td>
-
                 <td className="px-4 py-3 text-xs text-gray-700">{s.products}</td>
                 <td className="px-4 py-3 text-center text-xs text-green-600">{s.delay}</td>
                 <td className="px-4 py-3 text-center text-xs text-gray-700">{s.orders}</td>
-
                 <td className="px-4 py-3 text-center">
                   <span className="px-2 py-1 rounded-full text-xs bg-green-50 text-green-700">
                     {s.status}
                   </span>
                 </td>
-
                 <td className="px-4 py-3 text-center">
                   <button
                     onClick={() => setSelectedSupplier(s)}
@@ -266,13 +312,9 @@ export default function Suppliers() {
                 </td>
               </tr>
             ))}
-
             {currentSuppliers.length === 0 && (
               <tr>
-                <td
-                  colSpan={7}
-                  className="px-4 py-6 text-center text-gray-400 italic"
-                >
+                <td colSpan={7} className="px-4 py-6 text-center text-gray-400 italic">
                   Aucun fournisseur trouvé.
                 </td>
               </tr>
@@ -286,55 +328,42 @@ export default function Suppliers() {
             <div className="text-xs text-gray-500">
               Affichage de {startIndex + 1} à {endIndex} sur {totalItems} fournisseurs
             </div>
-            
             <div className="flex items-center gap-2">
-              {/* Boutons de navigation */}
               <button
                 onClick={() => goToPage(1)}
                 disabled={safeCurrentPage === 1}
                 className={`p-1 rounded-md ${safeCurrentPage === 1 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600 hover:bg-gray-100'}`}
-                title="Première page"
               >
                 <ChevronsLeft size={16} />
               </button>
-              
               <button
                 onClick={() => goToPage(safeCurrentPage - 1)}
                 disabled={safeCurrentPage === 1}
                 className={`p-1 rounded-md ${safeCurrentPage === 1 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600 hover:bg-gray-100'}`}
-                title="Page précédente"
               >
                 <ChevronLeft size={16} />
               </button>
-              
-              {/* Indicateur de page */}
               <div className="flex items-center gap-1 text-xs">
                 <span className="text-gray-700">Page</span>
                 <span className="font-semibold text-[#472EAD]">{safeCurrentPage}</span>
                 <span className="text-gray-700">sur</span>
                 <span className="font-semibold">{totalPages}</span>
               </div>
-              
               <button
                 onClick={() => goToPage(safeCurrentPage + 1)}
                 disabled={safeCurrentPage === totalPages}
                 className={`p-1 rounded-md ${safeCurrentPage === totalPages ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600 hover:bg-gray-100'}`}
-                title="Page suivante"
               >
                 <ChevronRight size={16} />
               </button>
-              
               <button
                 onClick={() => goToPage(totalPages)}
                 disabled={safeCurrentPage === totalPages}
                 className={`p-1 rounded-md ${safeCurrentPage === totalPages ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600 hover:bg-gray-100'}`}
-                title="Dernière page"
               >
                 <ChevronsRight size={16} />
               </button>
             </div>
-            
-            {/* Sélecteur de page directe */}
             <div className="flex items-center gap-2 text-xs">
               <span className="text-gray-500">Aller à :</span>
               <input
@@ -344,9 +373,7 @@ export default function Suppliers() {
                 value={safeCurrentPage}
                 onChange={(e) => {
                   const page = parseInt(e.target.value);
-                  if (page >= 1 && page <= totalPages) {
-                    goToPage(page);
-                  }
+                  if (page >= 1 && page <= totalPages) goToPage(page);
                 }}
                 className="w-12 border rounded-md px-2 py-1 text-center focus:outline-none focus:ring-1 focus:ring-[#472EAD]"
               />
@@ -364,7 +391,6 @@ export default function Suppliers() {
                 <Package className="text-[#472EAD]" />
                 Détails du Fournisseur
               </h3>
-
               <button
                 onClick={() => setSelectedSupplier(null)}
                 className="text-xl text-gray-500 hover:text-gray-800"
@@ -372,7 +398,6 @@ export default function Suppliers() {
                 ×
               </button>
             </div>
-
             <div className="mt-4 space-y-3 text-sm">
               <p><strong>Nom :</strong> {selectedSupplier.name}</p>
               <p><strong>Email :</strong> {selectedSupplier.email}</p>
@@ -388,7 +413,6 @@ export default function Suppliers() {
                 </span>
               </p>
             </div>
-
             <div className="flex justify-end mt-6">
               <button
                 onClick={() => setSelectedSupplier(null)}

@@ -1,19 +1,27 @@
-// src/services/api/mouvements.js
+/**
+ * 📦 Mouvements de Stock API
+ * 
+ * Endpoint réel (Laravel) : /api/mouvements-stock
+ */
+
 import httpClient from '../http/client';
 
 const ENDPOINTS = {
-  // Assure-toi que cela correspond au dossier de ton script PHP (api/mouvements/index.php)
-  BASE: '/mouvements', 
+  // 🔁 Correction : le endpoint Laravel est '/mouvements-stock' (avec trait d'union)
+  BASE: '/mouvements-stock',
 };
 
 export const mouvementsAPI = {
   
   /**
-   * Récupère l'historique complet
+   * Récupère l'historique complet des mouvements
+   * @param {Object} params - Paramètres optionnels (date_debut, date_fin, type, produit_id, per_page)
    */
   getAll: async (params = {}) => {
     try {
-      const response = await httpClient.get(ENDPOINTS.BASE, { params });
+      // Par défaut, on demande 1000 éléments pour éviter la pagination back-end
+      const defaultParams = { per_page: 1000, ...params };
+      const response = await httpClient.get(ENDPOINTS.BASE, { params: defaultParams });
       return response.data;
     } catch (error) {
       console.error('❌ Erreur getAll mouvements:', error);
@@ -22,8 +30,8 @@ export const mouvementsAPI = {
   },
 
   /**
-   * Crée un nouveau mouvement (Entrée/Sortie) et met à jour le stock
-   * @param {Object} data - { productId, type, quantity, ... }
+   * Crée un nouveau mouvement (Entrée/Sortie) – utilisé pour les réapprovisionnements/diminutions
+   * @param {Object} data - { produit_id, type, quantite, date, ... }
    */
   create: async (data) => {
     try {

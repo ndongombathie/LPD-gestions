@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import "../styles/depot-fix.css";
 import { produitsAPI } from '../../services/api/produits';
 import { categoriesAPI } from '../../services/api/categories';
+import { fournisseursAPI } from '../../services/api/fournisseurs';
 import httpClient from '../../services/http/client';
 
 import {
@@ -16,7 +17,7 @@ import {
 } from "react-icons/fa";
 
 /* =========================================================================
-   2) CALCULS ET UTILITAIRES (Compatible Base de Données)
+   2) CALCULS ET UTILITAIRES
    ========================================================================= */
 
 const computeTotalPrice = (p) => {
@@ -130,6 +131,7 @@ export default function Products() {
   // --- ÉTATS GLOBAUX ---
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [fournisseurs, setFournisseurs] = useState([]);
   const [history, setHistory] = useState([]); 
   
   const [isDataLoaded, setIsDataLoaded] = useState(false);
@@ -172,36 +174,8 @@ export default function Products() {
   
   const [searchCategory, setSearchCategory] = useState("");
 
-  // --- DONNÉES FOURNISSEURS ---
-  const fournisseursFictifs = [
-    { 
-      id: "019c447c-7073-7089-8887-e2c604ce91", 
-      nom: "849-738-8593",
-      contact: "819 Stark Estate West Pete, WI 31450",
-      adresse: "878031"
-    },
-    { 
-      id: "019c447c-71bd-7180-8dcb-201c10cd2fc2", 
-      nom: "Thompson-Smithatham",
-      contact: "13137271507",
-      adresse: "76560 Delaney Stream Keeleyfurt, WY 82011"
-    },
-    { 
-      id: "019c447c-71bd-7042-8593-c3ea428ad23", 
-      nom: "Hintz Ltd",
-      contact: "1-845-645-8552",
-      adresse: "89331 Little Vista Greenfeldermouth, MI 95883-8463"
-    },
-    { 
-      id: "019c447c-71c3-730b-a79-34553caab64f", 
-      nom: "Spencer, Kessler and Kuhlman",
-      contact: "1-845-645-8552",
-      adresse: "6303 Baumbach Junctions Apt. 365 South Abbigailis..."
-    }
-  ];
-
   /* =========================================================================
-     4) CHARGEMENT DES DONNÉES - CORRIGÉ POUR TOUT RÉCUPÉRER
+     4) CHARGEMENT DES DONNÉES - AVEC FOURNISSEURS
      ========================================================================= */
   
   const fetchData = async () => {
@@ -211,18 +185,21 @@ export default function Products() {
       
       try {
         console.log("📦 Tentative avec per_page=1000...");
-        const [productsResponse, categoriesResponse] = await Promise.all([
+        const [productsResponse, categoriesResponse, fournisseursResponse] = await Promise.all([
           produitsAPI.getAll({ per_page: 1000 }),
-          categoriesAPI.getAll({ per_page: 1000 })
+          categoriesAPI.getAll({ per_page: 1000 }),
+          fournisseursAPI.getAll({ per_page: 1000 })
         ]);
         
         const productsData = productsResponse.data || productsResponse;
         const categoriesData = categoriesResponse.data || categoriesResponse;
+        const fournisseursData = fournisseursResponse.data || fournisseursResponse;
         
         let allProducts = Array.isArray(productsData) ? productsData : (productsData?.data || []);
         let allCategories = Array.isArray(categoriesData) ? categoriesData : (categoriesData?.data || []);
+        let allFournisseurs = Array.isArray(fournisseursData) ? fournisseursData : (fournisseursData?.data || []);
         
-        console.log(`✅ Récupéré: ${allProducts.length} produits, ${allCategories.length} catégories (méthode per_page)`);
+        console.log(`✅ Récupéré: ${allProducts.length} produits, ${allCategories.length} catégories, ${allFournisseurs.length} fournisseurs`);
         
         if (allProducts.length > 20 && allCategories.length > 20) {
           const transformedCategories = allCategories.map(cat => ({
@@ -234,6 +211,7 @@ export default function Products() {
 
           setProducts(allProducts);
           setCategories(transformedCategories);
+          setFournisseurs(allFournisseurs);
           setIsDataLoaded(true);
           setLoading(false);
           return;
@@ -245,8 +223,9 @@ export default function Products() {
       console.log("📦 Récupération paginée...");
       const allProducts = await fetchAllPaginatedData('/produits');
       const allCategories = await fetchAllPaginatedData('/categories');
+      const allFournisseurs = await fetchAllPaginatedData('/fournisseurs');
       
-      console.log(`🎯 RÉSULTAT: ${allProducts.length} produits, ${allCategories.length} catégories`);
+      console.log(`🎯 RÉSULTAT: ${allProducts.length} produits, ${allCategories.length} catégories, ${allFournisseurs.length} fournisseurs`);
       
       const transformedCategories = allCategories.map(cat => ({
         id: cat.id || cat.uuid,
@@ -257,11 +236,8 @@ export default function Products() {
 
       setProducts(allProducts);
       setCategories(transformedCategories);
+      setFournisseurs(allFournisseurs);
       setIsDataLoaded(true);
-      
-      if (allProducts.length >= 55 && allCategories.length >= 51) {
-        console.log("🎉 SUCCÈS: Tous les 55 produits et 51 catégories récupérés!");
-      }
 
     } catch (error) {
       console.error("❌ Erreur chargement:", error);
@@ -277,9 +253,9 @@ export default function Products() {
 
   useEffect(() => {
     if (isDataLoaded) {
-      console.log(`📊 ÉTAT FINAL - Produits: ${products.length}, Catégories: ${categories.length}`);
+      console.log(`📊 ÉTAT FINAL - Produits: ${products.length}, Catégories: ${categories.length}, Fournisseurs: ${fournisseurs.length}`);
     }
-  }, [isDataLoaded, products, categories]);
+  }, [isDataLoaded, products, categories, fournisseurs]);
 
   /* =========================================================================
      5) TRANSFORMATION DES DONNÉES
@@ -306,6 +282,17 @@ export default function Products() {
       }
     }
 
+    // Trouver le nom du fournisseur depuis l'API
+    let fournisseurNom = "Non spécifié";
+    let fournisseurId = p.fournisseur_id || null;
+    
+    if (fournisseurId) {
+      const foundFournisseur = fournisseurs.find(f => f.id === fournisseurId);
+      if (foundFournisseur) {
+        fournisseurNom = foundFournisseur.nom || foundFournisseur.name || "Non spécifié";
+      }
+    }
+
     const productUnified = {
         ...p,
         id: p.id || p.uuid,
@@ -318,8 +305,8 @@ export default function Products() {
         stockIdeal: parseInt(p.stock_ideal) || 0,
         pricePerCarton: parseFloat(p.prix_unite_carton) || 0,
         unitsPerCarton: parseInt(p.unite_carton) || 1,
-        fournisseur: p.fournisseur || "Non spécifié",
-        fournisseur_id: p.fournisseur_id || null
+        fournisseur: fournisseurNom,
+        fournisseur_id: fournisseurId
     };
 
     const totalPrice = computeTotalPrice(productUnified);
@@ -354,75 +341,90 @@ export default function Products() {
       return;
     }
 
-    // PRÉPARATION DU PAYLOAD - CORRIGÉ
+    // PRÉPARATION DU PAYLOAD DE BASE
     const apiPayload = {
       nom: String(currentProduct.name || "").trim(),
       categorie_id: String(categoryId),
-      nombre_carton: parseInt(currentProduct.cartons) || 0,
-      unite_carton: parseInt(currentProduct.unitsPerCarton) || 1, // CORRIGÉ: nombre, pas string
-      prix_unite_carton: parseFloat(currentProduct.pricePerCarton) || 0,
-      stock_seuil: parseInt(currentProduct.stockMin) || 5,
-      stock_ideal: parseInt(currentProduct.stockIdeal) || 20
+      cartons: parseInt(currentProduct.cartons) || 0,
+      unitsPerCarton: parseInt(currentProduct.unitsPerCarton) || 1,
+      pricePerCarton: parseFloat(currentProduct.pricePerCarton) || 0,
+      stockMin: parseInt(currentProduct.stockMin) || 5,
+      stockIdeal: parseInt(currentProduct.stockIdeal) || 20
     };
 
-    // Seulement ajouter le code s'il est fourni ET a changé
-    if (modalType === "add" && currentProduct.barcode && currentProduct.barcode.trim() !== "") {
-      apiPayload.code = String(currentProduct.barcode).trim();
-    } else if (modalType === "edit" && currentProduct.barcode && currentProduct.barcode.trim() !== "") {
-      // Pour l'édition, vérifier si le code a changé
-      const originalProduct = products.find(p => p.id === currentProduct.id);
-      const originalCode = originalProduct?.code || originalProduct?.code_barre || "";
-      const newCode = currentProduct.barcode.trim();
-      
-      if (newCode !== originalCode) {
-        apiPayload.code = newCode;
+    // ---------- GESTION DU CODE-BARRE (ÉVITE "code field is required" et "already taken") ----------
+    const barcode = currentProduct.barcode ? currentProduct.barcode.trim() : '';
+    
+    if (modalType === "add") {
+      // Création : on envoie le code s'il est non vide, sinon on envoie une chaîne vide
+      // (selon la validation backend, le code peut être requis ou non)
+      if (barcode !== '') {
+        // Vérification d'unicité
+        const codeExists = products.some(p => 
+          (p.code === barcode || p.code_barre === barcode)
+        );
+        if (codeExists) {
+          alert("❌ Ce code-barre est déjà utilisé par un autre produit.");
+          return;
+        }
+        apiPayload.code = barcode;
+      } else {
+        apiPayload.code = ''; // envoi d'une chaîne vide
       }
-      // Si le code est le même, ne pas l'envoyer pour éviter l'erreur "already taken"
-    }
-
-    // Ajouter fournisseur_id seulement s'il existe
-    if (currentProduct.fournisseur_id) {
-      apiPayload.fournisseur_id = currentProduct.fournisseur_id;
-    }
-
-    try {
-      if (modalType === "add") {
-        // Vérification du code-barre unique seulement pour l'ajout
-        if (apiPayload.code && apiPayload.code.trim() !== "") {
+    } else if (modalType === "edit") {
+      // Modification : on envoie TOUJOURS le code (soit le nouveau, soit l'ancien)
+      const originalProduct = products.find(p => p.id === currentProduct.id);
+      const originalCode = originalProduct?.code || originalProduct?.code_barre || '';
+      
+      if (barcode !== '') {
+        // Vérifier l'unicité seulement si le code a changé
+        if (barcode !== originalCode) {
           const codeExists = products.some(p => 
-            (p.code === apiPayload.code || p.code_barre === apiPayload.code)
+            p.id !== currentProduct.id && 
+            (p.code === barcode || p.code_barre === barcode)
           );
-          
           if (codeExists) {
             alert("❌ Ce code-barre est déjà utilisé par un autre produit.");
             return;
           }
         }
+        apiPayload.code = barcode;
+      } else {
+        // Code vide : on renvoie l'ancien code (qui peut être vide ou non)
+        apiPayload.code = originalCode;
+      }
+    }
 
+    // ---------- GESTION DU FOURNISSEUR ----------
+    if (currentProduct.fournisseur_id && 
+        currentProduct.fournisseur_id.trim() !== "" &&
+        currentProduct.fournisseur_id !== "null") {
+      
+      const fournisseurExists = fournisseurs.some(f => f.id === currentProduct.fournisseur_id);
+      if (fournisseurExists) {
+        apiPayload.fournisseur_id = String(currentProduct.fournisseur_id).trim();
+      }
+    }
+
+    try {
+      if (modalType === "add") {
         await produitsAPI.create(apiPayload);
         alert("✅ Produit ajouté avec succès !");
-        
+        addHistoryEntry({
+          product: currentProduct,
+          type: "Création",
+          before: null,
+          after: currentProduct.cartons || 0
+        });
       } else if (modalType === "edit") {
-        // Pour l'édition, vérifier le code uniquement s'il a changé
-        if (apiPayload.code) {
-          const originalProduct = products.find(p => p.id === currentProduct.id);
-          const originalCode = originalProduct?.code || originalProduct?.code_barre || "";
-          
-          if (apiPayload.code !== originalCode) {
-            const codeExists = products.some(p => 
-              p.id !== currentProduct.id && 
-              (p.code === apiPayload.code || p.code_barre === apiPayload.code)
-            );
-            
-            if (codeExists) {
-              alert("❌ Ce code-barre est déjà utilisé par un autre produit.");
-              return;
-            }
-          }
-        }
-
         await produitsAPI.update(currentProduct.id, apiPayload);
         alert("✅ Produit modifié !");
+        addHistoryEntry({
+          product: currentProduct,
+          type: "Modification",
+          before: products.find(p => p.id === currentProduct.id)?.cartons || 0,
+          after: currentProduct.cartons || 0
+        });
       }
       
       closeProductModal();
@@ -441,36 +443,88 @@ export default function Products() {
           });
           alert(errorMessage);
         } else if (errorData.message) {
-          alert(`❌ Erreur: ${errorData.message}`);
+          if (errorData.message.includes("code has been already taken")) {
+            alert("❌ Ce code-barre est déjà utilisé par un autre produit. Veuillez en choisir un autre.");
+          } else if (errorData.message.includes("foreign key constraint fails")) {
+            alert("❌ Erreur: Le fournisseur sélectionné n'existe pas.");
+          } else {
+            alert(`❌ Erreur: ${errorData.message}`);
+          }
         } else {
           alert("❌ Une erreur est survenue lors de la sauvegarde.");
         }
-      } else {
+      } else if (error.message) {
         alert("❌ Erreur: " + error.message);
+      } else {
+        alert("❌ Erreur inconnue lors de la sauvegarde.");
       }
     }
+  };
+
+  const addHistoryEntry = ({ product, type, before, after }) => {
+    const entry = {
+      id: Date.now(),
+      productName: product?.name || "Produit",
+      type,
+      date: new Date().toLocaleString("fr-FR"),
+      before: before !== undefined ? before : null,
+      after: after !== undefined ? after : null,
+      manager: "Utilisateur"
+    };
+    setHistory(prev => [entry, ...prev]);
   };
 
   const handleConfirmDeleteProduct = async () => {
     if (!deleteId) return;
 
+    // Confirmation simple
+    const confirmDelete = window.confirm("Êtes-vous sûr de vouloir supprimer ce produit ? Cette action est irréversible.");
+    
+    if (!confirmDelete) {
+      setDeleteId(null);
+      return;
+    }
+
     try {
-        // SUPPRESSION FORCÉE SANS CONTRRAINTE
-        await produitsAPI.delete(deleteId);
-        
-        alert("✅ Produit supprimé avec succès !");
-        setDeleteId(null);
-        await fetchData();
+      await produitsAPI.delete(deleteId);
+      alert("✅ Produit supprimé avec succès !");
+      
+      // Ajouter à l'historique
+      const productToDelete = products.find(p => p.id === deleteId);
+      if (productToDelete) {
+        addHistoryEntry({
+          product: productToDelete,
+          type: "Suppression",
+          before: productToDelete.cartons || 0,
+          after: null
+        });
+      }
+      
+      setDeleteId(null);
+      await fetchData();
 
     } catch (error) {
-        console.error("Erreur suppression:", error);
+      console.error("Erreur suppression:", error);
+      
+      let errorMessage = "❌ Erreur lors de la suppression.";
+      
+      if (error.response?.data?.message) {
+        const msg = error.response.data.message;
         
-        if (error.response?.data?.message) {
-            alert(`❌ ${error.response.data.message}`);
+        if (msg.includes("associé") || msg.includes("vente") || msg.includes("1451") || 
+            msg.includes("Cannot delete") || msg.includes("foreign key constraint")) {
+          errorMessage = "❌ Impossible de supprimer ce produit car il est associé à des ventes.\n\n" +
+                        "Solutions suggérées:\n" +
+                        "1. Désactivez le produit au lieu de le supprimer\n" +
+                        "2. Archivez les ventes associées d'abord\n" +
+                        "3. Contactez l'administrateur si nécessaire";
         } else {
-            alert("❌ Erreur lors de la suppression.");
+          errorMessage = `❌ ${msg}`;
         }
-        setDeleteId(null);
+      }
+      
+      alert(errorMessage);
+      setDeleteId(null);
     }
   };
 
@@ -495,14 +549,22 @@ export default function Products() {
     }
 
     try {
+      // UTILISATION DES ROUTES DÉDIÉES (SANS CODE)
       if (adjustAction === "reappro") {
         await produitsAPI.reapprovisionner(product.id, qty);
         alert("✅ Stock réapprovisionné avec succès !");
-        
       } else if (adjustAction === "diminue") {
         await produitsAPI.diminuerStock(product.id, qty);
         alert("✅ Stock diminué avec succès !");
       }
+      
+      // Ajouter à l'historique
+      addHistoryEntry({
+        product: adjustProduct,
+        type: adjustAction === "reappro" ? "Réapprovisionnement" : "Diminution",
+        before: currentStock,
+        after: adjustAction === "reappro" ? currentStock + qty : currentStock - qty
+      });
       
       closeAdjustModal();
       await fetchData();
@@ -510,14 +572,7 @@ export default function Products() {
     } catch (error) {
       console.error("❌ Erreur ajustement:", error);
       
-      if (error.response?.data?.errors) {
-        const errors = error.response.data.errors;
-        let errorMsg = "Erreurs de validation:\n";
-        Object.entries(errors).forEach(([field, messages]) => {
-          errorMsg += `• ${field}: ${messages.join(', ')}\n`;
-        });
-        alert(errorMsg);
-      } else if (error.response?.data?.message) {
+      if (error.response?.data?.message) {
         alert(`❌ ${error.response.data.message}`);
       } else {
         alert("❌ Erreur lors de la mise à jour du stock.");
@@ -525,21 +580,8 @@ export default function Products() {
     }
   };
 
-  const addHistoryEntry = ({ product, type, before, after }) => {
-    const entry = {
-      id: Date.now(),
-      productName: product?.name || "Produit",
-      type,
-      date: new Date().toLocaleString("fr-FR"),
-      before: before !== undefined ? before : null,
-      after: after !== undefined ? after : null,
-      manager: "Utilisateur"
-    };
-    setHistory(prev => [entry, ...prev]);
-  };
-
   /* =========================================================================
-     7) GESTION CATÉGORIES CORRIGÉE
+     7) GESTION CATÉGORIES
      ========================================================================= */
   const openAddCategoryModal = () => {
     setCategoryModal("add");
@@ -608,7 +650,6 @@ export default function Products() {
     if(!deleteCategoryId) return;
     
     try {
-        // SUPPRESSION FORCÉE
         await categoriesAPI.delete(deleteCategoryId);
         alert("✅ Catégorie supprimée avec succès !");
         setDeleteCategoryId(null);
@@ -925,6 +966,9 @@ export default function Products() {
               <span className="bg-gradient-to-r from-[#F58020] to-[#FFA94D] text-white px-3 py-1 rounded-full inline-flex items-center gap-1">
                 <FaFolder /> {categories.length} catégories
               </span>
+              <span className="bg-gradient-to-r from-[#10B981] to-[#34D399] text-white px-3 py-1 rounded-full inline-flex items-center gap-1">
+                <FaTruck /> {fournisseurs.length} fournisseurs
+              </span>
             </div>
           )}
         </div>
@@ -974,7 +1018,7 @@ export default function Products() {
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#472EAD]"></div>
             <div>
               <p className="font-semibold text-[#472EAD]">Chargement en cours...</p>
-              <p className="text-sm text-slate-600">Récupération de tous les produits et catégories</p>
+              <p className="text-sm text-slate-600">Récupération de tous les produits, catégories et fournisseurs</p>
             </div>
           </div>
         </div>
@@ -1065,7 +1109,6 @@ export default function Products() {
                     <th className="p-4 text-right">Total</th>
                     <th className="p-4 text-center">Min.</th>
                     <th className="p-4 text-center">Statut</th>
-                    {/* SEULEMENT MODIFIER et SUPPRIMER */}
                     <th className="p-4 text-center">Actions</th>
                   </tr>
                 </thead>
@@ -1084,7 +1127,6 @@ export default function Products() {
                       <td className="p-4 text-right font-mono font-bold text-[#472EAD]">{Number(p.totalPrice).toLocaleString("fr-FR")}</td>
                       <td className="p-4 text-center text-[#F58020] font-medium">{p.stockMin}</td>
                       <td className="p-4 text-center"><StatusBadge status={p.status} /></td>
-                      {/* SEULEMENT MODIFIER et SUPPRIMER */}
                       <td className="p-4 text-center">
                         <div className="flex items-center justify-center gap-2">
                           <button onClick={() => openEditModal(p)} className="p-1.5 text-[#472EAD] hover:bg-[#F7F5FF] rounded transition-colors" title="Modifier">
@@ -1208,7 +1250,7 @@ export default function Products() {
         </div>
       )}
 
-      {/* ONGLET HISTORIQUE - SANS COLONNE MOTIF */}
+      {/* ONGLET HISTORIQUE */}
       {activeTab === "historique" && (
         <>
           <div className="bg-white rounded-xl shadow-sm border p-3">
@@ -1335,7 +1377,7 @@ export default function Products() {
         </>
       )}
 
-      {/* ONGLET CATÉGORIES - SANS DESCRIPTION */}
+      {/* ONGLET CATÉGORIES */}
       {activeTab === "categories" && (
         <>
           <div className="bg-white rounded-xl shadow-sm border p-3">
@@ -1481,31 +1523,38 @@ export default function Products() {
                 <label className="block text-xs font-semibold text-[#472EAD] mb-1">Fournisseur</label>
                 <div className="relative">
                   <div className="flex items-center gap-2">
-                    <select name="fournisseur_id" value={currentProduct.fournisseur_id || ""} onChange={(e) => {
-                      const selectedValue = e.target.value;
-                      setCurrentProduct(prev => ({ ...prev, fournisseur_id: selectedValue }));
-                      if (selectedValue) {
-                        const selectedFournisseur = fournisseursFictifs.find(f => f.id === selectedValue);
-                        if (selectedFournisseur) setCurrentProduct(prev => ({ ...prev, fournisseur: selectedFournisseur.nom }));
-                      } else setCurrentProduct(prev => ({ ...prev, fournisseur: "" }));
-                    }} className="w-full border rounded px-3 py-2 text-sm focus:ring-2 focus:ring-[#472EAD] focus:border-[#472EAD] outline-none appearance-none">
-                      <option value="">-- Sélectionnez un fournisseur --</option>
-                      {fournisseursFictifs.map(fournisseur => (
+                    <select 
+                      name="fournisseur_id" 
+                      value={currentProduct.fournisseur_id || ""} 
+                      onChange={(e) => {
+                        const selectedValue = e.target.value;
+                        setCurrentProduct(prev => ({ 
+                          ...prev, 
+                          fournisseur_id: selectedValue,
+                          fournisseur: selectedValue ? 
+                            fournisseurs.find(f => f.id === selectedValue)?.nom || "" 
+                            : ""
+                        }));
+                      }} 
+                      className="w-full border rounded px-3 py-2 text-sm focus:ring-2 focus:ring-[#472EAD] focus:border-[#472EAD] outline-none appearance-none"
+                    >
+                      <option value="">-- Aucun fournisseur --</option>
+                      {fournisseurs.map(fournisseur => (
                         <option key={fournisseur.id} value={fournisseur.id}>
-                          {fournisseur.nom} - {fournisseur.contact.substring(0, 15)}...
+                          {fournisseur.nom}
                         </option>
                       ))}
                     </select>
                     <FaChevronDown className="text-[#472EAD] pointer-events-none -ml-8" />
                   </div>
                   <div className="mt-1 text-xs text-[#472EAD]">
-                    <span>{fournisseursFictifs.length} fournisseurs</span>
+                    <span>{fournisseurs.length} fournisseurs disponibles</span>
                   </div>
                 </div>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-[#472EAD] mb-1">Code-barre</label>
-                <input type="text" name="barcode" value={currentProduct.barcode} onChange={handleProductFieldChange} className="w-full border rounded px-3 py-2 text-sm focus:ring-2 focus:ring-[#472EAD] focus:border-[#472EAD] outline-none" placeholder="Code unique" />
+                <input type="text" name="barcode" value={currentProduct.barcode} onChange={handleProductFieldChange} className="w-full border rounded px-3 py-2 text-sm focus:ring-2 focus:ring-[#472EAD] focus:border-[#472EAD] outline-none" placeholder="Code unique (facultatif)" />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-[#472EAD] mb-1">Prix par carton (F)</label>
@@ -1543,7 +1592,7 @@ export default function Products() {
         </div>
       )}
 
-      {/* MODALES CATÉGORIES - SANS DESCRIPTION */}
+      {/* MODALES CATÉGORIES */}
       {categoryModal && currentCategory && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
@@ -1604,7 +1653,7 @@ export default function Products() {
         </div>
       )}
 
-      {/* MODALE AJUSTEMENT STOCK - SANS MOTIF */}
+      {/* MODALE AJUSTEMENT STOCK */}
       {adjustModalOpen && adjustProduct && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
