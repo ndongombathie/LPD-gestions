@@ -1,10 +1,11 @@
 // ==========================================================
-// 👥 Utilisateurs.jsx — Responsable
-// CRUD + RESET PASSWORD + MODIFICATION
-// VERSION STABLE FINALE — PRODUCTION READY
+// 👥 Utilisateurs.jsx — VERSION 100 ANS
+// CRUD + RECHERCHE + FILTRES + PAGINATION + TOASTS
+// ✅ CORRECTION FILTRES PAR RÔLE
+// ✅ MAPPING COMPLET BACKEND/FRONTEND
 // ==========================================================
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   UserPlus,
@@ -17,60 +18,95 @@ import {
   Search,
   RefreshCw,
   KeyRound,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Filter,
+  Users,
 } from "lucide-react";
 
 import FormModal from "../components/FormModal.jsx";
 import DataTable from "../components/DataTable.jsx";
 import utilisateursAPI from "../../services/api/utilisateurs.js";
 
-/* ===================== */
-const ROLES = [
-  "Responsable",
-  "Vendeur",
-  "Caissier",
-  "Gestionnaire Dépôt",
-  "Gestionnaire Boutique",
+/* ===================== CONSTANTES ===================== */
+
+// ⚠️ RÔLES AU FORMAT BASE DE DONNÉES (snake_case)
+const ROLES_DB = [
+  "responsable",
+  "vendeur",
+  "caissier",
+  "gestionnaire_depot",
+  "gestionnaire_boutique",
 ];
 
-const cls = (...a) => a.filter(Boolean).join(" ");
-const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+// 🎯 MAPPAGE POUR L'AFFICHAGE (DB -> UI)
+const ROLE_DISPLAY_MAPPING = {
+  "responsable": "Responsable",
+  "vendeur": "Vendeur",
+  "caissier": "Caissier",
+  "gestionnaire_depot": "Gestionnaire Dépôt",
+  "gestionnaire_boutique": "Gestionnaire Boutique"
+};
 
-/* =======================
-   🔔 TOASTS
-======================= */
-function Toasts({ toasts, remove }) {
-  return (
-    <div className="fixed top-4 right-4 z-[120] space-y-2">
-      <AnimatePresence>
-        {toasts.map((t) => (
-          <motion.div
-            key={t.id}
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 20 }}
-            className={cls(
-              "min-w-[280px] rounded-xl border shadow px-4 py-3 flex gap-3",
-              t.type === "success"
-                ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-                : "bg-rose-50 border-rose-200 text-rose-800"
-            )}
+// 🔄 MAPPAGE POUR L'ENVOI (UI -> DB)
+const ROLE_API_MAPPING = {
+  "Responsable": "responsable",
+  "Vendeur": "vendeur",
+  "Caissier": "caissier",
+  "Gestionnaire Dépôt": "gestionnaire_depot",
+  "Gestionnaire Boutique": "gestionnaire_boutique"
+};
+
+// 📋 RÔLES POUR L'AFFICHAGE DANS L'UI
+const ROLES_UI = Object.values(ROLE_DISPLAY_MAPPING);
+
+const DEFAULT_PER_PAGE = 20;
+const DEBOUNCE_DELAY = 500;
+
+const cls = (...classes) => classes.filter(Boolean).join(" ");
+const isEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+/* ======================= TOASTS ======================= */
+const Toasts = ({ toasts, remove }) => (
+  <div className="fixed top-20 right-4 z-[9999] space-y-2 pointer-events-none">
+    <AnimatePresence>
+      {toasts.map((toast) => (
+        <motion.div
+          key={toast.id}
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: 20 }}
+          className={cls(
+            "min-w-[320px] max-w-md rounded-xl border shadow-lg px-4 py-3 flex gap-3 pointer-events-auto",
+            toast.type === "success"
+              ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+              : "bg-rose-50 border-rose-200 text-rose-800"
+          )}
+        >
+          {toast.type === "success" ? (
+            <CheckCircle2 className="flex-shrink-0 mt-0.5" size={18} />
+          ) : (
+            <AlertCircle className="flex-shrink-0 mt-0.5" size={18} />
+          )}
+          <div className="flex-1 text-sm font-medium break-words">
+            {toast.title}
+          </div>
+          <button 
+            onClick={() => remove(toast.id)} 
+            className="flex-shrink-0 hover:opacity-70 transition-opacity"
           >
-            {t.type === "success" ? <CheckCircle2 /> : <AlertCircle />}
-            <div className="flex-1 text-sm font-medium">{t.title}</div>
-            <button onClick={() => remove(t.id)}>
-              <X size={16} />
-            </button>
-          </motion.div>
-        ))}
-      </AnimatePresence>
-    </div>
-  );
-}
+            <X size={16} />
+          </button>
+        </motion.div>
+      ))}
+    </AnimatePresence>
+  </div>
+);
 
-/* =======================
-   🧾 FORMULAIRE CRÉATION
-======================= */
-function UserForm({ onSubmit, onCancel }) {
+/* ================== FORMULAIRE CRÉATION ================= */
+const UserForm = ({ onSubmit, onCancel, isLoading, error }) => {
   const [form, setForm] = useState({
     prenom: "",
     nom: "",
@@ -78,243 +114,927 @@ function UserForm({ onSubmit, onCancel }) {
     telephone: "",
     adresse: "",
     numero_cni: "",
-    role: "Vendeur",
+    role: "Vendeur", // Format UI
   });
 
-  const update = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const [fieldErrors, setFieldErrors] = useState({});
 
-  const submit = () => {
-    if (!form.prenom || !form.nom || !isEmail(form.email)) {
-      alert("Veuillez remplir correctement les champs requis");
-      return;
+  const updateField = (key, value) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    if (fieldErrors[key]) {
+      setFieldErrors((prev) => ({ ...prev, [key]: null }));
     }
-    onSubmit(form);
   };
 
-  const input = "border rounded-lg px-3 py-2 text-sm w-full";
+  const validateForm = () => {
+    const errors = {};
+    
+    if (!form.prenom?.trim()) errors.prenom = "Prénom requis";
+    if (!form.nom?.trim()) errors.nom = "Nom requis";
+    if (!form.email?.trim()) {
+      errors.email = "Email requis";
+    } else if (!isEmail(form.email)) {
+      errors.email = "Email invalide";
+    }
+
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleSubmit = () => {
+    if (validateForm()) {
+      onSubmit(form);
+    }
+  };
+
+  const inputClass = "border rounded-lg px-3 py-2 text-sm w-full transition-all focus:ring-2 focus:ring-[#472EAD]/20 focus:border-[#472EAD] outline-none";
+  const errorInputClass = "border-rose-500 bg-rose-50 focus:ring-rose-200 focus:border-rose-500";
 
   return (
     <div className="space-y-4">
+      {error && (
+        <div className="bg-rose-50 border border-rose-200 rounded-lg p-3 text-sm text-rose-800 flex items-start gap-2">
+          <AlertCircle size={18} className="flex-shrink-0 mt-0.5" />
+          <span className="flex-1">{error}</span>
+        </div>
+      )}
+      
       <div className="grid grid-cols-2 gap-4">
-        <input className={input} placeholder="Prénom" value={form.prenom} onChange={(e) => update("prenom", e.target.value)} />
-        <input className={input} placeholder="Nom" value={form.nom} onChange={(e) => update("nom", e.target.value)} />
-        <input className={input} placeholder="Email" value={form.email} onChange={(e) => update("email", e.target.value)} />
-        <input className={input} placeholder="Téléphone" value={form.telephone} onChange={(e) => update("telephone", e.target.value)} />
-        <input className={input} placeholder="CNI" value={form.numero_cni} onChange={(e) => update("numero_cni", e.target.value)} />
+        {/* Prénom */}
+        <div className="space-y-1">
+          <input
+            className={cls(inputClass, fieldErrors.prenom && errorInputClass)}
+            placeholder="Prénom *"
+            value={form.prenom}
+            onChange={(e) => updateField("prenom", e.target.value)}
+            disabled={isLoading}
+          />
+          {fieldErrors.prenom && (
+            <p className="text-xs text-rose-600">{fieldErrors.prenom}</p>
+          )}
+        </div>
 
-        <select className={input} value={form.role} onChange={(e) => update("role", e.target.value)}>
-          {ROLES.map((r) => <option key={r}>{r}</option>)}
+        {/* Nom */}
+        <div className="space-y-1">
+          <input
+            className={cls(inputClass, fieldErrors.nom && errorInputClass)}
+            placeholder="Nom *"
+            value={form.nom}
+            onChange={(e) => updateField("nom", e.target.value)}
+            disabled={isLoading}
+          />
+          {fieldErrors.nom && (
+            <p className="text-xs text-rose-600">{fieldErrors.nom}</p>
+          )}
+        </div>
+
+        {/* Email */}
+        <div className="space-y-1">
+          <input
+            className={cls(inputClass, fieldErrors.email && errorInputClass)}
+            placeholder="Email *"
+            type="email"
+            value={form.email}
+            onChange={(e) => updateField("email", e.target.value)}
+            disabled={isLoading}
+          />
+          {fieldErrors.email && (
+            <p className="text-xs text-rose-600">{fieldErrors.email}</p>
+          )}
+        </div>
+
+        {/* Téléphone */}
+        <input
+          className={inputClass}
+          placeholder="Téléphone"
+          value={form.telephone}
+          onChange={(e) => updateField("telephone", e.target.value)}
+          disabled={isLoading}
+        />
+
+        {/* CNI */}
+        <input
+          className={inputClass}
+          placeholder="CNI"
+          value={form.numero_cni}
+          onChange={(e) => updateField("numero_cni", e.target.value)}
+          disabled={isLoading}
+        />
+
+        {/* Rôle - AFFICHAGE UI */}
+        <select
+          className={inputClass}
+          value={form.role}
+          onChange={(e) => updateField("role", e.target.value)}
+          disabled={isLoading}
+        >
+          {ROLES_UI.map((role) => (
+            <option key={role}>{role}</option>
+          ))}
         </select>
 
-        <input className={`${input} col-span-2`} placeholder="Adresse" value={form.adresse} onChange={(e) => update("adresse", e.target.value)} />
+        {/* Adresse */}
+        <input
+          className={`${inputClass} col-span-2`}
+          placeholder="Adresse"
+          value={form.adresse}
+          onChange={(e) => updateField("adresse", e.target.value)}
+          disabled={isLoading}
+        />
       </div>
 
-      <div className="flex justify-end gap-3">
-        <button onClick={onCancel} className="border px-4 py-2 rounded-lg">
+      {/* Boutons */}
+      <div className="flex justify-end gap-3 pt-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-4 py-2 border rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+          disabled={isLoading}
+        >
           Annuler
         </button>
-        <button onClick={submit} className="bg-[#472EAD] text-white px-4 py-2 rounded-lg">
-          Créer utilisateur
+        <button
+          type="button"
+          onClick={handleSubmit}
+          className={cls(
+            "px-4 py-2 bg-[#472EAD] text-white rounded-lg transition-all flex items-center gap-2",
+            isLoading ? "opacity-70 cursor-not-allowed" : "hover:bg-[#3a2590]"
+          )}
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <>
+              <RefreshCw size={16} className="animate-spin" />
+              Création...
+            </>
+          ) : (
+            "Créer l'utilisateur"
+          )}
         </button>
       </div>
     </div>
   );
-}
+};
 
-/* =======================
-   📋 PAGE PRINCIPALE
-======================= */
+/* ================== FILTRE PAR RÔLE ================= */
+const RoleFilter = ({ selectedRole, onRoleChange, onReset }) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className={cls(
+          "flex items-center gap-2 px-4 py-2 border rounded-lg transition-colors whitespace-nowrap",
+          selectedRole 
+            ? "bg-[#472EAD] text-white border-[#472EAD]" 
+            : "hover:bg-gray-50"
+        )}
+      >
+        <Filter size={16} />
+        <span className="text-sm">
+          {selectedRole ? ROLE_DISPLAY_MAPPING[selectedRole] || selectedRole : "Filtrer par rôle"}
+        </span>
+      </button>
+
+      {isOpen && (
+        <>
+          <div 
+            className="fixed inset-0 z-40"
+            onClick={() => setIsOpen(false)}
+          />
+          <div className="absolute top-full left-0 mt-2 w-64 bg-white border rounded-lg shadow-lg z-50 py-2">
+            <button
+              onClick={() => {
+                onReset();
+                setIsOpen(false);
+              }}
+              className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm font-medium text-[#472EAD]"
+            >
+              🧹 Tous les rôles
+            </button>
+            <div className="border-t my-2" />
+            {ROLES_DB.map((role) => (
+              <button
+                key={role}
+                onClick={() => {
+                  onRoleChange(role);
+                  setIsOpen(false);
+                }}
+                className={cls(
+                  "w-full text-left px-4 py-2 hover:bg-gray-50 text-sm transition-colors",
+                  selectedRole === role && "bg-gray-50 text-[#472EAD] font-medium"
+                )}
+              >
+                {ROLE_DISPLAY_MAPPING[role] || role}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+/* ================== PAGINATION ================= */
+const Pagination = ({ currentPage, totalPages, onPageChange, totalItems }) => {
+  const getPageNumbers = useCallback(() => {
+    const pages = [];
+    const maxVisible = 5;
+    
+    if (totalPages <= maxVisible) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (currentPage <= 3) {
+        for (let i = 1; i <= 4; i++) pages.push(i);
+        pages.push('...');
+        pages.push(totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        pages.push(1);
+        pages.push('...');
+        for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
+      } else {
+        pages.push(1);
+        pages.push('...');
+        for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i);
+        pages.push('...');
+        pages.push(totalPages);
+      }
+    }
+    return pages;
+  }, [currentPage, totalPages]);
+
+  if (totalPages <= 1) return null;
+
+  return (
+    <div className="flex items-center justify-between mt-6">
+      <div className="text-sm text-gray-600">
+        <Users size={14} className="inline mr-1" />
+        {totalItems} utilisateur{totalItems > 1 ? 's' : ''} · Page {currentPage}/{totalPages}
+      </div>
+      
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => onPageChange(1)}
+          disabled={currentPage === 1}
+          className="p-2 rounded-lg border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          title="Première page"
+        >
+          <ChevronsLeft size={16} />
+        </button>
+        
+        <button
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          className="p-2 rounded-lg border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          title="Page précédente"
+        >
+          <ChevronLeft size={16} />
+        </button>
+
+        {getPageNumbers().map((page, index) => (
+          <button
+            key={index}
+            onClick={() => typeof page === 'number' && onPageChange(page)}
+            className={cls(
+              "min-w-[36px] h-9 rounded-lg text-sm font-medium transition-colors",
+              page === currentPage
+                ? "bg-[#472EAD] text-white"
+                : page === '...'
+                ? "cursor-default"
+                : "hover:bg-gray-50 border"
+            )}
+            disabled={page === '...'}
+          >
+            {page}
+          </button>
+        ))}
+
+        <button
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          className="p-2 rounded-lg border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          title="Page suivante"
+        >
+          <ChevronRight size={16} />
+        </button>
+        
+        <button
+          onClick={() => onPageChange(totalPages)}
+          disabled={currentPage === totalPages}
+          className="p-2 rounded-lg border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          title="Dernière page"
+        >
+          <ChevronsRight size={16} />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+/* ================== FONCTION DE FORMATAGE DES RÔLES ================= */
+const formatRole = (role) => {
+  if (!role) return '-';
+  // Convertir le rôle DB -> UI
+  return ROLE_DISPLAY_MAPPING[role.toLowerCase()] || 
+         role.charAt(0).toUpperCase() + role.slice(1).toLowerCase();
+};
+
+/* ================== PAGE PRINCIPALE ================= */
 export default function Utilisateurs() {
+  // États des données
   const [users, setUsers] = useState([]);
-  const [search, setSearch] = useState("");
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  
+  // États des filtres
+  const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [selectedRole, setSelectedRole] = useState(""); // Format DB (snake_case)
+  
+  // États de chargement
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // États des modales
   const [openAdd, setOpenAdd] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [resetTarget, setResetTarget] = useState(null);
+  const [formError, setFormError] = useState(null);
+  
+  // États des toasts
   const [toasts, setToasts] = useState([]);
 
-  const toast = (title, type = "success") => {
-    const id = Date.now();
-    setToasts((t) => [...t, { id, title, type }]);
-    setTimeout(() => removeToast(id), 3000);
-  };
-  const removeToast = (id) =>
-    setToasts((t) => t.filter((x) => x.id !== id));
-
-  const loadUsers = async () => {
-    try {
-      const res = await utilisateursAPI.getAll();
-      setUsers(Array.isArray(res) ? res : res?.data || []);
-    } catch {
-      setUsers([]);
-      toast("Erreur chargement utilisateurs", "error");
-    }
-  };
-
-  useEffect(() => {
-    loadUsers();
+  /* ============= GESTION DES TOASTS ============= */
+  const addToast = useCallback((title, type = "success") => {
+    const id = Date.now() + Math.random();
+    setToasts((prev) => [...prev, { id, title, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 4000);
   }, []);
 
-  const filteredUsers = users.filter((u) => {
-    const q = search.toLowerCase();
-    return (
-      u.prenom?.toLowerCase().includes(q) ||
-      u.nom?.toLowerCase().includes(q) ||
-      u.role?.toLowerCase().includes(q)
-    );
-  });
+  const removeToast = useCallback((id) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
 
+  /* ============= CHARGEMENT DES DONNÉES ============= */
+  const loadUsers = useCallback(async (page = 1) => {
+    try {
+      setIsLoading(true);
+      
+      const params = { page };
+      
+      // Ajout de la recherche
+      if (debouncedSearch?.trim()) {
+        params.search = debouncedSearch.trim();
+      }
+      
+      // Ajout du filtre rôle - DIRECTEMENT EN FORMAT DB
+      if (selectedRole) {
+        params.role = selectedRole; // Déjà en snake_case
+      }
+
+      console.log("📡 Chargement avec params:", params);
+      
+      const response = await utilisateursAPI.getAll(params);
+      
+      console.log("📡 Réponse API:", response);
+      
+      if (response?.data) {
+        setUsers(response.data);
+        setTotalPages(response.last_page || 1);
+        setTotalItems(response.total || 0);
+        setCurrentPage(response.current_page || page);
+      } else if (Array.isArray(response)) {
+        setUsers(response);
+        setTotalPages(1);
+        setTotalItems(response.length);
+        setCurrentPage(1);
+      }
+      
+    } catch (error) {
+      console.error("❌ Erreur chargement:", error);
+      addToast("Impossible de charger les utilisateurs", "error");
+      setUsers([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [debouncedSearch, selectedRole, addToast]);
+
+  /* ============= DEBOUNCE RECHERCHE ============= */
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+    }, DEBOUNCE_DELAY);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  /* ============= CHARGEMENT INITIAL ============= */
+  useEffect(() => {
+    loadUsers(1);
+  }, [debouncedSearch, selectedRole]);
+
+  /* ============= GESTIONNAIRES D'ÉVÉNEMENTS ============= */
+  const handleRefresh = useCallback(() => {
+    setSearchTerm("");
+    setSelectedRole("");
+    loadUsers(1);
+    addToast("✅ Liste actualisée");
+  }, [loadUsers, addToast]);
+
+  const handlePageChange = useCallback((page) => {
+    loadUsers(page);
+  }, [loadUsers]);
+
+  const handleCreateUser = useCallback(async (formData) => {
+    try {
+      setIsSubmitting(true);
+      setFormError(null);
+      
+      await utilisateursAPI.create(formData);
+      
+      addToast("✅ Utilisateur créé avec succès. Mot de passe envoyé par email.");
+      setOpenAdd(false);
+      loadUsers(currentPage);
+      
+    } catch (error) {
+      console.error("❌ Erreur création:", error);
+      
+      if (error.response?.status === 422 || error.response?.status === 409) {
+        const errors = error.response.data?.errors;
+        if (errors?.email) {
+          setFormError("❌ Cet email est déjà utilisé. Veuillez en choisir un autre.");
+        } else {
+          setFormError("❌ Erreur de validation. Vérifiez les champs.");
+        }
+      } else {
+        setFormError("❌ Erreur lors de la création de l'utilisateur");
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [addToast, currentPage, loadUsers]);
+
+  const handleUpdateUser = useCallback(async () => {
+    if (!editTarget) return;
+    
+    try {
+      setIsSubmitting(true);
+      
+      await utilisateursAPI.update(editTarget.id, {
+        telephone: editTarget.telephone,
+        adresse: editTarget.adresse,
+        role: editTarget.role, // Déjà en format UI, l'API convertira
+      });
+      
+      addToast("✅ Utilisateur modifié avec succès");
+      setEditTarget(null);
+      loadUsers(currentPage);
+      
+    } catch (error) {
+      console.error("❌ Erreur modification:", error);
+      addToast("❌ Erreur lors de la modification", "error");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [editTarget, addToast, currentPage, loadUsers]);
+
+  const handleDeleteUser = useCallback(async () => {
+    if (!deleteTarget) return;
+    
+    try {
+      setIsSubmitting(true);
+      
+      await utilisateursAPI.remove(deleteTarget.id);
+      
+      addToast("🗑️ Utilisateur supprimé", "error");
+      setDeleteTarget(null);
+      
+      if (users.length === 1 && currentPage > 1) {
+        loadUsers(currentPage - 1);
+      } else {
+        loadUsers(currentPage);
+      }
+      
+    } catch (error) {
+      console.error("❌ Erreur suppression:", error);
+      addToast("❌ Erreur lors de la suppression", "error");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [deleteTarget, addToast, users.length, currentPage, loadUsers]);
+
+  const handleResetPassword = useCallback(async () => {
+    if (!resetTarget) return;
+    
+    try {
+      setIsSubmitting(true);
+      
+      await utilisateursAPI.resetPassword(resetTarget.id);
+      
+      addToast("🔐 Nouveau mot de passe envoyé par email");
+      setResetTarget(null);
+      
+    } catch (error) {
+      console.error("❌ Erreur réinitialisation:", error);
+      addToast("❌ Erreur lors de la réinitialisation", "error");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [resetTarget, addToast]);
+
+  /* ============= FORMATAGE DES DONNÉES ============= */
+  const formattedUsers = useMemo(() => {
+    return users.map((user) => ({
+      ...user,
+      fullName: `${user.prenom || ''} ${user.nom || ''}`.trim() || '-',
+      formattedRole: formatRole(user.role), // Conversion DB -> UI
+    }));
+  }, [users]);
+
+  /* ============= RENDU DES ACTIONS ============= */
+  const renderActions = useCallback((user) => (
+    <div className="flex items-center gap-2">
+      <button
+        onClick={() => setEditTarget(user)}
+        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+        title="Modifier"
+      >
+        <Edit2 size={16} />
+      </button>
+      <button
+        onClick={() => setResetTarget(user)}
+        className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+        title="Réinitialiser mot de passe"
+      >
+        <KeyRound size={16} />
+      </button>
+      <button
+        onClick={() => setDeleteTarget(user)}
+        className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+        title="Supprimer"
+      >
+        <Trash2 size={16} />
+      </button>
+    </div>
+  ), []);
+
+  /* ============= COLONNES DU TABLEAU ============= */
+  const columns = useMemo(() => [
+    {
+      label: "Nom complet",
+      render: (_, user) => user.fullName,
+    },
+    {
+      label: "Email",
+      key: "email",
+    },
+    {
+      label: "Rôle",
+      render: (_, user) => user.formattedRole, // Déjà formaté
+    },
+    {
+      label: "Statut",
+      render: (_, user) => (
+        <span className="flex items-center gap-1.5 text-xs">
+          <Circle
+            size={8}
+            className={cls(
+              "fill-current",
+              user.is_online ? "text-green-600" : "text-gray-400"
+            )}
+          />
+          {user.is_online ? "En ligne" : "Hors ligne"}
+        </span>
+      ),
+    },
+    {
+      label: "Actions",
+      render: (_, user) => renderActions(user),
+    },
+  ], [renderActions]);
+
+  /* ============= RENDU ============= */
   return (
-    <div className="p-6 space-y-4">
-      <h1 className="text-2xl font-bold text-[#472EAD]">
-        Gestion des utilisateurs
-      </h1>
+    <div className="p-6 space-y-4 relative min-h-screen">
+      {/* En-tête */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-[#472EAD]">
+          Gestion des utilisateurs
+        </h1>
+        <div className="text-sm text-gray-500">
+          {!isLoading && totalItems > 0 && (
+            <span>{totalItems} utilisateur{totalItems > 1 ? 's' : ''}</span>
+          )}
+        </div>
+      </div>
 
-      <div className="relative w-full md:w-1/3">
-        <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Rechercher par nom ou rôle..."
-          className="w-full pl-9 pr-3 py-2 border rounded-lg text-sm"
+      {/* Barre de recherche et filtres */}
+      <div className="flex flex-col md:flex-row gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Rechercher par nom, prénom, email ou rôle..."
+            className="w-full pl-9 pr-10 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-[#472EAD]/20 focus:border-[#472EAD] outline-none"
+            disabled={isLoading}
+          />
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm("")}
+              className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X size={16} />
+            </button>
+          )}
+        </div>
+
+        <RoleFilter
+          selectedRole={selectedRole}
+          onRoleChange={setSelectedRole}
+          onReset={() => setSelectedRole("")}
         />
       </div>
 
+      {/* Filtres actifs */}
+      {(searchTerm || selectedRole) && (
+        <div className="flex items-center gap-2 text-sm flex-wrap">
+          <span className="text-gray-600">Filtres actifs:</span>
+          {searchTerm && (
+            <span className="bg-gray-100 px-3 py-1 rounded-full text-xs flex items-center gap-1">
+              🔍 "{searchTerm}"
+              <button
+                onClick={() => setSearchTerm("")}
+                className="ml-1 hover:text-gray-700"
+              >
+                <X size={12} />
+              </button>
+            </span>
+          )}
+          {selectedRole && (
+            <span className="bg-[#472EAD]/10 text-[#472EAD] px-3 py-1 rounded-full text-xs flex items-center gap-1">
+              🎯 {ROLE_DISPLAY_MAPPING[selectedRole] || selectedRole}
+              <button
+                onClick={() => setSelectedRole("")}
+                className="ml-1 hover:text-[#3a2590]"
+              >
+                <X size={12} />
+              </button>
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Boutons d'action */}
       <div className="flex gap-3">
-        <button onClick={() => setOpenAdd(true)} className="flex items-center gap-2 px-4 py-2 bg-[#472EAD] text-white rounded-lg">
-          <UserPlus size={16} /> Nouvel utilisateur
+        <button
+          onClick={() => {
+            setFormError(null);
+            setOpenAdd(true);
+          }}
+          className="flex items-center gap-2 px-4 py-2 bg-[#472EAD] text-white rounded-lg hover:bg-[#3a2590] transition-colors"
+        >
+          <UserPlus size={16} />
+          Nouvel utilisateur
         </button>
 
-        <button onClick={loadUsers} className="flex items-center gap-2 px-4 py-2 border rounded-lg">
-          <RefreshCw size={16} /> Rafraîchir
+        <button
+          onClick={handleRefresh}
+          className="flex items-center gap-2 px-4 py-2 border rounded-lg hover:bg-gray-50 transition-colors"
+          disabled={isLoading}
+        >
+          <RefreshCw size={16} className={isLoading ? "animate-spin" : ""} />
+          Rafraîchir
         </button>
       </div>
 
-      <DataTable
-        data={filteredUsers}
-        columns={[
-          { label: "Nom", render: (_, r) => `${r.prenom} ${r.nom}` },
-          { label: "Email", key: "email" },
-          { label: "Rôle", key: "role" },
-          {
-            label: "Statut",
-            render: (_, r) => (
-              <span className="flex items-center gap-1 text-xs">
-                <Circle size={10} className={r.is_online ? "text-green-600" : "text-gray-400"} />
-                {r.is_online ? "En ligne" : "Hors ligne"}
-              </span>
-            ),
-          },
-        ]}
-        actions={[
-          { title: "Modifier", icon: <Edit2 size={16} />, onClick: setEditTarget },
-          { title: "Réinitialiser mot de passe", icon: <KeyRound size={16} />, onClick: setResetTarget },
-          { title: "Supprimer", icon: <Trash2 size={16} />, onClick: setDeleteTarget },
-        ]}
-      />
+      {/* Tableau des utilisateurs */}
+      {!isLoading && users.length === 0 ? (
+        <div className="text-center py-12 bg-gray-50 rounded-lg">
+          <Users size={48} className="mx-auto text-gray-400 mb-4" />
+          <p className="text-gray-500">
+            {searchTerm || selectedRole
+              ? "Aucun utilisateur ne correspond à vos critères"
+              : "Aucun utilisateur trouvé"}
+          </p>
+          {(searchTerm || selectedRole) && (
+            <button
+              onClick={handleRefresh}
+              className="mt-4 text-[#472EAD] hover:underline text-sm"
+            >
+              Réinitialiser les filtres
+            </button>
+          )}
+        </div>
+      ) : (
+        <>
+          <DataTable
+            data={formattedUsers}
+            columns={columns}
+            isLoading={isLoading}
+          />
+          
+          {totalPages > 1 && (
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={handlePageChange}
+              totalItems={totalItems}
+            />
+          )}
+        </>
+      )}
 
-      {/* ➕ CRÉATION */}
-      <FormModal open={openAdd} onClose={() => setOpenAdd(false)} title="Nouvel utilisateur">
+      {/* Modal Création */}
+      <FormModal
+        open={openAdd}
+        onClose={() => {
+          setOpenAdd(false);
+          setFormError(null);
+        }}
+        title="Nouvel utilisateur"
+      >
         <UserForm
-          onSubmit={async (data) => {
-            try {
-              await utilisateursAPI.create(data);
-              toast("Utilisateur créé (mot de passe envoyé par email)");
-              setOpenAdd(false);
-              loadUsers();
-            } catch {
-              toast("Erreur création utilisateur", "error");
-            }
+          onSubmit={handleCreateUser}
+          onCancel={() => {
+            setOpenAdd(false);
+            setFormError(null);
           }}
-          onCancel={() => setOpenAdd(false)}
+          isLoading={isSubmitting}
+          error={formError}
         />
       </FormModal>
 
-      {/* ✏️ MODIFICATION */}
-      <FormModal open={!!editTarget} onClose={() => setEditTarget(null)} title="Modifier utilisateur">
+      {/* Modal Modification */}
+      <FormModal
+        open={!!editTarget}
+        onClose={() => {
+          setEditTarget(null);
+          setFormError(null);
+        }}
+        title="Modifier l'utilisateur"
+      >
         {editTarget && (
           <div className="space-y-4">
-            <input className="border rounded-lg px-3 py-2 w-full" value={editTarget.telephone || ""} onChange={(e) => setEditTarget({ ...editTarget, telephone: e.target.value })} placeholder="Téléphone" />
-            <input className="border rounded-lg px-3 py-2 w-full" value={editTarget.adresse || ""} onChange={(e) => setEditTarget({ ...editTarget, adresse: e.target.value })} placeholder="Adresse" />
-            <select className="border rounded-lg px-3 py-2 w-full" value={editTarget.role} onChange={(e) => setEditTarget({ ...editTarget, role: e.target.value })}>
-              {ROLES.map((r) => <option key={r}>{r}</option>)}
+            <input
+              className="border rounded-lg px-3 py-2 w-full focus:ring-2 focus:ring-[#472EAD]/20 focus:border-[#472EAD] outline-none"
+              value={editTarget.telephone || ""}
+              onChange={(e) => setEditTarget({ ...editTarget, telephone: e.target.value })}
+              placeholder="Téléphone"
+              disabled={isSubmitting}
+            />
+            <input
+              className="border rounded-lg px-3 py-2 w-full focus:ring-2 focus:ring-[#472EAD]/20 focus:border-[#472EAD] outline-none"
+              value={editTarget.adresse || ""}
+              onChange={(e) => setEditTarget({ ...editTarget, adresse: e.target.value })}
+              placeholder="Adresse"
+              disabled={isSubmitting}
+            />
+            <select
+              className="border rounded-lg px-3 py-2 w-full focus:ring-2 focus:ring-[#472EAD]/20 focus:border-[#472EAD] outline-none"
+              value={editTarget.role || "Vendeur"}
+              onChange={(e) => setEditTarget({ ...editTarget, role: e.target.value })}
+              disabled={isSubmitting}
+            >
+              {ROLES_UI.map((role) => (
+                <option key={role}>{role}</option>
+              ))}
             </select>
 
-            <div className="flex justify-end gap-3">
-              <button onClick={() => setEditTarget(null)} className="border px-4 py-2 rounded-lg">Annuler</button>
+            <div className="flex justify-end gap-3 pt-2">
               <button
-                onClick={async () => {
-                  try {
-                    await utilisateursAPI.update(editTarget.id, {
-                      telephone: editTarget.telephone,
-                      adresse: editTarget.adresse,
-                      role: editTarget.role,
-                    });
-                    toast("Utilisateur modifié");
-                    setEditTarget(null);
-                    loadUsers();
-                  } catch {
-                    toast("Erreur modification", "error");
-                  }
-                }}
-                className="bg-[#472EAD] text-white px-4 py-2 rounded-lg"
+                onClick={() => setEditTarget(null)}
+                className="px-4 py-2 border rounded-lg hover:bg-gray-50 transition-colors"
+                disabled={isSubmitting}
               >
-                Enregistrer
+                Annuler
+              </button>
+              <button
+                onClick={handleUpdateUser}
+                className={cls(
+                  "px-4 py-2 bg-[#472EAD] text-white rounded-lg transition-all flex items-center gap-2",
+                  isSubmitting ? "opacity-70 cursor-not-allowed" : "hover:bg-[#3a2590]"
+                )}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <>
+                    <RefreshCw size={16} className="animate-spin" />
+                    Modification...
+                  </>
+                ) : (
+                  "Enregistrer"
+                )}
               </button>
             </div>
           </div>
         )}
       </FormModal>
 
-      {/* 🔐 RESET PASSWORD */}
-      <FormModal open={!!resetTarget} onClose={() => setResetTarget(null)} title="Réinitialiser mot de passe">
-        <p className="mb-4 text-sm">
-          Un nouveau mot de passe sera généré et envoyé à <b>{resetTarget?.email}</b>
-        </p>
-        <div className="flex justify-end gap-3">
-          <button onClick={() => setResetTarget(null)} className="border px-4 py-2 rounded-lg">Annuler</button>
-          <button
-            onClick={async () => {
-              try {
-                await utilisateursAPI.resetPassword(resetTarget.id);
-                toast("Nouveau mot de passe envoyé");
-                setResetTarget(null);
-              } catch {
-                toast("Erreur réinitialisation", "error");
-              }
-            }}
-            className="bg-[#472EAD] text-white px-4 py-2 rounded-lg"
-          >
-            Confirmer
-          </button>
-        </div>
+      {/* Modal Reset Password */}
+      <FormModal
+        open={!!resetTarget}
+        onClose={() => setResetTarget(null)}
+        title="Réinitialiser le mot de passe"
+      >
+        {resetTarget && (
+          <div className="space-y-4">
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <p className="text-sm text-amber-800">
+                Un nouveau mot de passe sera généré et envoyé à :
+              </p>
+              <p className="font-semibold text-amber-900 mt-1 break-all">
+                {resetTarget.email}
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => setResetTarget(null)}
+                className="px-4 py-2 border rounded-lg hover:bg-gray-50 transition-colors"
+                disabled={isSubmitting}
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleResetPassword}
+                className={cls(
+                  "px-4 py-2 bg-[#472EAD] text-white rounded-lg transition-all flex items-center gap-2",
+                  isSubmitting ? "opacity-70 cursor-not-allowed" : "hover:bg-[#3a2590]"
+                )}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <>
+                    <RefreshCw size={16} className="animate-spin" />
+                    Envoi...
+                  </>
+                ) : (
+                  "Confirmer"
+                )}
+              </button>
+            </div>
+          </div>
+        )}
       </FormModal>
 
-      {/* 🗑️ SUPPRESSION */}
-      <FormModal open={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Supprimer utilisateur">
-        <p className="mb-4 text-sm">
-          Supprimer <b>{deleteTarget?.prenom} {deleteTarget?.nom}</b> ?
-        </p>
-        <div className="flex justify-end gap-3">
-          <button onClick={() => setDeleteTarget(null)} className="border px-4 py-2 rounded-lg">Annuler</button>
-          <button
-            onClick={async () => {
-              try {
-                await utilisateursAPI.remove(deleteTarget.id);
-                toast("Utilisateur supprimé", "error");
-                setDeleteTarget(null);
-                loadUsers();
-              } catch {
-                toast("Erreur suppression", "error");
-              }
-            }}
-            className="bg-rose-600 text-white px-4 py-2 rounded-lg"
-          >
-            Supprimer
-          </button>
-        </div>
+      {/* Modal Suppression */}
+      <FormModal
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        title="Supprimer l'utilisateur"
+      >
+        {deleteTarget && (
+          <div className="space-y-4">
+            <div className="bg-rose-50 border border-rose-200 rounded-lg p-4">
+              <p className="text-sm text-rose-800">
+                Êtes-vous sûr de vouloir supprimer cet utilisateur ?
+              </p>
+              <p className="font-semibold text-rose-900 mt-2">
+                {deleteTarget.prenom} {deleteTarget.nom}
+              </p>
+              <p className="text-xs text-rose-600 mt-2">
+                Cette action est irréversible.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="px-4 py-2 border rounded-lg hover:bg-gray-50 transition-colors"
+                disabled={isSubmitting}
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleDeleteUser}
+                className={cls(
+                  "px-4 py-2 bg-rose-600 text-white rounded-lg transition-all flex items-center gap-2",
+                  isSubmitting ? "opacity-70 cursor-not-allowed" : "hover:bg-rose-700"
+                )}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <>
+                    <RefreshCw size={16} className="animate-spin" />
+                    Suppression...
+                  </>
+                ) : (
+                  "Supprimer"
+                )}
+              </button>
+            </div>
+          </div>
+        )}
       </FormModal>
 
+      {/* Toasts */}
       <Toasts toasts={toasts} remove={removeToast} />
     </div>
   );

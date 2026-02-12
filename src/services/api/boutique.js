@@ -15,7 +15,7 @@ const boutiqueAPI = {
     try {
       const res = await httpClient.get(ENDPOINT, {
         params: {
-          per_page: 25, // 🔥 pagination fixe 25
+          per_page: 20, // 🔥 pagination fixe 25
           ...params,
         },
       });

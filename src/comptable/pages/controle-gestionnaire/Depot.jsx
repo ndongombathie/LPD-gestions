@@ -1,5 +1,5 @@
 // ==========================================================
-// 🏭 DepotControle.jsx — PRO MAX (Pagination 25 + Print Global)
+// 🏭 DepotControle.jsx — PRO MAX (Pagination 15 + Print Global)
 // ==========================================================
 
 import React, { useEffect, useMemo, useState, useCallback } from "react";
@@ -25,7 +25,7 @@ export default function DepotControle() {
   const [pagination, setPagination] = useState(null);
 
   const [page, setPage] = useState(1);
-  const perPage = 25;
+  const perPage = 15;
 
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
