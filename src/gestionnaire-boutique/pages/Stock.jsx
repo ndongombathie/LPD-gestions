@@ -146,8 +146,8 @@ const Stock = () => {
               columns={[
                 { label: "Produit", key: "nom" },
                 { label: "Code", key: "code" },
-                { label: "Quantité", key: "stock_global", render: (v, row) => row.stock_global ?? row.quantite ?? '-' },
-                { label: "Seuil", key: "stock_seuil", render: (v, row) => row.stock_seuil ?? row.seuil ?? '-' },
+                { label: "Quantité", key: "quantite", render: (v, row) => row.quantite ?? row.quantite ?? '-' },
+                { label: "Seuil", key: "seuil", render: (v, row) => row.seuil ?? row.seuil ?? '-' },
                 { label: "Cartons", key: "nombre_carton", render: (v, row) => row.nombre_carton ?? '-' },
               ]}
               data={stocksFiltres}
@@ -189,11 +189,11 @@ const Stock = () => {
                 </div>
                 <div className="border-b pb-3">
                   <p className="text-gray-600 font-medium">Quantité (unités)</p>
-                  <p className="text-[#111827] font-semibold mt-1">{produitDetail.stock_global ?? produitDetail.quantite ?? '-'}</p>
+                  <p className="text-[#111827] font-semibold mt-1">{produitDetail.quantite ?? produitDetail.quantite ?? '-'}</p>
                 </div>
                 <div className="border-b pb-3">
                   <p className="text-gray-600 font-medium">Seuil d'alerte</p>
-                  <p className="text-[#111827] font-semibold mt-1">{produitDetail.stock_seuil ?? produitDetail.seuil ?? '-'}</p>
+                  <p className="text-[#111827] font-semibold mt-1">{produitDetail.seuil ?? produitDetail.seuil ?? '-'}</p>
                 </div>
                 {produitDetail.nombre_carton != null && (
                   <div className="border-b pb-3">
