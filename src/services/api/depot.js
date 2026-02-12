@@ -1,8 +1,6 @@
 /**
  * 🏭 Dépôt – Contrôle des produits
  *
- * 
- *
  * Endpoint:
  * GET api/produits-controle-depots
  *
@@ -10,7 +8,7 @@
  * - Centraliser l’accès API
  * - Normaliser pagination Laravel
  * - Forcer pagination 25 par défaut
- * - Protéger Depot.jsx des changements backend
+ * - Transformer les données pour le frontend
  */
 
 import httpClient from "../http/client";
@@ -18,14 +16,29 @@ import httpClient from "../http/client";
 const ENDPOINT = "/produits-controle-depots";
 const DEFAULT_PER_PAGE = 25;
 
+/**
+ * 🟢 Calcul état du stock
+ */
+const getEtatStock = (stockGlobal, stockSeuil) => {
+  if (stockGlobal === 0) return "Rupture";
+  if (stockGlobal <= stockSeuil) return "Stock faible";
+  return "Disponible";
+};
+
+/**
+ * 🔄 Compter les réapprovisionnements
+ */
+const getNombreReappro = (mouvements = []) => {
+  if (!Array.isArray(mouvements)) return 0;
+
+  // Si le backend contient seulement les entrées
+  return mouvements.length;
+
+  // ⚠️ Si plus tard il y a type: "entree" / "sortie"
+  // return mouvements.filter(m => m.type === "entree").length;
+};
+
 const depotAPI = {
-  /**
-   * 📦 Récupérer les produits du dépôt
-   *
-   * @param {Object} params
-   * @param {number} params.page
-   * @param {number} params.per_page
-   */
   getProduitsControle: async (params = {}) => {
     try {
       const {
@@ -44,9 +57,29 @@ const depotAPI = {
 
       const payload = res?.data ?? {};
 
-      const data = Array.isArray(payload?.data)
+      const rawData = Array.isArray(payload?.data)
         ? payload.data
         : [];
+
+      /**
+       * 🔥 Transformation des données
+       * On renvoie uniquement les champs demandés
+       */
+      const data = rawData.map((produit) => ({
+        id: produit.id, // utile pour key React
+        nom: produit.nom,
+        prix_achat: produit.prix_achat,
+        nombre_carton: produit.nombre_carton,
+        stock_global: produit.stock_global,
+        stock_seuil: produit.stock_seuil,
+        etat_stock: getEtatStock(
+          produit.stock_global,
+          produit.stock_seuil
+        ),
+        nombre_reappro: getNombreReappro(
+          produit.entreees_sorties
+        ),
+      }));
 
       return {
         data,

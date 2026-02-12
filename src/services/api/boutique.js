@@ -7,6 +7,8 @@ import httpClient from "../http/client";
 
 const ENDPOINT = "/produits-controle-boutique";
 
+const DEFAULT_PER_PAGE = 15; // 🔥 cohérent avec ton front
+
 const boutiqueAPI = {
   /**
    * 🔎 Récupérer les produits du boutique
@@ -15,20 +17,20 @@ const boutiqueAPI = {
     try {
       const res = await httpClient.get(ENDPOINT, {
         params: {
-          per_page: 20, // 🔥 pagination fixe 25
-          ...params,
+          per_page: params.per_page ?? DEFAULT_PER_PAGE,
+          page: params.page ?? 1,
         },
       });
 
-      const payload = res.data;
+      const payload = res?.data ?? {};
 
       return {
-        data: Array.isArray(payload?.data) ? payload.data : [],
+        data: Array.isArray(payload.data) ? payload.data : [],
         pagination: {
-          currentPage: payload?.current_page ?? 1,
-          lastPage: payload?.last_page ?? 1,
-          perPage: payload?.per_page ?? 25,
-          total: payload?.total ?? 0,
+          currentPage: payload.current_page ?? 1,
+          lastPage: payload.last_page ?? 1,
+          perPage: payload.per_page ?? DEFAULT_PER_PAGE,
+          total: payload.total ?? 0,
         },
       };
     } catch (error) {
