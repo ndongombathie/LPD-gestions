@@ -340,8 +340,6 @@ const TableauDeBord = () => {
               <ArrowUp size={14} />
               +{Math.floor(stats.commandesTraitees * 0.2)} aujourd'hui
             </span>
-            <span className="text-gray-400">•</span>
-            <span className="text-gray-500">Panier moyen: {stats.panierMoyen.toLocaleString()} FCFA</span>
           </div>
         </div>
 
@@ -363,8 +361,6 @@ const TableauDeBord = () => {
               <ArrowUp size={14} />
               +{Math.floor(stats.produitsVendus * 0.15)} unités
             </span>
-            <span className="text-gray-400">•</span>
-            <span className="text-gray-500">Moyenne: {Math.round(stats.produitsVendus / Math.max(stats.commandesTraitees, 1))}/commande</span>
           </div>
         </div>
       </motion.div>

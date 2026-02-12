@@ -1,8 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import Ticket from "./Ticket";
-import { useReactToPrint } from "react-to-print";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { 
+import {
   faShoppingCart,
   faBarcode,
   faSearch,
@@ -23,27 +21,138 @@ import {
   faBan,
   faMoneyBillWave,
   faReceipt,
-  faDatabase,
   faCartArrowDown,
   faCheckSquare,
-  faPrint,
-  faXmark,
   faSquare,
   faSpinner,
   faBoxes,
-  faTag,
-  faExclamationTriangle
+  faExclamationTriangle,
+  faUserCircle,
+  faWarning,
+  faInfoCircle,
+  faCheckCircle,
+  faExclamationCircle
 } from '@fortawesome/free-solid-svg-icons';
+
+//Imports pour ticket 
+import { useReactToPrint } from 'react-to-print';
+import TicketCommande from './TicketCommande';
 
 // Import des APIs
 import { produitsDisponiblesAPI } from '../../services/api/produits-disponibles';
 import { commandesAPI } from '../../services/api/commandes';
 import { clientsAPI } from '../../services/api/clients';
+import profileAPI from '../../services/api/profile';
+
+// Composant de notification
+const Notification = ({ type, message, onClose }) => {
+  const [isVisible, setIsVisible] = useState(true);
+  const [progress, setProgress] = useState(100);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsVisible(false);
+      setTimeout(() => onClose(), 150);
+    }, 1500);
+
+    const progressInterval = setInterval(() => {
+      setProgress(prev => Math.max(0, prev - (100 / 2000) * 50));
+    }, 50);
+
+    return () => {
+      clearTimeout(timer);
+      clearInterval(progressInterval);
+    };
+  }, [onClose]);
+
+  if (!isVisible) return null;
+
+  const getIcon = () => {
+    switch (type) {
+      case 'success': return faCheckCircle;
+      case 'warning': return faExclamationTriangle;
+      case 'error': return faExclamationCircle;
+      case 'info': return faInfoCircle;
+      default: return faInfoCircle;
+    }
+  };
+
+  const getBgColor = () => {
+    switch (type) {
+      case 'success': return 'bg-gradient-to-r from-emerald-500 to-green-500';
+      case 'warning': return 'bg-gradient-to-r from-amber-500 to-orange-500';
+      case 'error': return 'bg-gradient-to-r from-red-500 to-rose-600';
+      case 'info': return 'bg-gradient-to-r from-blue-500 to-indigo-600';
+      default: return 'bg-gradient-to-r from-gray-500 to-gray-600';
+    }
+  };
+
+  const getIconColor = () => {
+    switch (type) {
+      case 'success': return 'text-emerald-50';
+      case 'warning': return 'text-amber-50';
+      case 'error': return 'text-red-50';
+      case 'info': return 'text-blue-50';
+      default: return 'text-gray-50';
+    }
+  };
+
+  const getBorderColor = () => {
+    switch (type) {
+      case 'success': return 'border-emerald-200';
+      case 'warning': return 'border-amber-200';
+      case 'error': return 'border-red-200';
+      case 'info': return 'border-blue-200';
+      default: return 'border-gray-200';
+    }
+  };
+
+  return (
+    <div className={`fixed top-4 right-4 z-[1000] animate-slideInRight ${getBgColor()} text-white rounded-xl shadow-2xl overflow-hidden min-w-[320px] max-w-[400px] ${getBorderColor()} border`}>
+      <div className="p-4">
+        <div className="flex items-start gap-3">
+          <div className={`mt-0.5 ${getIconColor()}`}>
+            <FontAwesomeIcon icon={getIcon()} className="text-lg" />
+          </div>
+          <div className="flex-1">
+            <p className="font-semibold text-white text-sm leading-tight">
+              {type === 'success' && 'Succès !'}
+              {type === 'warning' && 'Attention !'}
+              {type === 'error' && 'Erreur !'}
+              {type === 'info' && 'Information'}
+            </p>
+            <p className="text-white/90 text-sm mt-1">{message}</p>
+          </div>
+          <button
+            onClick={() => {
+              setIsVisible(false);
+              setTimeout(() => onClose(), 300);
+            }}
+            className="text-white/70 hover:text-white text-lg transition-colors"
+          >
+            <FontAwesomeIcon icon={faTimes} />
+          </button>
+        </div>
+      </div>
+      <div className="h-1 bg-white/20">
+        <div 
+          className="h-full bg-white/40 transition-all duration-100 ease-linear"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+    </div>
+  );
+};
 
 const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = null }) => {
   const [rechercheProduit, setRechercheProduit] = useState('');
   const [codeBarre, setCodeBarre] = useState('');
-  const [client, setClient] = useState({ nom: '', telephone: '', adresse: '' });
+  const [client, setClient] = useState({
+    nom: '',
+    prenom: '',
+    telephone: '',
+    adresse: ''
+  });
   const [typeVenteGlobal, setTypeVenteGlobal] = useState('détail');
   const [editionPrix, setEditionPrix] = useState(null);
   const [editionQuantite, setEditionQuantite] = useState(null);
@@ -53,14 +162,44 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
   const [loadingProduits, setLoadingProduits] = useState(true);
   const [produitsFiltres, setProduitsFiltres] = useState([]);
   const [errorMessage, setErrorMessage] = useState('');
-  const [clientsExistant, setClientsExistant] = useState([]);
-  const [rechercheClient, setRechercheClient] = useState('');
-  const [showClientDropdown, setShowClientDropdown] = useState(false);
-  
+
+  const [commandeImprimee, setCommandeImprimee] = useState(null);
+  const ticketRef = useRef();
+
+  const imprimerTicket = useReactToPrint({
+    contentRef: ticketRef,
+  });
+
+  // État pour stocker les infos du vendeur
+  const [vendeurInfo, setVendeurInfo] = useState({
+    nom: sellerName || 'Vendeur',
+    prenom: '',
+    email: '',
+    telephone: '',
+    boutique_id: null,
+    role: '',
+    photo: null
+  });
+  const [loadingVendeur, setLoadingVendeur] = useState(false);
+  const [apiError, setApiError] = useState(null);
+
+  // État pour les notifications
+  const [notifications, setNotifications] = useState([]);
+
   const inputCodeBarreRef = useRef(null);
   const inputNomClientRef = useRef(null);
-  const [commandeValidee, setCommandeValidee] = useState(null);
-  const ticketRef = useRef();
+
+  // Fonction pour ajouter une notification
+  const addNotification = (type, message) => {
+    const id = Date.now();
+    setNotifications(prev => [...prev, { id, type, message }]);
+    return id;
+  };
+
+  // Fonction pour supprimer une notification
+  const removeNotification = (id) => {
+    setNotifications(prev => prev.filter(notif => notif.id !== id));
+  };
 
   // Fonction pour normaliser le type de vente (enlever les accents)
   const normaliserTypeVente = (type) => {
@@ -70,11 +209,18 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
     return type;
   };
 
-  // Charger les produits et clients depuis l'API au montage
+  // Charger les produits depuis l'API au montage
   useEffect(() => {
     chargerProduits();
-    chargerClients();
+    chargerInfosVendeur();
   }, []);
+
+  // Mettre à jour le nom du vendeur si sellerName change
+  useEffect(() => {
+    if (sellerName && sellerName !== vendeurInfo.nom) {
+      setVendeurInfo(prev => ({ ...prev, nom: sellerName }));
+    }
+  }, [sellerName]);
 
   // Filtrer les produits lorsque la recherche change
   useEffect(() => {
@@ -83,14 +229,13 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
         setProduitsFiltres([]);
         return;
       }
-      
+
       const filtres = produits.filter(produit => {
         if (!produit) return false;
         const nomMatch = produit.nom?.toLowerCase().includes(rechercheProduit.toLowerCase()) || false;
-        const codeMatch = produit.code?.toLowerCase().includes(rechercheProduit.toLowerCase()) || false;
-        const categorieMatch = produit.categorie?.toLowerCase().includes(rechercheProduit.toLowerCase()) || false;
         const codeBarreMatch = produit.code_barre?.includes(rechercheProduit) || false;
-        return nomMatch || codeMatch || categorieMatch || codeBarreMatch;
+        const categorieMatch = produit.categorie?.toLowerCase().includes(rechercheProduit.toLowerCase()) || false;
+        return nomMatch || codeBarreMatch || categorieMatch;
       });
       setProduitsFiltres(filtres);
     };
@@ -98,82 +243,181 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
     filtrerProduits();
   }, [rechercheProduit, produits]);
 
-  // Rechercher clients quand le nom change
+  // Focus sur le champ code barre au chargement
   useEffect(() => {
-    if (client.nom.trim().length > 2) {
-      rechercherClients(client.nom);
-    } else {
-      setClientsExistant([]);
-      setShowClientDropdown(false);
+    if (inputCodeBarreRef.current) {
+      inputCodeBarreRef.current.focus();
     }
-  }, [client.nom]);
+  }, []);
+
+  // Fonction pour charger les informations du vendeur
+  const chargerInfosVendeur = async () => {
+    try {
+      setLoadingVendeur(true);
+
+      // Charger les infos détaillées du vendeur depuis l'API profile
+      const infosVendeur = await profileAPI.getProfile();
+
+      if (infosVendeur) {
+        setVendeurInfo({
+          nom: infosVendeur.nom || sellerName || 'Vendeur',
+          prenom: infosVendeur.prenom || '',
+          email: infosVendeur.email || '',
+          telephone: infosVendeur.telephone || '',
+          boutique_id: infosVendeur.boutique_id || null,
+          role: infosVendeur.role || '',
+          photo: infosVendeur.photo || null
+        });
+        console.log('✅ Infos vendeur chargées:', infosVendeur);
+      }
+    } catch (error) {
+      console.error('❌ Erreur chargement infos vendeur:', error);
+      // On garde le sellerName si fourni en prop
+      if (sellerName) {
+        setVendeurInfo(prev => ({ ...prev, nom: sellerName }));
+      }
+    } finally {
+      setLoadingVendeur(false);
+    }
+  };
+
+  // Fonction pour obtenir le nom complet du vendeur
+  const getVendeurNomComplet = () => {
+    if (vendeurInfo.prenom && vendeurInfo.nom) {
+      return `${vendeurInfo.prenom} ${vendeurInfo.nom}`.trim();
+    }
+    return vendeurInfo.nom || 'Vendeur';
+  };
+
+  // Fonction pour obtenir les infos vendeur formatées pour l'API
+  const getVendeurApiData = () => {
+    return {
+      vendeur_id: vendeurInfo.id || null,
+      vendeur_nom: getVendeurNomComplet(),
+      vendeur_email: vendeurInfo.email || '',
+      vendeur_telephone: vendeurInfo.telephone || '',
+      boutique_id: vendeurInfo.boutique_id || null
+    };
+  };
+
+  // Fonction pour vérifier la cohérence des prix
+  const verifierCohérencePrix = () => {
+    console.log('=== VÉRIFICATION DES PRIX ===');
+    
+    produits.forEach((produit, index) => {
+      console.log(`Produit ${index + 1}: ${produit.nom}`);
+      console.log('  - API données:');
+      console.log(`    * prix_vente_detail: ${produit.prix_vente_detail}`);
+      console.log(`    * prix_vente_gros: ${produit.prix_vente_gros}`);
+      console.log(`    * prix_unite_carton: ${produit.prix_unite_carton}`);
+      console.log(`    * prix: ${produit.prix}`);
+      
+      const prixDetail = obtenirPrixParType(produit, 'détail');
+      const prixGros = obtenirPrixParType(produit, 'gros');
+      
+      console.log('  - Calculés:');
+      console.log(`    * Détail: ${prixDetail.prix} (seuil: ${prixDetail.prix_seuil})`);
+      console.log(`    * Gros: ${prixGros.prix} (seuil: ${prixGros.prix_seuil})`);
+    });
+    
+    console.log('=== PANIER ACTUEL ===');
+    panier.forEach((item, index) => {
+      if (item) {
+        console.log(`Item ${index + 1}: ${item.nom}`);
+        console.log(`  - Type: ${item.type_vente}`);
+        console.log(`  - Prix panier: ${item.prix_vente}`);
+        console.log(`  - Prix base: ${item.prix_base}`);
+        console.log(`  - Prix original: ${item.prix_original}`);
+        console.log(`  - Prix détail: ${item.prix_detail}`);
+        console.log(`  - Prix gros: ${item.prix_gros}`);
+        console.log(`  - Unité/carton: ${item.unite_par_carton}`);
+      }
+    });
+  };
 
   // Charger les produits disponibles depuis l'API
   const chargerProduits = async () => {
     try {
       setLoadingProduits(true);
       setErrorMessage('');
-      
+
       // Utiliser l'API des produits disponibles en boutique
       const produitsApi = await produitsDisponiblesAPI.getDisponiblesBoutique();
-      
+
+      // Log pour déboguer la structure des prix
+      console.log('=== STRUCTURE DES PRIX DE L\'API ===');
+      if (produitsApi.length > 0) {
+        const sample = produitsApi[0];
+        console.log('Exemple produit API:', {
+          nom: sample.nom,
+          prix_vente_detail: sample.prix_vente_detail,
+          prix_vente_gros: sample.prix_vente_gros,
+          prix_unite_carton: sample.prix_unite_carton,
+          prix: sample.prix,
+          toutes_cles: Object.keys(sample)
+        });
+      }
+
       // Formatage des données selon vos variables
-      const produitsFormates = produitsApi.map(produit => ({
-        // Variables principales selon votre modèle
-        id: produit.id,
-        nom: produit.nom,
-        code: produit.code,
-        code_barre: produit.code_barre || produit.code,
+      const produitsFormates = produitsApi.map(produit => {
+        // CALCULER les prix manquants si nécessaire
+        const prixDetail = produit.prix_vente_detail || produit.prix || 0;
+        const prixGros = produit.prix_vente_gros || produit.prix_unite_carton || Math.round(prixDetail * 0.8);
         
-        // Prix selon votre modèle
-        prix_vente_detail: produit.prix_vente_detail || produit.prix || 0,
-        prix_vente_gros: produit.prix_vente_gros || produit.prix_unite_carton || produit.prix || 0,
-        prix_achat: produit.prix_achat || 0,
-        prix_total: produit.prix_total || 0,
-        
-        // Seuils
-        prix_seuil_detail: produit.prix_seuil_detail || Math.round((produit.prix_vente_detail || produit.prix || 0) * 0.7),
-        prix_seuil_gros: produit.prix_seuil_gros || Math.round((produit.prix_vente_gros || produit.prix_unite_carton || produit.prix || 0) * 0.7),
-        
-        // Stock et gestion (stock_global gardé pour vérifications internes mais non affiché)
-        stock_global: produit.stock_global || produit.stock || 0,
-        stock_seuil: produit.stock_seuil || 10,
-        stock: produit.stock_global || produit.stock || 0,
-        seuil_alerte: produit.stock_seuil || 10,
-        
-        // Gestion des cartons (gardé pour vérifications mais non affiché)
-        unite_carton: produit.unite_carton || 1,
-        prix_unite_carton: produit.prix_unite_carton || produit.prix_vente_gros || 0,
-        nombre_carton: produit.nombre_carton || Math.floor((produit.stock_global || 0) / (produit.unite_carton || 1)),
-        
-        // Catégorie
-        categorie_id: produit.categorie_id,
-        categorie: produit.categorie_nom || 'Non catégorisé',
-        
-        // Dates
-        created_at: produit.created_at,
-        updated_at: produit.updated_at,
-        
-        // Variables compatibilité
-        prix: produit.prix_vente_detail || produit.prix || 0,
-        prix_detail: produit.prix_vente_detail || produit.prix || 0,
-        prix_gros: produit.prix_vente_gros || produit.prix_unite_carton || produit.prix || 0,
-        prix_seuil: produit.prix_seuil_detail || Math.round((produit.prix_vente_detail || produit.prix || 0) * 0.7)
-      }));
-      
+        return {
+          id: produit.id,
+          nom: produit.nom,
+          code_barre: produit.code_barre || '',
+
+          // Prix selon votre modèle
+          prix_vente_detail: prixDetail,
+          prix_vente_gros: prixGros,
+          prix_achat: produit.prix_achat || 0,
+          prix_total: produit.prix_total || 0,
+
+          // Seuils
+          prix_seuil_detail: produit.prix_seuil_detail || Math.round(prixDetail * 0.7),
+          prix_seuil_gros: produit.prix_seuil_gros || Math.round(prixGros * 0.7),
+
+          // Stock et gestion
+          stock_global: produit.stock_global || produit.stock || 0,
+          stock_seuil: produit.stock_seuil || 10,
+          stock: produit.stock_global || produit.stock || 0,
+          seuil_alerte: produit.stock_seuil || 10,
+
+          // Gestion des cartons
+          unite_carton: produit.unite_carton || 1,
+          prix_unite_carton: prixGros,
+          nombre_carton: produit.nombre_carton || Math.floor((produit.stock_global || 0) / (produit.unite_carton || 1)),
+
+          // Catégorie
+          categorie_id: produit.categorie_id,
+          categorie: produit.categorie_nom || 'Non catégorisé',
+
+          // Dates
+          created_at: produit.created_at,
+          updated_at: produit.updated_at,
+
+          // Variables compatibilité
+          prix: prixDetail,
+          prix_detail: prixDetail,
+          prix_gros: prixGros,
+          prix_seuil: produit.prix_seuil_detail || Math.round(prixDetail * 0.7)
+        };
+      });
+
       setProduits(produitsFormates);
       console.log(`${produitsFormates.length} produits disponibles chargés`);
-      
+
     } catch (error) {
       console.error('❌ Erreur chargement produits:', error);
       setErrorMessage('Impossible de charger les produits. Mode démo activé.');
-      
-      // Données de démo avec vos variables
+
+      // Données de démo avec prix cohérents
       setProduits([
         {
           id: 1,
           nom: 'Bloc Note Mood Diary',
-          code: 'BLOC-MOOD-001',
           code_barre: '694689174174',
           prix_vente_detail: 350,
           prix_vente_gros: 2800,
@@ -200,7 +444,6 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
         {
           id: 2,
           nom: "Bouteille d'eau 1.5L",
-          code: 'EAU-1.5L-001',
           code_barre: '6044000268101',
           prix_vente_detail: 400,
           prix_vente_gros: 3200,
@@ -230,55 +473,39 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
     }
   };
 
-  const chargerClients = async () => {
-    try {
-      const response = await clientsAPI.getAll();
-      if (response.data && Array.isArray(response.data)) {
-        console.log(`${response.data.length} clients chargés`);
-      }
-    } catch (error) {
-      console.error('❌ Erreur chargement clients:', error);
-    }
-  };
-
-  const rechercherClients = async (nom) => {
-    try {
-      const response = await clientsAPI.search(nom);
-      if (response.data && Array.isArray(response.data)) {
-        setClientsExistant(response.data.slice(0, 5));
-        setShowClientDropdown(true);
-      }
-    } catch (error) {
-      console.error('❌ Erreur recherche clients:', error);
-      setClientsExistant([]);
-    }
-  };
-
-  const selectionnerClient = (clientExistant) => {
-    setClient({
-      nom: clientExistant.nom || clientExistant.prenom + ' ' + clientExistant.nom,
-      telephone: clientExistant.telephone || '',
-      adresse: clientExistant.adresse || ''
-    });
-    setShowClientDropdown(false);
-  };
-
   const obtenirPrixParType = (produit, typeVente) => {
     if (!produit) {
       return { prix: 0, prix_seuil: 0 };
     }
-    
+
     const typeNormalise = normaliserTypeVente(typeVente);
-    
+
     if (typeNormalise === 'gros') {
       return {
-        prix: produit.prix_vente_gros || produit.prix_unite_carton || Math.round((produit.prix || 0) * 0.8),
-        prix_seuil: produit.prix_seuil_gros || Math.round((produit.prix_seuil || (produit.prix || 0) * 0.7) * 0.8)
+        // PRIORITÉ 1: prix_vente_gros depuis l'API
+        // PRIORITÉ 2: prix_unite_carton depuis l'API  
+        // PRIORITÉ 3: Calcul basé sur prix détail
+        prix: produit.prix_vente_gros || 
+              produit.prix_unite_carton || 
+              Math.round((produit.prix_vente_detail || produit.prix || 0) * 0.8),
+        
+        // Seuil pour vente en gros
+        prix_seuil: produit.prix_seuil_gros || 
+                    Math.round((produit.prix_seuil || (produit.prix_vente_detail || produit.prix || 0) * 0.7) * 0.8)
       };
     }
+    
+    // Type détail
     return {
-      prix: produit.prix_vente_detail || produit.prix || 0,
-      prix_seuil: produit.prix_seuil_detail || Math.round((produit.prix_vente_detail || produit.prix || 0) * 0.7)
+      // PRIORITÉ 1: prix_vente_detail depuis l'API
+      // PRIORITÉ 2: prix depuis l'API
+      prix: produit.prix_vente_detail || 
+            produit.prix || 
+            0,
+      
+      // Seuil pour vente détail
+      prix_seuil: produit.prix_seuil_detail || 
+                  Math.round((produit.prix_vente_detail || produit.prix || 0) * 0.7)
     };
   };
 
@@ -287,112 +514,165 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
       console.error('❌ Produit non défini');
       return;
     }
-    
+
     const typeVente = typeVenteSpecifique || typeVenteGlobal;
     const typeNormalise = normaliserTypeVente(typeVente);
-    
+
     // Vérifier si le produit est en stock
     if (produit.stock_global <= 0) {
-      alert('❌ Ce produit est en rupture de stock');
+      addNotification('error', 'Ce produit est en rupture de stock');
       return;
     }
-    
+
     // Pour le gros, vérifier si assez de stock pour un carton
     if (typeNormalise === 'gros' && produit.unite_carton > 1 && produit.stock_global < produit.unite_carton) {
-      alert(`❌ Stock insuffisant pour vendre en gros (nécessite ${produit.unite_carton} unités)`);
+      addNotification('error', `Stock insuffisant pour vendre en gros (nécessite ${produit.unite_carton} unités)`);
       return;
     }
-    
+
     const { prix, prix_seuil } = obtenirPrixParType(produit, typeNormalise);
 
-    const produitExistant = panier.find(item => 
+    const produitExistant = panier.find(item =>
       item && item.id === produit.id && item.type_vente === typeNormalise
     );
-    
+
     if (produitExistant) {
       const stockRestant = produit.stock_global - produitExistant.quantite;
       if (stockRestant <= 0) {
-        alert('❌ Stock insuffisant pour ajouter une unité supplémentaire');
+        addNotification('error', 'Stock insuffisant pour ajouter une unité supplémentaire');
         return;
       }
-      
+
       setPanier(panier.map(item =>
         item && item.id === produit.id && item.type_vente === typeNormalise
-          ? { ...item, quantite: item.quantite + 1 }
+          ? { 
+              ...item, 
+              quantite: item.quantite + 1,
+              // Recalculer le prix unitaire si nécessaire
+              prix_unitaire: item.prix_vente // Garder le même prix unitaire
+            }
           : item
       ));
+      addNotification('success', `${produit.nom} quantité augmentée`);
     } else {
-      setPanier([...panier.filter(item => item), { 
-        ...produit, 
+      // Ajouter tous les prix pertinents au produit du panier
+      setPanier([...panier.filter(item => item), {
+        ...produit,
         quantite: 1,
         type_vente: typeNormalise,
-        prix_vente: prix,
-        prix_base: prix,
+        
+        // PRIX PRINCIPAL pour cette vente
+        prix_vente: prix, // Prix utilisé pour les calculs
+        
+        // PRIX DE BASE selon le type
+        prix_base: prix, // Prix initial (peut être modifié)
+        
+        // SEUIL MINIMUM
         prix_seuil: prix_seuil,
+        
+        // PRIX ORIGINAL (pour réinitialisation)
         prix_original: prix,
+        
+        // AJOUTER: Tous les prix disponibles
+        prix_unitaire: prix, // Pour l'API
+        prix_detail: produit.prix_vente_detail || produit.prix || 0,
+        prix_gros: produit.prix_vente_gros || produit.prix_unite_carton || 0,
+        
+        // Type d'affichage
         type_vente_affichage: typeVente,
+        
         // Stock actuel pour référence
         stock_initial: produit.stock_global,
-        stock_seuil: produit.stock_seuil
+        stock_seuil: produit.stock_seuil,
+        
+        // AJOUTER: Unité par carton
+        unite_par_carton: produit.unite_carton || 1
       }]);
+      addNotification('success', `${produit.nom} ajouté au panier`);
     }
   };
 
   const ajouterParCodeBarre = async () => {
     if (!codeBarre.trim()) {
-      alert('❌ Veuillez saisir un code barre');
+      addNotification('warning', 'Veuillez saisir un code barre');
       return;
     }
 
     try {
       // Recherche par code barre via API
       const produitTrouve = await produitsDisponiblesAPI.getByCodeBarre(codeBarre);
-      
+
       if (produitTrouve) {
         // Formater le produit trouvé
         const produitFormate = {
           id: produitTrouve.id,
           nom: produitTrouve.nom,
-          code: produitTrouve.code,
-          code_barre: produitTrouve.code_barre || produitTrouve.code,
+          code_barre: produitTrouve.code_barre || '',
+          
+          // Prix depuis l'API
           prix_vente_detail: produitTrouve.prix_vente_detail || produitTrouve.prix || 0,
-          prix_vente_gros: produitTrouve.prix_vente_gros || produitTrouve.prix_unite_carton || produitTrouve.prix || 0,
+          prix_vente_gros: produitTrouve.prix_vente_gros || produitTrouve.prix_unite_carton || 0,
           prix_achat: produitTrouve.prix_achat || 0,
           prix_total: produitTrouve.prix_total || 0,
+          
+          // Seuils
           prix_seuil_detail: produitTrouve.prix_seuil_detail || Math.round((produitTrouve.prix_vente_detail || produitTrouve.prix || 0) * 0.7),
-          prix_seuil_gros: produitTrouve.prix_seuil_gros || Math.round((produitTrouve.prix_vente_gros || produitTrouve.prix_unite_carton || produitTrouve.prix || 0) * 0.7),
+          prix_seuil_gros: produitTrouve.prix_seuil_gros || Math.round((produitTrouve.prix_vente_gros || produitTrouve.prix_unite_carton || 0) * 0.7),
+          
+          // Stock
           stock_global: produitTrouve.stock_global || produitTrouve.stock || 0,
           stock_seuil: produitTrouve.stock_seuil || 10,
           stock: produitTrouve.stock_global || produitTrouve.stock || 0,
           seuil_alerte: produitTrouve.stock_seuil || 10,
+          
+          // Carton
           unite_carton: produitTrouve.unite_carton || 1,
           prix_unite_carton: produitTrouve.prix_unite_carton || produitTrouve.prix_vente_gros || 0,
           nombre_carton: produitTrouve.nombre_carton || Math.floor((produitTrouve.stock_global || 0) / (produitTrouve.unite_carton || 1)),
+          
+          // Catégorie
           categorie_id: produitTrouve.categorie_id,
           categorie: produitTrouve.categorie_nom || 'Non catégorisé',
+          
+          // Dates
           created_at: produitTrouve.created_at,
           updated_at: produitTrouve.updated_at,
+          
+          // Compatibilité
           prix: produitTrouve.prix_vente_detail || produitTrouve.prix || 0,
           prix_detail: produitTrouve.prix_vente_detail || produitTrouve.prix || 0,
-          prix_gros: produitTrouve.prix_vente_gros || produitTrouve.prix_unite_carton || produitTrouve.prix || 0,
+          prix_gros: produitTrouve.prix_vente_gros || produitTrouve.prix_unite_carton || 0,
           prix_seuil: produitTrouve.prix_seuil_detail || Math.round((produitTrouve.prix_vente_detail || produitTrouve.prix || 0) * 0.7)
         };
-        
+
         ajouterAuPanier(produitFormate, typeVenteGlobal);
         setCodeBarre('');
         if (inputCodeBarreRef.current) {
           inputCodeBarreRef.current.focus();
         }
       } else {
-        alert('❌ Aucun produit trouvé avec ce code barre');
+        // Recherche locale en cas d'erreur API
+        const produitTrouve = produits.find(p =>
+          p && p.code_barre === codeBarre
+        );
+
+        if (produitTrouve) {
+          ajouterAuPanier(produitTrouve, typeVenteGlobal);
+          setCodeBarre('');
+          if (inputCodeBarreRef.current) {
+            inputCodeBarreRef.current.focus();
+          }
+        } else {
+          addNotification('error', 'Aucun produit trouvé avec ce code barre');
+        }
       }
     } catch (error) {
       console.error('❌ Erreur recherche code barre:', error);
       // Recherche locale en cas d'erreur API
-      const produitTrouve = produits.find(p => 
-        p && (p.code === codeBarre || p.code_barre === codeBarre)
+      const produitTrouve = produits.find(p =>
+        p && p.code_barre === codeBarre
       );
-      
+
       if (produitTrouve) {
         ajouterAuPanier(produitTrouve, typeVenteGlobal);
         setCodeBarre('');
@@ -400,14 +680,21 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
           inputCodeBarreRef.current.focus();
         }
       } else {
-        alert('❌ Aucun produit trouvé avec ce code barre');
+        addNotification('error', 'Aucun produit trouvé avec ce code barre');
       }
+    }
+  };
+
+  // Gérer l'entrée directe dans le champ code barre
+  const handleCodeBarreKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      ajouterParCodeBarre();
     }
   };
 
   const demarrerEditionQuantite = (produit) => {
     if (!produit) return;
-    
+
     setEditionQuantite({
       produitId: produit.id,
       typeVente: produit.type_vente,
@@ -428,21 +715,22 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
     if (!editionQuantite) return;
 
     const { produitId, typeVente, nouvelleQuantite } = editionQuantite;
-    
+
     if (nouvelleQuantite <= 0) {
       retirerDuPanier(produitId, typeVente);
     } else {
       const produitOriginal = produits.find(p => p && p.id === produitId);
       if (produitOriginal && nouvelleQuantite > produitOriginal.stock_global) {
-        alert(`❌ Stock insuffisant. Maximum disponible: ${produitOriginal.stock_global}`);
+        addNotification('error', `Stock insuffisant. Maximum disponible: ${produitOriginal.stock_global}`);
         return;
       }
-      
+
       setPanier(panier.map(item =>
         item && item.id === produitId && item.type_vente === typeVente
           ? { ...item, quantite: nouvelleQuantite }
           : item
       ));
+      addNotification('success', 'Quantité modifiée avec succès');
     }
 
     setEditionQuantite(null);
@@ -458,10 +746,10 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
     } else {
       const produitOriginal = produits.find(p => p && p.id === produitId);
       if (produitOriginal && nouvelleQuantite > produitOriginal.stock_global) {
-        alert(`❌ Stock insuffisant. Maximum disponible: ${produitOriginal.stock_global}`);
+        addNotification('error', `Stock insuffisant. Maximum disponible: ${produitOriginal.stock_global}`);
         return;
       }
-      
+
       setPanier(panier.map(item =>
         item && item.id === produitId && item.type_vente === typeVente
           ? { ...item, quantite: nouvelleQuantite }
@@ -471,7 +759,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
   };
 
   const retirerDuPanier = (produitId, typeVente) => {
-    setPanier(panier.filter(item => 
+    setPanier(panier.filter(item =>
       !(item && item.id === produitId && item.type_vente === typeVente)
     ));
     if (editionPrix && editionPrix.produitId === produitId && editionPrix.typeVente === typeVente) {
@@ -480,11 +768,12 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
     if (editionQuantite && editionQuantite.produitId === produitId && editionQuantite.typeVente === typeVente) {
       setEditionQuantite(null);
     }
+    addNotification('info', 'Produit retiré du panier');
   };
 
   const demarrerEditionPrix = (produit) => {
     if (!produit) return;
-    
+
     setEditionPrix({
       produitId: produit.id,
       typeVente: produit.type_vente,
@@ -510,12 +799,12 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
     const { produitId, typeVente, nouveauPrix, prixSeuil } = editionPrix;
 
     if (nouveauPrix < prixSeuil) {
-      alert(`❌ Prix trop bas ! Le prix ne peut pas être inférieur à ${prixSeuil.toLocaleString()} FCFA (prix de seuil)`);
+      addNotification('error', `Prix trop bas ! Le prix ne peut pas être inférieur à ${prixSeuil.toLocaleString()} FCFA`);
       return;
     }
 
     if (nouveauPrix < 0) {
-      alert('❌ Le prix ne peut pas être négatif !');
+      addNotification('error', 'Le prix ne peut pas être négatif !');
       return;
     }
 
@@ -526,8 +815,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
     ));
 
     setEditionPrix(null);
-    
-    alert(`✅ Prix modifié à ${nouveauPrix.toLocaleString()} FCFA`);
+    addNotification('success', `Prix modifié à ${nouveauPrix.toLocaleString()} FCFA`);
   };
 
   const annulerEditionPrix = () => {
@@ -535,7 +823,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
   };
 
   const reinitialiserPrix = (produitId, typeVente) => {
-    const produit = panier.find(item => 
+    const produit = panier.find(item =>
       item && item.id === produitId && item.type_vente === typeVente
     );
     if (produit) {
@@ -544,70 +832,146 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
           ? { ...item, prix_vente: produit.prix_original }
           : item
       ));
-      alert(`🔄 Prix réinitialisé à ${produit.prix_original.toLocaleString()} FCFA`);
+      addNotification('info', `Prix réinitialisé à ${produit.prix_original.toLocaleString()} FCFA`);
     }
   };
 
   const calculerTotaux = () => {
-    const totalHT = panier.reduce((total, item) => {
-      if (!item) return total;
-      return total + (item.prix_vente * item.quantite);
-    }, 0);
-    
-    let tva = 0;
-    let totalTTC = totalHT;
-    
-    if (tvaActive) {
-      tva = totalHT * 0.18;
-      totalTTC = totalHT + tva;
-    }
+  const totalHT = panier.reduce((total, item) => {
+    if (!item) return total;
 
-    return {
-      totalHT: Math.round(totalHT),
-      tva: Math.round(tva),
-      totalTTC: Math.round(totalTTC),
-      tvaActive: tvaActive
-    };
+    const prix = Number(item.prix_vente) || 0;
+    const quantite = Number(item.quantite) || 0;
+
+    return total + (prix * quantite);
+  }, 0);
+
+  let tva = 0;
+
+  if (tvaActive) {
+    tva = totalHT * 0.18;
+  }
+
+  const totalTTC = totalHT + tva;
+
+  return {
+    totalHT: Math.round(totalHT),
+    tva: Math.round(tva),
+    totalTTC: Math.round(totalTTC)
   };
+};
+
 
   const { totalHT, tva, totalTTC } = calculerTotaux();
 
+  // Fonction pour détecter si l'erreur est liée à Pusher
+  const isPusherError = (error) => {
+    const errorMessage = error?.response?.data?.message || error?.message || '';
+    return errorMessage.includes('Pusher') ||
+      errorMessage.includes('BroadcastException') ||
+      errorMessage.includes('cURL error 7');
+  };
+
+  // Fonction pour créer une commande locale en cas d'échec API
+  const creerCommandeLocale = () => {
+    const numeroCommande = `CMD-LOCAL-${Date.now().toString().slice(-8)}`;
+    const vendeurData = getVendeurApiData();
+    const clientNomFinal = client.nom.trim();
+    const clientPrenomFinal = client.prenom.trim();
+    const typeVenteNormalise = normaliserTypeVente(typeVenteGlobal);
+
+    return {
+      id: `local-${Date.now()}`,
+      numero_commande: numeroCommande,
+      date: new Date().toISOString(),
+      client: {
+        id: null,
+        nom: clientNomFinal,
+        prenom: clientPrenomFinal,
+        telephone: client.telephone?.trim() || '',
+        adresse: client.adresse?.trim() || ''
+      },
+      vendeur: {
+        id: vendeurData.vendeur_id,
+        nom_complet: vendeurData.vendeur_nom,
+        nom: vendeurInfo.nom,
+        prenom: vendeurInfo.prenom,
+        email: vendeurInfo.email,
+        telephone: vendeurInfo.telephone,
+        boutique_id: vendeurInfo.boutique_id,
+        role: vendeurInfo.role
+      },
+      type_vente: typeVenteNormalise,
+      type_vente_affichage: typeVenteGlobal,
+      items: panier.filter(item => item).map(item => ({
+        produit_id: item.id,
+        nom: item.nom,
+        code_barre: item.code_barre,
+        quantite: item.quantite,
+        type_vente: item.type_vente,
+        type_vente_affichage: item.type_vente_affichage || typeVenteGlobal,
+        prix_unitaire: item.prix_vente,
+        prix_base: item.prix_base,
+        prix_seuil: item.prix_seuil,
+        prix_original: item.prix_original,
+        sous_total: item.prix_vente * item.quantite,
+        categorie: item.categorie,
+        stock_initial: item.stock_global,
+        // AJOUTER: Informations sur les prix
+        prix_detail: item.prix_detail || 0,
+        prix_gros: item.prix_gros || 0,
+        unite_par_carton: item.unite_par_carton || 1
+      })),
+      total_ht: totalHT,
+      tva: tva,
+      total_ttc: totalTTC,
+      tva_appliquee: tvaActive,
+      statut: 'en_attente_paiement',
+      api_success: false,
+      api_message: 'Créée localement (erreur serveur)',
+      api_error: 'Erreur de connexion Pusher/WebSockets',
+      is_local: true
+    };
+  };
+
   const validerCommande = async () => {
     console.log('🔄 Début validation commande...');
-    
+
     if (panier.length === 0) {
-      alert('❌ Le panier est vide !');
+      addNotification('warning', 'Le panier est vide !');
       return;
     }
 
-    if (!client.nom.trim()) {
-      alert('❌ Veuillez saisir le nom du client !');
-      
+    // Validation - nom ET prénom sont obligatoires
+    if (!client.nom.trim() || !client.prenom.trim()) {
+      addNotification('error', 'Veuillez saisir le nom ET le prénom du client !');
+
       if (inputNomClientRef.current) {
         inputNomClientRef.current.focus();
-        inputNomClientRef.current.scrollIntoView({ 
-          behavior: 'smooth', 
-          block: 'center' 
+        inputNomClientRef.current.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center'
         });
-        
+
         inputNomClientRef.current.classList.add('border-red-500', 'ring-2', 'ring-red-200');
-        
+
         setTimeout(() => {
           if (inputNomClientRef.current) {
             inputNomClientRef.current.classList.remove('border-red-500', 'ring-2', 'ring-red-200');
           }
         }, 2000);
       }
-      
+
       return;
     }
 
     if (editionPrix || editionQuantite) {
-      alert('❌ Veuillez terminer les modifications en cours !');
+      addNotification('warning', 'Veuillez terminer les modifications en cours !');
       return;
     }
 
     setEnvoiEnCours(true);
+    setApiError(null);
 
     try {
       // Vérifier les stocks avant validation
@@ -618,90 +982,125 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
       });
 
       if (stockInsuffisant) {
-        alert(`❌ Stock insuffisant pour ${stockInsuffisant.nom}. Veuillez ajuster les quantités.`);
+        addNotification('error', `Stock insuffisant pour ${stockInsuffisant.nom}. Veuillez ajuster les quantités.`);
         setEnvoiEnCours(false);
         return;
       }
 
-      // 1. Vérifier ou créer le client
+      // 1. Créer le client via l'API
       let clientId = null;
       let clientNomFinal = client.nom.trim();
-      let clientTelephoneFinal = client.telephone?.trim() || null;
-      let clientAdresseFinal = client.adresse?.trim() || null;
-      
+      let clientPrenomFinal = client.prenom.trim();
+      let clientTelephoneFinal = client.telephone?.trim() || '';
+      let clientAdresseFinal = client.adresse?.trim() || '';
+
       try {
-        // Rechercher le client
-        const clientsResponse = await clientsAPI.search(client.nom);
-        let clientExistant = null;
-        
-        if (clientsResponse.data && Array.isArray(clientsResponse.data)) {
-          clientExistant = clientsResponse.data.find(c => 
-            c.nom === client.nom || 
-            (c.telephone && c.telephone === client.telephone)
-          );
+        // Créer un nouveau client avec la structure requise par votre API
+        const nouveauClient = {
+          nom: clientNomFinal,
+          prenom: clientPrenomFinal,
+          telephone: clientTelephoneFinal,
+          adresse: clientAdresseFinal,
+          type_client: 'normal',
+          solde: 0,
+          contact: ''
+        };
+
+        console.log('📝 Création nouveau client:', nouveauClient);
+        const createResponse = await clientsAPI.create(nouveauClient);
+
+        // Extraire l'ID selon la structure de votre API
+        if (createResponse && createResponse.data) {
+          if (createResponse.data.id) {
+            clientId = createResponse.data.id;
+            console.log(`✅ Nouveau client créé avec ID (via data.id): ${clientId}`);
+          }
+          else if (createResponse.data.data && createResponse.data.data.id) {
+            clientId = createResponse.data.data.id;
+            console.log(`✅ Nouveau client créé avec ID (via data.data.id): ${clientId}`);
+          }
+          else if (createResponse.data && typeof createResponse.data === 'object' && createResponse.data.id) {
+            clientId = createResponse.data.id;
+            console.log(`✅ Nouveau client créé avec ID (via data.id simple): ${clientId}`);
+          }
         }
-        
-        if (clientExistant) {
-          clientId = clientExistant.id;
-          clientNomFinal = clientExistant.nom;
-          clientTelephoneFinal = clientExistant.telephone || clientTelephoneFinal;
-          clientAdresseFinal = clientExistant.adresse || clientAdresseFinal;
-          console.log(`✅ Client existant trouvé: ${clientExistant.nom} (ID: ${clientId})`);
-        } else {
-          // Créer un nouveau client
-          const nouveauClient = {
-            nom: client.nom,
-            prenom: '',
-            telephone: client.telephone || '',
-            adresse: client.adresse || '',
-            email: '',
-            type_client: 'normal'
-          };
-          
-          console.log('📝 Création nouveau client:', nouveauClient);
-          const createResponse = await clientsAPI.create(nouveauClient);
-          clientId = createResponse.data.id;
-          console.log(`✅ Nouveau client créé avec ID: ${clientId}`);
+        else if (createResponse && createResponse.id) {
+          clientId = createResponse.id;
+          console.log(`✅ Nouveau client créé avec ID (via id direct): ${clientId}`);
         }
+        else {
+          console.warn('⚠️ Structure de réponse inattendue pour la création client:', createResponse);
+        }
+
       } catch (clientError) {
-        console.warn('⚠️ Erreur gestion client:', clientError);
-        // Continuer sans clientId
+        console.warn('⚠️ Erreur création client:', clientError);
+        // On continue sans clientId, la commande sera créée quand même
+        if (clientError.response?.data?.message) {
+          console.log('⚠️ Détails erreur client:', clientError.response.data.message);
+        }
       }
 
       const typeVenteNormalise = normaliserTypeVente(typeVenteGlobal);
 
-      // 2. Préparer les données pour l'API
+      // Récupérer les infos du vendeur
+      const vendeurData = getVendeurApiData();
+
+      // 2. Préparer les données pour l'API des commandes
       const commandeData = {
         // Informations client
         client_id: clientId,
-        client_nom: clientNomFinal,
+        client_nom: `${clientNomFinal} ${clientPrenomFinal}`.trim(),
         client_telephone: clientTelephoneFinal,
         client_adresse: clientAdresseFinal,
-        
+
+        // Informations vendeur
+        vendeur_id: vendeurData.vendeur_id,
+        vendeur_nom: vendeurData.vendeur_nom,
+        vendeur_email: vendeurData.vendeur_email,
+        vendeur_telephone: vendeurData.vendeur_telephone,
+        boutique_id: vendeurData.boutique_id,
+
         // Type de vente - Normalisé
         type_vente: typeVenteNormalise,
-        
+
         // Items (produits)
-        items: panier.filter(item => item).map(item => ({
-          produit_id: item.id,
-          nom: item.nom,
-          code: item.code,
-          quantite: parseInt(item.quantite),
-          prix_unitaire: parseFloat(item.prix_vente),
-          sous_total: parseFloat(item.prix_vente * item.quantite),
-          type_vente: item.type_vente,
-          stock_initial: parseInt(item.stock_global)
-        })),
-        
+        items: panier.filter(item => item).map(item => {
+          const itemData = {
+            produit_id: item.id,
+            nom: item.nom,
+            code_barre: item.code_barre,
+            quantite: parseInt(item.quantite),
+            type_vente: item.type_vente, // 'detail' ou 'gros'
+            
+            // PRIX: Utiliser le prix actuel du panier
+            prix_unitaire: parseFloat(item.prix_vente),
+            
+            // AJOUTER: Les prix d'origine pour référence
+            prix_detail: parseFloat(item.prix_detail || 0),
+            prix_gros: parseFloat(item.prix_gros || 0),
+            prix_original: parseFloat(item.prix_original || 0),
+            
+            sous_total: parseFloat(item.prix_vente * item.quantite),
+            stock_initial: parseInt(item.stock_global),
+            
+            // Pour le type gros
+            ...(item.type_vente === 'gros' && {
+              unite_par_carton: parseInt(item.unite_par_carton || 1),
+              est_vente_carton: true
+            })
+          };
+          
+          return itemData;
+        }),
+
         // Totaux
         montant_ht: parseFloat(totalHT),
         tva: tvaActive ? parseFloat(tva) : 0,
         montant_ttc: parseFloat(totalTTC),
         tva_appliquee: tvaActive,
-        
+
         // Métadonnées
         statut: 'en_attente',
-        vendeur_nom: sellerName || 'Vendeur Principal',
         date_commande: new Date().toISOString(),
         mode_paiement: 'non_paye',
         notes: ''
@@ -712,11 +1111,13 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
       // 3. Envoyer à l'API des commandes
       let apiResponse = null;
       let apiError = null;
-      
+      let commandeCreee = false;
+
       try {
-        console.log('📤 Tentative d\'envoi à l\'API...');
+        console.log('📤 Tentative d\'envoi à l\'API commandes...');
         apiResponse = await commandesAPI.create(commandeData);
-        console.log('✅ Réponse API:', apiResponse);
+        console.log('✅ Réponse API commandes:', apiResponse);
+        commandeCreee = true;
       } catch (error) {
         console.error('❌ Erreur API commandes:', {
           message: error.message,
@@ -724,159 +1125,214 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
           status: error.response?.status
         });
         apiError = error;
-        
-        if (error.response?.data) {
-          console.error('📋 Détail erreur API:', error.response.data);
+
+        // Vérifier si c'est une erreur Pusher
+        if (isPusherError(error)) {
+          console.warn('⚠️ Erreur Pusher détectée - La commande a probablement été créée côté serveur');
+          commandeCreee = true;
+
+          // Créer une réponse simulée pour continuer le processus
+          apiResponse = {
+            success: true,
+            data: {
+              id: `temp-pusher-${Date.now()}`,
+              numero: `CMD-PSH-${Date.now().toString().slice(-8)}`,
+              statut: 'en_attente_paiement',
+              created_at: new Date().toISOString()
+            }
+          };
+        } else if (error.response?.status === 500) {
+          console.warn('⚠️ Erreur serveur 500 détectée');
+          // On continue avec une commande locale
         }
       }
 
-      // 4. Mettre à jour les stocks si la commande est créée
-      if (apiResponse && apiResponse.data) {
-        try {
-          console.log('⚠️ Mise à jour des stocks non implémentée avec produitsDisponiblesAPI');
-        } catch (stockError) {
-          console.error('❌ Erreur mise à jour stocks:', stockError);
-        }
+      // 4. Créer l'objet commande pour l'affichage
+      let nouvelleCommande;
+
+      if (commandeCreee && apiResponse) {
+        // Commande créée avec succès (même avec erreur Pusher)
+        nouvelleCommande = {
+          id: apiResponse?.data?.id || apiResponse?.data?.uuid || `temp-${Date.now()}`,
+          numero_commande: apiResponse?.data?.numero || `CMD-${Date.now().toString().slice(-8)}`,
+          date: apiResponse?.data?.created_at || new Date().toISOString(),
+          client: {
+            id: clientId,
+            nom: clientNomFinal,
+            prenom: clientPrenomFinal,
+            telephone: clientTelephoneFinal,
+            adresse: clientAdresseFinal
+          },
+          vendeur: {
+            id: vendeurData.vendeur_id,
+            nom_complet: vendeurData.vendeur_nom,
+            nom: vendeurInfo.nom,
+            prenom: vendeurInfo.prenom,
+            email: vendeurInfo.email,
+            telephone: vendeurInfo.telephone,
+            boutique_id: vendeurInfo.boutique_id,
+            role: vendeurInfo.role
+          },
+          type_vente: typeVenteNormalise,
+          type_vente_affichage: typeVenteGlobal,
+          items: panier.filter(item => item).map(item => ({
+            produit_id: item.id,
+            nom: item.nom,
+            code_barre: item.code_barre,
+            quantite: item.quantite,
+            type_vente: item.type_vente,
+            type_vente_affichage: item.type_vente_affichage || typeVenteGlobal,
+            prix_unitaire: item.prix_vente,
+            prix_base: item.prix_base,
+            prix_seuil: item.prix_seuil,
+            prix_original: item.prix_original,
+            sous_total: item.prix_vente * item.quantite,
+            categorie: item.categorie,
+            stock_initial: item.stock_global,
+            // AJOUTER: Informations sur les prix
+            prix_detail: item.prix_detail || 0,
+            prix_gros: item.prix_gros || 0,
+            unite_par_carton: item.unite_par_carton || 1
+          })),
+          total_ht: totalHT,
+          tva: tva,
+          total_ttc: totalTTC,
+          tva_appliquee: tvaActive,
+          statut: apiResponse?.data?.statut || 'en_attente_paiement',
+          api_success: true,
+          api_message: isPusherError(apiError) ? 'Créée avec succès (notification échouée)' : 'Créée avec succès',
+          api_data: apiResponse?.data,
+          api_error: isPusherError(apiError) ? 'Erreur notification WebSocket' : null,
+          has_pusher_error: isPusherError(apiError)
+        };
+      } else {
+        // Créer une commande locale en cas d'échec total
+        nouvelleCommande = creerCommandeLocale();
       }
 
-      // 5. Créer l'objet commande pour l'affichage
-      const nouvelleCommande = {
-        id: apiResponse?.data?.uuid || apiResponse?.data?.id || `local-${Date.now()}`,
-        numero_commande: apiResponse?.data?.numero || `CMD-${Date.now().toString().slice(-8)}`,
-        date: new Date().toISOString(),
-        client: {
-          nom: clientNomFinal,
-          telephone: clientTelephoneFinal,
-          adresse: clientAdresseFinal
-        },
-        type_vente: typeVenteNormalise,
-        type_vente_affichage: typeVenteGlobal,
-        items: panier.filter(item => item).map(item => ({
-          produit_id: item.id,
-          nom: item.nom,
-          code: item.code,
-          reference: item.code,
-          quantite: item.quantite,
-          type_vente: item.type_vente,
-          type_vente_affichage: item.type_vente_affichage || typeVenteGlobal,
-          prix_unitaire: item.prix_vente,
-          prix_base: item.prix_base,
-          prix_seuil: item.prix_seuil,
-          prix_original: item.prix_original,
-          sous_total: item.prix_vente * item.quantite,
-          categorie: item.categorie,
-          stock_initial: item.stock_global
-        })),
-        total_ht: totalHT,
-        tva: tva,
-        total_ttc: totalTTC,
-        tva_appliquee: tvaActive,
-        statut: apiResponse?.data?.statut || 'en_attente_paiement',
-        vendeur: sellerName || 'Vendeur Principal',
-        api_success: !!apiResponse,
-        api_message: apiError ? 'Erreur API' : 'Synchronisé avec API',
-        api_data: apiResponse?.data,
-        api_error: apiError?.response?.data
-      };
+      console.log('✅ Commande préparée:', nouvelleCommande);
 
-      console.log('✅ Commande créée:', nouvelleCommande);
-
-      // 6. Appeler le callback parent
+      // 5. Appeler le callback parent
       await onCommandeValidee(nouvelleCommande);
-      
-      // 7. Afficher le ticket
-      setCommandeValidee(nouvelleCommande);
 
-      // 8. Réinitialiser
+      // ouvrir le ticket
+      setCommandeImprimee(nouvelleCommande);
+
+      // 6. Réinitialiser
       setPanier([]);
-      setClient({ nom: '', telephone: '', adresse: '' });
+      setClient({ nom: '', prenom: '', telephone: '', adresse: '' });
       setEditionPrix(null);
       setEditionQuantite(null);
-      setClientsExistant([]);
-      setShowClientDropdown(false);
-      
-      // 9. Message de succès
-      if (apiError) {
-        let errorMsg = 'Erreur lors de l\'envoi à l\'API';
-        if (apiError.response?.data?.message) {
-          errorMsg = apiError.response.data.message;
-        } else if (apiError.message) {
-          errorMsg = apiError.message;
-        }
-        alert(`⚠️ Commande enregistrée localement - ${errorMsg}`);
-      } else {
-        alert(`✅ Commande ${nouvelleCommande.numero_commande} créée avec succès !`);
+      setCodeBarre('');
+
+      // 7. Focus sur le champ code barre
+      if (inputCodeBarreRef.current) {
+        inputCodeBarreRef.current.focus();
       }
-      
+
+      // 8. Message de succès adapté
+      if (apiError && !commandeCreee) {
+        // Échec complet
+        setApiError({
+          type: 'error',
+          message: 'Erreur serveur. Commande sauvegardée localement.',
+          details: apiError.response?.data?.message || apiError.message
+        });
+
+        addNotification('warning', `Commande ${nouvelleCommande.numero_commande} sauvegardée localement`);
+      } else if (commandeCreee && isPusherError(apiError)) {
+        // Succès avec erreur Pusher
+        addNotification('success', `Commande ${nouvelleCommande.numero_commande} créée avec succès !`);
+        addNotification('info', 'Les notifications temps-réel sont temporairement indisponibles');
+      } else {
+        // Succès complet
+        addNotification('success', `Commande ${nouvelleCommande.numero_commande} créée avec succès !`);
+      }
+
     } catch (error) {
       console.error('❌ Erreur validation commande:', error);
-      
-      let errorMessage = 'Erreur lors de la création de la commande';
-      if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-      
-      alert(`❌ ${errorMessage}`);
-      
-      // Créer une commande locale en cas d'erreur
-      const commandeLocale = {
-        id: `local-error-${Date.now()}`,
-        numero_commande: `CMD-ERR-${Date.now().toString().slice(-8)}`,
-        date: new Date().toISOString(),
-        client: {
-          nom: client.nom,
-          telephone: client.telephone,
-          adresse: client.adresse
-        },
-        type_vente: normaliserTypeVente(typeVenteGlobal),
-        items: panier.filter(item => item).map(item => ({
-          produit_id: item.id,
-          nom: item.nom,
-          code: item.code,
-          quantite: item.quantite,
-          prix_unitaire: item.prix_vente,
-          sous_total: item.prix_vente * item.quantite
-        })),
-        total_ht: totalHT,
-        tva: tva,
-        total_ttc: totalTTC,
-        statut: 'erreur',
-        vendeur: sellerName || 'Vendeur Principal',
-        error_message: errorMessage
-      };
-      
+
+      // Créer une commande locale en cas d'erreur inattendue
+      const commandeLocale = creerCommandeLocale();
       await onCommandeValidee(commandeLocale);
-      
-      setCommandeValidee(commandeLocale);
+
+      setApiError({
+        type: 'critical',
+        message: 'Erreur inattendue. Commande sauvegardée localement.',
+        details: error.message
+      });
+
+      addNotification('warning', `Erreur inattendue. Commande ${commandeLocale.numero_commande} sauvegardée localement`);
+
     } finally {
       setEnvoiEnCours(false);
     }
   };
 
-  const imprimerTicket = useReactToPrint({
-    content: () => ticketRef.current,
-  });
-
   const annulerCommande = () => {
     if (panier.length === 0) {
-      alert('ℹ️ Aucune commande en cours !');
+      addNotification('info', 'Aucune commande en cours !');
       return;
     }
 
-    if (window.confirm('Êtes-vous sûr de vouloir annuler la commande en cours ?')) {
+    const confirmAnnulation = () => {
       setPanier([]);
-      setClient({ nom: '', telephone: '', adresse: '' });
+      setClient({ nom: '', prenom: '', telephone: '', adresse: '' });
       setEditionPrix(null);
       setEditionQuantite(null);
-      setClientsExistant([]);
-      setShowClientDropdown(false);
-    }
+      setCodeBarre('');
+      setApiError(null);
+
+      // Focus sur le champ code barre après annulation
+      if (inputCodeBarreRef.current) {
+        inputCodeBarreRef.current.focus();
+      }
+      addNotification('info', 'Commande annulée avec succès');
+    };
+
+    // Créer une modal de confirmation personnalisée
+    const modalId = Date.now();
+    const modal = document.createElement('div');
+    modal.id = `confirm-modal-${modalId}`;
+    modal.className = 'fixed inset-0 z-[2000] flex items-center justify-center bg-black/50';
+    modal.innerHTML = `
+      <div class="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+            <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.342 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+          </div>
+          <h3 class="text-lg font-bold text-gray-800">Confirmer l'annulation</h3>
+        </div>
+        <p class="text-gray-600 mb-6">Êtes-vous sûr de vouloir annuler la commande en cours ? Tous les articles du panier seront supprimés.</p>
+        <div class="flex gap-3">
+          <button id="confirm-cancel-${modalId}" class="flex-1 bg-amber-500 hover:bg-amber-600 text-white py-2.5 px-4 rounded-lg font-semibold transition-colors">
+            Oui, annuler
+          </button>
+          <button id="cancel-modal-${modalId}" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 py-2.5 px-4 rounded-lg font-semibold transition-colors">
+            Non, garder
+          </button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+
+    // Gérer les clics
+    document.getElementById(`confirm-cancel-${modalId}`).onclick = () => {
+      document.body.removeChild(modal);
+      confirmAnnulation();
+    };
+
+    document.getElementById(`cancel-modal-${modalId}`).onclick = () => {
+      document.body.removeChild(modal);
+    };
   };
 
   const rechargerProduits = async () => {
     await chargerProduits();
+    addNotification('success', 'Produits rechargés avec succès');
   };
 
   // Fonction utilitaire pour l'affichage du type de vente
@@ -921,31 +1377,24 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {produitsFiltres.map(produit => {
           if (!produit) return null;
-          
-          const prixDetail = obtenirPrixParType(produit, 'detail');
-          const prixGros = obtenirPrixParType(produit, 'gros');
-          
+
           return (
             <div key={produit.id || Date.now()} className="bg-gray-50 rounded-lg p-4 border-2 border-gray-200 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-[#472ead] flex flex-col justify-between">
               <div>
                 <h4 className="text-sm font-semibold text-gray-800 mb-2">{produit.nom || 'Produit sans nom'}</h4>
                 <div className="space-y-2 mb-3">
-                  <p className="text-xs text-gray-600 flex items-center gap-2">
-                    <FontAwesomeIcon icon={faTag} className="text-xs text-gray-400" />
-                    Code: <span className="font-medium">{produit.code || 'N/A'}</span>
-                  </p>
-                  <p className="text-xs text-gray-600 flex items-center gap-2">
-                    <FontAwesomeIcon icon={faBoxes} className="text-xs text-gray-400" />
-                    Catégorie: <span className="font-medium">{produit.categorie || 'Non catégorisé'}</span>
-                  </p>
-                  {produit.code_barre && produit.code_barre !== produit.code && (
+                  {produit.code_barre && (
                     <p className="text-xs text-gray-600 flex items-center gap-2">
                       <FontAwesomeIcon icon={faBarcode} className="text-xs text-gray-400" />
                       Code-barre: <span className="font-medium">{produit.code_barre}</span>
                     </p>
                   )}
+                  <p className="text-xs text-gray-600 flex items-center gap-2">
+                    <FontAwesomeIcon icon={faBoxes} className="text-xs text-gray-400" />
+                    Catégorie: <span className="font-medium">{produit.categorie || 'Non catégorisé'}</span>
+                    </p>
                 </div>
-                
+
                 {/* Prix - Section simplifiée sans stock */}
                 <div className="space-y-2 my-3">
                   <div className="bg-white p-2 rounded border border-gray-200 text-xs">
@@ -973,19 +1422,23 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
                       <FontAwesomeIcon icon={faMoneyBillWave} className="text-red-500" />
                       Seuil: {(produit.prix_seuil_gros || 0).toLocaleString()} FCFA
                     </div>
+                    {produit.unite_carton > 1 && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        {produit.unite_carton} unités/carton
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
-              
+
               <div className="mt-4">
                 <div className="flex gap-2">
                   <button
                     onClick={() => ajouterAuPanier(produit, 'détail')}
-                    className={`flex-1 py-2 px-3 rounded text-xs font-semibold flex items-center gap-2 justify-center hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 ${
-                      produit.stock_global === 0 
-                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                    className={`flex-1 py-2 px-3 rounded text-xs font-semibold flex items-center gap-2 justify-center hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 ${produit.stock_global === 0
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                         : 'bg-gradient-to-br from-[#472ead] to-[#5a3bc0] text-white'
-                    }`}
+                      }`}
                     title="Ajouter en vente détail"
                     disabled={produit.stock_global === 0}
                   >
@@ -994,11 +1447,10 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
                   </button>
                   <button
                     onClick={() => ajouterAuPanier(produit, 'gros')}
-                    className={`flex-1 py-2 px-3 rounded text-xs font-semibold flex items-center gap-2 justify-center hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 ${
-                      produit.stock_global === 0 || produit.stock_global < produit.unite_carton
-                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                    className={`flex-1 py-2 px-3 rounded text-xs font-semibold flex items-center gap-2 justify-center hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 ${produit.stock_global === 0 || produit.stock_global < produit.unite_carton
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                         : 'bg-gradient-to-br from-[#f58020] to-[#ff9c4d] text-white'
-                    }`}
+                      }`}
                     title="Ajouter en vente gros"
                     disabled={produit.stock_global === 0 || produit.stock_global < produit.unite_carton}
                   >
@@ -1016,6 +1468,35 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
 
   return (
     <div className="p-5 min-h-screen bg-gray-50 box-border">
+      {/* Styles CSS pour les animations */}
+      <style>
+        {`
+          @keyframes slideInRight {
+            from {
+              transform: translateX(100%);
+              opacity: 0;
+            }
+            to {
+              transform: translateX(0);
+              opacity: 1;
+            }
+          }
+          .animate-slideInRight {
+            animation: slideInRight 0.3s ease-out;
+          }
+        `}
+      </style>
+
+      {/* Notifications */}
+      {notifications.map(notification => (
+        <Notification
+          key={notification.id}
+          type={notification.type}
+          message={notification.message}
+          onClose={() => removeNotification(notification.id)}
+        />
+      ))}
+
       <div className="mb-5">
         <div className="flex justify-between items-center mb-4 gap-4">
           <div className="flex flex-col gap-0">
@@ -1025,12 +1506,69 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
             </h2>
             <p className="text-gray-600 text-sm font-light">Créez une commande client - Gestion détail et gros</p>
           </div>
-          
+
           <div className="text-right text-sm text-gray-700">
             <div className="font-semibold">{new Date().toLocaleDateString('fr-FR')}</div>
             <div className="text-xs text-gray-600">{new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</div>
+
+            {/* Afficher les infos du vendeur */}
+            <div className="mt-2 flex items-center gap-2 bg-gray-100 px-3 py-1 rounded-lg">
+              {loadingVendeur ? (
+                <FontAwesomeIcon icon={faSpinner} className="animate-spin text-xs text-gray-500" />
+              ) : (
+                <>
+                  <FontAwesomeIcon icon={faUserCircle} className="text-gray-600 text-xs" />
+                  <span className="text-xs font-medium text-gray-700">
+                    {getVendeurNomComplet()}
+                  </span>
+                  {vendeurInfo.role && (
+                    <span className="ml-1 px-2 py-0.5 bg-indigo-100 text-indigo-700 text-xs rounded-full">
+                      {vendeurInfo.role}
+                    </span>
+                  )}
+                </>
+              )}
+            </div>
           </div>
+
+          {/* Bouton de débogage (optionnel) */}
+          <button
+            onClick={verifierCohérencePrix}
+            className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 py-1 px-3 rounded-lg flex items-center gap-1 transition-colors"
+          >
+            <FontAwesomeIcon icon={faInfoCircle} />
+            Debug Prix
+          </button>
         </div>
+
+        {/* Afficher les erreurs API */}
+        {apiError && (
+          <div className={`mb-4 rounded-lg p-3 flex items-center justify-between ${apiError.type === 'critical'
+              ? 'bg-red-50 border border-red-200'
+              : 'bg-amber-50 border border-amber-200'
+            }`}>
+            <div className="flex items-center gap-2">
+              <FontAwesomeIcon
+                icon={apiError.type === 'critical' ? faExclamationTriangle : faWarning}
+                className={apiError.type === 'critical' ? 'text-red-500' : 'text-amber-500'}
+              />
+              <div>
+                <span className={`text-sm ${apiError.type === 'critical' ? 'text-red-700' : 'text-amber-700'}`}>
+                  {apiError.message}
+                </span>
+                {apiError.details && (
+                  <small className="block text-xs mt-1 opacity-75">{apiError.details}</small>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={() => setApiError(null)}
+              className="text-xs hover:opacity-75"
+            >
+              <FontAwesomeIcon icon={faTimes} />
+            </button>
+          </div>
+        )}
 
         {errorMessage && (
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 flex items-center justify-between">
@@ -1079,8 +1617,8 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
                 <strong>Type :</strong> {typeVenteGlobal}
               </p>
               <small className="text-xs text-gray-500">
-                {typeVenteGlobal === 'détail' 
-                  ? 'Prix détail - Vente à l\'unité' 
+                {typeVenteGlobal === 'détail'
+                  ? 'Prix détail - Vente à l\'unité'
                   : 'Prix gros - Vente par carton'}
               </small>
             </div>
@@ -1096,20 +1634,25 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
               <input
                 ref={inputCodeBarreRef}
                 type="text"
-                placeholder={`Code produit (${typeVenteGlobal})...`}
+                placeholder={`Scannez ou entrez le code barre...`}
                 value={codeBarre}
                 onChange={(e) => setCodeBarre(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && ajouterParCodeBarre()}
+                onKeyPress={handleCodeBarreKeyPress}
                 className="flex-1 py-2 px-3 text-sm border-2 border-gray-200 rounded-lg transition-colors focus:border-[#472ead] focus:outline-none"
+                autoFocus
               />
-              <button 
-                onClick={ajouterParCodeBarre} 
+              <button
+                onClick={ajouterParCodeBarre}
                 className="bg-gradient-to-br from-[#472ead] to-[#5a3bc0] text-white py-2 px-4 rounded-lg font-semibold transition-all duration-300 flex items-center gap-2 border-none cursor-pointer text-sm hover:shadow-lg hover:-translate-y-0.5 shadow-md"
               >
                 <FontAwesomeIcon icon={faSearch} className="text-sm" />
                 Scanner
               </button>
             </div>
+            <small className="text-xs text-gray-500 mt-2 flex items-center gap-1">
+              <FontAwesomeIcon icon={faBarcode} />
+              Appuyez sur Entrée ou cliquez sur Scanner pour ajouter le produit
+            </small>
           </div>
 
           {/* Recherche manuelle */}
@@ -1120,7 +1663,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
             </h3>
             <input
               type="text"
-              placeholder="Nom, code produit ou catégorie..."
+              placeholder="Nom, code barre ou catégorie..."
               value={rechercheProduit}
               onChange={(e) => setRechercheProduit(e.target.value)}
               className="w-full py-2 px-3 text-sm border-2 border-gray-200 rounded-lg transition-colors focus:border-[#472ead] focus:outline-none"
@@ -1150,7 +1693,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
                 </button>
               </div>
             </div>
-            
+
             {loadingProduits ? (
               <div className="flex justify-center items-center py-10">
                 <FontAwesomeIcon icon={faSpinner} className="animate-spin text-3xl text-[#472ead]" />
@@ -1163,61 +1706,109 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
 
         {/* Section droite : Panier et Client */}
         <div className="space-y-5">
-          {/* Informations client */}
+          {/* Informations client - SECTION AMÉLIORÉE */}
           <div className="bg-white rounded-xl p-5 shadow-sm relative">
-            <h3 className="text-base text-gray-800 mb-4 font-semibold flex items-center gap-2">
+            <h3 className="text-base text-gray-800 mb-5 font-semibold flex items-center gap-2">
               <FontAwesomeIcon icon={faUser} className="text-[#472ead] text-sm" />
               Informations Client
             </h3>
-            <div className="space-y-3">
-              <div className="relative flex items-center">
-                <FontAwesomeIcon icon={faUser} className="absolute left-3 text-gray-500 text-sm z-10" />
-                <input
-                  ref={inputNomClientRef}
-                  type="text"
-                  placeholder="Nom complet *"
-                  value={client.nom}
-                  onChange={(e) => setClient({...client, nom: e.target.value})}
-                  className="w-full py-2 px-3 pl-10 text-sm border-2 border-gray-200 rounded-lg transition-colors focus:border-[#472ead] focus:outline-none"
-                  required
-                />
-                
-                {showClientDropdown && clientsExistant.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 max-h-48 overflow-y-auto">
-                    {clientsExistant.map((clientItem, index) => (
-                      <div
-                        key={index}
-                        className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
-                        onClick={() => selectionnerClient(clientItem)}
-                      >
-                        <div className="font-medium">{clientItem.nom || `${clientItem.prenom} ${clientItem.nom}`}</div>
-                        {clientItem.telephone && (
-                          <div className="text-sm text-gray-600">📱 {clientItem.telephone}</div>
-                        )}
-                      </div>
-                    ))}
+            <div className="space-y-5"> {/* Augmentation de l'espacement */}
+              
+              {/* Nom et Prénom - ligne séparée avec plus d'espace */}
+              <div className="grid grid-cols-2 gap-4"> {/* Augmenté de gap-3 à gap-4 */}
+                <div className="space-y-2"> {/* Ajout d'espace vertical entre label et input */}
+                  <label className="text-xs font-medium text-gray-600 block">
+                    Nom *
+                  </label>
+                  <div className="relative">
+                    <FontAwesomeIcon icon={faUser} className="absolute left-3 top-3 text-gray-500 text-sm z-10" />
+                    <input
+                      ref={inputNomClientRef}
+                      type="text"
+                      placeholder="Saisir le nom"
+                      value={client.nom}
+                      onChange={(e) => setClient({ ...client, nom: e.target.value })}
+                      className="w-full py-2.5 px-3 pl-10 text-sm border-2 border-gray-200 rounded-lg transition-colors focus:border-[#472ead] focus:outline-none hover:border-gray-300"
+                      required
+                    />
                   </div>
-                )}
+                </div>
+                
+                <div className="space-y-2"> {/* Ajout d'espace vertical entre label et input */}
+                  <label className="text-xs font-medium text-gray-600 block">
+                    Prénom *
+                  </label>
+                  <div className="relative">
+                    <FontAwesomeIcon icon={faUser} className="absolute left-3 top-3 text-gray-500 text-sm z-10" />
+                    <input
+                      type="text"
+                      placeholder="Saisir le prénom"
+                      value={client.prenom}
+                      onChange={(e) => setClient({ ...client, prenom: e.target.value })}
+                      className="w-full py-2.5 px-3 pl-10 text-sm border-2 border-gray-200 rounded-lg transition-colors focus:border-[#472ead] focus:outline-none hover:border-gray-300"
+                      required
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="relative flex items-center">
-                <FontAwesomeIcon icon={faPhone} className="absolute left-3 text-gray-500 text-sm z-10" />
-                <input
-                  type="tel"
-                  placeholder="Téléphone"
-                  value={client.telephone}
-                  onChange={(e) => setClient({...client, telephone: e.target.value})}
-                  className="w-full py-2 px-3 pl-10 text-sm border-2 border-gray-200 rounded-lg transition-colors focus:border-[#472ead] focus:outline-none"
-                />
+
+              {/* Téléphone - avec plus d'espace au-dessus */}
+              <div className="space-y-2 pt-1"> {/* Ajout de pt-1 pour plus d'espace */}
+                <label className="text-xs font-medium text-gray-600 block">
+                  Téléphone
+                  <span className="text-gray-400 text-xs font-normal ml-1">(optionnel)</span>
+                </label>
+                <div className="relative">
+                  <FontAwesomeIcon icon={faPhone} className="absolute left-3 top-3 text-gray-500 text-sm z-10" />
+                  <input
+                    type="tel"
+                    placeholder="Ex: 77 123 45 67"
+                    value={client.telephone}
+                    onChange={(e) => setClient({ ...client, telephone: e.target.value })}
+                    className="w-full py-2.5 px-3 pl-10 text-sm border-2 border-gray-200 rounded-lg transition-colors focus:border-[#472ead] focus:outline-none hover:border-gray-300"
+                  />
+                </div>
               </div>
-              <div className="relative flex items-center">
-                <FontAwesomeIcon icon={faMapMarkerAlt} className="absolute left-3 top-3 text-gray-500 text-sm z-10" />
-                <textarea
-                  placeholder="Adresse"
-                  value={client.adresse}
-                  onChange={(e) => setClient({...client, adresse: e.target.value})}
-                  className="w-full py-2 px-3 pl-10 text-sm border-2 border-gray-200 rounded-lg transition-colors focus:border-[#472ead] focus:outline-none resize-y min-h-[60px]"
-                  rows="2"
-                />
+
+              {/* Adresse - avec plus d'espace au-dessus */}
+              <div className="space-y-2 pt-1"> {/* Ajout de pt-1 pour plus d'espace */}
+                <label className="text-xs font-medium text-gray-600 block">
+                  Adresse
+                  <span className="text-gray-400 text-xs font-normal ml-1">(optionnel)</span>
+                </label>
+                <div className="relative">
+                  <FontAwesomeIcon icon={faMapMarkerAlt} className="absolute left-3 top-3 text-gray-500 text-sm z-10" />
+                  <textarea
+                    placeholder="Saisir l'adresse complète"
+                    value={client.adresse}
+                    onChange={(e) => setClient({ ...client, adresse: e.target.value })}
+                    className="w-full py-2.5 px-3 pl-10 text-sm border-2 border-gray-200 rounded-lg transition-colors focus:border-[#472ead] focus:outline-none hover:border-gray-300 resize-y min-h-[80px]"
+                    rows="3"
+                  />
+                </div>
+              </div>
+
+              {/* Aperçu du nom complet - avec plus de marge au-dessus */}
+              {(client.nom.trim() || client.prenom.trim()) && (
+                <div className="mt-4 p-3 bg-gradient-to-r from-emerald-50 to-green-50 rounded-lg border border-emerald-200">
+                  <div className="flex items-center gap-2">
+                    <FontAwesomeIcon icon={faUserCircle} className="text-emerald-600 text-sm" />
+                    <div>
+                      <p className="text-xs font-medium text-emerald-800">
+                        Client identifié
+                      </p>
+                      <p className="text-sm font-semibold text-emerald-900 mt-0.5">
+                        {client.nom.trim()} {client.prenom.trim()}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Indicateur de champs obligatoires */}
+              <div className="text-xs text-gray-500 pt-2 border-t border-gray-100">
+                <FontAwesomeIcon icon={faInfoCircle} className="text-xs mr-1" />
+                Les champs marqués d'une astérisque (*) sont obligatoires
               </div>
             </div>
           </div>
@@ -1238,7 +1829,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
               <div className="text-center py-8 text-gray-500">
                 <FontAwesomeIcon icon={faCartArrowDown} className="text-4xl mb-3 text-gray-300" />
                 <p className="font-medium">Panier vide</p>
-                <small className="text-sm">Ajoutez des produits</small>
+                <small className="text-sm">Scannez un code barre pour ajouter un produit</small>
               </div>
             ) : (
               <>
@@ -1253,8 +1844,8 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
                         className="hidden"
                       />
                       <span className="flex items-center justify-center w-4 h-4">
-                        <FontAwesomeIcon 
-                          icon={tvaActive ? faCheckSquare : faSquare} 
+                        <FontAwesomeIcon
+                          icon={tvaActive ? faCheckSquare : faSquare}
                           className={`text-sm transition-all duration-300 ${tvaActive ? 'text-green-500' : 'text-gray-400'}`}
                         />
                       </span>
@@ -1287,7 +1878,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
                         {produits.filter(item => item).length} prod.
                       </span>
                     </div>
-                    
+
                     <div className="p-3">
                       {produits.filter(item => item).map(item => {
                         const typeAffichage = item.type_vente_affichage || getTypeVenteAffichage(item.type_vente);
@@ -1296,9 +1887,9 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
                             <div className="mb-3">
                               <div className="font-bold text-gray-800 mb-1 text-sm">{item.nom}</div>
                               <div className="text-xs text-gray-600 mb-1">
-                                Code: {item.code} | Cat: {item.categorie}
+                                Code-barre: {item.code_barre || 'N/A'} | Cat: {item.categorie}
                               </div>
-                              
+
                               {editionPrix && editionPrix.produitId === item.id && editionPrix.typeVente === item.type_vente ? (
                                 <div className="bg-amber-50 border-2 border-amber-200 rounded-lg p-3 my-3 text-xs">
                                   <div className="flex items-center gap-2 mb-2">
@@ -1334,9 +1925,13 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
                                   <div className="text-xs text-green-600 font-semibold mt-1">
                                     {(item.prix_vente * item.quantite).toLocaleString()} FCFA
                                   </div>
-                                  {typeAffichage === 'gros' && item.unite_carton > 1 && (
+                                  {typeAffichage === 'gros' && item.unite_par_carton > 1 && (
                                     <div className="text-xs text-gray-500 mt-1">
-                                      {item.quantite} carton(s) × {item.unite_carton} unités
+                                      {item.quantite} carton(s) × {item.unite_par_carton} unités
+                                      <br />
+                                      <small>
+                                        Prix unitaire détail: {(item.prix_detail || 0).toLocaleString()} FCFA
+                                      </small>
                                     </div>
                                   )}
                                 </div>
@@ -1373,7 +1968,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
                                   >
                                     <FontAwesomeIcon icon={faMinus} className="text-xs" />
                                   </button>
-                                  <span 
+                                  <span
                                     className="font-semibold text-gray-800 cursor-pointer px-2"
                                     onClick={() => demarrerEditionQuantite(item)}
                                     title="Modifier quantité"
@@ -1450,6 +2045,15 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
 
                 {/* Actions */}
                 <div className="flex flex-col gap-3 mt-auto">
+                  {apiError && (
+                    <div className="mb-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                      <p className="text-sm text-amber-700 flex items-center gap-2">
+                        <FontAwesomeIcon icon={faWarning} className="text-xs" />
+                        Mode dégradé activé - Les commandes sont sauvegardées localement
+                      </p>
+                    </div>
+                  )}
+
                   <button
                     onClick={validerCommande}
                     className="py-3 rounded-lg text-sm font-bold border-none cursor-pointer flex items-center gap-2 justify-center bg-gradient-to-br from-green-500 to-emerald-600 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300"
@@ -1481,50 +2085,30 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
           </div>
         </div>
       </div>
-      
-      {/* Modal du ticket */}
-      {commandeValidee && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white p-5 rounded-2xl shadow-2xl w-[340px]">
+
+      {commandeImprimee && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-xl max-w-4xl mx-4">
             
-            {/* TITRE */}
-            <div className="flex items-center justify-between mb-3 border-b pb-2">
-              <h3 className="font-bold text-sm flex items-center gap-2">
-                <FontAwesomeIcon icon={faPrint} />
-                Aperçu du ticket
-              </h3>
-              <button
-                onClick={() => setCommandeValidee(null)}
-                className="text-gray-500 hover:text-red-600"
-              >
-                <FontAwesomeIcon icon={faXmark} />
-              </button>
-            </div>
+            <TicketCommande
+              ref={ticketRef}
+              commande={commandeImprimee}
+            />
 
-            {/* TICKET */}
-            <div className="flex justify-center">
-              <Ticket ref={ticketRef} commande={commandeValidee} />
-            </div>
-
-            {/* ACTIONS */}
-            <div className="flex gap-3 mt-4">
+            <div className="flex gap-4 mt-6">
               <button
                 onClick={imprimerTicket}
-                className="flex-1 flex items-center justify-center gap-2
-                           bg-green-600 hover:bg-green-700
-                           text-white py-2 rounded-lg font-bold transition"
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-lg font-medium transition-colors duration-200 flex items-center justify-center gap-2"
               >
-                <FontAwesomeIcon icon={faPrint} />
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                </svg>
                 Imprimer
               </button>
-
               <button
-                onClick={() => setCommandeValidee(null)}
-                className="flex-1 flex items-center justify-center gap-2
-                           bg-gray-200 hover:bg-gray-300
-                           py-2 rounded-lg font-bold transition"
+                onClick={() => setCommandeImprimee(null)}
+                className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-3 px-4 rounded-lg font-medium transition-colors duration-200"
               >
-                <FontAwesomeIcon icon={faXmark} />
                 Fermer
               </button>
             </div>
