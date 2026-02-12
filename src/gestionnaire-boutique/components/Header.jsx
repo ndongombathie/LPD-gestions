@@ -1,62 +1,28 @@
-// ==========================================================
-// 🧠 Header.jsx — Version 100% Fonctionnelle (LPD Manager)
-// Connecté Laravel + Sanctum : profil, logout, update, password + Raccourcis
-// ==========================================================
-
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Bell,
   ChevronDown,
-  LayoutGrid,
   LogOut,
-  User,
   Key,
   X,
   CheckCircle2,
   AlertCircle,
   Eye,
   EyeOff,
-  Camera,
-  // Icônes identiques à la Sidebar pour les pages
-  LayoutDashboard,
-  Users,
-  Truck,
-  ShoppingCart,
-  BarChart2,
-  ClipboardList,
-  FileText,
-  Clock,
-  Banknote,
+
 } from "lucide-react";
 // framer-motion removed to avoid optional peer dep on react/jsx-runtime in dev
 import useAuth from "../../hooks/useAuth";
 import profileAPI from "@/services/api/profile";
 
-// ==========================================================
-// 🧩 Utils
-// ==========================================================
-
 const getInitials = (prenom = "", nom = "") =>
   (`${(prenom || "").charAt(0)}${(nom || "").charAt(0)}`.trim() || "AR").toUpperCase();
-
-const loadJSON = (k, def) => {
-  try {
-    const v = localStorage.getItem(k);
-    return v ? JSON.parse(v) : def;
-  } catch {
-    return def;
-  }
-};
-
-
-const RECENTS_KEY = "lpd_recent_paths";
 
 // Normalise la structure utilisateur pour garantir prenom/nom même si l'API renvoie seulement `name`
 const normalizeUser = (u) => {
   try {
     if (!u || typeof u !== "object") {
-      return { prenom: "", nom: "", email: "", role: "Gestionnaire", photo: null };
+      return { prenom: "", nom: "", email: "", role: "", photo: null };
     }
     const name = u.name || "";
     const [first, ...rest] = name.split(" ").filter(Boolean);
@@ -67,30 +33,14 @@ const normalizeUser = (u) => {
       prenom,
       nom,
       email: u.email || "",
-      role: u.role || "Gestionnaire",
+      role: u.role || "",
       photo: u.photo || null,
     };
   } catch {
-    return { prenom: "", nom: "", email: "", role: "Gestionnaire", photo: null };
+    return { prenom: "", nom: "", email: "", role: "", photo: null };
   }
 };
 
-// 🔗 Pages éligibles aux raccourcis (mêmes infos que la Sidebar)
-const SHORTCUT_ITEMS = [
-  { name: "Tableau de bord", path: "/gestionnaire-boutique/dashboard", icon: LayoutDashboard },
-  { name: "Utilisateurs", path: "/gestionnaire-boutique/utilisateurs", icon: Users },
-  { name: "Fournisseurs", path: "/gestionnaire-boutique/fournisseurs", icon: Truck },
-  { name: "Clients spéciaux", path: "/gestionnaire-boutique/clients-speciaux", icon: ClipboardList },
-  { name: "Commandes", path: "/gestionnaire-boutique/commandes", icon: ShoppingCart },
-  { name: "Inventaire", path: "/gestionnaire-boutique/inventaire", icon: BarChart2 },
-  { name: "Rapports", path: "/gestionnaire-boutique/rapports", icon: FileText },
-  { name: "Décaissements", path: "/gestionnaire-boutique/decaissements", icon: Banknote },
-  { name: "Journal d’activités", path: "/gestionnaire-boutique/journal-activites", icon: Clock },
-];
-
-// ==========================================================
-// 🔔 Toast system
-// ==========================================================
 
 function Toasts({ toasts, remove }) {
   return (
@@ -125,10 +75,7 @@ function Toasts({ toasts, remove }) {
   );
 }
 
-// ==========================================================
-// 🔐 Modal — Changer mot de passe (Connectée au backend !)
-// ==========================================================
-
+//  Modal — Changer mot de passe (Connectée au backend !)
 function PasswordModal({ open, onClose, onSuccess, addToast, changePassword }) {
   const [oldPwd, setOldPwd] = useState("");
   const [newPwd, setNewPwd] = useState("");
@@ -267,9 +214,7 @@ function PasswordModal({ open, onClose, onSuccess, addToast, changePassword }) {
 }
 
 
-// ==========================================================
-// 🧠 HEADER PRINCIPAL (connecté au backend !)
-// ==========================================================
+// HEADER PRINCIPAL (connecté au backend !)
 
 export default function Header() {
   const navigate = useNavigate();
@@ -281,30 +226,14 @@ export default function Header() {
   const [showNotif, setShowNotif] = useState(false);
   const [showPwdModal, setShowPwdModal] = useState(false);
 
-  // Data
-  const defaultUser = loadJSON("user", {
-    prenom: "Admin",
-    nom: "LPD",
-    email: "admin@local",
-    role: "Gestionnaire",
-    photo: null,
-  });
 
-  const [user, setUser] = useState(() => authUser || defaultUser);
+  const [user, setUser] = useState(() => authUser);
   useEffect(() => {
     if (authUser) setUser(authUser);
   }, [authUser]);
   const [toasts, setToasts] = useState([]);
-  const [notifications, setNotifications] = useState(
-    loadJSON("lpd_notifications", [
-      { id: 1, type: "stock", text: "3 produits presque en rupture", read: false },
-      { id: 2, type: "rapport", text: "Nouveau rapport disponible", read: false },
-    ])
-  );
 
 
-
-  const unreadCount = notifications.filter((n) => !n.read).length;
 
   const addToast = (type, title, message) => {
     const id = Date.now();
@@ -315,13 +244,9 @@ export default function Header() {
   const removeToast = (id) =>
     setToasts((prev) => prev.filter((t) => t.id !== id));
 
-  // ==========================================================
-  // 🔥 Charger le VRAI utilisateur
-  // ==========================================================
 
   useEffect(() => {
     const loadUser = async () => {
-      // Si `instance` (axios) est disponible sur globalThis, on l'utilise ; sinon on charge un utilisateur mock depuis localStorage
       try {
         const data = await profileAPI.getProfile();
         const normalized = normalizeUser(data);
@@ -335,14 +260,10 @@ export default function Header() {
           try {
             setUser(normalizeUser(JSON.parse(saved)));
           } catch {
-            const mock = { prenom: "Admin", nom: "LPD", email: "admin@local", role: "Gestionnaire", photo: null };
-            setUser(mock);
-            localStorage.setItem("user", JSON.stringify(mock));
+            console.error("Erreur parsing user:", err);
           }
         } else {
-          const mock = { prenom: "Admin", nom: "LPD", email: "admin@local", role: "Gestionnaire", photo: null };
-          setUser(mock);
-          localStorage.setItem("user", JSON.stringify(mock));
+          console.error("Erreur chargement user:", err);
         }
       }
     };
@@ -361,37 +282,12 @@ export default function Header() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // ==========================================================
-  // 🚪 Déconnexion réelle
-  // ==========================================================
-
+  // Déconnexion réelle
   const handleLogout = async () => {
     await logout();
     navigate("/login");
   };
 
-  // ==========================================================
-  // 🔔 Notifications
-  // ==========================================================
-
-  const toggleNotif = () => {
-    setShowNotif((v) => !v);
-    setShowMenu(false);
-
-    if (!showNotif) {
-      setTimeout(() => {
-        setNotifications((prev) =>
-          prev.map((n) => ({ ...n, read: true }))
-        );
-      }, 400);
-    }
-  };
-
-  // Toujours afficher le header (utilisateur mock si non connecté)
-
-  // ==========================================================
-  // 🧱 UI du Header
-  // ==========================================================
 
   return (
     <>
@@ -424,48 +320,6 @@ export default function Header() {
             {/* ACTIONS */}
             <div className="flex items-center gap-4">
 
-
-              {/* NOTIFS */}
-              <div className="relative">
-                <button
-                  onClick={toggleNotif}
-                  className="p-2 rounded-lg hover:bg-gray-100 relative"
-                >
-                  <Bell className="w-5 h-5 text-[#472EAD]" />
-
-                  {unreadCount > 0 && (
-                    <span className="absolute -top-1 -right-1 text-[10px] font-bold bg-[#F58020] text-white px-1.5 py-0.5 rounded-full shadow">
-                      {unreadCount}
-                    </span>
-                  )}
-                </button>
-
-                {showNotif && (
-                  <div className="absolute right-0 mt-2 w-72 bg-white border rounded-lg shadow-lg p-2">
-                    <p className="text-xs font-semibold px-2 py-1 text-gray-500">Notifications</p>
-
-                    <ul className="max-h-64 overflow-auto divide-y">
-                      {notifications.length ? (
-                        notifications.map((n) => (
-                          <li
-                            key={n.id}
-                            className="px-3 py-2 hover:bg-gray-50 flex gap-2 items-start cursor-pointer"
-                          >
-                            <span>{n.type === "stock" ? "⚠️" : "📄"}</span>
-                            <span className={n.read ? "text-gray-500" : "font-medium"}>
-                              {n.text}
-                            </span>
-                          </li>
-                        ))
-                      ) : (
-                        <li className="px-3 py-6 text-center text-gray-400">
-                          Aucune notification
-                        </li>
-                      )}
-                    </ul>
-                  </div>
-                )}
-              </div>
 
               {/* PROFIL */}
               <div className="relative">
