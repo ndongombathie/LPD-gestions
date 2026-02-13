@@ -1,5 +1,5 @@
 // ==========================================================
-// 📦 Inventaire Dépôt API — VERSION STABLE ENTERPRISE
+// 📦 Inventaire Dépôt API — VERSION 100 ANS PROPRE
 // ==========================================================
 
 import httpClient from "../http/client";
@@ -21,7 +21,9 @@ const sanitizeDate = (d) => (d ? String(d) : undefined);
 
 const inventaireDepotAPI = {
 
-  // 🔹 GET Produits inventaire
+  /* ==========================================================
+   * GET INVENTAIRE DEPOT
+   * ========================================================== */
   async getInventaire(params = {}) {
     try {
       const {
@@ -66,17 +68,29 @@ const inventaireDepotAPI = {
       };
 
     } catch (error) {
-      console.error("Erreur GET inventaire:", error);
+      console.error("❌ Erreur GET inventaire dépôt:", error);
       throw error;
     }
   },
 
-  // 🔹 POST Calcul Totaux
-  async calculerTotaux({ date_debut, date_fin }) {
+  /* ==========================================================
+   * POST ENREGISTRER INVENTAIRE
+   * (Backend retourne aussi les totaux)
+   * ========================================================== */
+  async enregistrerInventaire({ date_debut, date_fin }) {
     try {
+
+      if (!date_debut || !date_fin) {
+        throw new Error("Intervalle de dates obligatoire");
+      }
+
+      if (date_debut > date_fin) {
+        throw new Error("Date début supérieure à date fin");
+      }
+
       const res = await httpClient.post(SAVE_ENDPOINT, {
-        date_debut,
-        date_fin,
+        date_debut: sanitizeDate(date_debut),
+        date_fin: sanitizeDate(date_fin),
       });
 
       return {
@@ -87,7 +101,7 @@ const inventaireDepotAPI = {
       };
 
     } catch (error) {
-      console.error("Erreur POST totaux:", error);
+      console.error("❌ Erreur POST enregistrer inventaire dépôt:", error);
       throw error;
     }
   },

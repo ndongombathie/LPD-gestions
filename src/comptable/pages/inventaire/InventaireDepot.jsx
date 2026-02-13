@@ -27,41 +27,25 @@ export default function InventaireDepot() {
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [dateError, setDateError] = useState("");
 
   /* ================= FETCH DATA ================= */
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
 
-      const params = {
+      const res = await inventaireDepotAPI.getInventaire({
         page,
         per_page: PER_PAGE,
         date_debut: dateDebut || undefined,
         date_fin: dateFin || undefined,
-      };
-
-      const res = await inventaireDepotAPI.getInventaire(params);
+      });
 
       setItems(res.items);
       setPagination(res.pagination);
 
-      if (dateDebut && dateFin) {
-        const totaux = await inventaireDepotAPI.calculerTotaux({
-          date_debut: dateDebut,
-          date_fin: dateFin,
-        });
-        setTotals(totaux);
-      } else {
-        setTotals({
-          prix_achat_total: 0,
-          prix_valeur_sortie_total: 0,
-          valeur_estimee_total: 0,
-          benefice_total: 0,
-        });
-      }
-
     } catch (err) {
-      console.error("Erreur inventaire:", err);
+      console.error("Erreur inventaire dépôt:", err);
     } finally {
       setLoading(false);
     }
@@ -71,32 +55,65 @@ export default function InventaireDepot() {
     fetchData();
   }, [fetchData]);
 
-  /* ================= APPLIQUER FILTRE ================= */
-  const appliquerFiltre = () => {
-    if (dateDebut && dateFin && dateDebut > dateFin) {
-      alert("Date début invalide");
+  /* ================= VALIDATION DATES ================= */
+  const validerDates = () => {
+    if (!dateDebut || !dateFin) {
+      setDateError("Sélectionnez une période complète.");
+      return false;
+    }
+
+    if (dateDebut > dateFin) {
+      setDateError("La date de début ne peut pas être supérieure à la date de fin.");
+      return false;
+    }
+
+    setDateError("");
+    return true;
+  };
+
+  /* ================= CHARGER LES CARTES ================= */
+  const chargerCartes = useCallback(async () => {
+    if (!validerDates()) {
+      setTotals({
+        prix_achat_total: 0,
+        prix_valeur_sortie_total: 0,
+        valeur_estimee_total: 0,
+        benefice_total: 0,
+      });
       return;
     }
 
-    setPage(1);
-    fetchData();
-  };
+    try {
+      const res = await inventaireDepotAPI.enregistrerInventaire({
+        date_debut: dateDebut,
+        date_fin: dateFin,
+      });
+      setTotals(res);
+    } catch (err) {
+      console.error("Erreur chargement des cartes:", err);
+    }
+  }, [dateDebut, dateFin]);
+
+  // Charger les cartes quand les dates changent
+  useEffect(() => {
+    chargerCartes();
+  }, [dateDebut, dateFin, chargerCartes]);
 
   /* ================= ENREGISTRER INVENTAIRE ================= */
   const enregistrerInventaire = async () => {
-    if (!dateDebut || !dateFin) {
-      alert("Sélectionne une période.");
+    if (!validerDates()) {
       return;
     }
 
     try {
       setSaving(true);
 
-      await inventaireDepotAPI.enregistrerInventaire({
+      const res = await inventaireDepotAPI.enregistrerInventaire({
         date_debut: dateDebut,
         date_fin: dateFin,
       });
 
+      setTotals(res);
       alert("✅ Inventaire enregistré avec succès");
 
     } catch (err) {
@@ -109,6 +126,9 @@ export default function InventaireDepot() {
 
   /* ================= IMPRIMER GLOBAL ================= */
   const imprimer = async () => {
+    if (!validerDates()) {
+      return;
+    }
 
     try {
       setLoading(true);
@@ -185,7 +205,6 @@ export default function InventaireDepot() {
         headStyles: { fillColor: [71, 46, 173] },
       });
 
-      // PAGE RÉCAP
       doc.addPage();
       doc.setFontSize(14);
       doc.text("RÉCAPITULATIF FINANCIER", 14, 20);
@@ -207,121 +226,197 @@ export default function InventaireDepot() {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="min-h-screen bg-gray-50 p-6 md:p-8">
+      <div className="max-w-7xl mx-auto">
+        
+        {/* ESPACEMENT HEADER */}
+        <div className="mb-10">
+          <div className="bg-white p-6 rounded-2xl shadow-md">
+            <div className="flex flex-wrap justify-between items-center gap-4">
+              <h1 className="text-2xl font-bold text-indigo-700">
+                Inventaire Dépôt — Comptable
+              </h1>
 
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-indigo-700">
-          Inventaire Dépôt — Comptable
-        </h1>
+              <div className="flex gap-4">
+                <button
+                  onClick={enregistrerInventaire}
+                  disabled={saving}
+                  className="bg-green-600 text-white px-6 py-3 rounded-xl flex gap-2 shadow-md hover:bg-green-700 transition-colors font-medium"
+                >
+                  <Save size={18}/>
+                  {saving ? "Enregistrement..." : "Enregistrer"}
+                </button>
 
-        <div className="flex gap-3">
-          <button
-            onClick={enregistrerInventaire}
-            disabled={saving}
-            className="bg-green-600 text-white px-4 py-2 rounded flex gap-2"
-          >
-            <Save size={16}/>
-            {saving ? "Enregistrement..." : "Enregistrer"}
-          </button>
-
-          <button
-            onClick={imprimer}
-            className="bg-indigo-600 text-white px-4 py-2 rounded flex gap-2"
-          >
-            <Printer size={16}/>
-            Imprimer Global
-          </button>
-
-          <button
-            onClick={appliquerFiltre}
-            className="bg-gray-700 text-white px-4 py-2 rounded"
-          >
-            Appliquer
-          </button>
+                <button
+                  onClick={imprimer}
+                  className="bg-indigo-600 text-white px-6 py-3 rounded-xl flex gap-2 shadow-md hover:bg-indigo-700 transition-colors font-medium"
+                >
+                  <Printer size={18}/>
+                  Imprimer Global
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
 
-      <div className="grid grid-cols-4 gap-4">
-        <Card title="Achat Total" value={fcfa(totals.prix_achat_total)} />
-        <Card title="Valeur Sortie" value={fcfa(totals.prix_valeur_sortie_total)} />
-        <Card title="Valeur Stock" value={fcfa(totals.valeur_estimee_total)} />
-        <Card title="Bénéfice" value={fcfa(totals.benefice_total)} />
-      </div>
-
-      <div className="flex gap-4">
-        <input type="date" value={dateDebut}
-          onChange={(e)=>setDateDebut(e.target.value)}
-          className="border px-3 py-2 rounded"/>
-
-        <input type="date" value={dateFin}
-          onChange={(e)=>setDateFin(e.target.value)}
-          className="border px-3 py-2 rounded"/>
-      </div>
-
-      <div className="bg-white shadow rounded">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="p-3 text-left">Produit</th>
-              <th className="p-3 text-left">Catégorie</th>
-              <th className="p-3 text-center">Entrées</th>
-              <th className="p-3 text-center">Sorties</th>
-              <th className="p-3 text-center">Stock</th>
-              <th className="p-3 text-right">Valeur sortie</th>
-              <th className="p-3 text-right">Valeur estimée</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((p)=>(
-              <tr key={p.id} className="border-t">
-                <td className="p-3">{p.nom}</td>
-                <td className="p-3">{p.categorie}</td>
-                <td className="p-3 text-center">{p.total_entree}</td>
-                <td className="p-3 text-center">{p.total_sortie}</td>
-                <td className="p-3 text-center">{p.stock_restant}</td>
-                <td className="p-3 text-right">{fcfa(p.valeur_sortie)}</td>
-                <td className="p-3 text-right">{fcfa(p.valeur_estimee)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {pagination && pagination.lastPage > 1 && (
-        <div className="flex justify-between items-center">
-          <button
-            disabled={page <= 1}
-            onClick={()=>setPage(p=>p-1)}
-            className="px-3 py-1 border rounded"
-          >
-            Précédent
-          </button>
-
-          <span>
-            Page {pagination.currentPage} / {pagination.lastPage}
-          </span>
-
-          <button
-            disabled={page >= pagination.lastPage}
-            onClick={()=>setPage(p=>p+1)}
-            className="px-3 py-1 border rounded"
-          >
-            Suivant
-          </button>
+        {/* ESPACEMENT CARTES */}
+        <div className="mb-10">
+          <div className="bg-white p-6 rounded-2xl shadow-md">
+            <h2 className="text-lg font-semibold text-gray-800 mb-6 border-b border-gray-200 pb-4">
+              Récapitulatif financier
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              <Card title="ACHAT TOTAL" value={fcfa(totals.prix_achat_total)} />
+              <Card title="VALEUR SORTIE" value={fcfa(totals.prix_valeur_sortie_total)} />
+              <Card title="VALEUR STOCK" value={fcfa(totals.valeur_estimee_total)} />
+              <Card title="BÉNÉFICE" value={fcfa(totals.benefice_total)} />
+            </div>
+          </div>
         </div>
-      )}
 
-      {loading && <p>Chargement...</p>}
+        {/* ESPACEMENT FILTRE */}
+        <div className="mb-10">
+          <div className="bg-white p-6 rounded-2xl shadow-md">
+            <h2 className="text-lg font-semibold text-gray-800 mb-4">
+              Période d'inventaire
+            </h2>
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium text-gray-600">Du</span>
+                  <input 
+                    type="date"
+                    value={dateDebut}
+                    onChange={(e) => {
+                      setDateDebut(e.target.value);
+                      setPage(1);
+                      setDateError("");
+                    }}
+                    className="border-2 border-gray-200 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 w-56"
+                  />
+                </div>
+                
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium text-gray-600">au</span>
+                  <input 
+                    type="date"
+                    value={dateFin}
+                    onChange={(e) => {
+                      setDateFin(e.target.value);
+                      setPage(1);
+                      setDateError("");
+                    }}
+                    className="border-2 border-gray-200 px-4 py-2.5 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 w-56"
+                  />
+                </div>
+              </div>
+              
+              {/* MESSAGE D'ERREUR */}
+              {dateError && (
+                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg">
+                  <p className="text-sm text-red-700 font-medium">
+                    ⚠️ {dateError}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
 
+        {/* ESPACEMENT TABLEAU */}
+        <div className="mb-10">
+          <div className="bg-white rounded-2xl shadow-md overflow-hidden">
+            <div className="px-6 py-4 border-b-2 border-gray-200 bg-gray-50">
+              <h2 className="text-lg font-semibold text-gray-800">
+                Détail des produits
+              </h2>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Produit</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Catégorie</th>
+                    <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Entrées</th>
+                    <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Sorties</th>
+                    <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Stock</th>
+                    <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Valeur sortie</th>
+                    <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Valeur estimée</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {items.map((p)=>(
+                    <tr key={p.id} className="hover:bg-indigo-50 transition-colors">
+                      <td className="px-6 py-4 font-medium text-gray-900">{p.nom}</td>
+                      <td className="px-6 py-4 text-gray-600">{p.categorie}</td>
+                      <td className="px-6 py-4 text-center text-gray-900">{p.total_entree}</td>
+                      <td className="px-6 py-4 text-center text-gray-900">{p.total_sortie}</td>
+                      <td className="px-6 py-4 text-center text-gray-900">{p.stock_restant}</td>
+                      <td className="px-6 py-4 text-right font-medium text-indigo-700">{fcfa(p.valeur_sortie)}</td>
+                      <td className="px-6 py-4 text-right font-medium text-indigo-700">{fcfa(p.valeur_estimee)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        {/* ESPACEMENT PAGINATION */}
+        {pagination && pagination.lastPage > 1 && (
+          <div className="mb-6">
+            <div className="bg-white px-6 py-4 rounded-2xl shadow-md flex justify-between items-center">
+              <button
+                disabled={page <= 1}
+                onClick={() => setPage(p => p - 1)}
+                className="px-5 py-2.5 border-2 border-gray-200 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 hover:border-gray-300 transition-all font-medium flex items-center gap-2"
+              >
+                ← Précédent
+              </button>
+
+              <span className="text-gray-700 bg-gray-100 px-5 py-2.5 rounded-xl font-medium">
+                Page <span className="font-bold text-indigo-700">{pagination.currentPage}</span> / {pagination.lastPage}
+              </span>
+
+              <button
+                disabled={page >= pagination.lastPage}
+                onClick={() => setPage(p => p + 1)}
+                className="px-5 py-2.5 border-2 border-gray-200 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 hover:border-gray-300 transition-all font-medium flex items-center gap-2"
+              >
+                Suivant →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* CHARGEMENT */}
+        {loading && (
+          <div className="bg-white p-8 rounded-2xl shadow-md flex justify-center items-center">
+            <div className="flex items-center gap-3">
+              <div className="animate-spin rounded-full h-6 w-6 border-3 border-indigo-600 border-t-transparent"></div>
+              <p className="text-gray-700 font-medium">Chargement en cours...</p>
+            </div>
+          </div>
+        )}
+
+        {/* ESPACE SUPPLEMENTAIRE EN BAS */}
+        <div className="h-6"></div>
+
+      </div>
     </div>
   );
 }
 
+/* ===== CARD COMPONENT ===== */
 function Card({ title, value }) {
   return (
-    <div className="p-4 bg-white shadow rounded">
-      <p className="text-sm text-gray-500">{title}</p>
-      <p className="text-lg font-bold text-indigo-700">{value}</p>
+    <div className="bg-gradient-to-br from-indigo-50 to-white p-6 rounded-xl border-2 border-indigo-100 shadow-sm hover:shadow-md transition-all">
+      <p className="text-xs font-bold text-indigo-700 uppercase tracking-wider mb-2">
+        {title}
+      </p>
+      <p className="text-xl lg:text-2xl font-extrabold text-gray-800 break-words">
+        {value}
+      </p>
     </div>
   );
 }
