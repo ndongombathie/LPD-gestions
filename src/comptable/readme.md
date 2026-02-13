@@ -72,4 +72,8 @@ GET    api/enregistrer-inventaire-depot | en donnant les deux intevalle de dates
 # Enregistrer inventaire de depot
 GET    api/enregistrer-inventaire-boutique | en donnant les deux intevalle de dates
 
+# historiques des inventaires
 GET   api/historique-inventaires   | afficher historiques des inventaires
+
+# les mouvement de stock pour un produit donnee
+GET api/mouvements-stock/{id} | afficher les mouvement de stock
