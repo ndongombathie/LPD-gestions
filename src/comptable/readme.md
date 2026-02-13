@@ -62,7 +62,7 @@ POST          api/utilisateurs/{utilisateur_id}/reset-password
 GET          api/mouvements-stock/inventaire-depot  
 
 # les journals caissier 
-GET         caissier/caisses-journal/{date}
+GET            api/caissier/caisses-journals
 
 
 # les statistiques sur le dasboard jopurnal caisse
