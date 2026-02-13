@@ -61,20 +61,21 @@ POST          api/utilisateurs/{utilisateur_id}/reset-password
 # inventaire depot 
 GET          api/mouvements-stock/inventaire-depot  
 
+# vous aussi pouvez filtrer pa date_debut et date_fin
 # les journals caissier 
 GET            api/caissier/caisses-journals
 
 
-# les statistiques sur le dasboard jopurnal caisse
+# les statistiques sur le dasboard jopurnal caisse vous aussi pouvez filtrer pa date_debut et date_fin
 
 # Total des caisses
-GET             api/caissier/caisses-journal/{date}/total-caisse 
+GET             api/caissier/caisses-journal-total-caisse
 
 # Total décaissements
-GET|HEAD        api/caissier/caisses-journal/{date}/total_decaissement
+GET|HEAD        api/caissier/caisses-journal-total_decaissement
 
 # Total encaissements
-GET|HEAD        api/caissier/caisses-journal/{date}/total-encaissement
+GET|HEAD        api/caissier/caisses-journal-total-encaissement
 
 # controle vendeur 
 GET     api/commandes-payees
