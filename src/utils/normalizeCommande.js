@@ -1,8 +1,7 @@
 // ==========================================================
 // normalizeCommande.js
 // Normalisation SAFE d'une commande backend (Laravel)
-// - Laravel = source de vérité
-// - React n'invente JAMAIS le statut
+// Laravel = source de vérité
 // ==========================================================
 
 export function normalizeCommande(cmd) {
@@ -25,10 +24,17 @@ export function normalizeCommande(cmd) {
     ""
   ).trim();
 
-  const clientId = cmd.client_id || client.id || null;
+  const rawClientId =
+    cmd.clientId ??
+    cmd.client_id ??
+    cmd.client?.id ??
+    null;
+
+  // ✅ CORRECTION : on force toujours un string
+  const clientId = rawClientId ? String(rawClientId) : null;
 
   // ===============================
-  // 📦 LIGNES
+  // 📦 LIGNES (PAS DE RECALCUL)
   // ===============================
   const lignesSource =
     cmd.details ||
@@ -37,60 +43,40 @@ export function normalizeCommande(cmd) {
     cmd.ligne_commandes ||
     [];
 
-  const lignes = (lignesSource || []).map((l) => {
-    const qte = Number(l.quantite || l.qte || 0);
-    const pu = Number(l.prix_unitaire || l.prix || 0);
-    const modeVente = l.mode_vente || l.modeVente || "detail";
-
-    const totalHT =
-      Number(l.total_ht || l.totalHT) ||
-      (qte && pu ? qte * pu : 0);
-
-    const totalTTC =
-      Number(l.total_ttc || l.totalTTC || l.total) ||
-      totalHT * 1.18;
-
-    const unitesParCarton = Number(l.unites_par_carton || 1);
-
-    const quantiteUnites =
+  const lignes = (lignesSource || []).map((l) => ({
+    id: l.id,
+    produitId: l.produit_id || l.produitId || null,
+    libelle:
+      l.libelle ||
+      l.nom_produit ||
+      l.designation ||
+      l.produit?.nom ||
+      "",
+    ref: l.ref || l.code_produit || l.reference || null,
+    qte: Number(l.quantite || l.qte || 0),
+    prixUnitaire: Number(l.prix_unitaire || l.prix || 0),
+    totalHT: Number(l.total_ht ?? l.totalHT ?? 0),
+    totalTTC: Number(l.total_ttc ?? l.totalTTC ?? l.total ?? 0),
+    modeVente: l.mode_vente || l.modeVente || "detail",
+    quantiteUnites:
       Number(l.quantite_unites) ||
-      (modeVente === "gros" ? qte * unitesParCarton : qte);
-
-    return {
-      id: l.id,
-      produitId: l.produit_id || l.produitId || null,
-      libelle:
-        l.libelle ||
-        l.nom_produit ||
-        l.designation ||
-        l.produit?.nom ||
-        "",
-      ref: l.ref || l.code_produit || l.reference || null,
-      qte,
-      prixUnitaire: pu,
-      totalHT,
-      totalTTC,
-      modeVente,
-      quantiteUnites,
-    };
-  });
+      Number(l.quantite || l.qte || 0),
+  }));
 
   // ===============================
-  // 💰 TOTAUX (backend prioritaire)
+  // 💰 TOTAUX (BACKEND UNIQUEMENT)
   // ===============================
-  let totalHT = Number(cmd.total_ht ?? cmd.totalHT ?? cmd.montant_ht ?? 0);
-  let totalTTC = Number(cmd.total_ttc ?? cmd.totalTTC ?? cmd.montant_total ?? cmd.total ?? 0);
+  const totalHT = Number(
+    cmd.total_ht ?? cmd.totalHT ?? cmd.montant_ht ?? 0
+  );
 
-  if ((!totalHT || isNaN(totalHT)) && lignes.length) {
-    totalHT = lignes.reduce((s, l) => s + (l.totalHT || 0), 0);
-  }
+  const totalTTC = Number(
+    cmd.total_ttc ?? cmd.totalTTC ?? cmd.montant_total ?? cmd.total ?? 0
+  );
 
-  if ((!totalTTC || isNaN(totalTTC)) && lignes.length) {
-    totalTTC = lignes.reduce((s, l) => s + (l.totalTTC || 0), 0);
-  }
-
-  let totalTVA = Number(cmd.total_tva ?? cmd.totalTVA ?? (totalTTC - totalHT));
-  if (isNaN(totalTVA)) totalTVA = totalTTC - totalHT;
+  const totalTVA = Number(
+    cmd.total_tva ?? cmd.totalTVA ?? 0
+  );
 
   // ===============================
   // 💳 PAIEMENTS
@@ -101,19 +87,22 @@ export function normalizeCommande(cmd) {
     montant: Number(p.montant || 0),
     mode_paiement: p.mode_paiement || p.mode || "",
     commentaire: p.commentaire || "",
-    statut_paiement: p.statut_paiement || p.statut || "payee",
-    type_paiement: p.type_paiement || "paiement",
-  }));
-
-
-  const montantPaye = Number(cmd.montant_paye ?? cmd.montantPaye ?? 0);
-
-  const resteAPayer =
-    Number(cmd.reste_a_payer ?? cmd.resteAPayer ?? Math.max(totalTTC - montantPaye, 0));
-
+    statut_paiement: p.statut_paiement || p.statut || "inconnu",
+    type_paiement: p.type_paiement ?? null,  }));
 
   // ===============================
-  // 🧠 STATUT — ON FAIT CONFIANCE À LARAVEL
+  // 💰 FINANCIER (BACKEND)
+  // ===============================
+  const montantPaye = Number(
+    cmd.montant_paye ?? cmd.montantPaye ?? 0
+  );
+
+  const resteAPayer = Number(
+    cmd.reste_a_payer ?? cmd.resteAPayer ?? 0
+  );
+
+  // ===============================
+  // 🧠 STATUT
   // ===============================
   const statut = cmd.statut;
 
@@ -127,10 +116,14 @@ export function normalizeCommande(cmd) {
   // ===============================
   // 🧾 DATE
   // ===============================
-  const dateCommande =
-    cmd.date_commande ||
-    cmd.date ||
-    (cmd.created_at ? String(cmd.created_at).slice(0, 10) : null);
+const dateCommande =
+  cmd.dateCommande ||
+  cmd.date_commande ||
+  cmd.date ||
+  (cmd.created_at
+    ? String(cmd.created_at).slice(0, 10)
+    : null);
+
 
   // ===============================
   // 📦 RETOUR FINAL
@@ -138,22 +131,16 @@ export function normalizeCommande(cmd) {
   return {
     id: cmd.id,
     numero: cmd.numero || cmd.reference || `CMD-${cmd.id}`,
-
     clientId,
     clientNom,
-
     dateCommande,
-
     lignes,
-
     totalHT,
     totalTVA,
     totalTTC,
-
     paiements,
     montantPaye,
     resteAPayer,
-
     statut,
     statutLabel,
   };

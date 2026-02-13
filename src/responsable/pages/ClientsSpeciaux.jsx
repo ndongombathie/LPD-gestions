@@ -17,6 +17,7 @@ import {
   X,
   ListChecks,
   BadgeDollarSign,
+  Phone,
 } from "lucide-react";
 import FormModal from "../components/FormModal.jsx";
 import DataTable from "../components/DataTable.jsx";
@@ -31,6 +32,8 @@ const formatFCFA = (n) =>
     style: "currency",
     currency: "XOF",
   }).format(Number(n || 0));
+const getPaiementEffectiveStatus = (paiement) =>
+  String(paiement?.statut_paiement || "inconnu").toLowerCase();
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
@@ -104,6 +107,7 @@ function NouvelleTrancheModal({
       }),
     [commandes]
   );
+  const [submitting, setSubmitting] = useState(false);
 
   const [commandeId, setCommandeId] = useState("");
   const [montant, setMontant] = useState("");
@@ -135,6 +139,7 @@ function NouvelleTrancheModal({
 
   const handleSubmit = (e) => {
     e.preventDefault();
+
     if (!commandeSelectionnee) {
       toast(
         "error",
@@ -154,14 +159,13 @@ function NouvelleTrancheModal({
       return;
     }
 
-    // ✅ CORRECTION : Utiliser resteAPayer (source de vérité Laravel)
     const resteDisponible = Number(commandeSelectionnee.resteAPayer || 0);
 
     if (resteDisponible <= 0) {
       toast(
         "error",
         "Aucun reste pour nouvelle tranche",
-        "Le montant total de la commande est déjà couvert par les encaissements et tranches en attente."
+        "Le montant total de la commande est déjà couvert."
       );
       return;
     }
@@ -170,19 +174,24 @@ function NouvelleTrancheModal({
       toast(
         "error",
         "Montant trop élevé",
-        `La tranche ne peut pas dépasser le reste disponible (${formatFCFA(
-          resteDisponible
-        )}).`
+        `La tranche ne peut pas dépasser (${formatFCFA(resteDisponible)}).`
       );
       return;
     }
 
-    onSubmit(commandeSelectionnee, {
-      montant: m,
-      mode,
-      date,
-      commentaire: commentaire?.trim() || "",
-    });
+    // ✅ ACTIVER LE LOADING
+    setSubmitting(true);
+
+    onSubmit(
+      commandeSelectionnee,
+      {
+        montant: m,
+        mode,
+        date,
+        commentaire: commentaire?.trim() || "",
+      },
+      () => setSubmitting(false) // ✅ FIN LOADING
+    );
   };
 
   if (!open || !client) return null;
@@ -355,16 +364,29 @@ function NouvelleTrancheModal({
               <button
                 type="button"
                 onClick={handleClose}
-                className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm hover:bg-gray-50 shadow-sm"
+                disabled={submitting}
+                className={cls(
+                  "px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm shadow-sm",
+                  submitting
+                    ? "opacity-60 cursor-not-allowed"
+                    : "hover:bg-gray-50"
+                )}
               >
                 Annuler
               </button>
+
               <button
                 type="submit"
-                className="px-4 py-2 rounded-lg text-sm text-white bg-[#472EAD] hover:opacity-95 shadow-sm"
-                disabled={!commandeSelectionnee}
+                disabled={!commandeSelectionnee || submitting}
+                className={cls(
+                  "px-4 py-2 rounded-lg text-sm text-white bg-[#472EAD] shadow-sm flex items-center gap-2",
+                  submitting
+                    ? "opacity-70 cursor-not-allowed"
+                    : "hover:opacity-95"
+                )}
               >
-                Envoyer à la caisse
+                {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                {submitting ? "Envoi..." : "Envoyer à la caisse"}
               </button>
             </div>
           </form>
@@ -415,7 +437,6 @@ function ClientForm({ initial, onSubmit, onCancel, submitting }) {
     return Object.keys(e).length === 0;
   };
 
-
   const handleSubmit = (ev) => {
     ev.preventDefault();
     console.log("CLIENT UPDATE FORM:", initial);
@@ -460,9 +481,10 @@ function ClientForm({ initial, onSubmit, onCancel, submitting }) {
           </label>
           <input
             value={form.contact}
-            onChange={(e) =>
-              update("contact", e.target.value.replace(/\D/g, "").slice(0, 9))
-            }
+            onChange={(e) => {
+              const clean = e.target.value.replace(/\D/g, "").slice(0, 9);
+              update("contact", clean);
+            }}
             placeholder="Ex : 771234567"
             maxLength={9}
             className={base(errors.contact)}
@@ -484,7 +506,6 @@ function ClientForm({ initial, onSubmit, onCancel, submitting }) {
             placeholder="Ex : Imprisol SARL (optionnel)"
             className={base(errors.entreprise)}
           />
-
           {errors.entreprise && (
             <p className="text-xs text-rose-600 mt-1">{errors.entreprise}</p>
           )}
@@ -513,10 +534,17 @@ function ClientForm({ initial, onSubmit, onCancel, submitting }) {
         <button
           type="button"
           onClick={onCancel}
-          className="px-4 py-2.5 rounded-lg border border-gray-300 bg-white text-sm hover:bg-gray-50 shadow-sm"
+          disabled={submitting}
+          className={cls(
+            "px-4 py-2.5 rounded-lg border border-gray-300 bg-white text-sm shadow-sm",
+            submitting
+              ? "opacity-60 cursor-not-allowed"
+              : "hover:bg-gray-50"
+          )}
         >
           Annuler
         </button>
+
         <button
           type="submit"
           disabled={submitting}
@@ -538,9 +566,14 @@ function ClientForm({ initial, onSubmit, onCancel, submitting }) {
 
 // ==========================================================
 // 📋 Page principale Clients Spéciaux - CORRIGÉE AVEC STATUTS LARAVEL
+// Version avec le même cadre visuel que Utilisateurs.jsx
 // ==========================================================
 export default function ClientsSpeciaux() {
+  // ✅ 1️⃣ Ajouter page et searchInput
+  const [page, setPage] = useState(1);
+  const [searchInput, setSearchInput] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  
   const [openAdd, setOpenAdd] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -551,6 +584,16 @@ export default function ClientsSpeciaux() {
   const [trancheClient, setTrancheClient] = useState(null);
   const [openTranche, setOpenTranche] = useState(false);
 
+  // ✅ 2️⃣ Ajouter le debounce (IMPORTANT)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setPage(1);
+      setSearchTerm(searchInput);
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
   const toast = (type, title, message) => {
     const id = Date.now();
     setToasts((t) => [...t, { id, type, title, message }]);
@@ -558,21 +601,21 @@ export default function ClientsSpeciaux() {
   };
   const removeToast = (id) => setToasts((t) => t.filter((x) => x.id !== id));
 
-  // ✅ CORRECTION 1 : Appel complet du hook avec pagination
+  // ✅ 3️⃣ Appel du hook (LA GROSSE CORRECTION)
   const {
     clients,
     commandes,
     clientsEnrichis,
     statsGlobales,
-    page,
     totalPages,
-    setPage,
     loading,
     handleAdd,
     handleEdit,
     handleDelete,
-  } = useClientsSpeciaux(toast);
-
+  } = useClientsSpeciaux(toast, {
+    page,
+    search: searchTerm,
+  });
 
   const {
     loadPaiementsForClient,
@@ -580,28 +623,6 @@ export default function ClientsSpeciaux() {
     handleVoirDetailEditTranche,
     handleVoirDetailDeleteTranche,
   } = usePaiementsClients(toast);
-
-  // ✅ CORRECTION 3 : Réinitialiser la page quand on recherche
-  useEffect(() => {
-    setPage(1);
-  }, [searchTerm, setPage]);
-
-  // ✅ CORRECTION 1 : Filtre correct pour la table
-  const displayedClients = useMemo(() => {
-    if (!searchTerm) return clientsEnrichis;
-
-    const q = searchTerm.toLowerCase();
-    return clientsEnrichis.filter(
-      (c) =>
-        c.nom.toLowerCase().includes(q) ||
-        (c.contact || "").toLowerCase().includes(q) ||
-        (c.entreprise || "").toLowerCase().includes(q) ||
-        (c.adresse || "").toLowerCase().includes(q)
-    );
-  }, [clientsEnrichis, searchTerm]);
-
-  // ✅ Utilisation des stats globales du hook
-  const statsReelles = statsGlobales;
 
   const openHistoriqueClient = (client) => {
     setHistoriqueClient(client);
@@ -628,14 +649,19 @@ export default function ClientsSpeciaux() {
       return reste > 0;
     });
   };
+  
+  const isDeleteDisabled = (client) => {
+    const dette = Number(client.detteTotale || 0);
+    return dette > 0;
+  };
 
   // Loader compact aligné
   if (loading)
     return (
-      <div className="flex items-center justify-center h-[60vh] overflow-x-hidden">
-        <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-gray-200 shadow-sm">
+      <div className="min-h-screen w-full bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white flex items-center justify-center">
+        <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-white/80 border border-[#E4E0FF] shadow-sm">
           <Loader2 className="w-5 h-5 text-[#472EAD] animate-spin" />
-          <span className="text-xs font-medium text-[#472EAD]">
+          <span className="text-sm font-medium text-[#472EAD]">
             Chargement des clients spéciaux...
           </span>
         </div>
@@ -643,358 +669,428 @@ export default function ClientsSpeciaux() {
     );
 
   return (
-    <div className="w-full h-full overflow-x-hidden">
-      <div className="w-full h-full bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white px-3 sm:px-4 lg:px-6 py-4 sm:py-5 overflow-y-auto">
-        <div className="max-w-6xl mx-auto space-y-8"> {/* Changé de space-y-5 à space-y-8 */}
-          
-          {/* HEADER */}
-          <motion.header
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35 }}
-            className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
-          >
-            <div className="space-y-1.5">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/70 border border-[#E4E0FF]">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                <span className="text-[11px] font-semibold tracking-wide text-[#472EAD] uppercase">
-                  Module Clients spéciaux — Responsable
+    <div className="min-h-screen w-full bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white px-3 sm:px-4 lg:px-6 py-6 sm:py-8 overflow-y-auto">
+      <div className="max-w-6xl mx-auto space-y-8">
+        
+        {/* HEADER avec badge intégré */}
+        <motion.header
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45 }}
+          className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mt-6 mb-8"
+        >
+          <div className="space-y-2 flex-1">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/70 border border-[#E4E0FF] shadow-xs">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              <span className="text-[11px] font-semibold tracking-wide text-[#472EAD] uppercase">
+                Module Clients spéciaux — Responsable
+              </span>
+            </div>
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#2F1F7A]">
+                Clients spéciaux
+              </h1>
+              <p className="mt-1 text-sm text-gray-500">
+                Gestion des clients privilégiés, commandes en gros et
+                paiements par tranches (préparation côté Responsable,{" "}
+                <span className="font-semibold">
+                  encaissement côté caisse
                 </span>
-              </div>
-              <div>
-                <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-[#2F1F7A]">
-                  Clients spéciaux
-                </h1>
-                <p className="mt-0.5 text-xs sm:text-sm text-gray-500">
-                  Gestion des clients privilégiés, commandes en gros et
-                  paiements par tranches (préparation côté Responsable,{" "}
-                  <span className="font-semibold">
-                    encaissement côté caisse
-                  </span>
-                  ).
-                </p>
-              </div>
-              <p className="text-[11px] text-gray-400">
-                {statsReelles.nbClients} client
-                {statsReelles.nbClients > 1 && "s"} spéciaux enregistrés
+                ).
               </p>
             </div>
+            <p className="text-[11px] text-gray-400">
+              {statsGlobales.nbClients} client
+              {statsGlobales.nbClients > 1 && "s"} spéciaux enregistrés
+            </p>
+          </div>
 
-            <div className="flex flex-wrap gap-2 justify-start sm:justify-end">
-              <button
-                onClick={() => setOpenAdd(true)}
-                className="flex items-center gap-2 px-4 py-2.5 bg-[#472EAD] text-white rounded-lg shadow-md hover:bg-[#5A3CF5] hover:shadow-lg text-xs sm:text-sm transition"
-              >
-                <UserPlus size={16} />
-                Nouveau client
-              </button>
+          {/* BADGE TOTAL aligné à droite au même niveau */}
+          <div className="flex items-center justify-end">
+            <button
+              onClick={() => setOpenAdd(true)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-[#472EAD] text-white rounded-lg shadow-md hover:bg-[#5A3CF5] hover:shadow-lg text-xs sm:text-sm transition"
+            >
+              <UserPlus size={16} />
+              Nouveau client
+            </button>
+          </div>
+        </motion.header>
+
+        {/* CARTES STATS GLOBALES */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Clients spéciaux */}
+          <div className="rounded-xl border border-yellow-400 bg-gradient-to-br from-yellow-50 via-amber-50 to-yellow-100 px-3 py-2.5 shadow-sm">
+            <div className="text-[15px] font-semibold text-yellow-800 mb-0.5">
+              Clients spéciaux
             </div>
-          </motion.header>
-
-          {/* CARTES STATS GLOBALES - CORRIGÉES avec données Laravel */}
-          <motion.div
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="w-full max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6 mb-8"
-          >
-            {/* Clients spéciaux */}
-            <div className="rounded-xl border border-yellow-400 bg-gradient-to-br from-yellow-50 via-amber-50 to-yellow-100 px-3 py-2.5 shadow-sm">
-              <div className="text-[15px] font-semibold text-yellow-800 mb-0.5">
-                Clients spéciaux
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-lg font-extrabold text-yellow-700">
-                  {statsReelles.nbClients}
-                </span>
-                <BadgeDollarSign className="w-5 h-5 text-yellow-600" />
-              </div>
+            <div className="flex items-center justify-between">
+              <span className="text-lg font-extrabold text-yellow-700">
+                {statsGlobales.nbClients}
+              </span>
+              <BadgeDollarSign className="w-5 h-5 text-yellow-600" />
             </div>
+          </div>
 
-            {/* Total TTC commandes */}
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
-              <div className="text-[15px] text-gray-500 mb-0.5">
-                Total TTC commandes
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm sm:text-lg font-extrabold text-emerald-700">
-                  {formatFCFA(statsReelles.totalTTC)}
-                </span>
-              </div>
+          {/* Total TTC commandes */}
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+            <div className="text-[15px] text-gray-500 mb-0.5">
+              Total TTC commandes
             </div>
-
-            {/* Total payé */}
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
-              <div className="text-[15px] text-gray-500 mb-0.5">
-                Total payé (encaissé)
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm sm:text-lg font-extrabold text-emerald-700">
-                  {formatFCFA(statsReelles.totalPaye)}
-                </span>
-                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-              </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm sm:text-lg font-extrabold text-emerald-700">
+                {formatFCFA(statsGlobales.totalTTC)}
+              </span>
             </div>
+          </div>
 
-            {/* Dette globale */}
-            <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5">
-              <div className="text-[15px] text-gray-500 mb-0.5">
-                Dette globale
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm sm:text-lg font-extrabold text-rose-700">
-                  {formatFCFA(statsReelles.detteTotale)}
-                </span>
-                <AlertCircle className="w-5 h-5 text-rose-600" />
-              </div>
+          {/* Total payé */}
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+            <div className="text-[15px] text-gray-500 mb-0.5">
+              Total payé (encaissé)
             </div>
-          </motion.div>
-
-          {/* RECHERCHE + TABLEAU */}
-          <section className="bg-white/95 border border-[#E4E0FF] rounded-2xl shadow-[0_12px_30px_rgba(15,23,42,0.06)] px-3 sm:px-4 py-4 sm:py-5 space-y-4 mt-8"> {/* Ajout de mt-8 */}
-            
-            {/* RECHERCHE */}
-            <div className="relative mb-4"> {/* Ajout de mb-4 */}
-              <Search className="absolute left-3 top-2.5 text-gray-400 w-4 h-4" />
-              <input
-                type="text"
-                placeholder="Rechercher par nom, contact, entreprise, adresse..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-xl text-sm bg-white shadow-sm focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD] placeholder:text-gray-400"
-              />
+            <div className="flex items-center justify-between">
+              <span className="text-sm sm:text-lg font-extrabold text-emerald-700">
+                {formatFCFA(statsGlobales.totalPaye)}
+              </span>
+              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
             </div>
+          </div>
 
-            {/* TABLEAU PRINCIPAL - CORRIGÉ */}
-            <div className="mt-2"> {/* Ajout d'un wrapper avec espacement */}
-              <DataTable
-                columns={[
-                  {
-                    key: "nom",
-                    label: "Client",
-                    render: (_, row) => (
-                      <div>
-                        <div className="font-semibold text-sm">{row.nom}</div>
-                        {row.entreprise && (
-                          <div className="text-[11px] text-gray-500">
-                            {row.entreprise}
+          {/* Dette globale */}
+          <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5">
+            <div className="text-[15px] text-gray-500 mb-0.5">
+              Dette globale
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm sm:text-lg font-extrabold text-rose-700">
+                {formatFCFA(statsGlobales.detteTotale)}
+              </span>
+              <AlertCircle className="w-5 h-5 text-rose-600" />
+            </div>
+          </div>
+        </div>
+
+        {/* RECHERCHE + TABLEAU */}
+        <section className="bg-white/90 border border-[#E4E0FF] rounded-2xl shadow-[0_18px_45px_rgba(15,23,42,0.06)] px-4 sm:px-5 py-4 sm:py-5 space-y-4">
+          
+          {/* Barre de recherche */}
+          <div className="relative">
+            <Search className="absolute left-3 top-2.5 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              placeholder="Rechercher par nom, contact, entreprise, adresse..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-xl text-sm bg-white/80 shadow-sm focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD] placeholder:text-gray-400"
+            />
+          </div>
+
+          {/* Résumé affichage */}
+          <div className="flex items-center justify-between text-[11px] text-gray-500 mb-2">
+            <span>
+              Affichage :{" "}
+              <span className="font-semibold">{clientsEnrichis.length}</span> sur{" "}
+              <span className="font-semibold">{statsGlobales.nbClients}</span>
+            </span>
+            <span>
+              Page <span className="font-semibold">{page}</span> /{" "}
+              <span className="font-semibold">{totalPages}</span>
+            </span>
+          </div>
+
+          {/* TABLEAU PRINCIPAL */}
+          <div className="mt-2">
+            {clientsEnrichis.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-14 text-center text-gray-400">
+                <Search className="w-8 h-8 mb-3 opacity-60" />
+                <p className="text-sm font-medium">
+                  Aucun client spécial trouvé
+                </p>
+                <p className="text-xs mt-1">
+                  Essayez de modifier votre recherche.
+                </p>
+              </div>
+            ) : (
+              <>
+                <DataTable
+                  columns={[
+                    {
+                      key: "nom",
+                      label: "Client",
+                      render: (_, row) => (
+                        <div className="space-y-[2px]">
+                          <div className="font-semibold text-sm text-gray-800">
+                            {row.nom}
                           </div>
-                        )}
-
-                        <div className="text-[11px] text-gray-400">
-                          {row.adresse}
+                          <div className="text-[11px] text-gray-500">
+                            {row.entreprise
+                              ? row.entreprise
+                              : <span className="italic text-gray-400">Particulier</span>}
+                          </div>
+                          <div className="text-[11px] text-gray-400">
+                            {row.adresse}
+                          </div>
+                          {row.contact && (
+                            <div className="text-[11px] text-gray-500 flex items-center gap-1">
+                              {row.contact}
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    ),
-                  },
-                  {
-                    key: "totalTTC",
-                    label: "Total TTC",
-                    render: (v) => (
-                      <span className="text-xs font-semibold text-gray-700">
-                        {formatFCFA(v || 0)}
-                      </span>
-                    ),
-                  },
-                  {
-                    key: "totalPaye",
-                    label: "Total payé",
-                    render: (v) => (
-                      <span className="text-xs font-semibold text-emerald-700">
-                        {formatFCFA(v || 0)}
-                      </span>
-                    ),
-                  },
-                  {
-                    key: "detteTotale",
-                    label: "Dette",
-                    render: (v) =>
-                      v > 0 ? (
-                        <span className="text-xs font-semibold text-rose-700">
-                          {formatFCFA(v)}
-                        </span>
-                      ) : (
-                        <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
-                          A jour
+                      ),
+                    },
+                    {
+                      key: "totalTTC",
+                      label: "Total TTC",
+                      render: (v) => (
+                        <span className="text-xs font-semibold text-gray-700">
+                          {formatFCFA(v || 0)}
                         </span>
                       ),
-                  },
-                  {
-                    key: "tranches",
-                    label: "Tranches",
-                    render: (_, row) => {
-                      const nbTranches = row.nbTranchesEnAttente || 0;
-                      const montantTranches = row.montantTranchesEnAttente || 0;
-                      
-                      return nbTranches > 0 ? (
-                        <div className="flex flex-col text-xs">
-                          <span className="font-semibold text-amber-700">
-                            {nbTranches} en attente
-                          </span>
-                          <span className="text-[11px] text-gray-600">
-                            {formatFCFA(montantTranches)}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
-                          Aucune tranche en attente
-                        </span>
-                      );
                     },
-                  },
-                  {
-                    key: "nbCommandes",
-                    label: "Commandes",
-                    render: (v) => (
-                      <span className="text-xs font-semibold text-gray-700">
-                        {v || 0}
-                      </span>
-                    ),
-                  },
-                ]}
-                data={displayedClients}
-                actions={[
-                  {
-                    icon: <BadgeDollarSign size={16} />,
-                    title: "Nouvelle tranche (en attente caisse)",
-                    color: "text-emerald-700",
-                    hoverBg: "bg-emerald-50",
-                    onClick: (row) => !isTrancheDisabled(row) && openTrancheClient(row),
-                    disabled: (row) => isTrancheDisabled(row),
-                  },
-                  {
-                    icon: <ListChecks size={16} />,
-                    title: "Historique commandes / paiements",
-                    color: "text-[#472EAD]",
-                    hoverBg: "bg-[#F7F5FF]",
-                    onClick: (row) => openHistoriqueClient(row),
-                  },
-                  {
-                    icon: <Edit2 size={16} />,
-                    title: "Modifier",
-                    color: "text-[#472EAD]",
-                    hoverBg: "bg-[#F7F5FF]",
-                    onClick: (row) => setEditTarget(row),
-                  },
-                  {
-                    icon: <Trash2 size={16} />,
-                    title: "Supprimer",
-                    color: "text-rose-600",
-                    hoverBg: "bg-rose-50",
-                    onClick: (row) => setDeleteTarget(row),
-                  },
-                ]}
-              />
-
-              {/* ✅ CORRECTION 2 : Pagination cachée pendant la recherche */}
-              {!searchTerm && (
-                <div className="mt-6"> {/* Ajout de mt-6 */}
+                    {
+                      key: "totalPaye",
+                      label: "Total payé",
+                      render: (v) => (
+                        <span className="text-xs font-semibold text-emerald-700">
+                          {formatFCFA(v || 0)}
+                        </span>
+                      ),
+                    },
+                    {
+                      key: "detteTotale",
+                      label: "Dette",
+                      render: (v) =>
+                        v > 0 ? (
+                          <span className="text-xs font-semibold text-rose-700">
+                            {formatFCFA(v)}
+                          </span>
+                        ) : (
+                          <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                            A jour
+                          </span>
+                        ),
+                    },
+                    {
+                      key: "tranches",
+                      label: "Tranches",
+                      render: (_, row) => {
+                        const nbTranches = row.nbTranchesEnAttente || 0;
+                        const montantTranches = row.montantTranchesEnAttente || 0;
+                        
+                        return nbTranches > 0 ? (
+                          <div className="flex flex-col text-xs">
+                            <span className="font-semibold text-amber-700">
+                              {nbTranches} en attente
+                            </span>
+                            <span className="text-[11px] text-gray-600">
+                              {formatFCFA(montantTranches)}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                            Aucune tranche en attente
+                          </span>
+                        );
+                      },
+                    },
+                    {
+                      key: "nbCommandes",
+                      label: "Commandes",
+                      render: (v) => (
+                        <span className="text-xs font-semibold text-gray-700">
+                          {v ?? 0}
+                        </span>
+                      ),
+                    },
+                  ]}
+                  data={clientsEnrichis}
+                  actions={[
+                    {
+                      icon: <BadgeDollarSign size={16} />,
+                      title: "Nouvelle tranche (en attente caisse)",
+                      color: "text-emerald-700",
+                      hoverBg: "bg-emerald-50",
+                      onClick: (row) => {
+                        if (isTrancheDisabled(row)) {
+                          toast(
+                            "error",
+                            "Nouvelle tranche impossible",
+                            "Ce client n'a aucune commande avec un reste à payer."
+                          );
+                          return;
+                        }
+                        openTrancheClient(row);
+                      },
+                      disabled: false,                  
+                    },
+                    {
+                      icon: <ListChecks size={16} />,
+                      title: "Historique commandes / paiements",
+                      color: "text-[#472EAD]",
+                      hoverBg: "bg-[#F7F5FF]",
+                      onClick: (row) => openHistoriqueClient(row),
+                    },
+                    {
+                      icon: <Edit2 size={16} />,
+                      title: "Modifier",
+                      color: "text-[#472EAD]",
+                      hoverBg: "bg-[#F7F5FF]",
+                      onClick: (row) => setEditTarget(row),
+                    },
+                    {
+                      icon: <Trash2 size={16} />,
+                      title: "Supprimer",
+                      color: "text-rose-600",
+                      hoverBg: "bg-rose-50",
+                      onClick: (row) => {
+                        if (isDeleteDisabled(row)) {
+                          toast(
+                            "error",
+                            "Suppression impossible",
+                            "Ce client possède encore une dette. Veuillez solder ses commandes avant suppression."
+                          );
+                          return;
+                        }
+                        setDeleteTarget(row);
+                      },
+                    },
+                  ]}
+                />
+                
+                <div className="mt-6">
                   <Pagination
                     page={page}
                     totalPages={totalPages}
                     onPageChange={setPage}
                   />
                 </div>
-              )}
-            </div>
-          </section>
+              </>
+            )}
+          </div>
+        </section>
 
-          {/* MODALES CRUD */}
-          <FormModal
-            open={openAdd}
-            onClose={() => setOpenAdd(false)}
-            title="Nouveau client spécial"
-          >
+        {/* MODALES CRUD */}
+        <FormModal
+          open={openAdd}
+          onClose={() => setOpenAdd(false)}
+          title="Nouveau client spécial"
+        >
+          <ClientForm
+            onSubmit={(data) => {
+              setSubmitting(true);
+              handleAdd({
+                ...data,
+                onSuccess: () => {
+                  setSubmitting(false);
+                  setOpenAdd(false);
+                },
+                onError: () => setSubmitting(false),
+              });
+            }}
+            onCancel={() => setOpenAdd(false)}
+            submitting={submitting}
+          />
+        </FormModal>
+
+        <FormModal
+          open={!!editTarget}
+          onClose={() => setEditTarget(null)}
+          title={`Modifier : ${editTarget?.nom}`}
+        >
+          {editTarget && (
             <ClientForm
-              onSubmit={(data) =>
-                handleAdd({
+              initial={editTarget}
+              onSubmit={(data) => {
+                setSubmitting(true);
+                handleEdit({
                   ...data,
-                  onSuccess: () => setOpenAdd(false),
-                })
-              }
-              onCancel={() => setOpenAdd(false)}
+                  onSuccess: () => {
+                    setSubmitting(false);
+                    setEditTarget(null);
+                  },
+                  onError: () => setSubmitting(false),
+                });
+              }}
+              onCancel={() => setEditTarget(null)}
               submitting={submitting}
             />
-          </FormModal>
+          )}
+        </FormModal>
 
+        <FormModal
+          open={!!deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          title="Confirmer la suppression"
+          width="max-w-md"
+        >
+          <p className="text-sm text-gray-600 mb-4">
+            Voulez-vous vraiment supprimer{" "}
+            <span className="font-semibold">{deleteTarget?.nom}</span> ?
+          </p>
+          <div className="flex justify-end gap-3">
+            <button
+              onClick={() => setDeleteTarget(null)}
+              disabled={submitting}
+              className={cls(
+                "px-4 py-2 border border-gray-300 rounded-lg text-sm bg-white shadow-sm",
+                submitting
+                  ? "opacity-60 cursor-not-allowed"
+                  : "hover:bg-gray-50"
+              )}
+            >
+              Annuler
+            </button>
+            <button
+              onClick={() => {
+                setSubmitting(true);
+                handleDelete(deleteTarget.id, () => {
+                  setSubmitting(false);
+                  setDeleteTarget(null);
+                });
+              }}
+              disabled={submitting}
+              className={cls(
+                "px-4 py-2 rounded-lg text-sm text-white bg-rose-600 shadow-sm",
+                submitting
+                  ? "opacity-70 cursor-not-allowed"
+                  : "hover:bg-rose-700"
+              )}
+            >
+              {submitting ? "Suppression en cours..." : "Supprimer"}
+            </button>
+          </div>
+        </FormModal>
 
-          <FormModal
-            open={!!editTarget}
-            onClose={() => setEditTarget(null)}
-            title={`Modifier : ${editTarget?.nom}`}
-          >
-            {editTarget && (
-              <ClientForm
-                initial={editTarget}
-                onSubmit={(data) =>
-                  handleEdit({
-                    ...data,
-                    onSuccess: () => setEditTarget(null)
-                  })
-                }
-                onCancel={() => setEditTarget(null)}
-                submitting={submitting}
-              />
-            )}
-          </FormModal>
+        {/* MODALE HISTORIQUE CLIENT */}
+        <VoirDetailClient
+          open={openHistorique}
+          onClose={() => setOpenHistorique(false)}
+          client={historiqueClient}
+          commandes={commandes.filter(
+            (cmd) => cmd.clientId === historiqueClient?.id
+          )}
+          onEditTranche={handleVoirDetailEditTranche}
+          onDeleteTranche={handleVoirDetailDeleteTranche}
+        />
 
-          <FormModal
-            open={!!deleteTarget}
-            onClose={() => setDeleteTarget(null)}
-            title="Confirmer la suppression"
-            width="max-w-md"
-          >
-            <p className="text-sm text-gray-600 mb-4">
-              Voulez-vous vraiment supprimer{" "}
-              <span className="font-semibold">{deleteTarget?.nom}</span> ?
-            </p>
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setDeleteTarget(null)}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-sm bg-white hover:bg-gray-50 shadow-sm"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={() =>
-                  handleDelete(deleteTarget.id, () => setDeleteTarget(null))
-                }
-                className="px-4 py-2 rounded-lg text-sm text-white bg-rose-600 hover:bg-rose-700 shadow-sm"
-              >
-                Supprimer
-              </button>
-            </div>
-          </FormModal>
+        {/* MODALE NOUVELLE TRANCHE */}
+        <NouvelleTrancheModal
+          open={openTranche}
+          onClose={() => {
+            setOpenTranche(false);
+            setTrancheClient(null);
+          }}
+          client={trancheClient}
+          commandes={commandes.filter(
+            (cmd) => cmd.clientId === trancheClient?.id
+          )}
+          onSubmit={handleTrancheSubmit}
+          toast={toast}
+        />
 
-          {/* MODALE HISTORIQUE CLIENT */}
-          <VoirDetailClient
-            open={openHistorique}
-            onClose={() => setOpenHistorique(false)}
-            client={historiqueClient}
-            commandes={commandes.filter(
-              (cmd) => cmd.clientId === historiqueClient?.id
-            )}
-            onEditTranche={handleVoirDetailEditTranche}
-            onDeleteTranche={handleVoirDetailDeleteTranche}
-          />
-
-          {/* MODALE NOUVELLE TRANCHE */}
-          <NouvelleTrancheModal
-            open={openTranche}
-            onClose={() => {
-              setOpenTranche(false);
-              setTrancheClient(null);
-            }}
-            client={trancheClient}
-            commandes={commandes.filter(
-              (cmd) => cmd.clientId === trancheClient?.id
-            )}
-            onSubmit={handleTrancheSubmit}
-            toast={toast}
-          />
-
-          {/* TOASTS */}
-          <Toasts toasts={toasts} remove={removeToast} />
-        </div>
+        {/* TOASTS */}
+        <Toasts toasts={toasts} remove={removeToast} />
       </div>
     </div>
   );

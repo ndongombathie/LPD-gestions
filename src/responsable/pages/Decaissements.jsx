@@ -197,25 +197,28 @@ export default function Decaissements() {
   // ——————————————————————————————————————————————————
   // 🔍 Debounce recherche (400ms)
   // ——————————————————————————————————————————————————
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setSearchDebounced(searchTerm);
-    }, 400);
-    
-    return () => clearTimeout(timer);
-  }, [searchTerm]);
+useEffect(() => {
+  
+
+  const timer = setTimeout(() => {
+    setSearchDebounced(searchTerm);
+  }, 1000);
+
+  return () => clearTimeout(timer);
+}, [searchTerm]);
+
 
   // ——————————————————————————————————————————————————
   // 📥 Chargement initial avec stats API et pagination
   // ——————————————————————————————————————————————————
   const loadData = async () => {
     try {
-    if (demandes.length === 0 && page === 1) {
-      setLoading(true);       // vrai chargement initial
-    } else {
-      setLoading(false);     // filtres = pas d'écran vide
-      setLoadingPage(true);  // petit loader discret
-    }
+        if (demandes.length === 0) {
+          setLoading(true);
+        } else {
+          setLoadingPage(true);
+        }
+
 
 
       const data = await decaissementsAPI.list({
@@ -668,8 +671,14 @@ export default function Decaissements() {
           </motion.div>
 
           {/* TABLEAU + FILTRES */}
-          <section className="bg-white/90 border border-[#E4E0FF] rounded-2xl shadow-[0_18px_45px_rgba(15,23,42,0.06)] overflow-x-auto mt-8"> {/* Ajout de mt-8 */}
-            
+          <section className="relative bg-white/90 border border-[#E4E0FF] rounded-2xl shadow-[0_18px_45px_rgba(15,23,42,0.06)] overflow-x-auto mt-8"> {/* Ajout de mt-8 */}
+
+          {loadingPage && (
+            <div className="absolute inset-0 bg-white/60 backdrop-blur-[1px] flex items-center justify-center z-10">
+              <RefreshCw className="w-5 h-5 text-[#472EAD] animate-spin" />
+            </div>
+          )}
+
             <div className="px-4 pt-4 pb-3 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
               <div className="flex flex-wrap items-center gap-2 text-xs">
                 <span className="text-gray-500 font-medium">Filtrer par statut :</span>
@@ -684,7 +693,10 @@ export default function Decaissements() {
                     <button
                       key={opt.id}
                       type="button"
-                      onClick={() => setFilterStatut(opt.id)}
+                      onClick={() => {
+                        
+                        setFilterStatut(opt.id);
+                      }}
                       className={
                         "px-3 py-1 rounded-full transition " +
                         (filterStatut === opt.id
@@ -704,7 +716,10 @@ export default function Decaissements() {
                   <input
                     type="date"
                     value={filterStartDate}
-                    onChange={(e) => setFilterStartDate(e.target.value)}
+                    onChange={(e) => {
+                      
+                      setFilterStartDate(e.target.value);
+                    }}
                     className="border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:border-[#472EAD] focus:ring-1 focus:ring-[#472EAD] bg-white"
                   />
                   <span className="text-gray-400">→</span>
@@ -718,7 +733,12 @@ export default function Decaissements() {
 
                 <div className="flex items-center gap-2 min-w-[230px]">
                   <div className="relative flex-1">
+                  {loadingPage ? (
+                    <RefreshCw className="w-3.5 h-3.5 text-[#472EAD] animate-spin absolute left-2 top-1/2 -translate-y-1/2" />
+                  ) : (
                     <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2 top-1/2 -translate-y-1/2" />
+                  )}
+
                     <input
                       type="text"
                       value={searchTerm}
@@ -808,11 +828,7 @@ export default function Decaissements() {
             </table>
 
             {/* ✅ Pagination footer corrigée */}
-            {loadingPage && (
-              <div className="flex justify-center py-2 text-xs text-gray-400">
-                Chargement de la page...
-              </div>
-            )}
+  
 
             <div className="mt-6 mb-4"> {/* Ajout de mt-6 mb-4 */}
               <Pagination

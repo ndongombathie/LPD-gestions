@@ -6,26 +6,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
-  Filter,
-  FileDown,
-  RefreshCw,
-  Search,
   Activity,
   ShoppingCart,
   Banknote,
   Store,
   AlertTriangle,
-  CalendarDays,
-  Download,
-  Clock,
-  CheckCircle,
-  XCircle,
-  ChevronDown,
-  X,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
-import jsPDF from "jspdf";
-import "jspdf-autotable";
 
 // Import des sous-pages des rôles
 import VendeursPage from "./roles/VendeursPage.jsx";
@@ -189,13 +177,8 @@ export default function JournalActivites() {
 
   const [activeRole, setActiveRole] = useState("vendeur");
   const [activeRolePage, setActiveRolePage] = useState("vendeur");
-  const [typeAction, setTypeAction] = useState("Tous");
-  const [moduleFilter, setModuleFilter] = useState("Tous");
-  const [recherche, setRecherche] = useState("");
   const [loading, setLoading] = useState(true);
   const [logs, setLogs] = useState([]);
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  const [activeTab, setActiveTab] = useState("overview");
 
   // ========================================================
   // 📥 Chargement initial
@@ -359,14 +342,12 @@ export default function JournalActivites() {
   }, []);
 
   // ========================================================
-  // 🔎 Filtrage local
+  // 🔎 Filtrage local (uniquement par date)
   // ========================================================
   const filteredLogs = useMemo(() => {
     const start = new Date(dateDebut);
     const end = new Date(dateFin);
     end.setHours(23, 59, 59, 999);
-
-    const q = (recherche || "").toLowerCase();
 
     return logs
       .filter((l) => {
@@ -375,28 +356,8 @@ export default function JournalActivites() {
         return d >= start && d <= end;
       })
       .filter((l) => (activeRole === "all" ? true : l.role === activeRole))
-      .filter((l) =>
-        moduleFilter === "Tous" ? true : l.module === moduleFilter
-      )
-      .filter((l) => (typeAction === "Tous" ? true : l.type === typeAction))
-      .filter((l) => {
-        if (!q) return true;
-        const blob = [
-          l.user,
-          l.role,
-          l.module,
-          l.type,
-          l.description,
-          l.ref,
-          l.statut,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-        return blob.includes(q);
-      })
       .sort((a, b) => (a.date < b.date ? 1 : -1));
-  }, [logs, dateDebut, dateFin, activeRole, moduleFilter, typeAction, recherche]);
+  }, [logs, dateDebut, dateFin, activeRole]);
 
   // Logs pour KPI
   const kpiBaseLogs = useMemo(() => {
@@ -417,90 +378,6 @@ export default function JournalActivites() {
     () => computeStatsForRole(kpiBaseLogs, activeRole),
     [kpiBaseLogs, activeRole]
   );
-
-  // Compteur de filtres actifs
-  const activeFiltersCount = useMemo(() => {
-    let count = 0;
-    if (moduleFilter !== "Tous") count++;
-    if (typeAction !== "Tous") count++;
-    if (recherche) count++;
-    return count;
-  }, [moduleFilter, typeAction, recherche]);
-
-  // ========================================================
-  // 📤 Export PDF
-  // ========================================================
-  const exportPDF = () => {
-    const doc = new jsPDF();
-    const roleLabel =
-      ROLE_CARDS.find((r) => r.id === activeRole)?.label || "Vendeurs";
-
-    doc.text("Journal d'activités — Librairie Papeterie Daradji (LPD)", 14, 16);
-    doc.setFontSize(10);
-    doc.text(`Profil : ${roleLabel}`, 14, 22);
-    doc.text(`Période : ${dateDebut} → ${dateFin}`, 14, 27);
-    doc.text(
-      `Filtres : Module=${moduleFilter} • Type=${typeAction} • Résultats=${filteredLogs.length}`,
-      14,
-      32
-    );
-
-    doc.autoTable({
-      startY: 38,
-      head: [
-        [
-          "Date",
-          "Utilisateur",
-          "Rôle",
-          "Module",
-          "Type",
-          "Référence",
-          "Montant",
-          "Statut",
-          "Description",
-        ],
-      ],
-      body: filteredLogs.map((l) => [
-        l.date,
-        l.user,
-        l.role,
-        l.module,
-        l.type,
-        l.ref || "-",
-        l.montant ? formatFCFA(l.montant) : "-",
-        l.statut || "-",
-        l.description,
-      ]),
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [71, 46, 173] },
-      columnStyles: {
-        0: { cellWidth: 24 },
-        1: { cellWidth: 24 },
-        2: { cellWidth: 24 },
-        3: { cellWidth: 26 },
-        4: { cellWidth: 22 },
-        5: { cellWidth: 25 },
-        6: { cellWidth: 24 },
-        7: { cellWidth: 22 },
-        8: { cellWidth: "auto" },
-      },
-    });
-
-    doc.save(`Journal_activites_${dateDebut}_au_${dateFin}.pdf`);
-    toast.success("Export PDF généré avec succès.");
-  };
-
-  const resetFilters = () => {
-    const d = new Date();
-    d.setDate(d.getDate() - 7);
-    setDateDebut(d.toISOString().slice(0, 10));
-    setDateFin(todayISO());
-    setModuleFilter("Tous");
-    setTypeAction("Tous");
-    setRecherche("");
-    setShowAdvancedFilters(false);
-    toast.info("Filtres réinitialisés");
-  };
 
   // Loader
   if (loading) {
@@ -542,7 +419,7 @@ export default function JournalActivites() {
               <p className="mt-1 text-sm text-gray-500">
                 Traçabilité complète des connexions, ventes, mouvements de stock, encaissements et décaissements.
                 <br />
-                <span className="text-indigo-600 font-medium">Cliquez sur une carte pour voir les détails par rôle</span>
+                <span className="text-[#2F1F7A] font-medium">Cliquez sur une carte pour voir les détails par rôle</span>
               </p>
             </div>
             <p className="text-[11px] text-gray-400">
@@ -553,138 +430,7 @@ export default function JournalActivites() {
               {filteredLogs.length > 1 && "s"} affichée
             </p>
           </div>
-
-          <div className="flex flex-col sm:flex-row items-end gap-3">
-            <button
-              onClick={exportPDF}
-              className="inline-flex items-center gap-2 bg-[#472EAD] text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-[#5A3CF5] shadow-md transition"
-            >
-              <FileDown className="w-4 h-4" />
-              Exporter PDF
-            </button>
-          </div>
         </motion.header>
-
-        {/* BARRE DE FILTRES HORIZONTALE */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-white rounded-xl border border-gray-200 shadow-sm p-4"
-        >
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <div className="flex-1">
-              <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4">
-                {/* Recherche */}
-                <div className="flex-1 min-w-[200px]">
-                  <div className="relative">
-                    <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
-                    <input
-                      value={recherche}
-                      onChange={(e) => setRecherche(e.target.value)}
-                      placeholder="Rechercher utilisateur, référence, description..."
-                      className="pl-9 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white hover:border-gray-400 focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 transition placeholder:text-gray-400"
-                    />
-                  </div>
-                </div>
-
-                {/* Période */}
-                <div className="flex items-center gap-2">
-                  <CalendarDays className="w-4 h-4 text-gray-400" />
-                  <div className="flex gap-2">
-                    <input
-                      type="date"
-                      value={dateDebut}
-                      max={dateFin}
-                      onChange={(e) => setDateDebut(e.target.value)}
-                      className="border border-gray-300 rounded-lg px-3 py-2 text-xs bg-white hover:border-gray-400 focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 transition"
-                    />
-                    <span className="text-gray-400 self-center">→</span>
-                    <input
-                      type="date"
-                      value={dateFin}
-                      min={dateDebut}
-                      onChange={(e) => setDateFin(e.target.value)}
-                      className="border border-gray-300 rounded-lg px-3 py-2 text-xs bg-white hover:border-gray-400 focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 transition"
-                    />
-                  </div>
-                </div>
-
-                {/* Module */}
-                <div className="min-w-[160px]">
-                  <select
-                    value={moduleFilter}
-                    onChange={(e) => setModuleFilter(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white hover:border-gray-400 focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 transition"
-                  >
-                    {MODULES.map((m) => (
-                      <option key={m} value={m}>
-                        {MODULE_LABELS[m] || m}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Bouton filtres avancés */}
-                <button
-                  onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                  className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition"
-                >
-                  <Filter className="w-4 h-4" />
-                  Filtres {activeFiltersCount > 0 && `(${activeFiltersCount})`}
-                  <ChevronDown className={`w-4 h-4 transition-transform ${showAdvancedFilters ? 'rotate-180' : ''}`} />
-                </button>
-              </div>
-
-              {/* Filtres avancés (toggle) */}
-              {showAdvancedFilters && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="mt-4 pt-4 border-t border-gray-200"
-                >
-                  <div className="flex flex-wrap items-center gap-4">
-                    {/* Type d'action */}
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
-                        Type d'action
-                      </label>
-                      <select
-                        value={typeAction}
-                        onChange={(e) => setTypeAction(e.target.value)}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white hover:border-gray-400 focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 transition"
-                      >
-                        {ACTION_TYPES.map((t) => (
-                          <option key={t} value={t}>
-                            {t.charAt(0).toUpperCase() + t.slice(1)}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Boutons d'action */}
-                    <div className="flex items-end gap-2 ml-auto">
-                      <button
-                        onClick={resetFilters}
-                        className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition"
-                      >
-                        <RefreshCw className="w-4 h-4" />
-                        Réinitialiser
-                      </button>
-                      <button
-                        onClick={() => setShowAdvancedFilters(false)}
-                        className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </div>
-          </div>
-        </motion.div>
 
         {/* CARTES PROFILS (CLIQUABLES) - ONGLETS MÉTIER */}
         <motion.div
@@ -822,7 +568,7 @@ export default function JournalActivites() {
                 </div>
                 <div className="bg-gray-50 rounded-lg p-4">
                   <p className="text-xs text-gray-500 font-medium">Décaissements</p>
-                  <p className="text-xl font-bold text-amber-600 mt-1">{formatFCFA(stats.decaissementTotal || 0)}</p>
+                  <p className="text-xl font-bold text-amber-600 mt-1">{formatFCFA(stats.decaisseTotal || 0)}</p>
                   <p className="text-xs text-gray-500 mt-1">{stats.decaissementsCount} sortie{stats.decaissementsCount > 1 ? 's' : ''}</p>
                 </div>
                 <div className="bg-gray-50 rounded-lg p-4">
@@ -882,8 +628,6 @@ export default function JournalActivites() {
             {activeRolePage === "gestionnaire_boutique" && <GestionnairesBoutiquePage />}
           </motion.div>
         )}
-
-
       </div>
     </div>
   );

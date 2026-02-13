@@ -3,7 +3,6 @@
 // ==========================================================
 
 import React, { useState, useEffect } from "react";
-import { toast } from "sonner";
 import {
   Users,
   Banknote,
@@ -26,10 +25,12 @@ import {
   BarChart3,
   Clock,
   AlertCircle,
+  Wallet,
 } from "lucide-react";
 
 // Composants
 import CaissierHistoryModal from "../../components/roles/CaissierHistoryModal";
+import FondOuvertureModal from "../../components/roles/FondOuvertureModal";
 
 const formatFCFA = (n) =>
   new Intl.NumberFormat("fr-FR", {
@@ -42,7 +43,18 @@ export default function CaissiersPage() {
   const [caissiers, setCaissiers] = useState([]);
   const [selectedCaissier, setSelectedCaissier] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [showFondOuverture, setShowFondOuverture] = useState(false);
   const [search, setSearch] = useState("");
+const [toasts, setToasts] = useState([]);
+
+const removeToast = (id) =>
+  setToasts((t) => t.filter((x) => x.id !== id));
+
+const toast = React.useCallback((type, title, message) => {
+  const id = Date.now();
+  setToasts((t) => [...t, { id, type, title, message }]);
+  setTimeout(() => removeToast(id), 4000);
+}, []);
 
   useEffect(() => {
     const loadCaissiers = async () => {
@@ -177,6 +189,11 @@ export default function CaissiersPage() {
   const handleViewHistory = (caissier) => {
     setSelectedCaissier(caissier);
     setShowHistory(true);
+  };
+
+  const handleFondOuverture = (caissier) => {
+    setSelectedCaissier(caissier);
+    setShowFondOuverture(true);
   };
 
   const getStatusIcon = (status) => {
@@ -354,147 +371,27 @@ export default function CaissiersPage() {
                     </div>
                   </td>
                   <td className="px-3 py-3">
-                    <button
-                      onClick={() => handleViewHistory(caissier)}
-                      className="flex items-center gap-1 px-2 py-1 text-xs text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 rounded"
-                    >
-                      <Eye className="w-3 h-3" />
-                      Détails
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleViewHistory(caissier)}
+                        className="flex items-center gap-1 px-2 py-1 text-xs text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 rounded"
+                      >
+                        <Eye className="w-3 h-3" />
+                        Détails
+                      </button>
+                      <button
+                        onClick={() => handleFondOuverture(caissier)}
+                        className="flex items-center gap-1 px-2 py-1 text-xs text-emerald-600 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 rounded"
+                      >
+                        <Wallet className="w-3 h-3" />
+                        Fond
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
-      </div>
-
-      {/* DASHBOARD COMPACT */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        {/* Classement */}
-        <div className="bg-white border border-gray-200 rounded-lg p-3">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-xs font-semibold text-gray-800 flex items-center gap-1">
-              <Award className="w-3 h-3 text-yellow-600" />
-              Classement encaissements
-            </h4>
-            <TrendingUp className="w-3 h-3 text-yellow-600" />
-          </div>
-          <div className="space-y-1.5">
-            {[...caissiers]
-              .sort((a, b) => (b.stats?.encaissementsTotal || 0) - (a.stats?.encaissementsTotal || 0))
-              .slice(0, 4)
-              .map((caissier, index) => (
-                <div key={caissier.id} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-5 h-5 text-xs font-bold rounded flex items-center justify-center
-                      ${index === 0 ? 'bg-yellow-100 text-yellow-700' : 
-                        index === 1 ? 'bg-gray-100 text-gray-700' : 
-                        index === 2 ? 'bg-orange-100 text-orange-700' : 
-                        'bg-blue-50 text-blue-600'}`}>
-                      {index + 1}
-                    </div>
-                    <div>
-                      <div className="text-xs font-medium text-gray-800 truncate max-w-[100px]">{caissier.name}</div>
-                      <div className="text-[10px] text-gray-500">{caissier.stats?.tauxErreur?.toFixed(1) || 0}% erreurs</div>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-xs font-semibold text-emerald-600">
-                      {formatFCFA(caissier.stats?.encaissementsTotal || 0)}
-                    </div>
-                  </div>
-                </div>
-              ))}
-          </div>
-        </div>
-
-        {/* Métriques */}
-        <div className="bg-white border border-gray-200 rounded-lg p-3">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-xs font-semibold text-gray-800 flex items-center gap-1">
-              <Activity className="w-3 h-3 text-indigo-600" />
-              Indicateurs clés
-            </h4>
-            <BarChart3 className="w-3 h-3 text-indigo-600" />
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="bg-gray-50 rounded p-2">
-              <div className="flex items-center gap-1 mb-1">
-                <Banknote className="w-3 h-3 text-blue-600" />
-                <span className="text-xs text-gray-600">Tx moyenne</span>
-              </div>
-              <div className="text-sm font-bold text-blue-600">
-                {formatFCFA(globalStats.transactionsTotal > 0 ? globalStats.encaissementsTotal / globalStats.transactionsTotal : 0)}
-              </div>
-            </div>
-            <div className="bg-gray-50 rounded p-2">
-              <div className="flex items-center gap-1 mb-1">
-                <Clock className="w-3 h-3 text-purple-600" />
-                <span className="text-xs text-gray-600">Jours actifs</span>
-              </div>
-              <div className="text-sm font-bold text-purple-600">
-                {Math.round(caissiers.reduce((sum, v) => sum + (v.stats?.joursActifs || 0), 0) / caissiers.length)}
-              </div>
-            </div>
-            <div className="bg-gray-50 rounded p-2">
-              <div className="flex items-center gap-1 mb-1">
-                <Percent className="w-3 h-3 text-emerald-600" />
-                <span className="text-xs text-gray-600">Objectifs</span>
-              </div>
-              <div className="text-sm font-bold text-emerald-600">
-                {globalStats.objectifMoyen.toFixed(0)}%
-              </div>
-            </div>
-            <div className="bg-gray-50 rounded p-2">
-              <div className="flex items-center gap-1 mb-1">
-                <AlertCircle className="w-3 h-3 text-orange-600" />
-                <span className="text-xs text-gray-600">Erreur moy.</span>
-              </div>
-              <div className="text-sm font-bold text-orange-600">
-                {globalStats.tauxErreurMoyen.toFixed(1)}%
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Distribution erreurs */}
-        <div className="bg-white border border-gray-200 rounded-lg p-3">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-xs font-semibold text-gray-800 flex items-center gap-1">
-              <Target className="w-3 h-3 text-purple-600" />
-              Distribution erreurs
-            </h4>
-            <TrendingDown className="w-3 h-3 text-purple-600" />
-          </div>
-          <div className="space-y-2">
-            {['0-0.5%', '0.6-1%', '1.1-2%', '>2%'].map((range, idx) => {
-              const count = caissiers.filter(c => {
-                const taux = c.stats?.tauxErreur || 0;
-                if (range === '0-0.5%') return taux <= 0.5;
-                if (range === '0.6-1%') return taux > 0.5 && taux <= 1;
-                if (range === '1.1-2%') return taux > 1 && taux <= 2;
-                return taux > 2;
-              }).length;
-              
-              const percentage = (count / caissiers.length) * 100;
-              
-              return (
-                <div key={range} className="space-y-1">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-gray-600">{range}</span>
-                    <span className="font-medium">{count}</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-1.5">
-                    <div 
-                      className="bg-purple-500 h-1.5 rounded-full" 
-                      style={{ width: `${percentage}%` }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
         </div>
       </div>
 
@@ -506,6 +403,20 @@ export default function CaissiersPage() {
           onClose={() => setShowHistory(false)}
         />
       )}
+
+      {/* MODAL FOND D'OUVERTURE */}
+      {showFondOuverture && selectedCaissier && (
+      <FondOuvertureModal
+        employee={selectedCaissier}
+        isOpen={showFondOuverture}
+        onClose={() => setShowFondOuverture(false)}
+        onToast={toast}
+      />
+
+      )}
     </div>
+    
   );
+  <Toasts toasts={toasts} remove={removeToast} />
+
 }

@@ -4,6 +4,7 @@
 // ✅ Corrections : annulation UI, stats dette, message "aucune commande"
 // ✅ Correction stats : mêmes filtres que la table
 // ✅ CORRECTION CRITIQUE : Normalisation API unique avec unwrapApi()
+// ✅ RECHERCHE PRODUITS DYNAMIQUE : recherche backend comme pour les clients
 // ==========================================================
 
 import React, { useEffect, useMemo, useState, useRef } from "react";
@@ -80,7 +81,7 @@ function unwrapApi(res) {
   }
 
   // Already unwrapped
-  if (res.data !== undefined) return res;
+  
 
   return {
     data: [],
@@ -137,7 +138,7 @@ function Toasts({ toasts, remove }) {
 }
 
 // ==========================================================
-// 🔎 Modal de recherche (Clients / Produits)
+// 🔎 Modal de recherche (Clients / Produits) - CORRIGÉ ✅
 // ==========================================================
 function SearchModal({
   open,
@@ -147,6 +148,8 @@ function SearchModal({
   onSelect,
   getLabel,
   getSubLabel,
+  onSearch,
+  loading,
 }) {
   const [query, setQuery] = useState("");
 
@@ -156,12 +159,8 @@ function SearchModal({
 
   if (!open) return null;
 
-  const lower = query.toLowerCase();
-  const filtered = items.filter((item) => {
-    const label = (getLabel(item) || "").toLowerCase();
-    const sub = (getSubLabel?.(item) || "").toLowerCase();
-    return label.includes(lower) || sub.includes(lower);
-  });
+  // ✅ CORRIGÉ : plus de filtre côté client, on utilise directement items du backend
+  const filtered = items;
 
   return (
     <div className="fixed inset-0 z-[130] bg-black/40 backdrop-blur-sm flex items-center justify-center px-3">
@@ -193,7 +192,10 @@ function SearchModal({
               type="text"
               placeholder="Rechercher..."
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                onSearch?.(e.target.value);
+              }}
               className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-xl bg-white shadow-sm focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD] placeholder:text-gray-400"
             />
           </div>
@@ -203,9 +205,14 @@ function SearchModal({
           </div>
         </div>
 
-        {/* Liste des résultats */}
+        {/* Liste des résultats - avec loader ✅ */}
         <div className="flex-1 overflow-auto">
-          {filtered.length ? (
+          {loading ? (
+            <div className="py-6 text-center text-xs text-gray-400">
+              <Loader2 className="w-4 h-4 animate-spin mx-auto mb-2" />
+              Recherche en cours...
+            </div>
+          ) : filtered.length ? (
             <ul className="divide-y divide-gray-100">
               {filtered.map((item) => (
                 <li
@@ -470,9 +477,9 @@ function QrCommandeModal({ open, onClose, commande, qrPayload }) {
 
           {/* Texte d'aide */}
           <div className="bg-[#F9FAFF] border border-[#E4E0FF] rounded-xl px-3 py-2 text-[11px] text-gray-600">
-            Le code embarque un résumé complet de la commande (client, date,
-            lignes, montants…). Le module caisse le lit et retrouve la commande
-            même si la liste est très longue.
+            Le QR contient le numéro de commande. 
+            La caisse recharge automatiquement les informations depuis le système.
+
           </div>
 
           {/* Boutons */}
@@ -637,13 +644,25 @@ function FactureModal({ open, onClose, commande }) {
 }
 
 // ======================================================================
-// 🧩 Formulaire Commande (multi-lignes produits + branché sur API refs)
+// 🧩 Formulaire Commande (multi-lignes produits + branché sur API refs) - CORRIGÉ ✅
 // ======================================================================
 function CommandeForm({ clientInitial, onCreate, toast }) {
+  // ✅ REF pour l'input produit (correction bug)
+  const produitInputRef = useRef(null);
+  
   // Clients spéciaux & catalogue produits depuis l'API
+  const [clientSearchInput, setClientSearchInput] = useState("");
+  const [clientSearchTerm, setClientSearchTerm] = useState("");
+  const [clientsLoading, setClientsLoading] = useState(false);
+
   const [clients, setClients] = useState([]);
+  
+  // ✅ RECHERCHE DYNAMIQUE PRODUITS (comme clients)
+  const [produitSearchInput, setProduitSearchInput] = useState("");
+  const [produitSearchTerm, setProduitSearchTerm] = useState("");
+  const [produitsLoading, setProduitsLoading] = useState(false);
+  
   const [catalogue, setCatalogue] = useState([]);
-  const [loadingRefs, setLoadingRefs] = useState(true);
 
   const [clientId, setClientId] = useState(clientInitial || "");
   const [dateCommande] = useState(todayISO());
@@ -674,54 +693,35 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
   );
 
   // 🔎 Liste des produits qui matchent le champ unique (nom / ref / code-barres)
-  const produitsFiltres = useMemo(() => {
-    const q = (ligneLibelle || "").trim().toLowerCase();
-    if (!q) return [];
+  const produitsFiltres = catalogue;
 
-    const isNumeric = /^\d+$/.test(q);
+  const hasTypedProduitRef = useRef(false);
 
-    return catalogue.filter((p) => {
-      const lib = (p.libelle || "").toLowerCase();
-      const refStr = (p.ref || "").toString().toLowerCase();
-      const codeStr = (p.codeBarre || "").toString().toLowerCase();
 
-      if (isNumeric) {
-        // Recherche plutôt sur code-barres / ref
-        return (
-          codeStr.includes(q) ||
-          refStr.includes(q) ||
-          lib.includes(q) // par sécurité
-        );
-      }
 
-      // Recherche texte sur libellé / ref
-      return lib.includes(q) || refStr.includes(q);
-    });
-  }, [ligneLibelle, catalogue]);
 
-  // 🔗 Charger clients spéciaux + produits
+  // ✅ RECHERCHE PRODUITS DYNAMIQUE - Debounce
   useEffect(() => {
-    const loadRefs = async () => {
+    const timer = setTimeout(() => {
+      setProduitSearchTerm(produitSearchInput);
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [produitSearchInput]);
+
+  // ✅ RECHERCHE PRODUITS DYNAMIQUE - Fetch API
+  useEffect(() => {
+    const fetchProduits = async () => {
       try {
-        setLoadingRefs(true);
+        setProduitsLoading(true);
 
-        const [clientsRes, produitsRes] = await Promise.all([
-          clientsAPI.getAll({ type_client: "special" }),
-          produitsAPI.getAll(),
-        ]);
+        const params = {};
+        if (produitSearchTerm) {
+          params.search = produitSearchTerm;
+        }
 
-        // Utiliser la fonction de normalisation unifiée
-        const clientsPayload = unwrapApi(clientsRes);
+        const produitsRes = await produitsAPI.getAll(params);
         const produitsPayload = unwrapApi(produitsRes);
-
-        const normalizedClients = (clientsPayload.data || []).map((c) => ({
-          id: c.id,
-          nom: c.nom || c.razon_social || "",
-          code:
-            c.code_client ||
-            c.code ||
-            (c.id ? `CL-${String(c.id).padStart(3, "0")}` : ""),
-        }));
 
         const normalizedProduits = (produitsPayload.data || []).map((p) => {
           const prixDetail = Number(
@@ -765,27 +765,79 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
             unitesParCarton: Number(p.unite_carton ?? p.unites_par_carton ?? 1),
             stockGlobal: Number(p.stock_global ?? 0),
             nombreCartons: Number(p.nombre_carton ?? p.nombre_cartons ?? 0),
-
           };
         });
 
-        setClients(normalizedClients);
         setCatalogue(normalizedProduits);
       } catch (error) {
-        logger.error("refs.load.clients_produits", error);
+        logger.error("produits.load", error);
         toast(
           "error",
           "Erreur de chargement",
-          "Impossible de charger les clients ou les produits."
+          "Impossible de charger le catalogue produits."
         );
       } finally {
-        setLoadingRefs(false);
+        setProduitsLoading(false);
       }
     };
 
-    loadRefs();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    fetchProduits();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [produitSearchTerm]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setClientSearchTerm(clientSearchInput);
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [clientSearchInput]);
+
+  useEffect(() => {
+    if (
+      hasTypedProduitRef.current &&
+      !produitsLoading &&
+      document.activeElement !== produitInputRef.current
+    ) {
+      produitInputRef.current?.focus();
+    }
+  }, [produitsLoading]);
+
+
+
+  // ✅ Étape B — VRAI FETCH CLIENTS avec recherche backend ✅
+  useEffect(() => {
+    const fetchClients = async () => {
+      try {
+        setClientsLoading(true);
+
+        const res = await clientsAPI.getAll({
+          type_client: "special",
+          search: clientSearchTerm,
+        });
+
+        const payload = unwrapApi(res);
+
+        const normalized = (payload.data || []).map((c) => ({
+          id: c.id,
+          nom: c.nom || c.entreprise || "",
+          code:
+            c.code_client ||
+            c.code ||
+            (c.id ? `CL-${String(c.id).padStart(3, "0")}` : ""),
+        }));
+
+        setClients(normalized);
+
+      } catch (e) {
+        logger.error("clients.search", e);
+      } finally {
+        setClientsLoading(false);
+      }
+    };
+
+    fetchClients();
+  }, [clientSearchTerm]);
 
   const clientActuel = useMemo(
     () => clients.find((c) => String(c.id) === String(clientId)) || null,
@@ -846,17 +898,25 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
 
   // ✅ Champ unique : saisie libellé / code-barres / scan
   const handleProduitInputChange = (e) => {
+    hasTypedProduitRef.current = true;
+
     const value = e.target.value;
     setLigneLibelle(value);
+    setProduitSearchInput(value); // ✅ Déclenche la recherche dynamique
 
     // Tant qu'on tape, on considère qu'on n'a pas encore confirmé le produit
     // (permet aussi le cas "produit hors catalogue")
     setLigneProduitId("");
 
     const trimmed = value.trim();
-    if (!trimmed) return;
-
     const isNumeric = /^\d+$/.test(trimmed);
+    
+    // ✅ Sécurité : éviter le spam API sur les scans longs
+    if (isNumeric && trimmed.length >= 6) {
+      setProduitSearchTerm(trimmed); // bypass debounce pour scan immédiat
+    }
+
+    if (!trimmed) return;
 
     // Cas "code-barres" saisi ou scanné
     if (isNumeric && trimmed.length >= 6) {
@@ -988,6 +1048,11 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
 
     setLignes((prev) => [...prev, nouvelle]);
     resetLigne();
+    
+    // ✅ Focus sur l'input produit après ajout
+    if (produitInputRef.current) {
+      produitInputRef.current.focus();
+    }
   };
 
   const handleRemoveLigne = (id) =>
@@ -1158,7 +1223,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
         <h2 className="text-lg font-semibold text-[#472EAD] mb-1 flex items-center gap-2">
           <PlusCircle size={18} /> Nouvelle commande client spécial
         </h2>
-        <p className="text-xs text-gray-500 mb-3"> {/* Augmenté mb-2 à mb-3 */}
+        <p className="text-xs text-gray-500 mb-3">
           Préparez la commande en gros ici. Elle sera ensuite{" "}
           <span className="font-semibold text-[#472EAD]">envoyée à la caisse</span>{" "}
           pour encaissement (acomptes / soldes).
@@ -1179,11 +1244,11 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
                   ? "border-gray-300"
                   : "border-dashed border-gray-300 bg-gray-50 text-gray-500"
               )}
-              disabled={loadingRefs}
+              disabled={clientsLoading}
             >
               <span>
-                {loadingRefs
-                  ? "Chargement des clients..."
+                {clientsLoading
+                  ? "Chargement..."
                   : clientActuel
                   ? clientActuel.nom
                   : "Rechercher un client spécial..."}
@@ -1205,7 +1270,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
         </div>
 
         {/* Saisie ligne produit */}
-        <div className="border border-[#E4E0FF] rounded-xl p-4 bg-[#F9FAFF] space-y-3 mt-4"> {/* Ajout de mt-4 */}
+        <div className="border border-[#E4E0FF] rounded-xl p-4 bg-[#F9FAFF] space-y-3 mt-4">
           {/* Mode de vente */}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -1266,7 +1331,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
             )}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-start mt-3"> {/* Augmenté mt-2 à mt-3 */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-start mt-3">
             <div className="sm:col-span-2">
               <label className="block text-xs text-gray-500 mb-1">
                 Produit (nom, référence ou code-barres)
@@ -1274,13 +1339,14 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
 
               <div className="relative">
                 <input
+                  ref={produitInputRef} // ✅ Ajout du ref manquant
                   type="text"
                   value={ligneLibelle}
                   onChange={handleProduitInputChange}
                   onKeyDown={handleProduitInputKeyDown}
                   placeholder="Tapez le libellé, scannez ou saisissez un code-barres..."
                   className={cls(baseInput, "pr-9")}
-                  disabled={loadingRefs}
+                  disabled={produitsLoading}
                 />
                 <button
                   type="button"
@@ -1375,7 +1441,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
         </div>
 
         {/* Tableau des lignes de la commande */}
-        <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white mt-4"> {/* Ajout de mt-4 */}
+        <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white mt-4">
           <table className="min-w-full text-xs">
             <thead className="bg-[#F7F5FF] text-[#472EAD] uppercase text-[11px] font-semibold">
               <tr>
@@ -1502,7 +1568,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
         </div>
 
         {/* Totaux + bouton envoyer à la caisse */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mt-6"> {/* Ajout de mt-6 */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mt-6">
           <div className="flex flex-col gap-2 text-xs text-gray-500">
             <span>
               Cette commande sera envoyée à la{" "}
@@ -1548,12 +1614,14 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
         </div>
       </motion.form>
 
-      {/* MODALS DE RECHERCHE */}
+      {/* ✅ MODALS DE RECHERCHE - CORRIGÉES ✅ */}
       <SearchModal
         open={openClientSearch}
         onClose={() => setOpenClientSearch(false)}
         title="Rechercher un client spécial"
         items={clients}
+        loading={clientsLoading}
+        onSearch={setClientSearchInput}
         onSelect={(client) => setClientId(client.id)}
         getLabel={(c) => c.nom}
         getSubLabel={(c) => c.code}
@@ -1564,6 +1632,8 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
         onClose={() => setOpenProduitSearch(false)}
         title="Rechercher un produit"
         items={catalogue}
+        loading={produitsLoading}
+        onSearch={setProduitSearchInput}
         onSelect={handleSelectProduitFromModal}
         getLabel={(p) => p.libelle}
         getSubLabel={(p) =>
@@ -1581,55 +1651,9 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
 // ======================================================================
 function buildQrPayloadFromCommande(commande) {
   if (!commande) return "";
-
-  const payload = {
-    type: "commande_client_special",
-    version: 1,
-    id: commande.id,
-    numero: commande.numero,
-    dateCommande: commande.dateCommande,
-    client: {
-      id: commande.clientId,
-      nom: commande.clientNom,
-      code: commande.clientCode,
-    },
-    montant: {
-      totalHT: commande.totalHT,
-      totalTVA: commande.totalTVA,
-      totalTTC: commande.totalTTC,
-      montantPaye: commande.montantPaye,
-      resteAPayer: commande.resteAPayer,
-    },
-    statut: {
-      code: commande.statut,
-      label: commande.statutLabel,
-    },
-    lignes: (commande.lignes || []).map((l) => ({
-      id: l.id,
-      produitId: l.produitId,
-      libelle: l.libelle,
-      ref: l.ref,
-      modeVente: l.modeVente,
-      qte: l.qte,
-      prixUnitaire: l.prixUnitaire,
-      totalHT: l.totalHT,
-      totalTTC: l.totalTTC,
-    })),
-  };
-
-  // Résumé humain lisible (ce que voit une app de scan basique)
-  const resumeHumain = [
-    `LPD_CMD#${commande.numero}`,
-    `Client: ${commande.clientNom || "Client spécial"}`,
-    `TTC: ${commande.totalTTC} XOF`,
-    `Date: ${commande.dateCommande}`,
-  ].join("\n");
-
-  const jsonPart = JSON.stringify(payload);
-
-  // Le module caisse lira ce qui est après "JSON::"
-  return `${resumeHumain}\n\nJSON::${jsonPart}`;
+  return String(commande.numero || commande.id);
 }
+
 
 // ======================================================================
 // 🔧 Helper : normaliser une commande provenant du backend
@@ -1651,6 +1675,7 @@ export default function Commandes() {
   const [toasts, setToasts] = useState([]);
   const [selectedCommande, setSelectedCommande] = useState(null);
   const [openFacture, setOpenFacture] = useState(false);
+  const [searchInput, setSearchInput] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
 
   // ✅ AJOUT (avisage) : filtres + période + pagination (Option A)
@@ -1683,87 +1708,90 @@ export default function Commandes() {
   };
   const removeToast = (id) => setToasts((t) => t.filter((x) => x.id !== id));
 
-  // 🔗 Chargement des commandes depuis le backend (CORRIGÉ avec mapping statuts UI ↔ DB)
-// 🔗 Chargement des commandes depuis le backend
-const fetchCommandes = async () => {
-  try {
-    setLoading(true);
+  // 🔗 Chargement des commandes depuis le backend
+  const fetchCommandes = async () => {
+    try {
+      setLoading(true);
 
-    // ✅ Mapping statuts UI → backend
-    const statutMapToBackend = {
-      en_attente_caisse: "en_attente_caisse",
-      partiellement_payee: "partiellement_payee",
-      soldee: "soldee",
-      annulee: "annulee",
-    };
+      // ✅ Mapping statuts UI → backend
+      const statutMapToBackend = {
+        en_attente_caisse: "en_attente_caisse",
+        partiellement_payee: "partiellement_payee",
+        soldee: "soldee",
+        annulee: "annulee",
+      };
 
-    // ✅ Paramètres envoyés à Laravel
-    const params = {
-      type_client: "special",
-      page,
-      ...(filterStatut !== "tous" && {
-        statut: statutMapToBackend[filterStatut] || filterStatut,
-      }),
-      ...(filterStartDate && { start_date: filterStartDate }),
-      ...(filterEndDate && { end_date: filterEndDate }),
-      ...(searchTerm && { search: searchTerm }),
-      ...(clientIdFromState && { client_id: clientIdFromState }),
-    };
+      // ✅ Paramètres envoyés à Laravel
+      const params = {
+        type_client: "special",
+        page,
+        ...(filterStatut !== "tous" && {
+          statut: statutMapToBackend[filterStatut] || filterStatut,
+        }),
+        ...(filterStartDate && { start_date: filterStartDate }),
+        ...(filterEndDate && { end_date: filterEndDate }),
+        ...(searchTerm && { search: searchTerm }),
+        ...(clientIdFromState && { client_id: clientIdFromState }),
+      };
 
-    // ===============================
-    // ✅ APPEL API
-    // ===============================
-    const res = await commandesAPI.getAll(params);
+      // ===============================
+      // ✅ APPEL API
+      // ===============================
+      const res = await commandesAPI.getAll(params);
 
-    // ⚠️ IMPORTANT :
-    // On récupère les stats AVANT unwrapApi()
-    const backendStatsRaw = res?.stats || null;
+      // ⚠️ IMPORTANT :
+      // On récupère les stats AVANT unwrapApi()
+      const backendStatsRaw =
+        res?.stats ||
+        res?.data?.stats ||
+        res?.data?.data?.stats ||
+        null;
 
-    // Normalisation pagination/table
-    const payload = unwrapApi(res);
+      // Normalisation pagination/table
+      const payload = unwrapApi(res);
 
-    const commandesData = payload.data || [];
+      const commandesData = payload.data || [];
 
-    const paginationData = {
-      current_page: Number(payload.current_page || 1),
-      last_page: Number(payload.last_page || 1),
-      total: Number(payload.total || commandesData.length || 0),
-    };
+      const paginationData = {
+        current_page: Number(payload.current_page || 1),
+        last_page: Number(payload.last_page || 1),
+        total: Number(payload.total || commandesData.length || 0),
+      };
 
-    // ===============================
-    // ✅ NORMALISATION COMMANDES
-    // ===============================
-    const normalized = commandesData.map(normalizeCommande);
-    setCommandes(normalized);
+      // ===============================
+      // ✅ NORMALISATION COMMANDES
+      // ===============================
+      const normalized = commandesData.map(normalizeCommande);
+      setCommandes(normalized);
 
-    setPage(paginationData.current_page);
-    setLastPage(paginationData.last_page);
-    setTotal(paginationData.total);
+      setPage(paginationData.current_page);
+      setLastPage(paginationData.last_page);
+      setTotal(paginationData.total);
 
-    // ===============================
-    // ✅ STATS BACKEND (CORRIGÉ)
-    // ===============================
-    const backendStats = backendStatsRaw || {
-      nb: 0,
-      annulees: 0,
-      totalTTC: 0,
-      totalPaye: 0,
-      dette: 0,
-    };
+      // ===============================
+      // ✅ STATS BACKEND (CORRIGÉ)
+      // ===============================
+      const backendStats = backendStatsRaw || {
+        nb: 0,
+        annulees: 0,
+        totalTTC: 0,
+        totalPaye: 0,
+        dette: 0,
+      };
 
-    setStatsFromBackend(backendStats);
+      setStatsFromBackend(backendStats);
 
-  } catch (error) {
-    logger.error("commandes.fetch", error);
-    toast(
-      "error",
-      "Erreur de chargement",
-      "Impossible de charger les commandes clients spéciaux."
-    );
-  } finally {
-    setLoading(false);
-  }
-};
+    } catch (error) {
+      logger.error("commandes.fetch", error);
+      toast(
+        "error",
+        "Erreur de chargement",
+        "Impossible de charger les commandes clients spéciaux."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // 🔗 Chargement des clients spéciaux pour retrouver les noms
   useEffect(() => {
@@ -1913,7 +1941,10 @@ const fetchCommandes = async () => {
       }
 
       // ✅ MISE À JOUR DE L'ÉTAT
-      setLastCreatedCommande(normalized);
+      setLastCreatedCommande({
+        ...normalized,
+        totalTTC: Number(normalized.totalTTC || commandeDraft.totalTTC || 0)
+      });
       setShowQrModal(true);
 
       toast(
@@ -1922,8 +1953,8 @@ const fetchCommandes = async () => {
         `${normalized.clientNom || "Client"} — ${formatFCFA(normalized.totalTTC)}`
       );
       
-      // Recharger la liste des commandes
-      fetchCommandes();
+      // ✅ OPTIMISATION : reset à la page 1, le useEffect recharge automatiquement
+      setPage(1);
 
     } catch (error) {
       logger.error("commandes.create", error);
@@ -1941,6 +1972,8 @@ const fetchCommandes = async () => {
         );
       }
     }
+
+
   };
 
   const badgeStatut = (statut) => {
@@ -2000,6 +2033,17 @@ const fetchCommandes = async () => {
     clientNameFromState,
   ]);
 
+  // ✅ Toast informatif quand on affiche les commandes annulées
+  useEffect(() => {
+    if (filterStatut === "annulee") {
+      toast(
+        "info",
+        "Commandes annulées",
+        "Ces commandes ne sont plus actives. Elles sont affichées uniquement pour la traçabilité."
+      );
+    }
+  }, [filterStatut]);
+
   // ✅ CHARGEMENT DES COMMANDES (OBLIGATOIRE)
   useEffect(() => {
     fetchCommandes();
@@ -2012,7 +2056,15 @@ const fetchCommandes = async () => {
     searchTerm,
     clientIdFromState,
   ]);
+  
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchTerm(searchInput.trim());      
+      setPage(1);
+    }, 1000);
 
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   if (loading)
     return (
@@ -2029,7 +2081,7 @@ const fetchCommandes = async () => {
   return (
     <>
       <div className="w-full h-full bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white px-3 sm:px-4 lg:px-6 py-4 sm:py-5 overflow-y-auto">
-        <div className="max-w-6xl mx-auto space-y-8"> {/* Changé de space-y-5 à space-y-8 */}
+        <div className="max-w-6xl mx-auto space-y-8">
           
           {/* HEADER */}
           <motion.header
@@ -2057,21 +2109,11 @@ const fetchCommandes = async () => {
                 </p>
               </div>
               <p className="text-[11px] text-gray-400">
-                {statsGlobales.nbCommandes} commandes ({statsGlobales.nbAnnulees} annulées)
-                {statsGlobales.nbCommandes > 1 && "s"} enregistrée
-                {statsGlobales.nbCommandes > 1 && "s"}.
+                {statsGlobales.nbCommandes} commande{statsGlobales.nbCommandes > 1 ? "s" : ""} ({statsGlobales.nbAnnulees} annulée{statsGlobales.nbAnnulees > 1 ? "s" : ""})
+                enregistrée{statsGlobales.nbCommandes > 1 ? "s" : ""}.
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-              <button
-                onClick={fetchCommandes}
-                className="flex items-center gap-2 px-4 py-2.5 bg-[#472EAD] text-white rounded-lg shadow-md hover:bg-[#5A3CF5] hover:shadow-lg text-xs sm:text-sm transition"
-              >
-                <RefreshCw size={16} />
-                Actualiser
-              </button>
-            </div>
           </motion.header>
 
           {/* CARTES STATS GLOBALES */}
@@ -2140,7 +2182,7 @@ const fetchCommandes = async () => {
           />
 
           {/* TABLE DES COMMANDES + FILTRES/RECHERCHE/LIMITE/PAGINATION */}
-          <section className="bg-white/95 border border-[#E4E0FF] rounded-2xl shadow-[0_12px_30px_rgba(15,23,42,0.06)] px-3 sm:px-4 py-4 sm:py-5 space-y-4 mt-8"> {/* Ajout de mt-8 et augmentation du padding */}
+          <section className="bg-white/95 border border-[#E4E0FF] rounded-2xl shadow-[0_12px_30px_rgba(15,23,42,0.06)] px-3 sm:px-4 py-4 sm:py-5 space-y-4 mt-8">
             
             {/* FILTRES + RECHERCHE + LIMITE (avisage) */}
             <div className="flex flex-col gap-3">
@@ -2195,19 +2237,22 @@ const fetchCommandes = async () => {
               </div>
 
               {/* RECHERCHE */}
-              <div className="relative mb-4"> {/* Ajout de mb-4 */}
+              <div className="relative mb-4">
                 <Search className="absolute left-3 top-2.5 text-gray-400 w-4 h-4" />
                 <input
                   type="text"
-                  placeholder="Rechercher une commande (numéro, client, statut, ligne produit...)"
-                  value={searchTerm || ""}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Rechercher une commande (numéro commande ou nom client)"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
                   className="w-full pl-9 pr-10 py-2.5 border border-gray-300 rounded-xl text-sm bg-white shadow-sm focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD] placeholder:text-gray-400"
                 />
                 {searchTerm ? (
                   <button
                     type="button"
-                    onClick={() => setSearchTerm("")}
+                    onClick={() => {
+                      setSearchInput("");
+                      setSearchTerm("");
+                    }}
                     className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
                     title="Effacer"
                   >
@@ -2231,7 +2276,7 @@ const fetchCommandes = async () => {
             </div>
 
             {/* TABLEAU */}
-            <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white mt-2"> {/* Ajout de mt-2 */}
+            <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white mt-2">
               <table className="min-w-full text-sm">
                 <thead className="bg-[#F7F5FF] text-[#472EAD] uppercase text-xs font-semibold">
                   <tr>
@@ -2305,7 +2350,7 @@ const fetchCommandes = async () => {
             </div>
 
             {/* ✅ PAGINATION AVEC COMPOSANT DÉDIÉ */}
-            <div className="mt-6"> {/* Ajout de mt-6 */}
+            <div className="mt-6">
               <Pagination
                 page={page}
                 totalPages={lastPage}

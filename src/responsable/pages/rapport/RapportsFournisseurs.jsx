@@ -167,7 +167,9 @@ export default function RapportsFournisseurs({
   onDateFinChange,
   onRechercheChange 
 }) {
+  // ✅ ÉTAPE 1 — Ajouter un second loading
   const [loading, setLoading] = useState(true);
+  const [loadingPage, setLoadingPage] = useState(false);
   const [logs, setLogs] = useState([]);
   const [stats, setStats] = useState({
     total: 0,
@@ -213,7 +215,9 @@ export default function RapportsFournisseurs({
   useEffect(() => {
     const loadData = async () => {
       try {
-        setLoading(true);
+        // ✅ ÉTAPE 2 — Modifier le chargement API
+        setLoading(currentPage === 1);
+        setLoadingPage(currentPage !== 1);
         
         // Charger les logs d'audit des fournisseurs
         const response = await rapportsAPI.getLogsFournisseurs({
@@ -269,6 +273,7 @@ export default function RapportsFournisseurs({
         toast.error("Erreur lors du chargement du journal d'activité");
       } finally {
         setLoading(false);
+        setLoadingPage(false);
       }
     };
 
@@ -502,6 +507,19 @@ const exportPDF = async () => {
     if (currentPage < totalPages) setCurrentPage(currentPage + 1);
   };
 
+  // ✅ ÉTAPE 3 — Loader plein écran (IMPORTANT)
+  if (loading)
+    return (
+      <div className="flex items-center justify-center min-h-[70vh] bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white">
+        <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-white/80 border border-[#E4E0FF] shadow-sm">
+          <RefreshCw className="w-5 h-5 text-[#472EAD] animate-spin" />
+          <span className="text-sm font-medium text-[#472EAD]">
+            Chargement du journal d'activité...
+          </span>
+        </div>
+      </div>
+    );
+
   return (
     <div className="space-y-6">
       {/* STATISTIQUES DU MODULE */}
@@ -733,7 +751,7 @@ const exportPDF = async () => {
       </div>
 
       {/* TABLEAU DU JOURNAL D'AUDIT */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm relative">
         {/* EN-TÊTE TABLEAU */}
         <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
           <div className="flex items-center justify-between">
@@ -749,17 +767,18 @@ const exportPDF = async () => {
           </div>
         </div>
 
-        {/* TABLEAU */}
-        <div className="overflow-hidden relative">
-          {loading && (
-            <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-10">
-              <div className="flex flex-col items-center gap-3">
-                <RefreshCw className="w-8 h-8 text-[#472EAD] animate-spin" />
-                <span className="text-sm font-medium text-gray-600">Chargement des données...</span>
-              </div>
+        {/* ✅ ÉTAPE 4 — Overlay uniquement pendant navigation */}
+        {loadingPage && (
+          <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-10">
+            <div className="flex flex-col items-center gap-3">
+              <RefreshCw className="w-8 h-8 text-[#472EAD] animate-spin" />
+              <span className="text-sm font-medium text-gray-600">Chargement des données...</span>
             </div>
-          )}
+          </div>
+        )}
 
+        {/* TABLEAU */}
+        <div className="overflow-hidden">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
@@ -887,34 +906,7 @@ const exportPDF = async () => {
         )}
       </div>
 
-      {/* RÉSUMÉ STATISTIQUE */}
-      <div className="bg-gradient-to-r from-gray-50 to-white border border-gray-200 rounded-xl p-5 shadow-sm">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-indigo-100 rounded-lg">
-              <Calendar className="w-5 h-5 text-indigo-600" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-700">Période d'analyse</p>
-              <p className="text-sm text-gray-900">{dateDebut} au {dateFin}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-6 text-sm text-gray-700">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
-              <span>Créations : <span className="font-semibold">{stats.creations}{!globalStats && " (page)"}</span></span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-              <span>Modifications : <span className="font-semibold">{stats.modifications}{!globalStats && " (page)"}</span></span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-rose-500"></div>
-              <span>Suppressions : <span className="font-semibold">{stats.suppressions}{!globalStats && " (page)"}</span></span>
-            </div>
-          </div>
-        </div>
-      </div>
+
 
       {/* MODAL DE DÉTAILS */}
       {showDetailsModal && selectedLog && (

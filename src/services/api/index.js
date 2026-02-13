@@ -27,6 +27,7 @@ export { default as profileAPI } from './profile';
 export { default as rapportsAPI } from './rapports';
 
 
+
 /**
  * Objet centralisé pour accès facile
  */
@@ -85,7 +86,8 @@ export default {
    * ✅ AJOUT — accès dynamique aux rapports
    */
   rapports: async () => {
-    const { default: rapportsAPI } = await import('./rapports');
-    return rapportsAPI;
+  const { default: rapportsAPI } = await import('./rapports');
+  return rapportsAPI;
+
   },
 };
