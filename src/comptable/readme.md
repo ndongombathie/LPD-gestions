@@ -93,3 +93,8 @@ GET api/mouvements-stock/{id} | afficher les mouvement de stock d'un produit don
 
 # les mouvement de stock pour un produit donnee pour le deopt
 GET api/mouvement-stock-boutique/{id} | afficher les mouvement de stock d'un produit donnee dans le boutique.
+
+
+GET|HEAD        api/enregistrer-versements | historiques des encaissements
+
+POST            api/enregistrer-versements | enregistrer un encaissement payload(caissier_id,montant,observation,la date(optionel))
