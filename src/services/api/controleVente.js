@@ -1,130 +1,83 @@
-/**
- * ==========================================================
- * 📊 Contrôle Vente API
- * ==========================================================
- * - Historique des ventes (avec pagination + filtres)
- * - Total des ventes par jour
- */
+// ==========================================================
+// 🧾 Controle Vente API — VERSION ULTRA STABLE
+// Compatible pagination Laravel native
+// Endpoint: GET api/commandes-payees
+// ==========================================================
 
 import httpClient from "../http/client";
 
-const BASE = "/historique-ventes";
-const TOTAL_PAR_JOUR = "/total-vente-par-jour";
+const ENDPOINT = "/commandes-payees";
+const DEFAULT_PER_PAGE = 15;
 
-/* ================= HELPER ================= */
-const cleanParams = (params) => {
-  const cleaned = {};
+/* ================= UTIL ================= */
 
-  Object.keys(params).forEach((key) => {
-    if (
-      params[key] !== undefined &&
-      params[key] !== null &&
-      params[key] !== ""
-    ) {
-      cleaned[key] = params[key];
-    }
-  });
-
-  return cleaned;
+const toNumber = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
 };
 
-const controleVenteAPI = {
-  /**
-   * 🔹 Historique des ventes
-   * Support :
-   * - date_debut
-   * - date_fin
-   * - vendeur_id
-   * - produit_id
-   * - page
-   * - per_page
-   */
-  getHistoriqueVentes: async (params = {}) => {
-    try {
-      const cleanedParams = cleanParams(params);
+const sanitizeDate = (d) => (d ? String(d) : undefined);
 
-      const res = await httpClient.get(BASE, {
-        params: cleanedParams,
+/* ================= API ================= */
+
+const controleVenteAPI = {
+
+  /* ==========================================================
+   * 🔹 GET COMMANDES PAYÉES (Paginated)
+   * ========================================================== */
+  async getCommandes(params = {}) {
+    try {
+      const {
+        page = 1,
+        per_page = DEFAULT_PER_PAGE,
+        date_debut,
+        date_fin,
+      } = params;
+
+      const res = await httpClient.get(ENDPOINT, {
+        params: {
+          page,
+          per_page,
+          date_debut: sanitizeDate(date_debut),
+          date_fin: sanitizeDate(date_fin),
+        },
       });
 
-      const response = res.data || {};
-
-      /* ========= STRUCTURE PAGINATION LARAVEL ========= */
-      const data = Array.isArray(response.data)
-        ? response.data
-        : [];
-
-      const pagination = {
-        current_page: response.current_page || 1,
-        last_page: response.last_page || 1,
-        per_page: response.per_page || data.length,
-        total: response.total || data.length,
-        next_page_url: response.next_page_url || null,
-        prev_page_url: response.prev_page_url || null,
-      };
-
-      /* ========= SECURITE FILTRAGE FRONT ========= */
-      let filteredData = [...data];
-
-      if (cleanedParams.date_debut && cleanedParams.date_fin) {
-        filteredData = filteredData.filter((v) => {
-          const date = v.created_at?.slice(0, 10);
-          return (
-            date >= cleanedParams.date_debut &&
-            date <= cleanedParams.date_fin
-          );
-        });
-      }
-
-      if (cleanedParams.vendeur_id) {
-        filteredData = filteredData.filter(
-          (v) => v.vendeur_id === cleanedParams.vendeur_id
-        );
-      }
-
-      if (cleanedParams.produit_id) {
-        filteredData = filteredData.filter(
-          (v) => v.produit_id === cleanedParams.produit_id
-        );
-      }
+      const payload = res?.data ?? {};
 
       return {
-        data: filteredData,
-        pagination,
+        items: Array.isArray(payload.data)
+          ? payload.data.map((cmd) => ({
+              id: cmd.id,
+              date: cmd.created_at ?? null,
+              vendeur: {
+                nom: cmd.vendeur?.nom ?? "",
+                prenom: cmd.vendeur?.prenom ?? "",
+              },
+              produit: {
+                nom: cmd.produit?.nom ?? "-",
+              },
+              quantite: toNumber(cmd.quantite),
+              montant: toNumber(cmd.montant),
+            }))
+          : [],
+
+        pagination: {
+          currentPage: payload.current_page ?? 1,
+          lastPage: payload.last_page ?? 1,
+          total: payload.total ?? 0,
+          perPage: payload.per_page ?? DEFAULT_PER_PAGE,
+          nextPageUrl: payload.next_page_url ?? null,
+          prevPageUrl: payload.prev_page_url ?? null,
+        },
       };
+
     } catch (error) {
-      console.error(
-        "❌ Erreur chargement historique ventes :",
-        error.response?.data || error.message
-      );
+      console.error("❌ Erreur GET commandes payées:", error);
       throw error;
     }
   },
 
-  /**
-   * 🔹 Total des ventes par jour
-   */
-  getTotalVenteParJour: async (params = {}) => {
-    try {
-      const cleanedParams = cleanParams(params);
-
-      const res = await httpClient.get(TOTAL_PAR_JOUR, {
-        params: cleanedParams,
-      });
-
-      return Array.isArray(res.data?.data)
-        ? res.data.data
-        : Array.isArray(res.data)
-        ? res.data
-        : [];
-    } catch (error) {
-      console.error(
-        "❌ Erreur chargement ventes par jour :",
-        error.response?.data || error.message
-      );
-      throw error;
-    }
-  },
 };
 
 export default controleVenteAPI;

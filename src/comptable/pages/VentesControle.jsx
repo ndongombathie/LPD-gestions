@@ -1,6 +1,6 @@
 // ==========================================================
-// 🧾 ControleVendeur.jsx — VERSION COMPLETE PRO
-// Journalier + Mensuel dynamique + Pagination + PDF Global
+// 🧾 ControleVendeur.jsx — VERSION AVEC MODE DATE INTELLIGENT
+// Journalier par défaut + date du jour auto
 // ==========================================================
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -11,6 +11,7 @@ import DataTable from "../components/DataTable.jsx";
 import controleVenteAPI from "@/services/api/controleVente";
 
 /* ================= UTILS ================= */
+
 const formatFCFA = (value = 0) =>
   Number(value).toLocaleString("fr-FR");
 
@@ -18,7 +19,12 @@ const getLastDayOfMonth = (year, month) =>
   new Date(year, month, 0).getDate();
 
 /* ================= COMPOSANT ================= */
+
 export default function ControleVendeur() {
+
+  const today = new Date().toISOString().slice(0, 10);
+  const currentMonth = new Date().toISOString().slice(0, 7);
+
   const [ventes, setVentes] = useState([]);
   const [pagination, setPagination] = useState({});
   const [loading, setLoading] = useState(true);
@@ -26,44 +32,39 @@ export default function ControleVendeur() {
   const [search, setSearch] = useState("");
   const [mode, setMode] = useState("journalier");
 
-  const today = new Date().toISOString().slice(0, 10);
-  const currentMonth = new Date().toISOString().slice(0, 7);
-
   const [date, setDate] = useState(today);
   const [mois, setMois] = useState(currentMonth);
+
   const [page, setPage] = useState(1);
 
-  /* ================= FETCH API ================= */
+  /* ================= FETCH ================= */
+
   useEffect(() => {
+
     const fetchVentes = async () => {
+
       try {
         setLoading(true);
 
-        let params = {};
+        let params = { page };
 
         if (mode === "journalier") {
-          params = {
-            date_debut: date || today,
-            date_fin: date || today,
-            page,
-          };
+          params.date_debut = date;
+          params.date_fin = date;
         } else {
-          const [year, month] = (mois || currentMonth).split("-");
+          const [year, month] = mois.split("-");
           const lastDay = getLastDayOfMonth(year, month);
 
-          params = {
-            date_debut: `${year}-${month}-01`,
-            date_fin: `${year}-${month}-${lastDay}`,
-            page,
-          };
+          params.date_debut = `${year}-${month}-01`;
+          params.date_fin = `${year}-${month}-${lastDay}`;
         }
 
-        const { data, pagination } =
-          await controleVenteAPI.getHistoriqueVentes(params);
+        const { items, pagination } =
+          await controleVenteAPI.getCommandes(params);
 
-        const normalized = data.map((v) => ({
+        const normalized = items.map((v) => ({
           id: v.id,
-          date: v.created_at?.slice(0, 10),
+          date: v.date?.slice(0, 10),
           quantite: v.quantite,
           montant: v.montant,
           vendeur: `${v.vendeur?.prenom ?? ""} ${v.vendeur?.nom ?? ""}`.trim(),
@@ -71,19 +72,23 @@ export default function ControleVendeur() {
         }));
 
         setVentes(normalized);
-        setPagination(pagination);
+        setPagination(pagination || {});
+
       } catch (e) {
         console.error(e);
         setVentes([]);
+        setPagination({});
       } finally {
         setLoading(false);
       }
     };
 
     fetchVentes();
-  }, [date, mois, mode, page]);
+
+  }, [page, mode, date, mois]);
 
   /* ================= FILTRE FRONT ================= */
+
   const ventesFiltrees = useMemo(() => {
     return ventes.filter((v) =>
       v.vendeur.toLowerCase().includes(search.toLowerCase())
@@ -91,83 +96,95 @@ export default function ControleVendeur() {
   }, [ventes, search]);
 
   /* ================= STATS ================= */
+
   const totalVentes = ventesFiltrees.length;
+
   const totalMontant = ventesFiltrees.reduce(
     (s, v) => s + Number(v.montant || 0),
     0
   );
 
-  /* ================= PDF GLOBAL ================= */
+  /* ================= PAGINATION ================= */
+
+  const currentPage = Number(pagination?.currentPage || 1);
+  const lastPage = Number(pagination?.lastPage || 1);
+  const total = Number(pagination?.total || 0);
+  const perPage = Number(pagination?.perPage || 15);
+
+  const hasPagination =
+    !loading &&
+    total > perPage &&
+    lastPage > 1;
+
+  const disablePrev =
+    loading ||
+    currentPage <= 1;
+
+  const disableNext =
+    loading ||
+    currentPage >= lastPage;
+
+  /* ================= PDF ================= */
+
   const imprimerPDF = async () => {
+
     try {
-      let params = {};
 
-      if (mode === "journalier") {
-        params = {
-          date_debut: date || today,
-          date_fin: date || today,
-        };
-      } else {
-        const [year, month] = (mois || currentMonth).split("-");
-        const lastDay = getLastDayOfMonth(year, month);
+      let current = 1;
+      let last = 1;
+      let allItems = [];
 
-        params = {
-          date_debut: `${year}-${month}-01`,
-          date_fin: `${year}-${month}-${lastDay}`,
-        };
-      }
+      do {
 
-      const { data } =
-        await controleVenteAPI.getHistoriqueVentes(params);
+        const { items, pagination } =
+          await controleVenteAPI.getCommandes({
+            page: current,
+            ...(mode === "journalier"
+              ? { date_debut: date, date_fin: date }
+              : (() => {
+                  const [year, month] = mois.split("-");
+                  const lastDay = getLastDayOfMonth(year, month);
+                  return {
+                    date_debut: `${year}-${month}-01`,
+                    date_fin: `${year}-${month}-${lastDay}`,
+                  };
+                })()
+            ),
+          });
+
+        allItems = [...allItems, ...items];
+        last = pagination.lastPage;
+        current++;
+
+      } while (current <= last);
+
+      if (!allItems.length) return;
 
       const doc = new jsPDF();
 
       doc.setFontSize(16);
       doc.text("CONTROLE GLOBAL DES VENTES", 14, 20);
 
-      doc.setFontSize(10);
-      doc.text(
-        `Période : ${
-          mode === "journalier"
-            ? `Jour ${date}`
-            : `Mois ${mois}`
-        }`,
-        14,
-        28
-      );
-
       autoTable(doc, {
-        startY: 35,
+        startY: 30,
         head: [["Vendeur", "Date", "Produit", "Quantité", "Montant"]],
-        body: data.map((v) => [
+        body: allItems.map((v) => [
           `${v.vendeur?.prenom ?? ""} ${v.vendeur?.nom ?? ""}`,
-          v.created_at?.slice(0, 10),
+          v.date?.slice(0, 10),
           v.produit?.nom ?? "-",
           v.quantite,
           formatFCFA(v.montant),
         ]),
-        styles: { fontSize: 9 },
       });
 
-      const total = data.reduce(
-        (s, v) => s + Number(v.montant || 0),
-        0
-      );
-
-      doc.text(
-        `Total Général : ${formatFCFA(total)} FCFA`,
-        14,
-        doc.lastAutoTable.finalY + 10
-      );
-
       doc.save("controle_global_ventes.pdf");
+
     } catch (error) {
-      console.error("Erreur impression :", error);
+      console.error(error);
     }
   };
 
   /* ================= UI ================= */
-  if (loading) return <p className="p-6">Chargement...</p>;
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -178,6 +195,7 @@ export default function ControleVendeur() {
 
       {/* FILTRES */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-white p-4 rounded-xl shadow">
+
         <input
           placeholder="Recherche vendeur"
           value={search}
@@ -225,62 +243,76 @@ export default function ControleVendeur() {
         >
           <Printer size={16} /> Impression Globale
         </button>
+
       </div>
 
       {/* STATS */}
-      <div className="grid grid-cols-2 gap-4">
-        <StatCard label="Nombre de ventes" value={totalVentes} />
-        <StatCard
-          label="Montant total"
-          value={`${formatFCFA(totalMontant)} FCFA`}
-        />
-      </div>
+      {ventesFiltrees.length > 0 ? (
+        <>
+          <div className="grid grid-cols-2 gap-4">
+            <StatCard label="Nombre de ventes" value={totalVentes} />
+            <StatCard
+              label="Montant total"
+              value={`${formatFCFA(totalMontant)} FCFA`}
+            />
+          </div>
 
-      {/* TABLE */}
-      <div className="bg-white p-4 rounded-xl shadow">
-        <DataTable
-          data={ventesFiltrees}
-          columns={[
-            { label: "Vendeur", key: "vendeur" },
-            { label: "Date", key: "date" },
-            { label: "Produit", key: "produit" },
-            { label: "Quantité", key: "quantite" },
-            {
-              label: "Montant",
-              key: "montant",
-              render: (v) => formatFCFA(v),
-            },
-          ]}
-        />
-      </div>
+          <div className="bg-white p-4 rounded-xl shadow">
+            <DataTable
+              data={ventesFiltrees}
+              columns={[
+                { label: "Vendeur", key: "vendeur" },
+                { label: "Date", key: "date" },
+                { label: "Produit", key: "produit" },
+                { label: "Quantité", key: "quantite" },
+                {
+                  label: "Montant",
+                  key: "montant",
+                  render: (v) => formatFCFA(v),
+                },
+              ]}
+            />
+          </div>
+        </>
+      ) : (
+        <div className="bg-white p-8 rounded-xl shadow text-center text-gray-500">
+          Aucune vente trouvée pour la période sélectionnée
+        </div>
+      )}
 
       {/* PAGINATION */}
-      <div className="flex justify-between items-center">
-        <button
-          disabled={!pagination.prev_page_url}
-          onClick={() => setPage((p) => p - 1)}
-          className="flex items-center gap-1 px-3 py-1 bg-gray-200 rounded disabled:opacity-50"
-        >
-          <ChevronLeft size={16} /> Précédent
-        </button>
+      {hasPagination && (
+        <div className="flex justify-between items-center mt-4">
 
-        <span>
-          Page {pagination.current_page} / {pagination.last_page}
-        </span>
+          <button
+            disabled={disablePrev}
+            onClick={() => setPage((p) => p - 1)}
+            className="flex items-center gap-1 px-4 py-2 bg-gray-200 rounded-lg disabled:opacity-40"
+          >
+            <ChevronLeft size={16} /> Précédent
+          </button>
 
-        <button
-          disabled={!pagination.next_page_url}
-          onClick={() => setPage((p) => p + 1)}
-          className="flex items-center gap-1 px-3 py-1 bg-gray-200 rounded disabled:opacity-50"
-        >
-          Suivant <ChevronRight size={16} />
-        </button>
-      </div>
+          <span>
+            Page {currentPage} / {lastPage}
+          </span>
+
+          <button
+            disabled={disableNext}
+            onClick={() => setPage((p) => p + 1)}
+            className="flex items-center gap-1 px-4 py-2 bg-gray-200 rounded-lg disabled:opacity-40"
+          >
+            Suivant <ChevronRight size={16} />
+          </button>
+
+        </div>
+      )}
+
     </div>
   );
 }
 
 /* ================= STAT CARD ================= */
+
 function StatCard({ label, value }) {
   return (
     <div className="bg-white rounded-xl shadow p-4">

@@ -89,7 +89,7 @@ GET    api/enregistrer-inventaire-boutique | en donnant les deux intevalle de da
 GET   api/historique-inventaires   | afficher historiques des inventaires
 
 # les mouvement de stock pour un produit donnee pour le deopt
-GET api/mouvements-stock/{id} | afficher les mouvement de stock d'un produit donnee dans le deopt.
+GET api/mouvements-stock/{id} | afficher les mouvement de stock d'un produit donnee dans le depot.
 
 # les mouvement de stock pour un produit donnee pour le deopt
 GET api/mouvement-stock-boutique/{id} | afficher les mouvement de stock d'un produit donnee dans le boutique.

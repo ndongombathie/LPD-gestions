@@ -1,110 +1,233 @@
 // ==========================================================
-// 💰 EnregistrerVersement.jsx — PRO
-// DESIGN SHADOW FINAL (SANS BORDURES)
+// 💰 EnregistrerVersement.jsx — VERSION ENTREPRISE STABLE
+// Liste déroulante caissiers + gestion erreurs Laravel
+// Durable 100 ans
 // ==========================================================
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import versementAPI from "@/services/api/versementAPI";
+import httpClient from "@/services/http/client";
 
 export default function EnregistrerVersement() {
-  const [caissier, setCaissier] = useState("");
+
+  /* ================= STATE ================= */
+
+  const [caissiers, setCaissiers] = useState([]);
+  const [caissierId, setCaissierId] = useState("");
   const [montant, setMontant] = useState("");
-  const [commentaire, setCommentaire] = useState("");
-  const [date, setDate] = useState(() =>
+  const [observation, setObservation] = useState("");
+  const [date, setDate] = useState(
     new Date().toISOString().slice(0, 10)
   );
 
-  // ===============================
-  // 📌 ENREGISTREMENT
-  // ===============================
-  const enregistrer = () => {
-    if (!caissier.trim() || !montant) {
-      alert("Veuillez remplir le nom du caissier et le montant.");
+  const [loading, setLoading] = useState(false);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
+
+  /* =========================================================
+     🔄 CHARGEMENT DES CAISSIERS
+  ========================================================= */
+
+  useEffect(() => {
+
+    const fetchCaissiers = async () => {
+
+      try {
+
+        setLoadingUsers(true);
+
+        const response = await httpClient.get("/utilisateurs");
+
+        const users = response?.data?.data || response?.data || [];
+
+        const onlyCaissiers = users.filter(
+          (u) => u.role?.toLowerCase() === "caissier"
+        );
+
+        setCaissiers(onlyCaissiers);
+
+      } catch (err) {
+
+        console.error("Erreur chargement caissiers:", err);
+        setError("Impossible de charger les caissiers.");
+
+      } finally {
+
+        setLoadingUsers(false);
+
+      }
+    };
+
+    fetchCaissiers();
+
+  }, []);
+
+  /* =========================================================
+     💾 ENREGISTRER VERSEMENT
+  ========================================================= */
+
+  const enregistrer = async () => {
+
+    if (!caissierId || !montant) {
+      setError("Veuillez sélectionner un caissier et entrer un montant.");
       return;
     }
 
-    const nouveauVersement = {
-      id: Date.now(),
-      caissier: caissier.trim(),
-      montant: Number(montant),
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    const result = await versementAPI.enregistrerVersement({
+      caissier_id: caissierId,
+      montant,
+      observation,
       date,
-      commentaire: commentaire.trim() || "",
-    };
+    });
 
-    const anciens = JSON.parse(localStorage.getItem("versements") || "[]");
-    const updated = [...anciens, nouveauVersement];
-    localStorage.setItem("versements", JSON.stringify(updated));
+    if (result.success) {
 
-    alert("Versement enregistré avec succès !");
+      setSuccess(result.message);
+      setMontant("");
+      setObservation("");
 
-    // Reset (on garde la date)
-    setMontant("");
-    setCommentaire("");
+    } else {
+
+      if (result.validationErrors?.caissier_id) {
+        setError(result.validationErrors.caissier_id[0]);
+      } else if (result.validationErrors?.montant) {
+        setError(result.validationErrors.montant[0]);
+      } else {
+        setError(result.message);
+      }
+
+    }
+
+    setLoading(false);
   };
 
-  return (
-    <div className="space-y-8">
+  /* =========================================================
+     🎨 UI
+  ========================================================= */
 
-      {/* ================= TITRE ================= */}
-      <div>
-        <h1 className="text-xl font-semibold text-[#472EAD]">
+  return (
+    <div className="p-8 bg-gray-50 min-h-screen">
+
+      {/* HEADER */}
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-[#472EAD]">
           Enregistrer un versement
         </h1>
         <p className="text-sm text-gray-500">
-          Ajout d’un versement avec commentaire optionnel
+          Ajout d’un encaissement dans la caisse
         </p>
       </div>
 
-      {/* ================= FORMULAIRE ================= */}
-      <div className="bg-white rounded-2xl shadow-md p-6 space-y-5">
+      {/* CARD */}
+      <div className="bg-white rounded-2xl shadow-lg p-8 max-w-2xl">
 
-        {/* Caissier */}
-        <input
-          type="text"
-          placeholder="Nom du caissier"
-          value={caissier}
-          onChange={(e) => setCaissier(e.target.value)}
-          className="w-full px-4 py-2 rounded-lg bg-gray-50 text-sm
-                     focus:outline-none focus:ring-2 focus:ring-[#472EAD]/30"
-        />
+        {/* SUCCESS */}
+        {success && (
+          <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-lg text-sm">
+            {success}
+          </div>
+        )}
 
-        {/* Montant */}
-        <input
-          type="number"
-          placeholder="Montant du versement"
-          value={montant}
-          onChange={(e) => setMontant(e.target.value)}
-          className="w-full px-4 py-2 rounded-lg bg-gray-50 text-sm
-                     focus:outline-none focus:ring-2 focus:ring-[#472EAD]/30"
-        />
+        {/* ERROR */}
+        {error && (
+          <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">
+            {error}
+          </div>
+        )}
 
-        {/* Commentaire */}
-        <textarea
-          placeholder="Commentaire (optionnel)"
-          value={commentaire}
-          onChange={(e) => setCommentaire(e.target.value)}
-          className="w-full px-4 py-2 rounded-lg bg-gray-50 text-sm h-24
-                     resize-none focus:outline-none
-                     focus:ring-2 focus:ring-[#472EAD]/30"
-        />
+        <div className="space-y-6">
 
-        {/* Date */}
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className="px-4 py-2 rounded-lg bg-gray-50 text-sm
-                     focus:outline-none focus:ring-2 focus:ring-[#472EAD]/30"
-        />
+          {/* SELECT CAISSIER */}
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">
+              Caissier
+            </label>
 
-        {/* Bouton */}
-        <div className="flex justify-end">
-          <button
-            onClick={enregistrer}
-            className="px-6 py-2 bg-[#472EAD] text-white rounded-xl
-                       shadow hover:shadow-lg transition"
-          >
-            Enregistrer
-          </button>
+            <select
+              value={caissierId}
+              onChange={(e) => setCaissierId(e.target.value)}
+              className="w-full px-4 py-2 rounded-lg bg-gray-50
+                         focus:outline-none focus:ring-2
+                         focus:ring-[#472EAD]/30"
+            >
+              <option value="">
+                {loadingUsers
+                  ? "Chargement..."
+                  : "Sélectionner un caissier"}
+              </option>
+
+              {caissiers.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nom} {c.prenom}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* MONTANT */}
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">
+              Montant (FCFA)
+            </label>
+            <input
+              type="number"
+              value={montant}
+              onChange={(e) => setMontant(e.target.value)}
+              className="w-full px-4 py-2 rounded-lg bg-gray-50
+                         focus:outline-none focus:ring-2
+                         focus:ring-[#472EAD]/30"
+              placeholder="Montant du versement"
+            />
+          </div>
+
+          {/* OBSERVATION */}
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">
+              Observation (optionnel)
+            </label>
+            <textarea
+              value={observation}
+              onChange={(e) => setObservation(e.target.value)}
+              className="w-full px-4 py-2 rounded-lg bg-gray-50 h-24 resize-none
+                         focus:outline-none focus:ring-2
+                         focus:ring-[#472EAD]/30"
+              placeholder="Commentaire..."
+            />
+          </div>
+
+          {/* DATE */}
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">
+              Date
+            </label>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="px-4 py-2 rounded-lg bg-gray-50
+                         focus:outline-none focus:ring-2
+                         focus:ring-[#472EAD]/30"
+            />
+          </div>
+
+          {/* BUTTON */}
+          <div className="flex justify-end">
+            <button
+              onClick={enregistrer}
+              disabled={loading}
+              className="px-6 py-2 bg-[#472EAD] text-white rounded-xl
+                         shadow hover:shadow-lg transition
+                         disabled:opacity-50"
+            >
+              {loading ? "Enregistrement..." : "Enregistrer"}
+            </button>
+          </div>
+
         </div>
       </div>
     </div>

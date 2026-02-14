@@ -1,8 +1,9 @@
 /**
  * 🏭 Dépôt – Contrôle des produits
  *
- * Endpoint:
+ * Endpoints:
  * GET api/produits-controle-depots
+ * GET api/mouvements-stock?produit_id=UUID
  *
  * Rôle:
  * - Centraliser l’accès API
@@ -13,7 +14,8 @@
 
 import httpClient from "../http/client";
 
-const ENDPOINT = "/produits-controle-depots";
+const PRODUITS_ENDPOINT = "/produits-controle-depots";
+const MOUVEMENTS_ENDPOINT = "/mouvements-stock";
 const DEFAULT_PER_PAGE = 25;
 
 /**
@@ -31,14 +33,13 @@ const getEtatStock = (stockGlobal, stockSeuil) => {
 const getNombreReappro = (mouvements = []) => {
   if (!Array.isArray(mouvements)) return 0;
 
-  // Si le backend contient seulement les entrées
   return mouvements.length;
-
-  // ⚠️ Si plus tard il y a type: "entree" / "sortie"
-  // return mouvements.filter(m => m.type === "entree").length;
 };
 
 const depotAPI = {
+  /**
+   * 📦 Produits dépôt (avec pagination)
+   */
   getProduitsControle: async (params = {}) => {
     try {
       const {
@@ -47,7 +48,7 @@ const depotAPI = {
         ...filters
       } = params;
 
-      const res = await httpClient.get(ENDPOINT, {
+      const res = await httpClient.get(PRODUITS_ENDPOINT, {
         params: {
           page,
           per_page,
@@ -61,12 +62,8 @@ const depotAPI = {
         ? payload.data
         : [];
 
-      /**
-       * 🔥 Transformation des données
-       * On renvoie uniquement les champs demandés
-       */
       const data = rawData.map((produit) => ({
-        id: produit.id, // utile pour key React
+        id: produit.id,
         nom: produit.nom,
         prix_achat: produit.prix_achat,
         nombre_carton: produit.nombre_carton,
@@ -95,6 +92,63 @@ const depotAPI = {
     } catch (error) {
       console.error(
         "❌ Erreur chargement produits dépôt :",
+        error.response?.data || error.message
+      );
+      throw error;
+    }
+  },
+
+  /**
+   * 📜 🔥 NOUVEAU – Mouvements d’un produit spécifique
+   *
+   * @param {string} produitId
+   */
+  getMouvementsProduit: async (produitId) => {
+    try {
+      if (!produitId) {
+        throw new Error("produitId est requis");
+      }
+
+      const res = await httpClient.get(MOUVEMENTS_ENDPOINT, {
+        params: {
+          produit_id: produitId,
+          per_page: 100, // large pour fiche produit
+        },
+      });
+
+      const payload = res?.data ?? {};
+      const rawData = Array.isArray(payload?.data)
+        ? payload.data
+        : [];
+
+      /**
+       * 🔥 Transformation propre pour le frontend
+       */
+      const data = rawData.map((mouvement) => ({
+        id: mouvement.id,
+        type: mouvement.type,
+        source: mouvement.source,
+        destination: mouvement.destination,
+        quantite: mouvement.quantite,
+        motif: mouvement.motif,
+        date: mouvement.date,
+        quantite_avant:
+          mouvement.entree_sortie?.quantite_avant ?? null,
+        quantite_apres:
+          mouvement.entree_sortie?.quantite_apres ?? null,
+      }));
+
+      return {
+        data,
+        pagination: {
+          currentPage: payload?.current_page ?? 1,
+          lastPage: payload?.last_page ?? 1,
+          total: payload?.total ?? data.length,
+        },
+      };
+    } catch (error) {
+      console.error(
+        "❌ Erreur chargement mouvements produit :",
         error.response?.data || error.message
       );
       throw error;

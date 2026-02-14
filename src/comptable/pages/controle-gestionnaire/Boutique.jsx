@@ -25,7 +25,7 @@ const getEtat = (quantite, seuil) => {
 export default function Boutique() {
   const [rows, setRows] = useState([]);
   const [allRows, setAllRows] = useState([]);
-  const [allPaginatedRows, setAllPaginatedRows] = useState([]); // Stocke TOUTES les lignes paginées
+  const [allPaginatedRows, setAllPaginatedRows] = useState([]);
   const [pagination, setPagination] = useState(null);
 
   const [page, setPage] = useState(1);
@@ -115,7 +115,7 @@ export default function Boutique() {
   useEffect(() => {
     fetchPaginated();
     fetchAll();
-    fetchAllPaginated(); // Charge toutes les pages paginées
+    fetchAllPaginated();
   }, [fetchPaginated, fetchAll, fetchAllPaginated]);
 
   /* ================= NORMALISATION + REGROUPEMENT ================= */
@@ -129,8 +129,6 @@ export default function Boutique() {
       const quantite = Number(row.quantite ?? 0);
       const seuil = Number(row.seuil ?? 0);
       const nombre_carton = Number(row.nombre_carton ?? 0);
-      const nombre_reappro =
-        Number(produit?.entree_sortie?.nombre_fois ?? 0);
       
       // Récupérer la catégorie
       const categorie = produit.categorie ?? {};
@@ -146,7 +144,6 @@ export default function Boutique() {
           nombre_carton,
           quantite,
           seuil,
-          nombre_reappro,
           // Informations supplémentaires pour la fiche
           description: produit.description ?? "Aucune description",
           code_barre: produit.code_barre ?? "N/A",
@@ -158,7 +155,6 @@ export default function Boutique() {
         const existing = map.get(key);
         existing.nombre_carton += nombre_carton;
         existing.quantite += quantite;
-        existing.nombre_reappro += nombre_reappro;
       }
     });
 
@@ -181,7 +177,6 @@ export default function Boutique() {
         nombre_carton: Number(row.nombre_carton ?? 0),
         quantite: Number(row.quantite ?? 0),
         seuil: Number(row.seuil ?? 0),
-        nombre_reappro: Number(produit?.entree_sortie?.nombre_fois ?? 0),
         etat: getEtat(Number(row.quantite ?? 0), Number(row.seuil ?? 0))
       };
     });
@@ -232,20 +227,16 @@ export default function Boutique() {
         "Catégorie",
         "Prix Achat",
         "Cartons",
-        "Stock",
         "Seuil",
-        "État",
-        "Réappro"
+        "État"
       ]],
       body: data.map((p) => [
         p.nom,
         p.categorie_nom,
         formatFCFA(p.prix_achat),
         p.nombre_carton,
-        p.quantite,
         p.seuil,
-        getEtat(p.quantite, p.seuil),
-        p.nombre_reappro,
+        getEtat(p.quantite, p.seuil)
       ]),
       headStyles: { fillColor: [71, 46, 173] },
       styles: { fontSize: 8 },
@@ -307,8 +298,7 @@ export default function Boutique() {
             prix_achat: produit.prix_achat ?? 0,
             nombre_carton: Number(row.nombre_carton ?? 0),
             quantite: Number(row.quantite ?? 0),
-            seuil: Number(row.seuil ?? 0),
-            nombre_reappro: Number(produit?.entree_sortie?.nombre_fois ?? 0)
+            seuil: Number(row.seuil ?? 0)
           };
         });
 
@@ -334,20 +324,16 @@ export default function Boutique() {
             "Catégorie",
             "Prix Achat",
             "Cartons",
-            "Stock",
             "Seuil",
-            "État",
-            "Réappro"
+            "État"
           ]],
           body: pagePrintData.map((p) => [
             p.nom,
             p.categorie_nom,
             formatFCFA(p.prix_achat),
             p.nombre_carton,
-            p.quantite,
             p.seuil,
-            getEtat(p.quantite, p.seuil),
-            p.nombre_reappro,
+            getEtat(p.quantite, p.seuil)
           ]),
           headStyles: { fillColor: [71, 46, 173] },
           styles: { fontSize: 8 },
@@ -486,10 +472,8 @@ export default function Boutique() {
                 <th className="px-4 py-2 text-left">Catégorie</th>
                 <th className="px-4 py-2 text-center">Prix Achat</th>
                 <th className="px-4 py-2 text-center">Cartons</th>
-                <th className="px-4 py-2 text-center">Stock</th>
                 <th className="px-4 py-2 text-center">Seuil</th>
                 <th className="px-4 py-2 text-center">État</th>
-                <th className="px-4 py-2 text-center">Réappro</th>
                 <th className="px-4 py-2 text-center">Fiche</th>
               </tr>
             </thead>
@@ -508,14 +492,12 @@ export default function Boutique() {
                     </td>
                     <td className="px-4 py-2 text-center">{formatFCFA(p.prix_achat)}</td>
                     <td className="px-4 py-2 text-center">{p.nombre_carton}</td>
-                    <td className="px-4 py-2 text-center font-medium">{p.quantite}</td>
                     <td className="px-4 py-2 text-center">{p.seuil}</td>
                     <td className="px-4 py-2 text-center">
                       {etat === "rupture" && <AlertTriangle size={16} className="text-red-600 mx-auto" />}
                       {etat === "faible" && <AlertTriangle size={16} className="text-orange-500 mx-auto" />}
                       {etat === "ok" && <CheckCircle size={16} className="text-emerald-600 mx-auto" />}
                     </td>
-                    <td className="px-4 py-2 text-center">{p.nombre_reappro}</td>
                     <td className="px-4 py-2 text-center">
                       <button
                         onClick={() => afficherFiche(p)}
@@ -609,17 +591,6 @@ export default function Boutique() {
                         'bg-emerald-100 text-emerald-800'}`}>
                       {getEtat(selectedProduit.quantite, selectedProduit.seuil)}
                     </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Réapprovisionnement */}
-              <div className="border rounded-lg p-4">
-                <h4 className="font-semibold text-gray-700 mb-3">Réapprovisionnement</h4>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Nombre de fois:</span>
-                    <span className="font-medium">{selectedProduit.nombre_reappro}</span>
                   </div>
                 </div>
               </div>

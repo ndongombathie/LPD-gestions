@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -8,156 +8,126 @@ import Input from "../../../components/ui/Input.jsx";
 import Badge from "../../../components/ui/Badge.jsx";
 
 import { formatCurrency, formatDate } from "../../../utils/formatters.js";
+import journalCaisseAPI from "@/services/api/journalCaisse";
 
 /* =========================================================
-   ✅ FORMAT FCFA COMPATIBLE PDF (PAS DE CARACTÈRES BIZARRES)
+   FORMAT FCFA PDF SAFE
 ========================================================= */
-const formatFCFA_PDF = (value) => {
-  return (
-    Number(value || 0)
-      .toLocaleString("fr-FR")
-      .replace(/\s/g, ".") + " FCFA"
-  );
-};
+const formatFCFA_PDF = (value) =>
+  Number(value || 0)
+    .toLocaleString("fr-FR")
+    .replace(/\s/g, ".") + " FCFA";
 
 export default function JournalCaisse() {
+
+  /* ================== STATE ================== */
+
   const [selectedDate, setSelectedDate] = useState(
     new Date().toISOString().split("T")[0]
   );
-  const previousDateRef = useRef(selectedDate);
 
-  // ⚠️ Données simulées (API plus tard)
-  const [rapportsParDate, setRapportsParDate] = useState({
-    [selectedDate]: {
-      fond_ouverture: 50000,
-      total_encaissements: 245000,
-      total_decaissements: 15000,
-      solde_cloture: 280000,
-      cloture: true,
-      ventes_par_moyen: {
-        especes: 120000,
-        carte: 80000,
-        wave: 25000,
-        om: 20000,
-      },
-      tickets_encaisses: [],
-      decaissements: [],
-    },
-  });
+  const [rapport, setRapport] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-  const rapport = rapportsParDate[selectedDate] || null;
+  /* ================== FETCH API ================== */
 
-  // 🔄 Gestion changement de date
   useEffect(() => {
-    const prev = previousDateRef.current;
 
-    if (prev !== selectedDate) {
-      setRapportsParDate((prevState) => {
-        if (prevState[selectedDate]) return prevState;
+    const fetchJournal = async () => {
+      try {
+        setLoading(true);
 
-        return {
-          ...prevState,
-          [selectedDate]: {
-            fond_ouverture: 0,
-            total_encaissements: 0,
-            total_decaissements: 0,
-            solde_cloture: 0,
-            cloture: true,
-            ventes_par_moyen: {},
-            tickets_encaisses: [],
-            decaissements: [],
-          },
-        };
-      });
-    }
+        const data = await journalCaisseAPI.getJournalComplet(selectedDate);
 
-    previousDateRef.current = selectedDate;
+        const encaissement = Number(data?.totalEncaissement || 0);
+        const decaissement = Number(data?.totalDecaissement || 0);
+
+        setRapport({
+          fond_ouverture: 0,
+          total_encaissements: encaissement,
+          total_decaissements: decaissement,
+          solde_cloture: encaissement - decaissement,
+          cloture: true,
+          ventes_par_moyen: data?.ventesParMoyen || {},
+        });
+
+      } catch (error) {
+        console.error("Erreur journal caisse:", error);
+        setRapport(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchJournal();
+
   }, [selectedDate]);
 
-  /* =========================================================
-     🖨️ EXPORT PDF PRO (CORRIGÉ)
-  ========================================================= */
+  /* ================== EXPORT PDF PRO ================== */
+
   const handleExportPDF = () => {
+
     if (!rapport) return;
 
     const doc = new jsPDF("p", "mm", "a4");
-    let y = 15;
 
-    // TITRE
+    /* ===== HEADER LPD ===== */
+    doc.setFillColor(71, 46, 173);
+    doc.rect(0, 0, 210, 30, "F");
+
+    doc.setTextColor(255);
+    doc.setFontSize(24);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
+    doc.text("LPD", 105, 18, { align: "center" });
+
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(
+      "LIBRAIRIE PAPETERIE DARADJI",
+      105,
+      24,
+      { align: "center" }
+    );
+
+    doc.setTextColor(0);
+
+    let y = 40;
+
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
     doc.text("JOURNAL DE CAISSE — COMPTABLE", 14, y);
 
     y += 8;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(11);
-    doc.text(`Date : ${formatDate(selectedDate)}`, 14, y);
 
-    y += 6;
-    doc.text(
-      `Statut : ${rapport.cloture ? "Clôturé" : "En cours"}`,
-      14,
-      y
-    );
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Date : ${formatDate(selectedDate)}`, 14, y);
 
     y += 10;
 
-    // TABLEAU RÉSUMÉ
+    /* ===== TABLEAU ===== */
     autoTable(doc, {
       startY: y,
       head: [["Libellé", "Montant"]],
       body: [
-        ["Fond d'ouverture", formatFCFA_PDF(rapport.fond_ouverture)],
         ["Encaissements", formatFCFA_PDF(rapport.total_encaissements)],
         ["Décaissements", formatFCFA_PDF(rapport.total_decaissements)],
-        ["Solde de clôture", formatFCFA_PDF(rapport.solde_cloture)],
+        ["Solde", formatFCFA_PDF(rapport.solde_cloture)],
       ],
       headStyles: {
         fillColor: [71, 46, 173],
         textColor: 255,
-        halign: "center",
-      },
-      bodyStyles: {
-        fontSize: 11,
       },
       columnStyles: {
         0: { halign: "left" },
         1: { halign: "right" },
       },
+      styles: {
+        fontSize: 11,
+      },
     });
 
-    y = doc.lastAutoTable.finalY + 10;
-
-    // VENTES PAR MOYEN
-    if (Object.keys(rapport.ventes_par_moyen).length > 0) {
-      doc.setFont("helvetica", "bold");
-      doc.text("Ventes par moyen de paiement", 14, y);
-      y += 6;
-
-      autoTable(doc, {
-        startY: y,
-        head: [["Moyen de paiement", "Montant"]],
-        body: Object.entries(rapport.ventes_par_moyen).map(
-          ([moyen, montant]) => [
-            moyen.toUpperCase(),
-            formatFCFA_PDF(montant),
-          ]
-        ),
-        headStyles: {
-          fillColor: [40, 120, 180],
-          textColor: 255,
-        },
-        columnStyles: {
-          0: { halign: "left" },
-          1: { halign: "right" },
-        },
-        styles: {
-          fontSize: 11,
-        },
-      });
-    }
-
-    // PIED DE PAGE
+    /* ===== FOOTER ===== */
     doc.setFontSize(9);
     doc.setTextColor(120);
     doc.text(
@@ -169,20 +139,23 @@ export default function JournalCaisse() {
     doc.save(`Journal_Caisse_${selectedDate}.pdf`);
   };
 
+  /* ================== UI ================== */
+
   return (
     <div className="space-y-6 p-6">
+
       {/* HEADER */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+
         <div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-3xl font-bold text-[#472EAD]">
               Journal de caisse — Comptable
             </h1>
             {rapport?.cloture && <Badge variant="success">Clôturé</Badge>}
           </div>
           <p className="text-gray-600 mt-1">
-            Consultation des mouvements de caisse du{" "}
-            {formatDate(selectedDate)}
+            Consultation des mouvements du {formatDate(selectedDate)}
           </p>
         </div>
 
@@ -195,71 +168,73 @@ export default function JournalCaisse() {
           <Button
             variant="outline"
             onClick={handleExportPDF}
+            disabled={!rapport}
             className="border-2 border-[#472EAD] text-[#472EAD]"
           >
             Exporter PDF
           </Button>
         </div>
+
       </div>
 
-      {!rapport ? (
+      {/* LOADING */}
+      {loading && (
+        <Card>
+          <div className="text-center py-12 text-gray-500">
+            Chargement en cours...
+          </div>
+        </Card>
+      )}
+
+      {/* EMPTY */}
+      {!loading && !rapport && (
         <Card>
           <div className="text-center py-12 text-gray-500">
             Aucun rapport disponible
           </div>
         </Card>
-      ) : (
-        <>
-          {/* RÉSUMÉ */}
-          <Card>
-            <CardHeader title={`Résumé du ${formatDate(selectedDate)}`} />
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <Resume label="Fond d'ouverture" value={rapport.fond_ouverture} />
-              <Resume
-                label="Encaissements"
-                value={rapport.total_encaissements}
-                color="green"
-              />
-              <Resume
-                label="Décaissements"
-                value={rapport.total_decaissements}
-                color="red"
-              />
-              <Resume
-                label="Solde clôture"
-                value={rapport.solde_cloture}
-                color="orange"
-              />
-            </div>
-          </Card>
-
-          {/* VENTES PAR MOYEN */}
-          <Card>
-            <CardHeader title="Ventes par moyen de paiement" />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {Object.entries(rapport.ventes_par_moyen).map(
-                ([moyen, montant]) => (
-                  <div
-                    key={moyen}
-                    className="text-center p-4 bg-gray-50 rounded"
-                  >
-                    <p className="text-sm text-gray-600">{moyen}</p>
-                    <p className="font-bold">
-                      {formatCurrency(montant)}
-                    </p>
-                  </div>
-                )
-              )}
-            </div>
-          </Card>
-        </>
       )}
+
+      {/* CONTENT */}
+      {!loading && rapport && (
+        <Card>
+          <CardHeader title={`Résumé du ${formatDate(selectedDate)}`} />
+
+          {/* GRID RESPONSIVE FIXÉ */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
+
+            <Resume
+              label="Encaissements"
+              value={rapport.total_encaissements}
+              color="green"
+            />
+
+            <Resume
+              label="Décaissements"
+              value={rapport.total_decaissements}
+              color="red"
+            />
+
+            <Resume
+              label="Solde"
+              value={rapport.solde_cloture}
+              color="orange"
+            />
+
+          </div>
+        </Card>
+      )}
+
     </div>
   );
 }
 
-/* 🔹 Sous-composant résumé (HTML uniquement) */
+/* =========================================================
+   RESUME COMPONENT PROPRE ET STABLE
+========================================================= */
+
 function Resume({ label, value, color }) {
+
   const colors = {
     green: "text-green-600",
     red: "text-red-600",
@@ -267,9 +242,9 @@ function Resume({ label, value, color }) {
   };
 
   return (
-    <div className="text-center p-4 bg-gray-50 rounded">
+    <div className="w-full bg-gray-50 rounded-xl p-6 text-center shadow-sm">
       <p className="text-sm text-gray-600">{label}</p>
-      <p className={`text-2xl font-bold ${colors[color] || ""}`}>
+      <p className={`text-2xl font-bold mt-2 ${colors[color] || ""}`}>
         {formatCurrency(value)}
       </p>
     </div>
