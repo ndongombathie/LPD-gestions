@@ -72,7 +72,7 @@ GET            api/caissier/caisses-journals
 GET             api/caissier/caisses-journal-total-caisse
 
 # Total décaissements
-GET|HEAD        api/caissier/caisses-journal-total_decaissement
+GET|HEAD        api/caissier/caisses-journal-total-decaissement
 
 # Total encaissements
 GET|HEAD        api/caissier/caisses-journal-total-encaissement
