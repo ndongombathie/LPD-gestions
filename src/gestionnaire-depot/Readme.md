@@ -31,21 +31,8 @@ GET             api/produits_en_rupture | les produits en rupture de stock
 # endpoint pour reapprovisionner un produit
 POST            api/stocks/reapprovisionner    | donner en post le quantité et le produit_id
 
-
- # la liste de l'historique des actions
-GET     api/historique-actions
-
-# Reduction de stock d'un produit
-PUT     api/produits/{produit}/reduire-stock
-
-GET     api/fournisseurs | Liste des fournisseurs 
-
-# les transfert en attente
-GET     api/produits-transfer
-
-# annuler un tramsfert 
-PUT    api/annuler-produits-transfer | donner en payload (transfer_id) du transfert
-
+# la liste de l'historique des actions
+GET             api/historique-actions
 
 
 
