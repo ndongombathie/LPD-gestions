@@ -7,21 +7,16 @@
 import httpClient from '../http/client';
 
 const ENDPOINTS = {
-  // 🔁 Correction : le endpoint Laravel est '/mouvements-stock' (avec trait d'union)
   BASE: '/mouvements-stock',
 };
 
 export const mouvementsAPI = {
-  
   /**
-   * Récupère l'historique complet des mouvements
-   * @param {Object} params - Paramètres optionnels (date_debut, date_fin, type, produit_id, per_page)
+   * Récupère une page de mouvements (pagination gérée par le backend)
    */
   getAll: async (params = {}) => {
     try {
-      // Par défaut, on demande 1000 éléments pour éviter la pagination back-end
-      const defaultParams = { per_page: 1000, ...params };
-      const response = await httpClient.get(ENDPOINTS.BASE, { params: defaultParams });
+      const response = await httpClient.get(ENDPOINTS.BASE, { params });
       return response.data;
     } catch (error) {
       console.error('❌ Erreur getAll mouvements:', error);
@@ -30,8 +25,44 @@ export const mouvementsAPI = {
   },
 
   /**
-   * Crée un nouveau mouvement (Entrée/Sortie) – utilisé pour les réapprovisionnements/diminutions
-   * @param {Object} data - { produit_id, type, quantite, date, ... }
+   * Récupère TOUS les mouvements (parcourt automatiquement toutes les pages)
+   */
+  getAllPaginated: async (params = {}) => {
+    let page = 1;
+    let allData = [];
+    let lastPage = 1;
+
+    try {
+      do {
+        const response = await httpClient.get(ENDPOINTS.BASE, {
+          params: { ...params, page }
+        });
+        const result = response.data;
+        
+        if (result && result.data) {
+          allData = [...allData, ...result.data];
+          lastPage = result.last_page || 1;
+          page++;
+        } else if (Array.isArray(result)) {
+          allData = result;
+          break;
+        } else {
+          break;
+        }
+
+        // Sécurité : ne pas dépasser 50 pages
+        if (page > 50) break;
+      } while (page <= lastPage);
+
+      return allData;
+    } catch (error) {
+      console.error('❌ Erreur getAllPaginated mouvements:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Crée un nouveau mouvement (pour les entrées/sorties manuelles)
    */
   create: async (data) => {
     try {
