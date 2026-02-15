@@ -10,10 +10,8 @@ const safeNumber = (v) => {
 const safeString = (v) => (v ? String(v) : "");
 
 const historiqueInventaireAPI = {
-
   async getHistorique(params = {}) {
     try {
-
       const response = await httpClient.get(BASE_URL, { params });
 
       const raw = response?.data ?? {};
@@ -21,24 +19,14 @@ const historiqueInventaireAPI = {
 
       const items = data.map((h) => ({
         id: safeString(h?.id),
-        date: h?.date ?? h?.created_at ?? null,
-        quantite: safeNumber(h?.quantite),
-        prix_unitaire: safeNumber(h?.prix_unitaire),
-        montant: safeNumber(h?.montant),
-
-        vendeur: {
-          id: safeString(h?.vendeur?.id),
-          nom: safeString(h?.vendeur?.nom),
-          prenom: safeString(h?.vendeur?.prenom),
-          role: safeString(h?.vendeur?.role),
-          boutique_id: h?.vendeur?.boutique_id ?? null,
-        },
-
-        produit: {
-          id: safeString(h?.produit?.id),
-          nom: safeString(h?.produit?.nom),
-          code: safeString(h?.produit?.code),
-        },
+        type: safeString(h?.type),
+        date_debut: h?.date_debut ?? null,
+        date_fin: h?.date_fin ?? null,
+        date: h?.date ?? null,
+        prix_achat_total: safeNumber(h?.prix_achat_total),
+        prix_valeur_sortie_total: safeNumber(h?.prix_valeur_sortie_total),
+        valeur_estimee_total: safeNumber(h?.valeur_estimee_total),
+        benefice_total: safeNumber(h?.benefice_total),
       }));
 
       return {
@@ -52,9 +40,7 @@ const historiqueInventaireAPI = {
           prevPageUrl: raw?.prev_page_url ?? null,
         },
       };
-
     } catch (error) {
-
       console.error("❌ Erreur GET historique inventaire :", error);
 
       return {
@@ -68,7 +54,6 @@ const historiqueInventaireAPI = {
       };
     }
   },
-
 };
 
 export default historiqueInventaireAPI;

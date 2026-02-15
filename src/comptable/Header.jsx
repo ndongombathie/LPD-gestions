@@ -1,12 +1,11 @@
 // ==========================================================
-// 🔝 HeaderComptable.jsx — Comptable LPD (AVEC NOTIFICATIONS)
-// DESIGN IDENTIQUE AU GESTIONNAIRE
+// 🔝 HeaderComptable.jsx — VERSION PRO SANS NOTIFICATIONS
+// CLEAN • STABLE • PRODUCTION READY
 // ==========================================================
 
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Bell,
   ChevronDown,
   LogOut,
   Key,
@@ -48,7 +47,7 @@ function PasswordModal({ open, onClose, changePassword }) {
       alert("Mot de passe modifié avec succès");
       onClose();
     } catch (error) {
-      console.error("[HeaderComptable] Erreur changement mot de passe :", error);
+      console.error("Erreur changement mot de passe :", error);
       alert("Erreur lors du changement de mot de passe");
     }
   };
@@ -126,42 +125,21 @@ export default function HeaderComptable() {
   const { user, logout, changePassword } = useAuth();
 
   const menuRef = useRef(null);
-  const notifRef = useRef(null);
 
   const [showMenu, setShowMenu] = useState(false);
   const [showPwdModal, setShowPwdModal] = useState(false);
-  const [showNotif, setShowNotif] = useState(false);
-  const [notifications, setNotifications] = useState([]);
 
-  useEffect(() => {
-    try {
-      const data =
-        JSON.parse(
-          sessionStorage.getItem("notificationsComptable")
-        ) || [
-          { id: 1, text: "Nouvelle demande de décaissement (Boutique)" },
-          { id: 2, text: "Vente spéciale validée (Dépôt)" },
-        ];
-      setNotifications(data);
-    } catch (error) {
-      console.error("[HeaderComptable] Erreur chargement notifications :", error);
-    }
-  }, []);
-
+  // Fermeture menu si clic extérieur
   useEffect(() => {
     const handler = (e) => {
-      if (
-        !menuRef.current?.contains(e.target) &&
-        !notifRef.current?.contains(e.target)
-      ) {
+      if (!menuRef.current?.contains(e.target)) {
         setShowMenu(false);
-        setShowNotif(false);
       }
     };
 
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [navigate]);
+  }, []);
 
   if (!user) return null;
 
@@ -181,93 +159,51 @@ export default function HeaderComptable() {
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
-          {/* NOTIFICATIONS */}
-          <div className="relative" ref={notifRef}>
-            <button
-              onClick={() => setShowNotif(!showNotif)}
-              className="relative p-2 rounded-full hover:bg-gray-100"
-            >
-              <Bell size={20} />
-              {notifications.length > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs px-1.5 rounded-full">
-                  {notifications.length}
-                </span>
-              )}
-            </button>
+        {/* USER MENU */}
+        <div className="relative" ref={menuRef}>
+          <button
+            onClick={() => setShowMenu(!showMenu)}
+            className="flex items-center gap-3 border rounded-full px-3 py-1.5"
+          >
+            <div className="w-8 h-8 rounded-full bg-[#472EAD] text-white flex items-center justify-center">
+              {getInitials(user.prenom, user.nom)}
+            </div>
 
-            <AnimatePresence>
-              {showNotif && (
-                <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-lg p-3 z-50">
-                  <h4 className="font-semibold mb-2 text-[#472EAD]">
-                    Notifications
-                  </h4>
+            <div className="hidden sm:block text-left">
+              <p className="text-sm font-semibold">
+                {user.prenom} {user.nom}
+              </p>
+              <p className="text-xs text-gray-500">{user.role}</p>
+            </div>
 
-                  {notifications.length === 0 ? (
-                    <p className="text-sm text-gray-500">Aucune alerte</p>
-                  ) : (
-                    <ul className="space-y-2">
-                      {notifications.map((n) => (
-                        <li
-                          key={n.id}
-                          className="text-sm p-2 rounded bg-gray-50"
-                        >
-                          {n.text}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
-            </AnimatePresence>
-          </div>
+            <ChevronDown size={14} />
+          </button>
 
-          {/* USER MENU */}
-          <div className="relative" ref={menuRef}>
-            <button
-              onClick={() => setShowMenu(!showMenu)}
-              className="flex items-center gap-3 border rounded-full px-3 py-1.5"
-            >
-              <div className="w-8 h-8 rounded-full bg-[#472EAD] text-white flex items-center justify-center">
-                {getInitials(user.prenom, user.nom)}
+          <AnimatePresence>
+            {showMenu && (
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg p-2">
+                <button
+                  onClick={() => {
+                    setShowPwdModal(true);
+                    setShowMenu(false);
+                  }}
+                  className="w-full px-3 py-2 text-sm hover:bg-gray-50 flex gap-2"
+                >
+                  <Key size={14} /> Changer mot de passe
+                </button>
+
+                <button
+                  onClick={() => {
+                    logout();
+                    navigate("/login");
+                  }}
+                  className="w-full px-3 py-2 text-sm hover:bg-gray-50 text-[#F58020] flex gap-2"
+                >
+                  <LogOut size={14} /> Déconnexion
+                </button>
               </div>
-
-              <div className="hidden sm:block text-left">
-                <p className="text-sm font-semibold">
-                  {user.prenom} {user.nom}
-                </p>
-                <p className="text-xs text-gray-500">{user.role}</p>
-              </div>
-
-              <ChevronDown size={14} />
-            </button>
-
-            <AnimatePresence>
-              {showMenu && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg p-2">
-                  <button
-                    onClick={() => {
-                      setShowPwdModal(true);
-                      setShowMenu(false);
-                    }}
-                    className="w-full px-3 py-2 text-sm hover:bg-gray-50 flex gap-2"
-                  >
-                    <Key size={14} /> Changer mot de passe
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      logout();
-                      navigate("/login");
-                    }}
-                    className="w-full px-3 py-2 text-sm hover:bg-gray-50 text-[#F58020] flex gap-2"
-                  >
-                    <LogOut size={14} /> Déconnexion
-                  </button>
-                </div>
-              )}
-            </AnimatePresence>
-          </div>
+            )}
+          </AnimatePresence>
         </div>
       </header>
 
