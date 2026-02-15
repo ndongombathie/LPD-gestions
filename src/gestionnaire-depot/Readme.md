@@ -37,7 +37,7 @@ PUT     api/produits/{produit}/reduire-stock
 GET     api/fournisseurs | Liste des fournisseurs 
 
 # annuler un tramsfert 
-POST    api/stocks/transfer/annuler | donner en payload (produit_id) du transfert
+PUT    api/annuler-produits-transfer | donner en payload (transfer_id) du transfert
 
 
 
