@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { FileText, Filter, Download, Eye } from "lucide-react";
 import DataTable from "../components/DataTable";
+import Pagination from "../components/Pagination";
 import LoadingSpinner from "../components/LoadingSpinner";
 import EmptyState from "../components/EmptyState";
 import { gestionnaireBoutiqueAPI } from "@/services/api";
@@ -11,6 +12,8 @@ const Historique = () => {
   const [loading, setLoading] = useState(true);
   const [filtreAction, setFiltreAction] = useState("Tous");
   const [detailEntry, setDetailEntry] = useState(null);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState(null);
 
   const actions = ["Tous", "Transfert reçu", "Produit validé", "Produit modifié", "Produit supprimé"];
 
@@ -22,8 +25,8 @@ const Historique = () => {
         
         // Utiliser Promise.allSettled pour mieux gérer les erreurs
         const results = await Promise.allSettled([
-          gestionnaireBoutiqueAPI.getProduitsTransfer(),
-          gestionnaireBoutiqueAPI.getTransfertsValides(),
+          gestionnaireBoutiqueAPI.getProduitsTransfer(page),
+          gestionnaireBoutiqueAPI.getTransfertsValides(page),
         ]);
         
         if (!mounted) return;
@@ -62,6 +65,7 @@ const Historique = () => {
         
         const merged = [...mapPending, ...mapValides].sort((a, b) => new Date(b.date) - new Date(a.date));
         setHistorique(merged);
+        setPagination(pendingData);
       } catch (error) {
         console.error('❌ Erreur chargement historique:', error);
         toast.error('Erreur de chargement', { description: "Impossible de charger l'historique" });
@@ -71,7 +75,13 @@ const Historique = () => {
     };
     load();
     return () => { mounted = false; };
-  }, []);
+  }, [page]);
+
+  const handlePageChange = (nextPage) => {
+    if (nextPage && nextPage !== page) {
+      setPage(nextPage);
+    }
+  };
 
   const historiqueFiltres = historique.filter((h) =>
     filtreAction === "Tous" || h.action === filtreAction
@@ -250,6 +260,7 @@ const Historique = () => {
               ]}
             />
           )}
+          <Pagination pagination={pagination} onPageChange={handlePageChange} />
         </div>
 
 

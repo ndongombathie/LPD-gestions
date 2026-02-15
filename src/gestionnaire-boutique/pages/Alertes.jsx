@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { AlertTriangle, RefreshCw, Eye } from "lucide-react";
 import DataTable from "../components/DataTable";
+import Pagination from "../components/Pagination";
 import LoadingSpinner from "../components/LoadingSpinner";
 import EmptyState from "../components/EmptyState";
 import { gestionnaireBoutiqueAPI } from "@/services/api";
@@ -9,14 +10,17 @@ import { toast } from "sonner";
 const Alertes = () => {
   const [alertes, setAlertes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState(null);
   const [produitDetail, setProduitDetail] = useState(null);
 
-  const loadAlertes = async () => {
+  const loadAlertes = async (pageNumber = page) => {
     try {
       setLoading(true);
-      const produitsSousSeuilData = await gestionnaireBoutiqueAPI.getProduitsSousSeuil();
+      const produitsSousSeuilData = await gestionnaireBoutiqueAPI.getProduitsSousSeuil(pageNumber);
       const produits = produitsSousSeuilData?.data || [];
       setAlertes(Array.isArray(produits) ? produits : []);
+      setPagination(produitsSousSeuilData);
     } catch (error) {
       console.error('❌ Erreur chargement alertes:', error);
       toast.error('Erreur de chargement', {
@@ -28,8 +32,14 @@ const Alertes = () => {
   };
 
   useEffect(() => {
-    loadAlertes();
-  }, []);
+    loadAlertes(page);
+  }, [page]);
+
+  const handlePageChange = (nextPage) => {
+    if (nextPage && nextPage !== page) {
+      setPage(nextPage);
+    }
+  };
 
   const handleView = (row) => setProduitDetail(row);
 
@@ -62,6 +72,7 @@ const Alertes = () => {
               ]}
             />
           )}
+          <Pagination pagination={pagination} onPageChange={handlePageChange} />
         </div>
 
         {/* Modal création supprimé (non supporté via API) */}

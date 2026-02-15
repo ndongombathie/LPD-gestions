@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Search, Eye, Filter, BarChart3 } from "lucide-react";
 import CardStat from "../components/CardStat";
 import DataTable from "../components/DataTable";
+import Pagination from "../components/Pagination";
 import LoadingSpinner from "../components/LoadingSpinner";
 import EmptyState from "../components/EmptyState";
 import { gestionnaireBoutiqueAPI } from "@/services/api";
@@ -16,6 +17,8 @@ const Stock = () => {
   const [nombreProduits, setNombreProduits] = useState(0);
   const [quantiteTotale, setQuantiteTotale] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState(null);
 
   // Stats
   const stats = {
@@ -36,7 +39,7 @@ const Stock = () => {
           gestionnaireBoutiqueAPI.getNombreProduitsTotal(),
           gestionnaireBoutiqueAPI.getQuantiteTotaleProduit(),
           gestionnaireBoutiqueAPI.getProduitsSousSeuil(),
-          gestionnaireBoutiqueAPI.getProduitsDisponiblesBoutique(),
+          gestionnaireBoutiqueAPI.getProduitsDisponiblesBoutique(page),
         ]);
         if (!mounted) return;
         
@@ -65,6 +68,7 @@ const Stock = () => {
         console.log('📦 Produits extraits:', produitsData.length, 'produits');
         console.log('📦 Premier produit:', produitsData[0]);
         setProduits(produitsData);
+        setPagination(produitsDispo);
       } catch (error) {
         console.error('❌ Erreur chargement stock:', error);
         toast.error('Erreur de chargement', { description: 'Impossible de charger les informations de stock' });
@@ -74,7 +78,13 @@ const Stock = () => {
     };
     load();
     return () => { mounted = false; };
-  }, []);
+  }, [page]);
+
+  const handlePageChange = (nextPage) => {
+    if (nextPage && nextPage !== page) {
+      setPage(nextPage);
+    }
+  };
 
   const stocksFiltres = produits.filter(s => {
     const q = recherche.trim().toLowerCase();
@@ -163,6 +173,7 @@ const Stock = () => {
               onRowClick={(row) => setProduitDetail(row)}
             />
           )}
+          <Pagination pagination={pagination} onPageChange={handlePageChange} />
         </div>
 
         {/* Modal Détails */}

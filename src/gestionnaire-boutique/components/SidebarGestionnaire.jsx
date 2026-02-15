@@ -21,7 +21,7 @@ export default function SidebarGestionnaire() {
     { name: "Produits", icon: Package, path: "/gestionnaire_boutique/produits" },
     { name: "Stock", icon: ClipboardList, path: "/gestionnaire_boutique/stock" },
     { name: "Alertes", icon: AlertTriangle, path: "/gestionnaire_boutique/alertes" },
-    { name: "Rapports", icon: FileText, path: "/gestionnaire_boutique/rapports" },
+    //{ name: "Rapports", icon: FileText, path: "/gestionnaire_boutique/rapports" },
     { name: "Historiques", icon: RefreshCw, path: "/gestionnaire_boutique/historique" },
 
   ];

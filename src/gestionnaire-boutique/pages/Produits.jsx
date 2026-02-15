@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Eye, Check, AlertCircle, CheckCircle2, AlertTriangle } from "lucide-react";
 import DataTable from "../components/DataTable";
+import Pagination from "../components/Pagination";
 import LoadingSpinner from "../components/LoadingSpinner";
 import EmptyState from "../components/EmptyState";
 import { gestionnaireBoutiqueAPI } from "@/services/api";
@@ -8,8 +9,11 @@ import { toast } from "sonner";
 
 const Produits = () => {
   const [transferts, setTransferts] = useState([]);
+  const [transfertsEnAttente, setTransfertsEnAttente] = useState(0);
   const [transfertsValides, setTransfertsValides] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [pendingPage, setPendingPage] = useState(1);
+  const [pendingPagination, setPendingPagination] = useState(null);
   const [validating, setValidating] = useState(false);
   
   const [selectedTransfert, setSelectedTransfert] = useState(null);
@@ -23,11 +27,11 @@ const Produits = () => {
     seuil: "",
   });
 
-  const loadTransferts = async () => {
+  const loadTransferts = async (page = pendingPage) => {
     try {
       setLoading(true);
       const [produitsTransferData, transfertsValidesData, produitsDispoData] = await Promise.all([
-        gestionnaireBoutiqueAPI.getProduitsTransfer(),
+        gestionnaireBoutiqueAPI.getProduitsTransfer(page),
         gestionnaireBoutiqueAPI.getTransfertsValides(),
         gestionnaireBoutiqueAPI.getProduitsDisponiblesBoutique()
       ]);
@@ -44,6 +48,8 @@ const Produits = () => {
       });
 
       setTransferts((produitsTransferData?.data || []).map(enrich));
+      setTransfertsEnAttente(produitsTransferData?.total || 0);
+      setPendingPagination(produitsTransferData);
       setTransfertsValides((transfertsValidesData?.data || []).map(enrich));
     } catch (error) {
       console.error('❌ Erreur chargement transferts:', error);
@@ -56,8 +62,14 @@ const Produits = () => {
   };
 
   useEffect(() => {
-    loadTransferts();
-  }, []);
+    loadTransferts(pendingPage);
+  }, [pendingPage]);
+
+  const handlePendingPageChange = (page) => {
+    if (page && page !== pendingPage) {
+      setPendingPage(page);
+    }
+  };
 
   const openCompletionModal = (transfert) => {
     setSelectedTransfert(transfert);
@@ -124,7 +136,7 @@ const Produits = () => {
         <div>
           <div className="flex items-center gap-2 mb-4">
             <AlertTriangle className="text-[#F58020]" size={24} />
-            <h3 className="text-xl font-semibold text-[#111827]">En attente de complétion ({transferts.length})</h3>
+            <h3 className="text-xl font-semibold text-[#111827]">En attente de complétion ({transfertsEnAttente})</h3>
           </div>
           <div className="bg-white rounded-lg shadow p-4 overflow-auto">
             {loading ? (
@@ -153,6 +165,7 @@ const Produits = () => {
                 ]}
               />
             )}
+            <Pagination pagination={pendingPagination} onPageChange={handlePendingPageChange} />
           </div>
         </div>
 

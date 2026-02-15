@@ -19,9 +19,9 @@ import httpClient from '../http/client';
  * Récupère la liste des produits transférés par le gestionnaire de dépôt
  * @returns {Promise<Object>} Données paginées avec structure Laravel
  */
-export const getProduitsTransfer = async () => {
+export const getProduitsTransfer = async (page = 1) => {
   try {
-    const response = await httpClient.get('/produits-transfer');
+    const response = await httpClient.get('/produits-transfer', { params: { page } });
     return response.data;
   } catch (error) {
     console.error('❌ Erreur getProduitsTransfer:', error);
@@ -58,9 +58,9 @@ export const validerProduitTransfer = async (data) => {
  * Récupère la liste des produits en sous-seuil (paginée)
  * @returns {Promise<Object>} Données paginées avec structure Laravel
  */
-export const getProduitsSousSeuil = async () => {
+export const getProduitsSousSeuil = async (page = 1) => {
   try {
-    const response = await httpClient.get('/produits-sous-seuil');
+    const response = await httpClient.get('/produits-sous-seuil', { params: { page } });
     // Le backend retourne {current_page, data: [], total, per_page, ...}
     return response.data;
   } catch (error) {
@@ -115,9 +115,9 @@ export const getQuantiteTotaleProduit = async () => {
  * Récupère la liste des transferts validés
  * @returns {Promise<Object>} Données paginées des transferts validés
  */
-export const getTransfertsValides = async () => {
+export const getTransfertsValides = async (page = 1) => {
   try {
-    const response = await httpClient.get('/transfers/valide');
+    const response = await httpClient.get('/transfers/valide', { params: { page } });
     // Le backend retourne directement un array: [...]
     // On le normalise en structure paginée pour compatibilité
     if (Array.isArray(response.data)) {
@@ -144,9 +144,9 @@ export const getTransfertsValides = async () => {
  * Récupère la liste des produits disponibles dans la boutique
  * @returns {Promise<Array>} Liste des produits disponibles
  */
-export const getProduitsDisponiblesBoutique = async () => {
+export const getProduitsDisponiblesBoutique = async (page = 1) => {
   try {
-    const response = await httpClient.get('/produits-disponibles-boutique');
+    const response = await httpClient.get('/produits-disponibles-boutique', { params: { page } });
     return response.data;
   } catch (error) {
     console.error('❌ Erreur getProduitsDisponiblesBoutique:', error);

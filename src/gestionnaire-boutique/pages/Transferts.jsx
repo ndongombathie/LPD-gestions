@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Plus, Search, FileText, Trash2, X, Eye } from "lucide-react";
 import CardStat from "../components/CardStat";
 import DataTable from "../components/DataTable";
+import Pagination from "../components/Pagination";
 import LoadingSpinner from "../components/LoadingSpinner";
 import EmptyState from "../components/EmptyState";
 import { gestionnaireBoutiqueAPI } from "@/services/api";
@@ -15,6 +16,8 @@ const Transferts = () => {
   const [detailTransfert, setDetailTransfert] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState(null);
 
   useEffect(() => {
     let mounted = true;
@@ -22,8 +25,8 @@ const Transferts = () => {
       try {
         setLoading(true);
         const [pending, valides] = await Promise.all([
-          gestionnaireBoutiqueAPI.getProduitsTransfer(),
-          gestionnaireBoutiqueAPI.getTransfertsValides(),
+          gestionnaireBoutiqueAPI.getProduitsTransfer(page),
+          gestionnaireBoutiqueAPI.getTransfertsValides(page),
         ]);
         if (!mounted) return;
         // Harmoniser structure pour l'affichage
@@ -42,6 +45,7 @@ const Transferts = () => {
         const pendingRows = Array.isArray(pending?.data) ? pending.data.map(mapItem) : [];
         const validesRows = Array.isArray(valides?.data) ? valides.data.map((x) => ({ ...mapItem(x), statut: 'validé' })) : [];
         setTransferts([...pendingRows, ...validesRows]);
+        setPagination(pending);
       } catch (error) {
         console.error('❌ Erreur chargement transferts:', error);
         toast.error('Erreur de chargement', { description: 'Impossible de charger les transferts' });
@@ -51,7 +55,13 @@ const Transferts = () => {
     };
     load();
     return () => { mounted = false; };
-  }, []);
+  }, [page]);
+
+  const handlePageChange = (nextPage) => {
+    if (nextPage && nextPage !== page) {
+      setPage(nextPage);
+    }
+  };
 
   const transfertsFiltres = transferts.filter(
     (t) => {
@@ -141,6 +151,7 @@ const Transferts = () => {
               onRowClick={(row) => setDetailTransfert(row)}
             />
           )}
+          <Pagination pagination={pagination} onPageChange={handlePageChange} />
         </div>
 
         {/* Modal création */}
