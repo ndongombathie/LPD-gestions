@@ -28,12 +28,13 @@ const Dashboard = () => {
           gestionnaireBoutiqueAPI.getStatistiquesBoutique(),
           gestionnaireBoutiqueAPI.getProduitsTransfer(),
           gestionnaireBoutiqueAPI.getTransfertsValides(),
-          gestionnaireBoutiqueAPI.getProduitsSousSeuil()
+          gestionnaireBoutiqueAPI.getProduitsSousSeuil(),
+          gestionnaireBoutiqueAPI.getNombreProduitsTotal()
         ]);
         
         if (!mounted) return;
         
-        const [statsResult, produitsTransferResult, transfertsValidesResult, produitsSousSeuilResult] = results;
+        const [statsResult, produitsTransferResult, transfertsValidesResult, produitsSousSeuilResult, nombreProduitsTotalResult] = results;
         
         const statsData = statsResult.status === 'fulfilled' ? statsResult.value : {
           nombreProduits: 0,
@@ -45,9 +46,10 @@ const Dashboard = () => {
         const produitsTransferData = produitsTransferResult.status === 'fulfilled' ? produitsTransferResult.value : { data: [], total: 0 };
         const transfertsValidesData = transfertsValidesResult.status === 'fulfilled' ? transfertsValidesResult.value : { data: [], total: 0 };
         const produitsSousSeuilData = produitsSousSeuilResult.status === 'fulfilled' ? produitsSousSeuilResult.value : { data: [] };
+        const nombreProduitsTotal = nombreProduitsTotalResult.status === 'fulfilled' ? nombreProduitsTotalResult.value : { total: 0 };
         
         setStats({
-          nombreProduits: parseInt(statsData.nombreProduits) || 0,
+          nombreProduits: parseInt(nombreProduitsTotal.total) || 0,
           quantiteTotale: parseInt(statsData.quantiteTotale) || 0,
           produitsSousSeuil: parseInt(statsData.produitsSousSeuil) || 0,
           transfertsEnAttente: produitsTransferData?.total || produitsTransferData?.data?.length || 0,

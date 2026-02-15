@@ -217,6 +217,20 @@ export const getStatistiquesBoutique = async () => {
   }
 };
 
+export const getProduitsRupture = async () => {
+  try {
+    const response = await httpClient.get('/produits-rupture');
+    return response.data;
+  } catch (error) {
+    console.error('❌ Erreur getProduitsRupture:', error);
+    if (error.code === 'ECONNABORTED' || error.response?.status === 401 || error.response?.status === 404) {
+      console.warn('⚠️ MODE DÉGRADÉ activé pour produits-rupture');
+      return { current_page: 1, data: [], last_page: 1, total: 0, per_page: 20 };
+    }
+    throw error;
+  }
+}
+
 export default {
   getProduitsTransfer,
   validerProduitTransfer,
@@ -226,5 +240,6 @@ export default {
   getTransfertsValides,
   getProduitsDisponiblesBoutique,
   getMontantTotalStock,
-  getStatistiquesBoutique
+  getStatistiquesBoutique,
+  getProduitsRupture
 };

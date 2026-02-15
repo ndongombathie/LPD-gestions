@@ -37,21 +37,13 @@
 | **DELETE** | `/api/uilisateurs/{uilisateur}` | Supprime un utilisateur |
 
 
-## 6️⃣ Fournisseurs — CRUD complet
-
-| Méthode | Endpoint | Description |
-|----------|-----------|-------------|
-| **GET** | `/api/fournisseurs` | Liste des fournisseurs |
-| **POST** | `/api/fournisseurs` | Ajoute un nouveau fournisseur |
-| **GET** | `/api/fournisseurs/{fournisseur}` | Détails d’un fournisseur |
-| **PUT** | `/api/fournisseurs/{fournisseur}` | Met à jour un fournisseur |
-| **DELETE** | `/api/fournisseurs/{fournisseur}` | Supprime un fournisseur |
 
 # Endpoint pour l'inventaire du boutique
 GET|HEAD        api/inventaires-boutique | affiche l'inventaire des produits du boutique
 
 # historique des ventes 
 GET           api/historique-ventes  | afficher la liste de l'historique des ventes on appliquer des filtre aussi
+
 GET           api/total-vente-par-jour | la vente journalier
 
 # liste des produits du depot et leurs informations
@@ -60,5 +52,50 @@ GET           api/produits            | affiche les produits du depot et leurs e
 # liste des produits du boutique et leurs informations
 GET           api/produits-controle   | affiche les produits du boutique et leurs etat de stock
 
+# les des produitd du depots et leurs informations
+GET           api/produits-controle-depots
+
 # reitialiser un mot de passe puis envoyer un mail
 POST          api/utilisateurs/{utilisateur_id}/reset-password
+
+# inventaire depot 
+GET          api/mouvements-stock/inventaire-depot  
+
+# vous aussi pouvez filtrer pa date_debut et date_fin
+# les journals caissier 
+GET            api/caissier/caisses-journals
+
+
+# les statistiques sur le dasboard jopurnal caisse vous aussi pouvez filtrer pa date_debut et date_fin
+
+# Total des caisses
+GET             api/caissier/caisses-journal-total-caisse
+
+# Total décaissements
+GET|HEAD        api/caissier/caisses-journal-total-decaissement
+
+# Total encaissements
+GET|HEAD        api/caissier/caisses-journal-total-encaissement
+
+# controle vendeur 
+GET     api/commandes-payees
+
+# Enregistrer inventaire de depot
+GET    api/enregistrer-inventaire-depot | en donnant les deux intevalle de dates
+
+# Enregistrer inventaire de boutique
+GET    api/enregistrer-inventaire-boutique | en donnant les deux intevalle de dates
+
+# historiques des inventaires
+GET   api/historique-inventaires   | afficher historiques des inventaires
+
+# les mouvement de stock pour un produit donnee pour le deopt
+GET api/mouvements-stock/{produit_id} | afficher les mouvement de stock d'un produit donnee dans le deopt.
+
+# les mouvement de stock pour un produit donnee pour le boutique
+GET api/mouvement-stock-boutique/{id} | afficher les mouvement de stock d'un produit donnee dans le boutique.
+
+
+GET|HEAD        api/enregistrer-versements | historiques des encaissements
+
+POST            api/enregistrer-versements | enregistrer un encaissement payload(caissier_id,montant,observation,la date(optionel))

@@ -14,6 +14,7 @@ const Stock = () => {
   const [produitDetail, setProduitDetail] = useState(null);
   const [produits, setProduits] = useState([]); // Produits validés
   const [stocksFaibles, setStocksFaibles] = useState([]); // Produits sous seuil
+  const [produitsRupture, setProduitsRupture] = useState([]); // Produits en rupture
   const [nombreProduits, setNombreProduits] = useState(0);
   const [quantiteTotale, setQuantiteTotale] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -25,7 +26,7 @@ const Stock = () => {
     totalProduits: nombreProduits,
     totalQuantite: quantiteTotale,
     faible: stocksFaibles.length,
-    horsAlerte: Math.max(nombreProduits - stocksFaibles.length, 0),
+    rupture: produitsRupture.length,
   };
 
   const categories = ["Toutes", ...new Set(produits.map(p => p.categorie).filter(Boolean))];
@@ -35,10 +36,11 @@ const Stock = () => {
     const load = async () => {
       try {
         setLoading(true);
-        const [nb, qty, sousSeuil, produitsDispo] = await Promise.all([
+        const [nb, qty, sousSeuil, rupture, produitsDispo] = await Promise.all([
           gestionnaireBoutiqueAPI.getNombreProduitsTotal(),
           gestionnaireBoutiqueAPI.getQuantiteTotaleProduit(),
           gestionnaireBoutiqueAPI.getProduitsSousSeuil(),
+          gestionnaireBoutiqueAPI.getProduitsRupture(),
           gestionnaireBoutiqueAPI.getProduitsDisponiblesBoutique(page),
         ]);
         if (!mounted) return;
@@ -49,6 +51,7 @@ const Stock = () => {
         setNombreProduits(nbValue);
         setQuantiteTotale(qtyValue);
         setStocksFaibles(sousSeuil?.data || []);
+        setProduitsRupture(rupture?.data || []);
         
         // Extraire les produits depuis la réponse paginée ou array direct
         console.log('📦 Produits disponibles boutique - structure:', produitsDispo);
@@ -113,8 +116,8 @@ const Stock = () => {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <CardStat title="Nombre de produits" value={stats.totalProduits} color="bg-[#472EAD]" />
           <CardStat title="Quantité totale" value={stats.totalQuantite.toLocaleString("fr-FR")} color="bg-blue-600" subtitle="unités (globale)" />
-          <CardStat title="Hors alerte" value={stats.horsAlerte} color="bg-green-600" />
-          <CardStat title="Stock faible" value={stats.faible} color="bg-[#F58020]" />
+          <CardStat title="Produits en rupture" value={stats.rupture} color="bg-red-600" />
+          <CardStat title="Produits sous seuil" value={stats.faible} color="bg-[#F58020]" />
         </div>
 
         {/* Recherche et filtres */}
