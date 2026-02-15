@@ -1,6 +1,7 @@
 // src/gestionnaire-depot/pages/Suppliers.jsx
-import React, { useState, useEffect, useMemo } from "react";
-import { fournisseursAPI } from "../../services/api/fournisseurs"; // ← IMPORT DU SERVICE
+import React, { useState, useMemo } from "react";
+// MODIFICATION: on garde l'import de l'API pour d'éventuelles actions futures, mais on ne l'utilise pas dans ce fichier
+// import { fournisseursAPI } from "../../services/api/fournisseurs";
 import "../styles/depot-fix.css";
 import { 
   Package, User, Phone, Store, Search as SearchIcon, 
@@ -8,8 +9,11 @@ import {
   Loader 
 } from "lucide-react";
 
+// MODIFICATION: import du contexte
+import { useStock } from "./StockContext";
+
 /* =========================================================================
-   AVATAR GÉNÉRÉ AUTOMATIQUEMENT
+   AVATAR GÉNÉRÉ AUTOMATIQUEMENT (inchangé)
    ========================================================================= */
 const generateAvatar = (name) => {
   const initials = name
@@ -35,10 +39,12 @@ const generateAvatar = (name) => {
    PAGE PRINCIPALE
    ========================================================================= */
 export default function Suppliers() {
-  // États pour les données API
-  const [suppliers, setSuppliers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  // MODIFICATION: récupération des fournisseurs depuis le contexte
+  const { fournisseurs: contextFournisseurs, loading: contextLoading } = useStock();
+
+  // MODIFICATION: plus d'états pour fournisseurs, loading, error
+  // On garde un état d'erreur local pour les actions futures (optionnel)
+  const [localError, setLocalError] = useState(null);
 
   // État pour la pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -51,62 +57,22 @@ export default function Suppliers() {
   const [selectedSupplier, setSelectedSupplier] = useState(null);
 
   // -----------------------------------------------------------------------
-  // 1. CHARGEMENT DES DONNÉES AVEC LE SERVICE API EXISTANT
+  // 1. FORMATAGE DES DONNÉES DES FOURNISSEURS (à partir du contexte)
   // -----------------------------------------------------------------------
-  useEffect(() => {
-    const fetchSuppliers = async () => {
-      try {
-        setLoading(true);
-        
-        // Appel via le service déjà configuré
-        const data = await fournisseursAPI.getAll();
-        console.log("📦 Données brutes de l'API :", data);
-
-        // Adapter la structure selon ce que renvoie réellement le backend
-        // Par défaut, on suppose que data est un tableau
-        let suppliersArray = data;
-
-        // Si ce n'est pas un tableau, on regarde les propriétés courantes
-        if (data && !Array.isArray(data)) {
-          if (Array.isArray(data.data)) suppliersArray = data.data;
-          else if (Array.isArray(data.results)) suppliersArray = data.results;
-          else if (Array.isArray(data.fournisseurs)) suppliersArray = data.fournisseurs;
-          else if (Array.isArray(data.items)) suppliersArray = data.items;
-          else {
-            console.warn("⚠️ Structure de données non reconnue :", data);
-            suppliersArray = [];
-          }
-        }
-
-        if (!Array.isArray(suppliersArray)) {
-          throw new Error("Les données reçues ne sont pas un tableau");
-        }
-
-        // Mapping vers le format attendu par le tableau et la modale
-        const formattedSuppliers = suppliersArray.map((item) => ({
-          id: item.id,
-          name: item.name || item.nom || "Nom inconnu",
-          email: item.email || "",
-          contact: item.contactName || item.contact || "",
-          phone: item.phone || "",
-          products: item.products || item.produits || "",
-          delay: item.deliveryDelay || item.delai || "",
-          orders: item.ordersCount ? `${item.ordersCount} commandes` : "0 commande",
-          status: item.status || "Actif",
-        }));
-
-        setSuppliers(formattedSuppliers);
-        setError(null);
-      } catch (err) {
-        console.error("❌ Erreur lors du chargement des fournisseurs :", err);
-        setError("Impossible de charger la liste des fournisseurs.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchSuppliers();
-  }, []); // ← pas de dépendances, exécuté au montage
+  const suppliers = useMemo(() => {
+    // On applique le même mapping que dans le code original
+    return contextFournisseurs.map((item) => ({
+      id: item.id,
+      name: item.name || item.nom || "Nom inconnu",
+      email: item.email || "",
+      contact: item.contactName || item.contact || "",
+      phone: item.phone || "",
+      products: item.products || item.produits || "",
+      delay: item.deliveryDelay || item.delai || "",
+      orders: item.ordersCount ? `${item.ordersCount} commandes` : "0 commande",
+      status: item.status || "Actif",
+    }));
+  }, [contextFournisseurs]);
 
   // -----------------------------------------------------------------------
   // 2. CALCUL DES STATISTIQUES DYNAMIQUES
@@ -160,7 +126,7 @@ export default function Suppliers() {
   // -----------------------------------------------------------------------
   // 4. RENDU AVEC GESTION DU CHARGEMENT ET DES ERREURS
   // -----------------------------------------------------------------------
-  if (loading) {
+  if (contextLoading) {
     return (
       <div className="depot-page flex items-center justify-center h-64">
         <Loader className="animate-spin text-[#472EAD]" size={32} />
@@ -169,12 +135,13 @@ export default function Suppliers() {
     );
   }
 
-  if (error) {
+  // Gestion d'erreur locale (si jamais on a besoin d'afficher une erreur liée à une action)
+  if (localError) {
     return (
       <div className="depot-page flex flex-col items-center justify-center h-64 text-red-600">
-        <p className="text-lg font-semibold">❌ {error}</p>
+        <p className="text-lg font-semibold">❌ {localError}</p>
         <button
-          onClick={() => window.location.reload()}
+          onClick={() => setLocalError(null)}
           className="mt-4 px-4 py-2 bg-[#472EAD] text-white rounded-lg hover:bg-[#3b2491]"
         >
           Réessayer

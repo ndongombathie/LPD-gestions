@@ -1,9 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import "../styles/depot-fix.css";
 import { produitsAPI } from '../../services/api/produits';
 import { categoriesAPI } from '../../services/api/categories';
 import { fournisseursAPI } from '../../services/api/fournisseurs';
 import httpClient from '../../services/http/client';
+// MODIFICATION: import du contexte
+import { useStock } from './StockContext';
 
 import {
   FaSearch, FaPlus, FaBoxOpen, FaBarcode, FaTags, FaBoxes, FaCubes,
@@ -17,7 +19,7 @@ import {
 } from "react-icons/fa";
 
 /* =========================================================================
-   2) CALCULS ET UTILITAIRES
+   2) CALCULS ET UTILITAIRES (inchangés)
    ========================================================================= */
 
 const computeTotalPrice = (p) => {
@@ -60,7 +62,7 @@ const getTypeIcon = (type) => {
 };
 
 /* =========================================================================
-   FONCTION POUR RÉCUPÉRER TOUTES LES PAGES
+   FONCTION POUR RÉCUPÉRER TOUTES LES PAGES (conservée mais plus utilisée ?)
    ========================================================================= */
 
 const fetchAllPaginatedData = async (endpoint) => {
@@ -125,14 +127,19 @@ const fetchAllPaginatedData = async (endpoint) => {
    ========================================================================= */
 
 export default function Products() {
-  // --- ÉTATS GLOBAUX ---
-  const [products, setProducts] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [fournisseurs, setFournisseurs] = useState([]);
+  // MODIFICATION: utilisation du contexte
+  const {
+    products: contextProducts,
+    categories: contextCategories,
+    fournisseurs: contextFournisseurs,
+    refreshAll,
+    loading: contextLoading,
+  } = useStock();
+
+  // --- ÉTATS GLOBAUX (supprimés products, categories, fournisseurs) ---
   const [history, setHistory] = useState([]); 
-  
-  const [isDataLoaded, setIsDataLoaded] = useState(false);
-  const [loading, setLoading] = useState(true);
+  // MODIFICATION: on garde isDataLoaded? plus utile car les données sont dans le contexte, mais on peut le déduire de contextLoading
+  // On peut garder un indicateur local si nécessaire, mais on utilisera contextLoading pour l'affichage
   const [activeTab, setActiveTab] = useState("liste");
 
   // --- ÉTATS UI ---
@@ -180,123 +187,50 @@ export default function Products() {
   const [historyDetailModalOpen, setHistoryDetailModalOpen] = useState(false);
 
   /* =========================================================================
-     4) CHARGEMENT DES DONNÉES - AVEC FOURNISSEURS
+     4) CHARGEMENT DES DONNÉES - SUPPRIMÉ (le contexte s'en charge)
      ========================================================================= */
-  
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      console.log("🚀 Chargement des données...");
-      
-      try {
-        console.log("📦 Tentative avec per_page=1000...");
-        const [productsResponse, categoriesResponse, fournisseursResponse] = await Promise.all([
-          produitsAPI.getAll({ per_page: 1000 }),
-          categoriesAPI.getAll({ per_page: 1000 }),
-          fournisseursAPI.getAll({ per_page: 1000 })
-        ]);
-        
-        const productsData = productsResponse.data || productsResponse;
-        const categoriesData = categoriesResponse.data || categoriesResponse;
-        const fournisseursData = fournisseursResponse.data || fournisseursResponse;
-        
-        let allProducts = Array.isArray(productsData) ? productsData : (productsData?.data || []);
-        let allCategories = Array.isArray(categoriesData) ? categoriesData : (categoriesData?.data || []);
-        let allFournisseurs = Array.isArray(fournisseursData) ? fournisseursData : (fournisseursData?.data || []);
-        
-        console.log(`✅ Récupéré: ${allProducts.length} produits, ${allCategories.length} catégories, ${allFournisseurs.length} fournisseurs`);
-        
-        if (allProducts.length > 20 && allCategories.length > 20) {
-          const transformedCategories = allCategories.map(cat => ({
-            id: cat.id || cat.uuid,
-            name: cat.nom || cat.name || "Sans nom",
-            nom: cat.nom || "Sans nom",
-          }));
-
-          setProducts(allProducts);
-          setCategories(transformedCategories);
-          setFournisseurs(allFournisseurs);
-          setIsDataLoaded(true);
-          setLoading(false);
-          return;
-        }
-      } catch (perPageError) {
-        console.log("Méthode per_page échouée, passage à la méthode paginée...");
-      }
-      
-      console.log("📦 Récupération paginée...");
-      const allProducts = await fetchAllPaginatedData('/produits');
-      const allCategories = await fetchAllPaginatedData('/categories');
-      const allFournisseurs = await fetchAllPaginatedData('/fournisseurs');
-      
-      console.log(`🎯 RÉSULTAT: ${allProducts.length} produits, ${allCategories.length} catégories, ${allFournisseurs.length} fournisseurs`);
-      
-      const transformedCategories = allCategories.map(cat => ({
-        id: cat.id || cat.uuid,
-        name: cat.nom || cat.name || "Sans nom",
-        nom: cat.nom || "Sans nom",
-      }));
-
-      setProducts(allProducts);
-      setCategories(transformedCategories);
-      setFournisseurs(allFournisseurs);
-      setIsDataLoaded(true);
-
-    } catch (error) {
-      console.error("❌ Erreur chargement:", error);
-      alert("Erreur de chargement des données. Vérifiez la console.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { 
-    fetchData(); 
-  }, []);
-
-  useEffect(() => {
-    if (isDataLoaded) {
-      console.log(`📊 ÉTAT FINAL - Produits: ${products.length}, Catégories: ${categories.length}, Fournisseurs: ${fournisseurs.length}`);
-    }
-  }, [isDataLoaded, products, categories, fournisseurs]);
+  // MODIFICATION: on supprime tout le bloc fetchData et useEffect associé
 
   /* =========================================================================
-     5) TRANSFORMATION DES DONNÉES
+     5) TRANSFORMATION DES DONNÉES (basée sur les données du contexte)
      ========================================================================= */
   
-  const computedProducts = products.map((p) => {
-    if (!p) return null;
+  const computedProducts = useMemo(() => {
+    if (!contextProducts.length) return [];
 
-    let categoryName = "Non classé";
-    let categoryId = null;
+    return contextProducts.map((p) => {
+      if (!p) return null;
 
-    if (p.categorie_nom) {
-      categoryName = p.categorie_nom;
-    } else if (p.categorie_id) {
-      categoryId = p.categorie_id;
-      const foundCat = categories.find(c => c.id === p.categorie_id);
-      if (foundCat) categoryName = foundCat.name || foundCat.nom || "Sans nom";
-    } else if (p.categorie) {
-      if (typeof p.categorie === 'object') {
-        categoryName = p.categorie.nom || p.categorie.name || "Non classé";
-        categoryId = p.categorie.id || p.categorie.uuid;
-      } else {
-        categoryName = p.categorie;
+      let categoryName = "Non classé";
+      let categoryId = null;
+
+      if (p.categorie_nom) {
+        categoryName = p.categorie_nom;
+      } else if (p.categorie_id) {
+        categoryId = p.categorie_id;
+        const foundCat = contextCategories.find(c => c.id === p.categorie_id);
+        if (foundCat) categoryName = foundCat.name || foundCat.nom || "Sans nom";
+      } else if (p.categorie) {
+        if (typeof p.categorie === 'object') {
+          categoryName = p.categorie.nom || p.categorie.name || "Non classé";
+          categoryId = p.categorie.id || p.categorie.uuid;
+        } else {
+          categoryName = p.categorie;
+        }
       }
-    }
 
-    // Trouver le nom du fournisseur depuis l'API
-    let fournisseurNom = "Non spécifié";
-    let fournisseurId = p.fournisseur_id || null;
-    
-    if (fournisseurId) {
-      const foundFournisseur = fournisseurs.find(f => f.id === fournisseurId);
-      if (foundFournisseur) {
-        fournisseurNom = foundFournisseur.nom || foundFournisseur.name || "Non spécifié";
+      // Trouver le nom du fournisseur
+      let fournisseurNom = "Non spécifié";
+      let fournisseurId = p.fournisseur_id || null;
+      
+      if (fournisseurId) {
+        const foundFournisseur = contextFournisseurs.find(f => f.id === fournisseurId);
+        if (foundFournisseur) {
+          fournisseurNom = foundFournisseur.nom || foundFournisseur.name || "Non spécifié";
+        }
       }
-    }
 
-    const productUnified = {
+      const productUnified = {
         ...p,
         id: p.id || p.uuid,
         name: p.nom || "Produit sans nom",
@@ -309,16 +243,17 @@ export default function Products() {
         unitsPerCarton: Number(p.unite_carton) ?? 1,
         fournisseur: fournisseurNom,
         fournisseur_id: fournisseurId
-    };
+      };
 
-    const totalPrice = computeTotalPrice(productUnified);
-    const status = getStatus(productUnified.cartons, productUnified.stockMin);
-    
-    return { ...productUnified, totalPrice, status };
-  }).filter(Boolean);
+      const totalPrice = computeTotalPrice(productUnified);
+      const status = getStatus(productUnified.cartons, productUnified.stockMin);
+      
+      return { ...productUnified, totalPrice, status };
+    }).filter(Boolean);
+  }, [contextProducts, contextCategories, contextFournisseurs]);
 
   /* =========================================================================
-     6) FONCTIONS CRUD CORRIGÉES
+     6) FONCTIONS CRUD (avec refresh après chaque action)
      ========================================================================= */
   
   const handleSubmitProduct = async (e) => {
@@ -332,7 +267,7 @@ export default function Products() {
 
     let categoryId = currentProduct.categoryId;
     if (!categoryId && currentProduct.category) {
-      const selectedCat = categories.find(c => 
+      const selectedCat = contextCategories.find(c => 
         (c.nom || c.name) === currentProduct.category
       );
       if (selectedCat) categoryId = selectedCat.id;
@@ -358,7 +293,8 @@ export default function Products() {
     
     if (modalType === "add") {
       if (barcode !== '') {
-        const codeExists = products.some(p => 
+        // MODIFICATION: utiliser contextProducts
+        const codeExists = contextProducts.some(p => 
           (p.code === barcode || p.code_barre === barcode)
         );
         if (codeExists) {
@@ -370,12 +306,13 @@ export default function Products() {
         apiPayload.code = '';
       }
     } else if (modalType === "edit") {
-      const originalProduct = products.find(p => p.id === currentProduct.id);
+      // MODIFICATION: utiliser contextProducts
+      const originalProduct = contextProducts.find(p => p.id === currentProduct.id);
       const originalCode = originalProduct?.code || originalProduct?.code_barre || '';
       
       if (barcode !== '') {
         if (barcode !== originalCode) {
-          const codeExists = products.some(p => 
+          const codeExists = contextProducts.some(p => 
             p.id !== currentProduct.id && 
             (p.code === barcode || p.code_barre === barcode)
           );
@@ -395,7 +332,7 @@ export default function Products() {
         currentProduct.fournisseur_id.trim() !== "" &&
         currentProduct.fournisseur_id !== "null") {
       
-      const fournisseurExists = fournisseurs.some(f => f.id === currentProduct.fournisseur_id);
+      const fournisseurExists = contextFournisseurs.some(f => f.id === currentProduct.fournisseur_id);
       if (fournisseurExists) {
         apiPayload.fournisseur_id = String(currentProduct.fournisseur_id).trim();
       }
@@ -405,10 +342,10 @@ export default function Products() {
       if (modalType === "add") {
         const nouveauProduit = await produitsAPI.create(apiPayload);
         alert("✅ Produit ajouté avec succès !");
-        setProducts(prev => [...prev, nouveauProduit]);
-        // Pas d'ajout à l'historique (création gérée ailleurs)
+        // MODIFICATION: on ne met plus à jour l'état local, on rafraîchit le contexte
       } else if (modalType === "edit") {
-        const oldProduct = products.find(p => p.id === currentProduct.id);
+        // MODIFICATION: trouver le produit dans contextProducts
+        const oldProduct = contextProducts.find(p => p.id === currentProduct.id);
         const changes = {};
 
         // Comparaison des champs modifiés
@@ -416,13 +353,13 @@ export default function Products() {
           changes.nom = { from: oldProduct.nom, to: apiPayload.nom };
         }
         if (oldProduct.categorie_id !== apiPayload.categorie_id) {
-          const oldCat = categories.find(c => c.id === oldProduct.categorie_id)?.name || oldProduct.categorie_id;
-          const newCat = categories.find(c => c.id === apiPayload.categorie_id)?.name || apiPayload.categorie_id;
+          const oldCat = contextCategories.find(c => c.id === oldProduct.categorie_id)?.name || oldProduct.categorie_id;
+          const newCat = contextCategories.find(c => c.id === apiPayload.categorie_id)?.name || apiPayload.categorie_id;
           changes.categorie_id = { from: oldCat, to: newCat };
         }
         if (oldProduct.fournisseur_id !== apiPayload.fournisseur_id) {
-          const oldFour = fournisseurs.find(f => f.id === oldProduct.fournisseur_id)?.nom || oldProduct.fournisseur_id || "Aucun";
-          const newFour = fournisseurs.find(f => f.id === apiPayload.fournisseur_id)?.nom || apiPayload.fournisseur_id || "Aucun";
+          const oldFour = contextFournisseurs.find(f => f.id === oldProduct.fournisseur_id)?.nom || oldProduct.fournisseur_id || "Aucun";
+          const newFour = contextFournisseurs.find(f => f.id === apiPayload.fournisseur_id)?.nom || apiPayload.fournisseur_id || "Aucun";
           changes.fournisseur_id = { from: oldFour, to: newFour };
         }
         if (oldProduct.unite_carton != apiPayload.unite_carton) {
@@ -440,7 +377,6 @@ export default function Products() {
 
         await produitsAPI.update(currentProduct.id, apiPayload);
         alert("✅ Produit modifié !");
-        setProducts(prev => prev.map(p => p.id === currentProduct.id ? { ...p, ...apiPayload } : p));
 
         // Ajouter à l'historique uniquement s'il y a des changements
         if (Object.keys(changes).length > 0) {
@@ -453,7 +389,8 @@ export default function Products() {
       }
       
       closeProductModal();
-      await fetchData();
+      // MODIFICATION: rafraîchir les données du contexte
+      await refreshAll();
 
     } catch (error) {
       console.error("❌ Erreur détaillée:", error);
@@ -508,7 +445,8 @@ export default function Products() {
     if (!deleteId) return;
 
     try {
-      const productToDelete = products.find(p => p.id === deleteId);
+      // MODIFICATION: trouver le produit dans contextProducts
+      const productToDelete = contextProducts.find(p => p.id === deleteId);
       await produitsAPI.delete(deleteId);
       alert("✅ Produit supprimé avec succès !");
       
@@ -523,7 +461,8 @@ export default function Products() {
       }
       
       setDeleteId(null);
-      await fetchData();
+      // MODIFICATION: rafraîchir le contexte
+      await refreshAll();
 
     } catch (error) {
       console.error("Erreur suppression:", error);
@@ -560,7 +499,8 @@ export default function Products() {
       return;
     }
 
-    const product = products.find((p) => p.id === adjustProduct.id);
+    // MODIFICATION: trouver le produit dans contextProducts
+    const product = contextProducts.find((p) => p.id === adjustProduct.id);
     if (!product) return;
 
     const currentStock = parseInt(product.nombre_carton || product.cartons || 0);
@@ -580,7 +520,8 @@ export default function Products() {
       }
       
       closeAdjustModal();
-      await fetchData();
+      // MODIFICATION: rafraîchir le contexte
+      await refreshAll();
 
     } catch (error) {
       console.error("❌ Erreur ajustement:", error);
@@ -639,7 +580,8 @@ export default function Products() {
       }
       
       closeCategoryModal();
-      await fetchData();
+      // MODIFICATION: rafraîchir le contexte (les catégories ont changé)
+      await refreshAll();
 
     } catch (error) {
       console.error("❌ Erreur catégorie:", error);
@@ -666,7 +608,8 @@ export default function Products() {
         await categoriesAPI.delete(deleteCategoryId);
         alert("✅ Catégorie supprimée avec succès !");
         setDeleteCategoryId(null);
-        await fetchData();
+        // MODIFICATION: rafraîchir le contexte
+        await refreshAll();
         
     } catch(err) {
         console.error("Erreur suppression catégorie:", err);
@@ -789,13 +732,13 @@ export default function Products() {
     setCurrentProduct((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Filtrer les catégories en fonction du terme de recherche
-  const filteredCategoriesOptions = categories.filter(cat =>
+  // Filtrer les catégories en fonction du terme de recherche (utilise contextCategories)
+  const filteredCategoriesOptions = contextCategories.filter(cat =>
     cat.name.toLowerCase().includes(categoryFilterTerm.toLowerCase())
   );
 
-  // Filtrer les fournisseurs en fonction du terme de recherche
-  const filteredFournisseursOptions = fournisseurs.filter(f =>
+  // Filtrer les fournisseurs en fonction du terme de recherche (utilise contextFournisseurs)
+  const filteredFournisseursOptions = contextFournisseurs.filter(f =>
     f.nom.toLowerCase().includes(fournisseurFilterTerm.toLowerCase())
   );
 
@@ -904,7 +847,7 @@ export default function Products() {
   /* =========================================================================
      12) CATÉGORIES
      ========================================================================= */
-  const filteredCategories = categories.filter((cat) => {
+  const filteredCategories = contextCategories.filter((cat) => {
       const term = (searchCategory || "").toLowerCase();
       const nameSafe = String(cat.name || cat.nom || "").toLowerCase();
       return nameSafe.includes(term);
@@ -916,7 +859,7 @@ export default function Products() {
   const paginatedCategories = filteredCategories.slice(startCategoriesIndex, startCategoriesIndex + pageSize);
 
   /* =========================================================================
-     13) COMPOSANT PAGINATION
+     13) COMPOSANT PAGINATION (inchangé)
      ========================================================================= */
   const Pagination = ({ currentPage, totalPages, onPageChange, filteredCount }) => {
     if (filteredCount === 0) return null;
@@ -996,16 +939,17 @@ export default function Products() {
             <FaWarehouse className="text-[#472EAD]" />
             Gestion Avancée des Produits
           </h1>
-          {isDataLoaded && (
+          {/* MODIFICATION: affichage des compteurs avec les données du contexte */}
+          {!contextLoading && (
             <div className="flex items-center gap-4 mt-2 text-sm">
               <span className="bg-gradient-to-r from-[#472EAD] to-[#6D5BD0] text-white px-3 py-1 rounded-full inline-flex items-center gap-1">
-                <FaBoxOpen /> {products.length} produits
+                <FaBoxOpen /> {contextProducts.length} produits
               </span>
               <span className="bg-gradient-to-r from-[#F58020] to-[#FFA94D] text-white px-3 py-1 rounded-full inline-flex items-center gap-1">
-                <FaFolder /> {categories.length} catégories
+                <FaFolder /> {contextCategories.length} catégories
               </span>
               <span className="bg-gradient-to-r from-[#10B981] to-[#34D399] text-white px-3 py-1 rounded-full inline-flex items-center gap-1">
-                <FaTruck /> {fournisseurs.length} fournisseurs
+                <FaTruck /> {contextFournisseurs.length} fournisseurs
               </span>
             </div>
           )}
@@ -1049,8 +993,8 @@ export default function Products() {
         ))}
       </div>
 
-      {/* CHARGEMENT */}
-      {loading && (
+      {/* CHARGEMENT - MODIFICATION: utilise contextLoading */}
+      {contextLoading && (
         <div className="bg-gradient-to-r from-[#F7F5FF] to-[#FFF5F0] p-4 rounded-lg border border-[#472EAD]">
           <div className="flex items-center gap-3">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#472EAD]"></div>
@@ -1063,7 +1007,7 @@ export default function Products() {
       )}
 
       {/* ONGLET LISTE */}
-      {activeTab === "liste" && (
+      {activeTab === "liste" && !contextLoading && (
         <div className="animate-fade-in space-y-6">
           {/* Barre d'outils */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
@@ -1179,7 +1123,7 @@ export default function Products() {
                   ))}
                   {paginatedProducts.length === 0 && (
                     <tr><td colSpan={11} className="p-8 text-center text-slate-400 italic">
-                      {loading ? "Chargement en cours..." : "Aucun produit trouvé."}
+                      {contextLoading ? "Chargement en cours..." : "Aucun produit trouvé."}
                     </td></tr>
                   )}
                 </tbody>
@@ -1195,7 +1139,7 @@ export default function Products() {
       )}
 
       {/* ONGLET AJUSTEMENT */}
-      {activeTab === "ajustement" && (
+      {activeTab === "ajustement" && !contextLoading && (
         <div className="animate-fade-in space-y-6">
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 flex items-center gap-3">
             <FaSearch className="text-[#472EAD]" />
@@ -1407,7 +1351,7 @@ export default function Products() {
       )}
 
       {/* ONGLET CATÉGORIES */}
-      {activeTab === "categories" && (
+      {activeTab === "categories" && !contextLoading && (
         <>
           <div className="bg-white rounded-xl shadow-sm border p-3">
             <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
@@ -1502,7 +1446,8 @@ export default function Products() {
                     value={currentProduct.categoryId || ""}
                     onChange={(e) => {
                       const selectedValue = e.target.value;
-                      const selectedCat = categories.find(c => c.id === selectedValue);
+                      // MODIFICATION: utiliser contextCategories
+                      const selectedCat = contextCategories.find(c => c.id === selectedValue);
                       setCurrentProduct(prev => ({
                         ...prev,
                         categoryId: selectedValue,
@@ -1544,7 +1489,8 @@ export default function Products() {
                     value={currentProduct.fournisseur_id || ""}
                     onChange={(e) => {
                       const selectedValue = e.target.value;
-                      const selectedFournisseur = fournisseurs.find(f => f.id === selectedValue);
+                      // MODIFICATION: utiliser contextFournisseurs
+                      const selectedFournisseur = contextFournisseurs.find(f => f.id === selectedValue);
                       setCurrentProduct(prev => ({
                         ...prev,
                         fournisseur_id: selectedValue,

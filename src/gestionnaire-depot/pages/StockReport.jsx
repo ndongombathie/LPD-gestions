@@ -4,8 +4,10 @@ import "../styles/depot-fix.css";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { Activity, FileText, DownloadCloud, PieChart, BarChart2, TrendingUp, Search, Filter, BarChart3, LineChart, TrendingDown, TrendingUp as TrendUp, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
-// Ajoutez cette ligne après les autres imports
 import DOMPurify from 'dompurify';
+
+// MODIFICATION: import du contexte
+import { useStock } from "./StockContext";
 
 /**
  * Rapport fusionné
@@ -22,91 +24,9 @@ const PALETTE = {
   text: "#111827",
 };
 
-const FAKE_PRODUCTS = [
-  { id: 1, name: "Cahier 96 pages", category: "Papeterie", cartons: 10, unitsPerCarton: 45, barcode: "594123456789", pricePerCarton: 800, stockMin: 20 },
-  { id: 2, name: "Classeur A4", category: "Papeterie", cartons: 5, unitsPerCarton: 10, barcode: "594555555555", pricePerCarton: 1500, stockMin: 20 },
-  { id: 3, name: "Ramette A4", category: "Papeterie", cartons: 20, unitsPerCarton: 40, barcode: "598444444444", pricePerCarton: 1750, stockMin: 30 },
-  { id: 4, name: "Stylo Bleu", category: "Fournitures", cartons: 2, unitsPerCarton: 12, barcode: "598976543210", pricePerCarton: 300, stockMin: 10 },
-  { id: 5, name: "Gomme Blanche", category: "Fournitures", cartons: 0, unitsPerCarton: 20, barcode: "598222222222", pricePerCarton: 500, stockMin: 5 },
-  { id: 6, name: "Crayon HB", category: "Fournitures", cartons: 8, unitsPerCarton: 50, barcode: "598333333333", pricePerCarton: 250, stockMin: 10 },
-  { id: 7, name: "Agrapheuse", category: "Bureau", cartons: 3, unitsPerCarton: 6, barcode: "598777777777", pricePerCarton: 3500, stockMin: 5 },
-  { id: 8, name: "Taille-crayon", category: "Fournitures", cartons: 1, unitsPerCarton: 24, barcode: "598888888888", pricePerCarton: 200, stockMin: 8 },
-  { id: 9, name: "Règle 30cm", category: "Papeterie", cartons: 12, unitsPerCarton: 20, barcode: "598999999999", pricePerCarton: 450, stockMin: 15 },
-  { id: 10, name: "Marqueur", category: "Fournitures", cartons: 6, unitsPerCarton: 30, barcode: "598000000000", pricePerCarton: 600, stockMin: 12 },
-  { id: 11, name: "Chemises", category: "Papeterie", cartons: 15, unitsPerCarton: 25, barcode: "598111111111", pricePerCarton: 1200, stockMin: 20 },
-  { id: 12, name: "Pochette plastique", category: "Papeterie", cartons: 25, unitsPerCarton: 100, barcode: "598222222223", pricePerCarton: 800, stockMin: 30 },
-];
-
-const FAKE_MOVEMENTS = [
-  { id: 1, type: "Entrée", productId: 1, productName: "Cahier 96 pages", barcode: "594123456789", qty: 5, before: 5, after: 10, cost: 4000, date: "2025-12-07T10:12:00", manager: "Modou Ndiaye" },
-  { id: 2, type: "Sortie", productId: 2, productName: "Classeur A4", barcode: "594555555555", qty: 3, before: 8, after: 5, cost: 4500, date: "2025-12-06T14:45:00", manager: "Modou Ndiaye" },
-  { id: 3, type: "Entrée", productId: 3, productName: "Ramette A4", barcode: "598444444444", qty: 10, before: 10, after: 20, cost: 17500, date: "2025-12-05T09:30:00", manager: "Modou Ndiaye" },
-  { id: 4, type: "Sortie", productId: 4, productName: "Stylo Bleu", barcode: "598976543210", qty: 1, before: 3, after: 2, cost: 300, date: "2025-12-08T11:00:00", manager: "Modou Ndiaye" },
-  { id: 5, type: "Entrée", productId: 1, productName: "Cahier 96 pages", barcode: "594123456789", qty: 8, before: 10, after: 18, cost: 6400, date: "2025-12-10T09:15:00", manager: "Amina Sow" },
-  { id: 6, type: "Sortie", productId: 3, productName: "Ramette A4", barcode: "598444444444", qty: 5, before: 20, after: 15, cost: 8750, date: "2025-12-11T16:30:00", manager: "Modou Ndiaye" },
-  { id: 7, type: "Entrée", productId: 2, productName: "Classeur A4", barcode: "594555555555", qty: 12, before: 5, after: 17, cost: 18000, date: "2025-12-12T14:20:00", manager: "Amina Sow" },
-  { id: 8, type: "Sortie", productId: 5, productName: "Gomme Blanche", barcode: "598222222222", qty: 1, before: 2, after: 1, cost: 250, date: "2025-12-09T10:30:00", manager: "Modou Ndiaye" },
-  { id: 9, type: "Entrée", productId: 6, productName: "Crayon HB", barcode: "598333333333", qty: 10, before: 15, after: 25, cost: 2500, date: "2025-12-13T11:45:00", manager: "Amina Sow" },
-  { id: 10, type: "Sortie", productId: 7, productName: "Agrapheuse", barcode: "598777777777", qty: 2, before: 5, after: 3, cost: 7000, date: "2025-12-14T09:20:00", manager: "Modou Ndiaye" },
-  { id: 11, type: "Entrée", productId: 8, productName: "Taille-crayon", barcode: "598888888888", qty: 5, before: 3, after: 8, cost: 1000, date: "2025-12-15T14:15:00", manager: "Amina Sow" },
-  { id: 12, type: "Sortie", productId: 9, productName: "Règle 30cm", barcode: "598999999999", qty: 8, before: 20, after: 12, cost: 3600, date: "2025-12-16T16:40:00", manager: "Modou Ndiaye" },
-];
-
 const formatNumber = (n) => n.toLocaleString("fr-FR");
 
-// Fonctions pour récupérer les mouvements réels depuis localStorage
-const loadRealMovements = () => {
-  try {
-    const raw = localStorage.getItem("lpd_movements");
-    if (!raw) return FAKE_MOVEMENTS; // Fallback aux données fictives si pas de données réelles
-    const movements = JSON.parse(raw);
-    
-    // Transformer la structure pour correspondre à FAKE_MOVEMENTS
-    return movements.map(m => ({
-      id: m.id,
-      type: m.type,
-      productId: m.productId,
-      productName: m.product || "Produit inconnu",
-      barcode: m.barcode || "",
-      qty: m.quantity || 0,
-      before: m.stockBefore || 0,
-      after: m.stockAfter || 0,
-      cost: 0, // À adapter si vous stockez le coût
-      date: m.date || new Date().toISOString(),
-      manager: m.createdBy || "Gestionnaire Dépôt"
-    }));
-  } catch {
-    return FAKE_MOVEMENTS;
-  }
-};
-
-const loadPendingSorties = () => {
-  try {
-    const raw = localStorage.getItem("lpd_pending_sorties");
-    if (!raw) return [];
-    const pending = JSON.parse(raw);
-    
-    // Transformer la structure pour correspondre à FAKE_MOVEMENTS
-    return pending.map(m => ({
-      id: m.id,
-      type: m.type,
-      productId: m.productId,
-      productName: m.product || "Produit inconnu",
-      barcode: m.barcode || "",
-      qty: m.quantity || 0,
-      before: m.stockBefore || 0,
-      after: m.stockAfter || 0,
-      cost: 0,
-      date: m.date || m.createdAt || new Date().toISOString(),
-      manager: m.createdBy || "Gestionnaire Dépôt",
-      status: "pending"
-    }));
-  } catch {
-    return [];
-  }
-};
-
-// Composant de pagination réutilisable
+// Composant de pagination réutilisable (inchangé)
 const Pagination = ({ currentPage, totalPages, totalItems, itemsPerPage, onPageChange, onItemsPerPageChange }) => {
   const startItem = (currentPage - 1) * itemsPerPage + 1;
   const endItem = Math.min(currentPage * itemsPerPage, totalItems);
@@ -209,7 +129,7 @@ const Pagination = ({ currentPage, totalPages, totalItems, itemsPerPage, onPageC
   );
 };
 
-// Nouveaux composants de graphiques professionnels
+// Nouveaux composants de graphiques professionnels (inchangés)
 const ProfessionalLineChart = ({ data, title, color = PALETTE.violet, height = 200 }) => {
   const width = 400;
   const padding = { top: 20, right: 20, bottom: 30, left: 40 };
@@ -561,6 +481,9 @@ const PieChartComponent = ({ data, title, height = 200 }) => {
 };
 
 export default function Reports() {
+  // MODIFICATION: récupération des données du contexte
+  const { products, movements, loading } = useStock();
+
   const [tab, setTab] = useState("resume");
   
   // Nouvel état pour les sous-onglets d'alertes
@@ -598,31 +521,9 @@ export default function Reports() {
     endDate: ""
   });
 
-  const [movements, setMovements] = useState(() => {
-    // Charger les mouvements réels au départ
-    const realMovements = loadRealMovements();
-    const pendingMovements = loadPendingSorties();
-    
-    // Combiner les deux listes et retirer les doublons (basés sur l'id)
-    const allMovements = [...realMovements, ...pendingMovements];
-    const uniqueMovements = Array.from(new Map(allMovements.map(m => [m.id, m])).values());
-    
-    return uniqueMovements;
-  });
+  // MODIFICATION: suppression des états et fonctions liés aux données fictives
 
-  const products = FAKE_PRODUCTS;
-
-  // Recharger les mouvements quand la page Rapport est active
-  useEffect(() => {
-    if (tab === "movements") {
-      const realMovements = loadRealMovements();
-      const pendingMovements = loadPendingSorties();
-      const allMovements = [...realMovements, ...pendingMovements];
-      const uniqueMovements = Array.from(new Map(allMovements.map(m => [m.id, m])).values());
-      setMovements(uniqueMovements);
-    }
-  }, [tab]);
-
+  // MODIFICATION: calcul des produits enrichis (avec statut et prix total)
   const enriched = useMemo(() => {
     return products.map((p) => {
       const stockGlobal = p.cartons * p.unitsPerCarton;
@@ -635,6 +536,7 @@ export default function Reports() {
     });
   }, [products]);
 
+  // Filtrage des produits (inchangé)
   const filteredProducts = useMemo(() => {
     return enriched.filter(product => {
       if (productFilters.search) {
@@ -658,6 +560,7 @@ export default function Reports() {
     });
   }, [enriched, productFilters]);
 
+  // Filtrage des mouvements (inchangé)
   const filteredMovements = useMemo(() => {
     return movements.filter(movement => {
       if (movementFilters.search) {
@@ -741,7 +644,7 @@ export default function Reports() {
     return o;
   }, {});
 
-  // Données pour les graphiques
+  // Données pour les graphiques (conservées fictives ou à calculer plus tard)
   const stockEvolutionData = [
     { label: "Lun", value: 120 },
     { label: "Mar", value: 115 },
@@ -778,6 +681,7 @@ export default function Reports() {
     { label: "Sem 4", entrées: 38, sorties: 35 }
   ];
 
+  // MODIFICATION: fonction exportPDF déplacée à l'intérieur pour utiliser les données réelles
   const exportPDF = async () => {
     try {
       const pdfContainer = document.createElement('div');
@@ -810,22 +714,8 @@ export default function Reports() {
       
       pdfContainer.innerHTML =  DOMPurify.sanitize(header);
       
+      // MODIFICATION: utiliser les données réelles (enriched, totalValue, counts, topProducts)
       const createPDFContent = () => {
-        const enriched = FAKE_PRODUCTS.map((p) => {
-          const stockGlobal = p.cartons * p.unitsPerCarton;
-          const totalPrice = p.cartons * p.pricePerCarton;
-          let status = "Normal";
-          if (p.cartons === 0) status = "Rupture";
-          else if (p.cartons < 10) status = "Critique";
-          else if (p.cartons <= p.stockMin) status = "Faible";
-          return { ...p, stockGlobal, totalPrice, status };
-        });
-        
-        const totalValue = enriched.reduce((s, p) => s + p.totalPrice, 0);
-        const counts = enriched.reduce((o, p) => {
-          o[p.status] = (o[p.status] || 0) + 1;
-          return o;
-        }, {});
         const topProducts = enriched.slice().sort((a, b) => b.totalPrice - a.totalPrice).slice(0, 3);
         
         return `
@@ -1001,6 +891,18 @@ export default function Reports() {
     });
     setMovementPage(1);
   };
+
+  // MODIFICATION: affichage d'un indicateur de chargement si les données ne sont pas encore prêtes
+  if (loading) {
+    return (
+      <div className="depot-page p-6 flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#472EAD] mx-auto"></div>
+          <p className="mt-4 text-gray-600">Chargement des données...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="depot-page p-6" style={{ color: PALETTE.text }}>

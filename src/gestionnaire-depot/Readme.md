@@ -34,7 +34,11 @@ GET     api/historique-actions
 # Reduction de stock d'un produit
 PUT     api/produits/{produit}/reduire-stock
 
-GET  api/fournisseurs` | Liste des fournisseurs 
+GET     api/fournisseurs | Liste des fournisseurs 
+
+# annuler un tramsfert 
+PUT    api/annuler-produits-transfer | donner en payload (transfer_id) du transfert
+
 
 
 

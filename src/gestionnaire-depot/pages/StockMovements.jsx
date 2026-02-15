@@ -30,15 +30,15 @@ import {
 } from "lucide-react";
 
 /* =========================================================================
-   IMPORT DES API
+   IMPORT DES API (conservés pour les actions)
    ========================================================================= */
 import { mouvementsAPI } from "../../services/api/mouvements";
 import { stockAPI } from "../../services/api/stock";
-import { produitsAPI } from "../../services/api/produits";
-import { fournisseursAPI } from "../../services/api/fournisseurs";
+// MODIFICATION: import du contexte
+import { useStock } from "./StockContext";
 
 /* =========================================================================
-   HELPERS
+   HELPERS (inchangés)
    ========================================================================= */
 const formatDateTime = (iso) => {
   const d = new Date(iso);
@@ -64,7 +64,7 @@ const todayIsSameDay = (iso) => {
 };
 
 /* =========================================================================
-   FONCTION DE MAPPAGE DES MOUVEMENTS
+   FONCTION DE MAPPAGE DES MOUVEMENTS (identique)
    ========================================================================= */
 const mapMovement = (m, productsList, fournisseursList) => {
   const produit = productsList.find(p => p.id === m.produit_id) || m.produit || {};
@@ -124,11 +124,23 @@ const mapMovement = (m, productsList, fournisseursList) => {
    COMPOSANT PRINCIPAL
    ========================================================================= */
 export default function StockMovements() {
-  const [movements, setMovements] = useState([]);
-  const [products, setProducts] = useState([]);
-  const [fournisseurs, setFournisseurs] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  // MODIFICATION: récupération des données depuis le contexte
+  const {
+    products,
+    fournisseurs,
+    movements: rawMovements,
+    loading: contextLoading,
+    refreshMovements,
+  } = useStock();
+
+  // MODIFICATION: mouvements formatés (mappés)
+  const movements = useMemo(() => {
+    return rawMovements.map(m => mapMovement(m, products, fournisseurs));
+  }, [rawMovements, products, fournisseurs]);
+
+  // MODIFICATION: plus d'états locaux pour products, fournisseurs, movements, loading, error
+  // On garde un état d'erreur local pour les actions utilisateur
+  const [localError, setLocalError] = useState(null);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [typeFilter, setTypeFilter] = useState("Tous");
@@ -162,52 +174,7 @@ export default function StockMovements() {
   const [pendingPage, setPendingPage] = useState(1);
   const [cancelledPage, setCancelledPage] = useState(1);
 
-  /* ==================== CHARGEMENT INITIAL ==================== */
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        const [productsRes, fournisseursRes, movementsRaw] = await Promise.all([
-          produitsAPI.getAll({ per_page: 1000 }),
-          fournisseursAPI.getAll({ per_page: 1000 }),
-          mouvementsAPI.getAllPaginated(),
-        ]);
-
-        const productsData = Array.isArray(productsRes) ? productsRes : productsRes.data || [];
-        const formattedProducts = productsData.map(p => ({
-          id: p.id,
-          nom: p.nom,
-          code_barre: p.code_barre || "",
-          nombre_carton: p.nombre_carton || 0,
-          prix_unite_carton: p.prix_unite_carton || 0,
-          categorie: p.categorie || null,
-          fournisseur_id: p.fournisseur_id,
-        }));
-        setProducts(formattedProducts);
-
-        const fournisseursData = Array.isArray(fournisseursRes) ? fournisseursRes : fournisseursRes.data || [];
-        const formattedFournisseurs = fournisseursData.map(f => ({
-          id: f.id,
-          nom: f.nom || f.name || "Inconnu",
-        }));
-        setFournisseurs(formattedFournisseurs);
-
-        const formattedMovements = movementsRaw.map(m => 
-          mapMovement(m, formattedProducts, formattedFournisseurs)
-        );
-        setMovements(formattedMovements);
-      } catch (err) {
-        console.error("❌ Erreur chargement:", err);
-        setError("Impossible de charger les mouvements.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, []);
+  // MODIFICATION: plus de useEffect pour fetchData
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -299,7 +266,7 @@ export default function StockMovements() {
   const startIndex = (currentPage - 1) * pageSize;
   const paginatedData = currentPagination.data.slice(startIndex, startIndex + pageSize);
 
-  /* ==================== COMPOSANT PAGINATION ==================== */
+  /* ==================== COMPOSANT PAGINATION (inchangé) ==================== */
   const Pagination = ({ currentPage, totalPages, onPageChange, filteredCount, pageSize }) => {
     const startItem = (currentPage - 1) * pageSize + 1;
     const endItem = Math.min(currentPage * pageSize, filteredCount);
@@ -388,7 +355,7 @@ export default function StockMovements() {
     );
   };
 
-  /* ==================== DROPDOWN PRODUIT ==================== */
+  /* ==================== DROPDOWN PRODUIT (utilise products du contexte) ==================== */
   const filteredProducts = useMemo(() => {
     const term = productSearch.trim().toLowerCase();
     if (!term) return products;
@@ -438,6 +405,7 @@ export default function StockMovements() {
     e.preventDefault();
     setFormError("");
     setIsSubmitting(true);
+    setLocalError(null);
 
     const { productId, quantity, date } = formData;
     if (!productId) {
@@ -462,16 +430,15 @@ export default function StockMovements() {
         date: date || new Date().toISOString(),
       });
 
-      // Recharger les mouvements
-      const updatedRes = await mouvementsAPI.getAllPaginated();
-      const updatedMovements = updatedRes.map(m => mapMovement(m, products, fournisseurs));
-      setMovements(updatedMovements);
+      // MODIFICATION: rafraîchir les mouvements via le contexte
+      await refreshMovements();
 
       alert("✅ Transfert créé et en attente de validation par la boutique.");
       closeModal();
     } catch (err) {
       console.error("❌ Erreur création transfert:", err);
       setFormError(err.response?.data?.message || "Erreur lors du transfert.");
+      setLocalError(err.response?.data?.message || "Erreur lors du transfert.");
     } finally {
       setIsSubmitting(false);
     }
@@ -483,10 +450,8 @@ export default function StockMovements() {
       // ⚠️  Endpoint à implémenter côté backend
       await stockAPI.cancelTransfer(sortieId); // méthode à créer dans stockAPI
       setCancelPendingId(null);
-      // Recharger les mouvements
-      const updatedRes = await mouvementsAPI.getAllPaginated();
-      const updatedMovements = updatedRes.map(m => mapMovement(m, products, fournisseurs));
-      setMovements(updatedMovements);
+      // MODIFICATION: rafraîchir les mouvements
+      await refreshMovements();
       alert("✅ Transfert annulé.");
     } catch (err) {
       console.error("❌ Erreur annulation:", err);
@@ -599,7 +564,8 @@ export default function StockMovements() {
   );
 
   /* ==================== RENDU ==================== */
-  if (loading) {
+  // MODIFICATION: utiliser contextLoading pour l'affichage du chargement
+  if (contextLoading) {
     return (
       <div className="depot-page flex items-center justify-center h-64">
         <div className="text-center">
@@ -610,11 +576,12 @@ export default function StockMovements() {
     );
   }
 
-  if (error) {
+  // MODIFICATION: gestion d'erreur locale (si une action a échoué)
+  if (localError) {
     return (
       <div className="depot-page p-6 bg-red-50 border border-red-200 rounded-lg">
-        <p className="text-red-600">{error}</p>
-        <button onClick={() => window.location.reload()} className="mt-2 text-sm underline text-red-600 hover:text-red-800">
+        <p className="text-red-600">{localError}</p>
+        <button onClick={() => setLocalError(null)} className="mt-2 text-sm underline text-red-600 hover:text-red-800">
           Réessayer
         </button>
       </div>
@@ -1194,7 +1161,7 @@ export default function StockMovements() {
   );
 }
 
-// Composant ArrowRight
+// Composant ArrowRight (inchangé)
 function ArrowRight(props) {
   return (
     <svg
