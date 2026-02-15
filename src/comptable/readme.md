@@ -61,8 +61,21 @@ POST          api/utilisateurs/{utilisateur_id}/reset-password
 # inventaire depot 
 GET          api/mouvements-stock/inventaire-depot  
 
+# vous aussi pouvez filtrer pa date_debut et date_fin
 # les journals caissier 
-GET         api/paiements-rapport-journalier
+GET            api/caissier/caisses-journals
+
+
+# les statistiques sur le dasboard jopurnal caisse vous aussi pouvez filtrer pa date_debut et date_fin
+
+# Total des caisses
+GET             api/caissier/caisses-journal-total-caisse
+
+# Total décaissements
+GET|HEAD        api/caissier/caisses-journal-total-decaissement
+
+# Total encaissements
+GET|HEAD        api/caissier/caisses-journal-total-encaissement
 
 # controle vendeur 
 GET     api/commandes-payees
@@ -72,4 +85,16 @@ GET    api/enregistrer-inventaire-depot | en donnant les deux intevalle de dates
 # Enregistrer inventaire de depot
 GET    api/enregistrer-inventaire-boutique | en donnant les deux intevalle de dates
 
+# historiques des inventaires
 GET   api/historique-inventaires   | afficher historiques des inventaires
+
+# les mouvement de stock pour un produit donnee pour le deopt
+GET api/mouvements-stock/{produit_id} | afficher les mouvement de stock d'un produit donnee dans le deopt.
+
+# les mouvement de stock pour un produit donnee pour le deopt
+GET api/mouvement-stock-boutique/{id} | afficher les mouvement de stock d'un produit donnee dans le boutique.
+
+
+GET|HEAD        api/enregistrer-versements | historiques des encaissements
+
+POST            api/enregistrer-versements | enregistrer un encaissement payload(caissier_id,montant,observation,la date(optionel))
