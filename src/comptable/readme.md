@@ -83,5 +83,28 @@ GET     api/commandes-payees
 
 # Enregistrer inventaire de depot
 GET    api/enregistrer-inventaire-depot | en donnant les deux intevalle de dates
+<<<<<<< HEAD
 # Enregistrer inventaire de depot
 GET    api/enregistrer-inventaire-boutique | en donnant les deux intevalle de dates
+=======
+
+# Enregistrer inventaire de boutique
+GET    api/enregistrer-inventaire-boutique | en donnant les deux intevalle de dates
+
+# historiques des inventaires
+GET   api/historique-inventaires   | afficher historiques des inventaires
+
+# les mouvement de stock pour un produit donnee pour le deopt
+GET api/mouvements-stock/{produit_id} | afficher les mouvement de stock d'un produit donnee dans le deopt.
+
+# les mouvement de stock pour un produit donnee pour le boutique
+GET api/mouvement-stock-boutique/{id} | afficher les mouvement de stock d'un produit donnee dans le boutique.
+
+
+GET|HEAD        api/enregistrer-versements | historiques des encaissements
+
+POST            api/enregistrer-versements | enregistrer un encaissement payload(caissier_id,montant,observation,la date(optionel))
+
+# tous les decaissement en attente et valide
+GET             api/decaissements-all
+>>>>>>> b96fd31 (decaissements all)
