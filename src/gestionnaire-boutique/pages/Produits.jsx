@@ -91,13 +91,50 @@ const Produits = () => {
       return;
     }
 
+    const prixVenteDetail = parseFloat(formData.prix_vente_detail);
+    const prixVenteGros = parseFloat(formData.prix_vente_gros);
+    const prixSeuilDetail = parseFloat(formData.prix_seuil_detail || 0);
+    const prixSeuilGros = parseFloat(formData.prix_seuil_gros || 0);
+
+    // Validation 1: Prix seuil détail ne doit pas être supérieur au prix vente détail
+    if (prixSeuilDetail > 0 && prixSeuilDetail > prixVenteDetail) {
+      toast.error('Erreur de validation des prix', {
+        description: 'Le prix seuil détail ne peut pas être supérieur au prix de vente détail'
+      });
+      return;
+    }
+
+    // Validation 2: Prix seuil gros ne doit pas être supérieur au prix vente gros
+    if (prixSeuilGros > 0 && prixSeuilGros > prixVenteGros) {
+      toast.error('Erreur de validation des prix', {
+        description: 'Le prix seuil gros ne peut pas être supérieur au prix de vente gros'
+      });
+      return;
+    }
+
+    // Validation 3: Prix vente détail ne doit pas être supérieur au prix vente gros
+    if (prixVenteDetail > prixVenteGros) {
+      toast.error('Erreur de validation des prix', {
+        description: 'Le prix de vente détail ne peut pas être supérieur au prix de vente gros'
+      });
+      return;
+    }
+
+    // Validation 4: Si les deux seuils sont renseignés, prix seuil détail ≤ prix seuil gros
+    if (prixSeuilDetail > 0 && prixSeuilGros > 0 && prixSeuilDetail > prixSeuilGros) {
+      toast.error('Erreur de validation des prix', {
+        description: 'Le prix seuil détail ne peut pas être supérieur au prix seuil gros'
+      });
+      return;
+    }
+
     const payload = {
       id: selectedTransfert.id,
       seuil: parseFloat(formData.seuil || selectedTransfert.seuil || 0),
-      prix_vente_detail: parseFloat(formData.prix_vente_detail),
-      prix_vente_gros: parseFloat(formData.prix_vente_gros),
-      prix_seuil_detail: parseFloat(formData.prix_seuil_detail || 0),
-      prix_seuil_gros: parseFloat(formData.prix_seuil_gros || 0),
+      prix_vente_detail: prixVenteDetail,
+      prix_vente_gros: prixVenteGros,
+      prix_seuil_detail: prixSeuilDetail,
+      prix_seuil_gros: prixSeuilGros,
     };
 
     console.log('📤 Payload envoyé au backend:', payload);
@@ -157,7 +194,7 @@ const Produits = () => {
                 actions={[
                   {
                     title: "Compléter",
-                    icon: <Check size={16} />,
+                    icon: <Check size={30} />,
                     color: "text-green-600",
                     hoverBg: "bg-green-50",
                     onClick: openCompletionModal,
@@ -220,6 +257,13 @@ const Produits = () => {
 
               {/* Formulaire de complétion */}
               <div className="space-y-4">
+                {/* Info sur la hiérarchie des prix */}
+                <div className="bg-blue-50 border-l-4 border-blue-500 p-3 rounded">
+                  <p className="text-sm text-blue-800">
+                    <strong>Règle de prix :</strong> Prix seuil détail ≤ Prix vente détail ≤ Prix vente gros
+                  </p>
+                </div>
+
                 {/* Ligne 1: Seuil de stock */}
                 <div className="grid grid-cols-1 gap-3">
                   <div>
@@ -241,21 +285,35 @@ const Produits = () => {
                     <label className="block text-sm font-medium text-[#111827] mb-1">Prix Vente Détail (FCFA) *</label>
                     <input
                       type="number"
-                      className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-[#472EAD]"
+                      className={`w-full border p-2 rounded focus:outline-none focus:ring-2 ${
+                        formData.prix_vente_detail && formData.prix_vente_gros && parseFloat(formData.prix_vente_detail) > parseFloat(formData.prix_vente_gros)
+                          ? 'border-red-500 focus:ring-red-500'
+                          : 'focus:ring-[#472EAD]'
+                      }`}
                       value={formData.prix_vente_detail}
                       onChange={(e) => setFormData({ ...formData, prix_vente_detail: e.target.value })}
                       placeholder="1000"
                     />
+                    {formData.prix_vente_detail && formData.prix_vente_gros && parseFloat(formData.prix_vente_detail) > parseFloat(formData.prix_vente_gros) && (
+                      <p className="text-xs text-red-600 mt-1">❌ Ne doit pas dépasser le prix gros</p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-[#111827] mb-1">Prix Vente Gros (FCFA) *</label>
                     <input
                       type="number"
-                      className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-[#472EAD]"
+                      className={`w-full border p-2 rounded focus:outline-none focus:ring-2 ${
+                        formData.prix_vente_detail && formData.prix_vente_gros && parseFloat(formData.prix_vente_detail) > parseFloat(formData.prix_vente_gros)
+                          ? 'border-red-500 focus:ring-red-500'
+                          : 'focus:ring-[#472EAD]'
+                      }`}
                       value={formData.prix_vente_gros}
                       onChange={(e) => setFormData({ ...formData, prix_vente_gros: e.target.value })}
                       placeholder="900"
                     />
+                    {formData.prix_vente_detail && formData.prix_vente_gros && parseFloat(formData.prix_vente_detail) > parseFloat(formData.prix_vente_gros) && (
+                      <p className="text-xs text-red-600 mt-1">❌ Doit être ≥ au prix détail</p>
+                    )}
                   </div>
                 </div>
 
@@ -265,21 +323,35 @@ const Produits = () => {
                     <label className="block text-sm font-medium text-[#111827] mb-1">Seuil Prix Détail (FCFA)</label>
                     <input
                       type="number"
-                      className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-[#472EAD]"
+                      className={`w-full border p-2 rounded focus:outline-none focus:ring-2 ${
+                        formData.prix_seuil_detail && formData.prix_vente_detail && parseFloat(formData.prix_seuil_detail) > parseFloat(formData.prix_vente_detail)
+                          ? 'border-red-500 focus:ring-red-500'
+                          : 'focus:ring-[#472EAD]'
+                      }`}
                       value={formData.prix_seuil_detail}
                       onChange={(e) => setFormData({ ...formData, prix_seuil_detail: e.target.value })}
                       placeholder="Prix minimum détail"
                     />
+                    {formData.prix_seuil_detail && formData.prix_vente_detail && parseFloat(formData.prix_seuil_detail) > parseFloat(formData.prix_vente_detail) && (
+                      <p className="text-xs text-red-600 mt-1">❌ Ne doit pas dépasser le prix vente détail</p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-[#111827] mb-1">Seuil Prix Gros (FCFA)</label>
                     <input
                       type="number"
-                      className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-[#472EAD]"
+                      className={`w-full border p-2 rounded focus:outline-none focus:ring-2 ${
+                        formData.prix_seuil_gros && formData.prix_vente_gros && parseFloat(formData.prix_seuil_gros) > parseFloat(formData.prix_vente_gros)
+                          ? 'border-red-500 focus:ring-red-500'
+                          : 'focus:ring-[#472EAD]'
+                      }`}
                       value={formData.prix_seuil_gros}
                       onChange={(e) => setFormData({ ...formData, prix_seuil_gros: e.target.value })}
                       placeholder="Prix minimum gros"
                     />
+                    {formData.prix_seuil_gros && formData.prix_vente_gros && parseFloat(formData.prix_seuil_gros) > parseFloat(formData.prix_vente_gros) && (
+                      <p className="text-xs text-red-600 mt-1">❌ Ne doit pas dépasser le prix vente gros</p>
+                    )}
                   </div>
                 </div>
               </div>

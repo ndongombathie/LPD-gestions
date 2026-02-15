@@ -15,7 +15,7 @@ const Historique = () => {
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState(null);
 
-  const actions = ["Tous", "Transfert reçu", "Produit validé", "Produit modifié", "Produit supprimé"];
+  const actions = ["Tous", "Transfert reçu", "Produit validé"];
 
   useEffect(() => {
     let mounted = true;
