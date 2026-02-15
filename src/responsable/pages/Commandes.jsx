@@ -1651,7 +1651,15 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
 // ======================================================================
 function buildQrPayloadFromCommande(commande) {
   if (!commande) return "";
-  return String(commande.numero || commande.id);
+
+  const numero =
+    commande.numero ??
+    commande.numero_commande ??
+    commande.reference ??
+    commande.id ??
+    "";
+
+  return numero ? String(numero) : "";
 }
 
 
@@ -1916,12 +1924,19 @@ export default function Commandes() {
       };
 
       const raw = await commandesAPI.create(payload);
-      const response = unwrapApi(raw);
+
+      // ✅ store() retourne directement la commande
+      const response =
+      raw?.data?.data ??
+      raw?.data ??
+      raw;
+
 
       let normalized;
 
-      if (response && typeof response === 'object' && !Array.isArray(response)) {
+      if (response && typeof response === "object") {
         normalized = normalizeCommande(response);
+
 
         // Complétion des infos client si manquantes
         if (!normalized.clientNom && commandeDraft.clientNom) {
@@ -2163,7 +2178,7 @@ export default function Commandes() {
             {/* Dette globale (commandes non soldées) */}
             <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5">
               <div className="text-[15px] text-gray-500 mb-0.5">
-                Dette globale (non soldées)
+                Dette globale (reste)
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm sm:text-lg font-extrabold text-rose-700">

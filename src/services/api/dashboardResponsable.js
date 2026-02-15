@@ -2,32 +2,27 @@
  * ==========================================================
  * 📊 Dashboard Responsable API
  * ==========================================================
- *
- * Centralise toutes les données nécessaires au dashboard
- * responsable.
- *
- * Ce fichier agit comme un agrégateur :
- * - appelle les autres APIs
- * - regroupe les données métier
- * - retourne un objet unique exploitable par Dashboard.jsx
- *
- * ⚠️ Aucune logique UI ici.
- * Le frontend décide quoi afficher.
  */
 
 import { clientsAPI } from "./clients";
 import { commandesAPI } from "./commandes";
-import { paiementsAPI } from "./paiements";
 import { produitsAPI } from "./produits";
 import { fournisseursAPI } from "./fournisseurs";
 import { utilisateursAPI } from "./utilisateurs";
 import { decaissementsAPI } from "./decaissements";
 import rapportsAPI from "./rapports";
 
-
 // ======================================================
 // 🧠 HELPERS INTERNES
 // ======================================================
+
+// ✅ garantit toujours un tableau
+const toArray = (data) => {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.data)) return data.data;
+  if (Array.isArray(data?.data?.data)) return data.data.data;
+  return [];
+};
 
 const sum = (arr, key) =>
   arr.reduce((acc, item) => acc + Number(item?.[key] || 0), 0);
@@ -37,24 +32,16 @@ const todayString = () => {
   return d.toISOString().split("T")[0];
 };
 
-
 // ======================================================
 // 📊 DASHBOARD RESPONSABLE API
 // ======================================================
 
 export const dashboardResponsableAPI = {
 
-  /**
-   * ==================================================
-   * 🔥 MÉTHODE PRINCIPALE
-   * ==================================================
-   */
   getDashboardData: async () => {
+
     try {
 
-      // ==================================================
-      // ⚡ Chargement parallèle (rapide)
-      // ==================================================
       const [
         clients,
         commandes,
@@ -75,43 +62,49 @@ export const dashboardResponsableAPI = {
         rapportsAPI.getLogsFournisseurs()
       ]);
 
+      // ✅ NORMALISATION UNIQUE
+      const clientsList = toArray(clients);
+      const commandesList = toArray(commandes);
+      const produitsList = toArray(produits);
+      const fournisseursList = toArray(fournisseurs);
+      const utilisateursList = toArray(utilisateurs);
+      const decaissementsList = toArray(decaissements);
+
       // ==================================================
-      // 🟣 VENTES & FINANCE
+      // 🟣 VENTES
       // ==================================================
 
-      const totalCommandes = commandes.length;
+      const totalCommandes = commandesList.length;
 
-      const chiffreAffaireTotal = sum(commandes, "total");
+      const chiffreAffaireTotal = sum(commandesList, "total");
 
-      const commandesAujourdhui = commandes.filter(c =>
+      const commandesAujourdhui = commandesList.filter(c =>
         c.date?.startsWith(todayString())
       );
 
       const caJour = sum(commandesAujourdhui, "total");
 
-      const commandesParStatut = commandes.reduce((acc, c) => {
+      const commandesParStatut = commandesList.reduce((acc, c) => {
         acc[c.statut] = (acc[c.statut] || 0) + 1;
         return acc;
       }, {});
 
       // ==================================================
-      // 🔵 CLIENTS SPÉCIAUX
+      // 🔵 CLIENTS
       // ==================================================
 
-      const clientsActifs = clients.length;
+      const clientsActifs = clientsList.length;
 
-      const topClients = clients
+      const topClients = clientsList
         .map(client => {
-          const commandesClient = commandes.filter(
+          const commandesClient = commandesList.filter(
             c => c.client_id === client.id
           );
-
-          const totalClient = sum(commandesClient, "total");
 
           return {
             id: client.id,
             nom: client.nom,
-            dette: totalClient,
+            dette: sum(commandesClient, "total"),
             transactions: commandesClient.length
           };
         })
@@ -122,36 +115,39 @@ export const dashboardResponsableAPI = {
       // 🟢 PRODUITS
       // ==================================================
 
-      const stockData = produits
-        .slice(0, 5)
-        .map(p => ({
-          name: p.nom,
-          value: Number(p.stock_global || 0)
-        }));
+      const stockData = produitsList.map(p => ({
+        id: p.id,
+        nom: p.nom,
+        stock: Number(p.stock_global || 0),
+        seuil: Number(p.seuil || 5),
+        quantiteVendue: Number(p.quantite_vendue || 0),
+        chiffreAffaires: Number(p.ca_total || 0)
+      }));
 
       // ==================================================
       // 🟠 FOURNISSEURS
       // ==================================================
 
       const fournisseursStats = {
-        total: fournisseurs.length,
-        derniers: fournisseurs.slice(0, 5)
+        total: fournisseursList.length,
+        derniers: fournisseursList.slice(0, 5)
       };
 
       // ==================================================
       // 🔴 DÉCAISSEMENTS
       // ==================================================
 
-      const totalDecaissements = sum(decaissements, "montant");
+      const totalDecaissements = sum(decaissementsList, "montant");
 
       // ==================================================
       // ⚫ UTILISATEURS
       // ==================================================
 
       const utilisateursStats = {
-        total: utilisateurs.length,
-        vendeurs: utilisateurs.filter(u => u.role === "vendeur").length,
-        caissiers: utilisateurs.filter(u => u.role === "caissier").length,
+        total: utilisateursList.length,
+        vendeurs: utilisateursList.filter(u => u.role === "vendeur").length,
+        caissiers: utilisateursList.filter(u => u.role === "caissier").length,
+        gestionnaires: utilisateursList.filter(u => u.role === "gestionnaire_boutique").length,
       };
 
       // ==================================================
@@ -166,7 +162,7 @@ export const dashboardResponsableAPI = {
         .slice(0, 10);
 
       // ==================================================
-      // ✅ OBJET FINAL
+      // ✅ RETURN FINAL
       // ==================================================
 
       return {
@@ -202,5 +198,4 @@ export const dashboardResponsableAPI = {
       throw error;
     }
   }
-
 };

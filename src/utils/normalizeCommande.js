@@ -130,8 +130,13 @@ const dateCommande =
   // ===============================
   return {
     id: cmd.id,
-    numero: cmd.numero || cmd.reference || `CMD-${cmd.id}`,
-    clientId,
+    numero:
+    cmd.numero ||
+    cmd.numero_commande ||
+    cmd.reference ||
+    cmd.code ||
+    null,
+     clientId,
     clientNom,
     dateCommande,
     lignes,
