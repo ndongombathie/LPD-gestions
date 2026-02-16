@@ -40,7 +40,6 @@ PUT     api/produits/{produit}/reduire-stock
 
 GET     api/fournisseurs | Liste des fournisseurs 
 
-
 # les transfert en attente
 GET     api/produits-transfer
 
