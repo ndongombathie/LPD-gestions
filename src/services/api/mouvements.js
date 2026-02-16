@@ -8,6 +8,7 @@ import httpClient from '../http/client';
 
 const ENDPOINTS = {
   BASE: '/mouvements-stock',
+  CANCEL_TRANSFER: '/annuler-produits-transfer', // Endpoint pour annuler un transfert
 };
 
 export const mouvementsAPI = {
@@ -70,6 +71,20 @@ export const mouvementsAPI = {
       return response.data;
     } catch (error) {
       console.error('❌ Erreur create mouvement:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Annule un transfert en attente
+   * @param {number} transferId - ID du transfert à annuler
+   */
+  cancelTransfer: async (transferId) => {
+    try {
+      const response = await httpClient.put(ENDPOINTS.CANCEL_TRANSFER, { transfer_id: transferId });
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erreur cancelTransfer:', error);
       throw error;
     }
   }

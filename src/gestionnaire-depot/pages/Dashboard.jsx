@@ -16,28 +16,21 @@ import {
 import {
   HiArrowTrendingUp,
   HiBellAlert,
-  HiClock,
 } from "react-icons/hi2";
 
-// MODIFICATION: import du contexte
 import { useStock } from "./StockContext";
 
 const Dashboard = () => {
-  // MODIFICATION: récupération des données du contexte
   const { products, movements, fournisseurs, loading } = useStock();
 
-  // Calcul des statistiques
   const stats = useMemo(() => {
-    // Nombre total de produits
     const totalProduits = products.length;
 
-    // Calcul du stock global pour chaque produit (nombre_carton * unite_carton)
     const produitsAvecStockGlobal = products.map(p => ({
       ...p,
       stockGlobal: (p.nombre_carton || 0) * (p.unite_carton || 1)
     }));
 
-    // Nombre de produits sains : stockGlobal > stock_seuil
     const produitsSains = produitsAvecStockGlobal.filter(
       p => p.stockGlobal > (p.stock_seuil || 0)
     ).length;
@@ -46,23 +39,20 @@ const Dashboard = () => {
       ? Math.round((produitsSains / totalProduits) * 100)
       : 0;
 
-    // Rupture stricte : stockGlobal === 0 (ou nombre_carton === 0)
     const ruptureStricte = produitsAvecStockGlobal.filter(
       p => p.stockGlobal === 0
     ).length;
 
-    // Stock faible : stockGlobal > 0 mais stockGlobal < stock_seuil
     const stockFaible = produitsAvecStockGlobal.filter(
       p => p.stockGlobal > 0 && p.stockGlobal < (p.stock_seuil || 0)
     ).length;
 
-    // Mouvements du jour
     const todayStr = new Date().toISOString().split('T')[0];
-    const mouvementsDuJour = movements.filter(
-      m => m.date_mouvement && m.date_mouvement.startsWith(todayStr)
-    ).length;
+    const mouvementsDuJour = movements.filter(m => {
+      const dateStr = m.date ? new Date(m.date).toISOString().split('T')[0] : '';
+      return dateStr === todayStr;
+    }).length;
 
-    // Nombre de fournisseurs
     const nbFournisseurs = fournisseurs.length;
 
     return {
@@ -75,30 +65,25 @@ const Dashboard = () => {
     };
   }, [products, movements, fournisseurs]);
 
-  // Activité récente : les 3 derniers mouvements (triés par date décroissante)
   const recentActivity = useMemo(() => {
-    // On suppose que les mouvements ont un champ date (date_mouvement ou created_at)
     const sorted = [...movements].sort((a, b) => {
-      const dateA = new Date(a.date_mouvement || a.created_at || 0);
-      const dateB = new Date(b.date_mouvement || b.created_at || 0);
+      const dateA = new Date(a.date || a.created_at || 0);
+      const dateB = new Date(b.date || b.created_at || 0);
       return dateB - dateA;
     });
     return sorted.slice(0, 3);
   }, [movements]);
 
-  // Date dynamique
   const today = new Date();
   const options = { weekday: "long", day: "numeric", month: "long", year: "numeric" };
   const dateFormatted = today.toLocaleDateString("fr-FR", options);
 
-  // Fonction utilitaire pour formater la date relative
   const formatDateRelative = (dateString) => {
     if (!dateString) return "Récemment";
     const date = new Date(dateString);
     return date.toLocaleDateString("fr-FR", { hour: '2-digit', minute: '2-digit' });
   };
 
-  // MODIFICATION: affichage du chargement
   if (loading) {
     return (
       <div className="depot-page flex items-center justify-center h-64">
@@ -119,11 +104,11 @@ const Dashboard = () => {
             Tableau de bord Dépôt
           </h1>
           <p className="text-xs text-gray-500">
-            Bienvenue, Modou Ndiaye et – Gestionnaire Dépôt
+            Bienvenue, Modou Ndiaye – Gestionnaire Dépôt
           </p>
         </div>
         <p className="text-xs text-gray-400">
-          Aujourd&apos;hui · {dateFormatted}
+          Aujourd'hui · {dateFormatted}
         </p>
       </div>
 
@@ -153,7 +138,7 @@ const Dashboard = () => {
 
         <div className="bg-white rounded-xl shadow-sm border p-5">
           <div className="flex justify-between items-center">
-            <p className="text-xs text-gray-500">Mouvements Aujourd&apos;hui</p>
+            <p className="text-xs text-gray-500">Mouvements Aujourd'hui</p>
             <MdCompareArrows className="text-blue-500" size={22} />
           </div>
           <p className="text-3xl font-bold text-gray-900 mt-2">{stats.mouvements}</p>
@@ -181,14 +166,14 @@ const Dashboard = () => {
               recentActivity.map((mouv, index) => (
                 <div key={index} className="flex justify-between items-start border-b pb-3 last:border-0">
                   <div className="flex gap-3">
-                    {mouv.type === 'entree' ? (
+                    {mouv.type === 'Entrée' ? (
                       <MdArrowUpward className="text-green-600 mt-1" size={18} />
                     ) : (
                       <MdArrowDownward className="text-orange-600 mt-1" size={18} />
                     )}
                     <div>
                       <p className="font-medium text-gray-900">
-                        {mouv.type === 'entree' ? "Réception" : "Sortie"} de Stock
+                        {mouv.type === 'Entrée' ? "Réception" : "Sortie"} de Stock
                       </p>
                       <p className="text-xs text-gray-500">
                         {mouv.quantite} unités — {mouv.motif || `Produit #${mouv.produit_id}`}
@@ -196,7 +181,7 @@ const Dashboard = () => {
                     </div>
                   </div>
                   <p className="text-xs text-gray-400">
-                    {formatDateRelative(mouv.date_mouvement || mouv.created_at)}
+                    {formatDateRelative(mouv.date || mouv.created_at)}
                   </p>
                 </div>
               ))

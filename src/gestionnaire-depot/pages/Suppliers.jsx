@@ -1,19 +1,15 @@
 // src/gestionnaire-depot/pages/Suppliers.jsx
 import React, { useState, useMemo } from "react";
-// MODIFICATION: on garde l'import de l'API pour d'éventuelles actions futures, mais on ne l'utilise pas dans ce fichier
-// import { fournisseursAPI } from "../../services/api/fournisseurs";
 import "../styles/depot-fix.css";
 import { 
-  Package, User, Phone, Store, Search as SearchIcon, 
-  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, 
-  Loader 
+  Store, User, Phone, Search, ChevronLeft, ChevronRight, 
+  ChevronsLeft, ChevronsRight, Loader, CheckCircle, XCircle, 
+  MapPin, Truck 
 } from "lucide-react";
-
-// MODIFICATION: import du contexte
 import { useStock } from "./StockContext";
 
 /* =========================================================================
-   AVATAR GÉNÉRÉ AUTOMATIQUEMENT (inchangé)
+   AVATAR GÉNÉRÉ AUTOMATIQUEMENT
    ========================================================================= */
 const generateAvatar = (name) => {
   const initials = name
@@ -25,7 +21,7 @@ const generateAvatar = (name) => {
 
   return (
     <div
-      className="w-9 h-9 rounded-full flex items-center justify-center text-white font-semibold"
+      className="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-sm"
       style={{
         background: "linear-gradient(135deg, #472EAD, #f97316)",
       }}
@@ -39,73 +35,45 @@ const generateAvatar = (name) => {
    PAGE PRINCIPALE
    ========================================================================= */
 export default function Suppliers() {
-  // MODIFICATION: récupération des fournisseurs depuis le contexte
   const { fournisseurs: contextFournisseurs, loading: contextLoading } = useStock();
-
-  // MODIFICATION: plus d'états pour fournisseurs, loading, error
-  // On garde un état d'erreur local pour les actions futures (optionnel)
-  const [localError, setLocalError] = useState(null);
-
-  // État pour la pagination
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
-
-  // champ recherche direct
   const [searchInput, setSearchInput] = useState("");
-
-  // modale détails
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(8);
   const [selectedSupplier, setSelectedSupplier] = useState(null);
 
-  // -----------------------------------------------------------------------
-  // 1. FORMATAGE DES DONNÉES DES FOURNISSEURS (à partir du contexte)
-  // -----------------------------------------------------------------------
+  // Formatage des fournisseurs
   const suppliers = useMemo(() => {
-    // On applique le même mapping que dans le code original
     return contextFournisseurs.map((item) => ({
       id: item.id,
       name: item.name || item.nom || "Nom inconnu",
       email: item.email || "",
       contact: item.contactName || item.contact || "",
       phone: item.phone || "",
-      products: item.products || item.produits || "",
-      delay: item.deliveryDelay || item.delai || "",
-      orders: item.ordersCount ? `${item.ordersCount} commandes` : "0 commande",
       status: item.status || "Actif",
+      address: item.address || "",
+      city: item.city || "",
     }));
   }, [contextFournisseurs]);
 
-  // -----------------------------------------------------------------------
-  // 2. CALCUL DES STATISTIQUES DYNAMIQUES
-  // -----------------------------------------------------------------------
+  // Statistiques
   const totalSuppliers = suppliers.length;
   const activeSuppliers = suppliers.filter((s) => s.status === "Actif").length;
-  
-  const totalOrders = suppliers.reduce((acc, s) => {
-    const match = s.orders.match(/(\d+)/);
-    const num = match ? parseInt(match[0], 10) : 0;
-    return acc + num;
-  }, 0);
 
-  const lastUpdate = new Date().toLocaleDateString("fr-FR");
-
-  // -----------------------------------------------------------------------
-  // 3. RECHERCHE, PAGINATION (inchangé)
-  // -----------------------------------------------------------------------
+  // Recherche
   const filteredSuppliers = useMemo(() => {
     const term = searchInput.trim().toLowerCase();
     if (!term) return suppliers;
-
     return suppliers.filter((s) => {
       return (
         s.name.toLowerCase().includes(term) ||
         s.contact.toLowerCase().includes(term) ||
         s.email.toLowerCase().includes(term) ||
-        s.phone.toLowerCase().includes(term) ||
-        s.products.toLowerCase().includes(term)
+        s.phone.toLowerCase().includes(term)
       );
     });
   }, [suppliers, searchInput]);
 
+  // Pagination
   const totalItems = filteredSuppliers.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
   const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages || 1);
@@ -123,9 +91,6 @@ export default function Suppliers() {
     setCurrentPage(1);
   };
 
-  // -----------------------------------------------------------------------
-  // 4. RENDU AVEC GESTION DU CHARGEMENT ET DES ERREURS
-  // -----------------------------------------------------------------------
   if (contextLoading) {
     return (
       <div className="depot-page flex items-center justify-center h-64">
@@ -135,65 +100,51 @@ export default function Suppliers() {
     );
   }
 
-  // Gestion d'erreur locale (si jamais on a besoin d'afficher une erreur liée à une action)
-  if (localError) {
-    return (
-      <div className="depot-page flex flex-col items-center justify-center h-64 text-red-600">
-        <p className="text-lg font-semibold">❌ {localError}</p>
-        <button
-          onClick={() => setLocalError(null)}
-          className="mt-4 px-4 py-2 bg-[#472EAD] text-white rounded-lg hover:bg-[#3b2491]"
-        >
-          Réessayer
-        </button>
-      </div>
-    );
-  }
-
   return (
-    <div className="depot-page space-y-6">
+    <div className="depot-page space-y-6 p-6">
       {/* HEADER */}
-      <div>
-        <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-          <Store className="text-[#472EAD]" />
-          Gestion des Fournisseurs
-        </h2>
-        <p className="text-sm text-gray-500 mt-1">
-          Gérer la liste des fournisseurs, leurs contacts et informations de livraison.
-        </p>
-      </div>
-
-      {/* STAT CARDS DYNAMIQUES */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl shadow-sm border p-4">
-          <p className="text-xs text-gray-500">Fournisseurs</p>
-          <p className="text-2xl font-bold text-gray-900 mt-2">{totalSuppliers}</p>
-          <p className="text-xs text-gray-500">totaux</p>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm border p-4">
-          <p className="text-xs text-gray-500">Actifs</p>
-          <p className="text-2xl font-bold text-gray-900 mt-2">{activeSuppliers}</p>
-          <p className="text-xs text-gray-500">actifs</p>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm border p-4">
-          <p className="text-xs text-gray-500">Commandes totales</p>
-          <p className="text-2xl font-bold text-gray-900 mt-2">{totalOrders}</p>
-          <p className="text-xs text-gray-500">commandes</p>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm border p-4">
-          <p className="text-xs text-gray-500">Dernière maj</p>
-          <p className="text-sm font-semibold text-gray-800 mt-2">{lastUpdate}</p>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+            <Truck className="text-[#472EAD]" size={28} />
+            Gestion des Fournisseurs
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Consultez et gérez vos partenaires
+          </p>
         </div>
       </div>
 
-      {/* BARRE DE RECHERCHE */}
-      <div className="bg-white border rounded-xl shadow-sm p-4">
+      {/* STATISTIQUES */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-white rounded-xl shadow-sm border p-5 flex items-center gap-4">
+          <div className="p-3 bg-purple-100 rounded-lg">
+            <Truck className="text-[#472EAD]" size={24} />
+          </div>
+          <div>
+            <p className="text-sm text-gray-500">Total fournisseurs</p>
+            <p className="text-2xl font-bold text-gray-900">{totalSuppliers}</p>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border p-5 flex items-center gap-4">
+          <div className="p-3 bg-green-100 rounded-lg">
+            <CheckCircle className="text-green-600" size={24} />
+          </div>
+          <div>
+            <p className="text-sm text-gray-500">Fournisseurs actifs</p>
+            <p className="text-2xl font-bold text-gray-900">{activeSuppliers}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* RECHERCHE */}
+      <div className="bg-white rounded-xl shadow-sm border p-4">
         <div className="relative">
-          <SearchIcon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
-            placeholder="Rechercher un fournisseur, contact, email, téléphone..."
-            className="w-full border rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#472EAD]"
+            placeholder="Rechercher un fournisseur, contact, email..."
+            className="w-full border rounded-lg pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#472EAD] focus:border-transparent"
             value={searchInput}
             onChange={(e) => {
               setSearchInput(e.target.value);
@@ -203,10 +154,88 @@ export default function Suppliers() {
         </div>
       </div>
 
-      {/* TABLEAU FOURNISSEURS */}
-      <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
-        <div className="border-b px-4 py-3 text-sm font-semibold text-gray-700 flex justify-between items-center">
-          <span>Liste des Fournisseurs ({filteredSuppliers.length})</span>
+      {/* GRILLE DES FOURNISSEURS */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        {currentSuppliers.map((supplier) => (
+          <div
+            key={supplier.id}
+            className="bg-white rounded-xl shadow-sm border hover:shadow-md transition-shadow p-5 cursor-pointer"
+            onClick={() => setSelectedSupplier(supplier)}
+          >
+            <div className="flex items-start gap-3">
+              {generateAvatar(supplier.name)}
+              <div className="flex-1 min-w-0">
+                <h3 className="font-semibold text-gray-800 truncate">{supplier.name}</h3>
+                <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
+                  <User size={12} />
+                  <span className="truncate">{supplier.contact || "Contact non spécifié"}</span>
+                </p>
+                <p className="text-xs text-gray-500 flex items-center gap-1 mt-1">
+                  <Phone size={12} />
+                  <span>{supplier.phone || "—"}</span>
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 flex items-center justify-between">
+              <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
+                supplier.status === "Actif" ? "bg-green-50 text-green-700" : "bg-gray-50 text-gray-700"
+              }`}>
+                {supplier.status === "Actif" ? <CheckCircle size={12} /> : <XCircle size={12} />}
+                {supplier.status}
+              </span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedSupplier(supplier);
+                }}
+                className="text-xs text-[#472EAD] hover:underline"
+              >
+                Détails
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* PAGINATION */}
+      {totalItems > 0 && (
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-3 px-4 py-3 bg-white rounded-xl shadow-sm border">
+          <div className="text-xs text-gray-500">
+            Affichage de {startIndex + 1} à {endIndex} sur {totalItems} fournisseurs
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => goToPage(1)}
+              disabled={safeCurrentPage === 1}
+              className="p-2 rounded-md border bg-white hover:bg-gray-50 disabled:opacity-40 transition-colors"
+            >
+              <ChevronsLeft size={16} className="text-gray-600" />
+            </button>
+            <button
+              onClick={() => goToPage(safeCurrentPage - 1)}
+              disabled={safeCurrentPage === 1}
+              className="p-2 rounded-md border bg-white hover:bg-gray-50 disabled:opacity-40 transition-colors"
+            >
+              <ChevronLeft size={16} className="text-gray-600" />
+            </button>
+            <span className="text-sm text-gray-700">
+              Page <span className="font-semibold text-[#472EAD]">{safeCurrentPage}</span> sur {totalPages}
+            </span>
+            <button
+              onClick={() => goToPage(safeCurrentPage + 1)}
+              disabled={safeCurrentPage === totalPages}
+              className="p-2 rounded-md border bg-white hover:bg-gray-50 disabled:opacity-40 transition-colors"
+            >
+              <ChevronRight size={16} className="text-gray-600" />
+            </button>
+            <button
+              onClick={() => goToPage(totalPages)}
+              disabled={safeCurrentPage === totalPages}
+              className="p-2 rounded-md border bg-white hover:bg-gray-50 disabled:opacity-40 transition-colors"
+            >
+              <ChevronsRight size={16} className="text-gray-600" />
+            </button>
+          </div>
           <div className="flex items-center gap-2 text-xs">
             <span className="text-gray-500">Afficher :</span>
             <select
@@ -214,176 +243,97 @@ export default function Suppliers() {
               onChange={handleItemsPerPageChange}
               className="border rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-[#472EAD]"
             >
-              <option value="5">5</option>
-              <option value="10">10</option>
+              <option value="4">4</option>
+              <option value="8">8</option>
+              <option value="12">12</option>
               <option value="20">20</option>
-              <option value="50">50</option>
-              <option value="100">100</option>
             </select>
-            <span className="text-gray-500">éléments</span>
           </div>
         </div>
+      )}
 
-        <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
-            <tr>
-              <th className="text-left px-4 py-3">Fournisseur</th>
-              <th className="text-left px-4 py-3">Contact</th>
-              <th className="text-left px-4 py-3">Produits</th>
-              <th className="text-center px-4 py-3">Délai</th>
-              <th className="text-center px-4 py-3">Commandes</th>
-              <th className="text-center px-4 py-3">Statut</th>
-              <th className="text-center px-4 py-3">Détails</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {currentSuppliers.map((s) => (
-              <tr key={s.id} className="hover:bg-gray-50">
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    {generateAvatar(s.name)}
-                    <div>
-                      <p className="font-medium text-gray-800 flex items-center gap-1">
-                        <Package size={14} className="text-gray-400" />
-                        {s.name}
-                      </p>
-                      <p className="text-xs text-gray-500">{s.email}</p>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <p className="font-medium text-gray-800 flex items-center gap-1">
-                    <User size={14} className="text-gray-400" />
-                    {s.contact}
-                  </p>
-                  <p className="text-xs text-gray-500 flex items-center gap-1">
-                    <Phone size={12} className="text-gray-400" />
-                    {s.phone}
-                  </p>
-                </td>
-                <td className="px-4 py-3 text-xs text-gray-700">{s.products}</td>
-                <td className="px-4 py-3 text-center text-xs text-green-600">{s.delay}</td>
-                <td className="px-4 py-3 text-center text-xs text-gray-700">{s.orders}</td>
-                <td className="px-4 py-3 text-center">
-                  <span className="px-2 py-1 rounded-full text-xs bg-green-50 text-green-700">
-                    {s.status}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-center">
-                  <button
-                    onClick={() => setSelectedSupplier(s)}
-                    className="text-xs text-blue-600 hover:underline"
-                  >
-                    Voir
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {currentSuppliers.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-gray-400 italic">
-                  Aucun fournisseur trouvé.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-
-        {/* PAGINATION */}
-        {totalItems > 0 && (
-          <div className="border-t px-4 py-3 flex flex-col sm:flex-row justify-between items-center gap-3">
-            <div className="text-xs text-gray-500">
-              Affichage de {startIndex + 1} à {endIndex} sur {totalItems} fournisseurs
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => goToPage(1)}
-                disabled={safeCurrentPage === 1}
-                className={`p-1 rounded-md ${safeCurrentPage === 1 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600 hover:bg-gray-100'}`}
-              >
-                <ChevronsLeft size={16} />
-              </button>
-              <button
-                onClick={() => goToPage(safeCurrentPage - 1)}
-                disabled={safeCurrentPage === 1}
-                className={`p-1 rounded-md ${safeCurrentPage === 1 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600 hover:bg-gray-100'}`}
-              >
-                <ChevronLeft size={16} />
-              </button>
-              <div className="flex items-center gap-1 text-xs">
-                <span className="text-gray-700">Page</span>
-                <span className="font-semibold text-[#472EAD]">{safeCurrentPage}</span>
-                <span className="text-gray-700">sur</span>
-                <span className="font-semibold">{totalPages}</span>
-              </div>
-              <button
-                onClick={() => goToPage(safeCurrentPage + 1)}
-                disabled={safeCurrentPage === totalPages}
-                className={`p-1 rounded-md ${safeCurrentPage === totalPages ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600 hover:bg-gray-100'}`}
-              >
-                <ChevronRight size={16} />
-              </button>
-              <button
-                onClick={() => goToPage(totalPages)}
-                disabled={safeCurrentPage === totalPages}
-                className={`p-1 rounded-md ${safeCurrentPage === totalPages ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600 hover:bg-gray-100'}`}
-              >
-                <ChevronsRight size={16} />
-              </button>
-            </div>
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-gray-500">Aller à :</span>
-              <input
-                type="number"
-                min="1"
-                max={totalPages}
-                value={safeCurrentPage}
-                onChange={(e) => {
-                  const page = parseInt(e.target.value);
-                  if (page >= 1 && page <= totalPages) goToPage(page);
-                }}
-                className="w-12 border rounded-md px-2 py-1 text-center focus:outline-none focus:ring-1 focus:ring-[#472EAD]"
-              />
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* MODALE DETAILS */}
+      {/* MODALE DÉTAILS - AMÉLIORÉE */}
       {selectedSupplier && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-lg">
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg font-semibold flex items-center gap-2">
-                <Package className="text-[#472EAD]" />
-                Détails du Fournisseur
-              </h3>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all">
+            {/* En-tête avec dégradé */}
+            <div className="bg-gradient-to-r from-[#472EAD] to-[#f97316] px-6 py-5">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                  <Store size={22} />
+                  Détails du fournisseur
+                </h3>
+                <button
+                  onClick={() => setSelectedSupplier(null)}
+                  className="text-white/80 hover:text-white transition-colors"
+                >
+                  <XCircle size={24} />
+                </button>
+              </div>
+            </div>
+
+            {/* Contenu */}
+            <div className="p-6">
+              {/* Avatar + Nom */}
+              <div className="flex items-center gap-4 mb-6">
+                {generateAvatar(selectedSupplier.name)}
+                <div>
+                  <p className="text-xl font-semibold text-gray-800">{selectedSupplier.name}</p>
+                </div>
+              </div>
+
+              {/* Grille d'informations */}
+              <div className="space-y-4">
+                {/* Contact */}
+                <div className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg border border-gray-100">
+                  <div className="p-2 bg-purple-100 rounded-full">
+                    <User size={18} className="text-[#472EAD]" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs text-gray-500">Personne de contact</p>
+                    <p className="font-medium text-gray-800">{selectedSupplier.contact || "Non renseigné"}</p>
+                  </div>
+                </div>
+
+                {/* Adresse */}
+                <div className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg border border-gray-100">
+                  <div className="p-2 bg-orange-100 rounded-full">
+                    <MapPin size={18} className="text-[#f97316]" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs text-gray-500">Adresse</p>
+                    <p className="font-medium text-gray-800">
+                      {selectedSupplier.address 
+                        ? `${selectedSupplier.address}${selectedSupplier.city ? `, ${selectedSupplier.city}` : ''}` 
+                        : "Non renseignée"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Statut */}
+                <div className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg border border-gray-100">
+                  <div className={`p-2 rounded-full ${selectedSupplier.status === "Actif" ? "bg-green-100" : "bg-gray-200"}`}>
+                    {selectedSupplier.status === "Actif" ? (
+                      <CheckCircle size={18} className="text-green-600" />
+                    ) : (
+                      <XCircle size={18} className="text-gray-600" />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs text-gray-500">Statut</p>
+                    <p className={`font-medium ${selectedSupplier.status === "Actif" ? "text-green-600" : "text-gray-600"}`}>
+                      {selectedSupplier.status}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Pied de page */}
+            <div className="border-t border-gray-100 px-6 py-4 bg-gray-50 flex justify-end">
               <button
                 onClick={() => setSelectedSupplier(null)}
-                className="text-xl text-gray-500 hover:text-gray-800"
-              >
-                ×
-              </button>
-            </div>
-            <div className="mt-4 space-y-3 text-sm">
-              <p><strong>Nom :</strong> {selectedSupplier.name}</p>
-              <p><strong>Email :</strong> {selectedSupplier.email}</p>
-              <p><strong>Contact :</strong> {selectedSupplier.contact}</p>
-              <p><strong>Téléphone :</strong> {selectedSupplier.phone}</p>
-              <p><strong>Produits :</strong> {selectedSupplier.products}</p>
-              <p><strong>Délai :</strong> {selectedSupplier.delay}</p>
-              <p><strong>Commandes :</strong> {selectedSupplier.orders}</p>
-              <p>
-                <strong>Statut :</strong>{" "}
-                <span className="px-2 py-1 rounded-full bg-green-50 text-green-700 text-xs">
-                  {selectedSupplier.status}
-                </span>
-              </p>
-            </div>
-            <div className="flex justify-end mt-6">
-              <button
-                onClick={() => setSelectedSupplier(null)}
-                className="px-4 py-2 bg-[#472EAD] text-white rounded-lg hover:bg-[#3b2491]"
+                className="px-5 py-2 bg-gradient-to-r from-[#472EAD] to-[#f97316] text-white rounded-lg hover:opacity-90 transition-all text-sm font-medium shadow-sm"
               >
                 Fermer
               </button>

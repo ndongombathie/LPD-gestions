@@ -7,7 +7,6 @@ import {
   Activity,
   Search,
   Filter,
-  CalendarRange,
   Info,
   Package,
   FileText,
@@ -30,17 +29,17 @@ import {
 } from "lucide-react";
 
 /* =========================================================================
-   IMPORT DES API (conservés pour les actions)
+   IMPORT DES API
    ========================================================================= */
-import { mouvementsAPI } from "../../services/api/mouvements";
 import { stockAPI } from "../../services/api/stock";
-// MODIFICATION: import du contexte
+import { mouvementsAPI } from "../../services/api/mouvements";
 import { useStock } from "./StockContext";
 
 /* =========================================================================
-   HELPERS (inchangés)
+   HELPERS
    ========================================================================= */
 const formatDateTime = (iso) => {
+  if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleString("fr-FR", {
@@ -64,87 +63,19 @@ const todayIsSameDay = (iso) => {
 };
 
 /* =========================================================================
-   FONCTION DE MAPPAGE DES MOUVEMENTS (identique)
-   ========================================================================= */
-const mapMovement = (m, productsList, fournisseursList) => {
-  const produit = productsList.find(p => p.id === m.produit_id) || m.produit || {};
-  const stockActuel = Number(produit.nombre_carton || 0);
-
-  let stockBefore, stockAfter;
-  if (m.type === 'entree') {
-    stockBefore = Math.max(0, stockActuel - (m.quantite || 0));
-    stockAfter = stockActuel;
-  } else {
-    stockBefore = Math.max(0, stockActuel + (m.quantite || 0));
-    stockAfter = stockActuel;
-  }
-
-  let source = "Boutique Colobane";
-  if (m.type === 'entree') {
-    const fournisseur = fournisseursList.find(f => f.id === produit.fournisseur_id);
-    source = fournisseur?.nom || "Fournisseur inconnu";
-  }
-
-  const motif = m.motif || '';
-  let sousType = '';
-  if (m.type === 'sortie') {
-    if (motif.toLowerCase().includes('transfert')) {
-      sousType = 'transfert';
-    } else {
-      sousType = 'diminution';
-    }
-  }
-
-  // Détermination du statut
-  let status = m.statut?.toLowerCase() || 'completed';
-  if (m.type === 'entree') status = 'completed';
-  else if (status === 'en_attente') status = 'pending';
-  else if (status === 'validé') status = 'validated';
-  else if (status === 'annulé') status = 'cancelled';
-
-  return {
-    id: m.id,
-    type: m.type === 'entree' ? 'Entrée' : 'Sortie',
-    sousType,
-    product: produit.nom || 'Produit inconnu',
-    barcode: produit.code_barre || '',
-    source,
-    quantity: m.quantite || 0,
-    stockBefore,
-    stockAfter,
-    date: m.date || m.created_at,
-    status,
-    motif,
-    createdAt: m.created_at,
-    validatedAt: m.validated_at,
-  };
-};
-
-/* =========================================================================
    COMPOSANT PRINCIPAL
    ========================================================================= */
 export default function StockMovements() {
-  // MODIFICATION: récupération des données depuis le contexte
   const {
+    movements: contextMovements,
     products,
     fournisseurs,
-    movements: rawMovements,
     loading: contextLoading,
     refreshMovements,
   } = useStock();
 
-  // MODIFICATION: mouvements formatés (mappés)
-  const movements = useMemo(() => {
-    return rawMovements.map(m => mapMovement(m, products, fournisseurs));
-  }, [rawMovements, products, fournisseurs]);
-
-  // MODIFICATION: plus d'états locaux pour products, fournisseurs, movements, loading, error
-  // On garde un état d'erreur local pour les actions utilisateur
   const [localError, setLocalError] = useState(null);
-
   const [searchTerm, setSearchTerm] = useState("");
-  const [typeFilter, setTypeFilter] = useState("Tous");
-  const [sousTypeFilter, setSousTypeFilter] = useState("Tous");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [activeTab, setActiveTab] = useState("historique");
@@ -174,8 +105,6 @@ export default function StockMovements() {
   const [pendingPage, setPendingPage] = useState(1);
   const [cancelledPage, setCancelledPage] = useState(1);
 
-  // MODIFICATION: plus de useEffect pour fetchData
-
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (productDropdownRef.current && !productDropdownRef.current.contains(event.target)) {
@@ -186,12 +115,52 @@ export default function StockMovements() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Calcul de la source et des before/after pour chaque mouvement
+  const movements = useMemo(() => {
+    return contextMovements.map(m => {
+      // Source
+      let source = m.source;
+      if (!source) {
+        if (m.type === "Entrée") {
+          const product = products.find(p => p.id === m.produit_id);
+          if (product && product.fournisseur_id) {
+            const fournisseur = fournisseurs.find(f => f.id === product.fournisseur_id);
+            source = fournisseur?.nom || "Fournisseur inconnu";
+          } else {
+            source = "Fournisseur inconnu";
+          }
+        } else {
+          source = "Boutique Colobane";
+        }
+      }
+
+      // Recalcul de before/after
+      let before = m.before;
+      let after = m.after;
+      const product = products.find(p => p.id === m.produit_id);
+      const stockActuel = product?.nombre_carton || 0;
+
+      // Si les valeurs de l'API sont manquantes ou incohérentes, on recalcule
+      if (before === undefined || after === undefined || (before === 0 && after === 0 && stockActuel > 0)) {
+        if (m.type === "Entrée") {
+          after = stockActuel;
+          before = Math.max(0, after - m.qty);
+        } else {
+          before = stockActuel;
+          after = Math.max(0, before - m.qty);
+        }
+      }
+
+      return { ...m, source, before, after };
+    });
+  }, [contextMovements, products, fournisseurs]);
+
   /* ==================== STATISTIQUES ==================== */
   const stats = useMemo(() => {
-    let totalEntries = 0; // nombre d'opérations d'entrée
-    let totalValidated = 0; // nombre de sorties validées (transferts + diminutions)
-    let totalPending = 0; // nombre de transferts en attente
-    let todayCount = 0; // nombre total de mouvements aujourd'hui
+    let totalEntries = 0;
+    let totalValidated = 0;
+    let totalPending = 0;
+    let todayCount = 0;
 
     movements.forEach((m) => {
       if (m.type === "Entrée") totalEntries += 1;
@@ -205,30 +174,31 @@ export default function StockMovements() {
 
   /* ==================== FILTRAGE PAR ONGLET ==================== */
   const filteredByTab = useMemo(() => {
-    // Applique les filtres communs (recherche, dates)
     const baseFiltered = movements.filter((m) => {
       const term = searchTerm.trim().toLowerCase();
       const matchesSearch = !term ||
-        (m.product?.toLowerCase() || "").includes(term) ||
-        (m.source?.toLowerCase() || "").includes(term);
+        (m.productName?.toLowerCase() || "").includes(term) ||
+        (m.source?.toLowerCase() || "").includes(term) ||
+        (m.manager?.toLowerCase() || "").includes(term);
 
       const d = new Date(m.date);
       if (Number.isNaN(d.getTime())) return matchesSearch;
 
       let matchesDate = true;
       if (dateFrom) {
-        const from = new Date(dateFrom); from.setHours(0,0,0,0);
+        const from = new Date(dateFrom);
+        from.setHours(0, 0, 0, 0);
         if (d < from) matchesDate = false;
       }
       if (dateTo) {
-        const to = new Date(dateTo); to.setHours(23,59,59,999);
+        const to = new Date(dateTo);
+        to.setHours(23, 59, 59, 999);
         if (d > to) matchesDate = false;
       }
 
       return matchesSearch && matchesDate;
     });
 
-    // Ensuite filtre par onglet
     if (activeTab === "historique") {
       return baseFiltered.filter(m => 
         m.type === "Entrée" || (m.type === "Sortie" && m.status === "validated")
@@ -266,7 +236,7 @@ export default function StockMovements() {
   const startIndex = (currentPage - 1) * pageSize;
   const paginatedData = currentPagination.data.slice(startIndex, startIndex + pageSize);
 
-  /* ==================== COMPOSANT PAGINATION (inchangé) ==================== */
+  /* ==================== COMPOSANT PAGINATION ==================== */
   const Pagination = ({ currentPage, totalPages, onPageChange, filteredCount, pageSize }) => {
     const startItem = (currentPage - 1) * pageSize + 1;
     const endItem = Math.min(currentPage * pageSize, filteredCount);
@@ -355,7 +325,7 @@ export default function StockMovements() {
     );
   };
 
-  /* ==================== DROPDOWN PRODUIT (utilise products du contexte) ==================== */
+  /* ==================== DROPDOWN PRODUIT ==================== */
   const filteredProducts = useMemo(() => {
     const term = productSearch.trim().toLowerCase();
     if (!term) return products;
@@ -420,8 +390,21 @@ export default function StockMovements() {
       return;
     }
 
+    // Vérification du stock disponible
+    const product = products.find(p => p.id === productId);
+    if (!product) {
+      setFormError("Produit introuvable.");
+      setIsSubmitting(false);
+      return;
+    }
+    const stockDisponible = Number(product.nombre_carton || 0);
+    if (qtyNum > stockDisponible) {
+      setFormError(`Stock insuffisant. Disponible: ${stockDisponible} cartons.`);
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
-      // Appel API pour créer un transfert en attente
       await stockAPI.transfer({
         produit_id: productId,
         quantite: qtyNum,
@@ -430,9 +413,7 @@ export default function StockMovements() {
         date: date || new Date().toISOString(),
       });
 
-      // MODIFICATION: rafraîchir les mouvements via le contexte
       await refreshMovements();
-
       alert("✅ Transfert créé et en attente de validation par la boutique.");
       closeModal();
     } catch (err) {
@@ -446,16 +427,28 @@ export default function StockMovements() {
 
   /* ==================== ANNULATION D'UN TRANSFERT ==================== */
   const cancelPendingSortie = async (sortieId) => {
+    const mouvement = movements.find(m => m.id === sortieId);
+    if (!mouvement) {
+      alert("Mouvement introuvable.");
+      return;
+    }
+
+    console.log("Mouvement à annuler:", mouvement);
+    const transferId = mouvement.transfer_id || mouvement.id;
+    console.log("ID envoyé à l'API:", transferId);
+
     try {
-      // ⚠️  Endpoint à implémenter côté backend
-      await stockAPI.cancelTransfer(sortieId); // méthode à créer dans stockAPI
+      await mouvementsAPI.cancelTransfer(transferId);
       setCancelPendingId(null);
-      // MODIFICATION: rafraîchir les mouvements
       await refreshMovements();
       alert("✅ Transfert annulé.");
     } catch (err) {
       console.error("❌ Erreur annulation:", err);
-      alert("Impossible d'annuler ce transfert. Vérifiez que l'endpoint est implémenté.");
+      if (err.response) {
+        alert(`Erreur ${err.response.status}: ${err.response.data?.message || "Impossible d'annuler"}`);
+      } else {
+        alert("Impossible d'annuler ce transfert.");
+      }
     }
   };
 
@@ -564,7 +557,6 @@ export default function StockMovements() {
   );
 
   /* ==================== RENDU ==================== */
-  // MODIFICATION: utiliser contextLoading pour l'affichage du chargement
   if (contextLoading) {
     return (
       <div className="depot-page flex items-center justify-center h-64">
@@ -576,7 +568,6 @@ export default function StockMovements() {
     );
   }
 
-  // MODIFICATION: gestion d'erreur locale (si une action a échoué)
   if (localError) {
     return (
       <div className="depot-page p-6 bg-red-50 border border-red-200 rounded-lg">
@@ -693,7 +684,7 @@ export default function StockMovements() {
         </nav>
       </div>
 
-      {/* FILTRES COMMUNS (recherche + dates) */}
+      {/* FILTRES COMMUNS */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 space-y-4">
         <div className="flex items-center gap-2 text-xs text-gray-500">
           <Filter size={14} />
@@ -814,7 +805,7 @@ export default function StockMovements() {
                   )}
                   <td className="px-4 py-3 text-gray-800 flex items-center gap-2">
                     <Package size={14} className="text-gray-400" />
-                    {item.product}
+                    {item.productName}
                   </td>
                   {activeTab !== "en-attente" ? (
                     <td className="px-4 py-3 text-xs text-gray-700">
@@ -844,17 +835,17 @@ export default function StockMovements() {
                     <span className={`font-semibold ${
                       item.type === "Entrée" ? "text-green-600" : "text-red-600"
                     }`}>
-                      {item.type === "Entrée" ? "+" : "-"}{item.quantity}
+                      {item.type === "Entrée" ? "+" : "-"}{item.qty}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-center">
                     <div className="flex items-center justify-center gap-1">
-                      <span className="text-gray-600">{item.stockBefore}</span>
+                      <span className="text-gray-600">{item.before}</span>
                       <ArrowRight className="text-gray-400" size={12} />
                       <span className={`font-bold ${
                         item.type === "Entrée" ? "text-green-600" : "text-red-600"
                       }`}>
-                        {item.stockAfter}
+                        {item.after}
                       </span>
                     </div>
                   </td>
@@ -906,7 +897,7 @@ export default function StockMovements() {
         )}
       </div>
 
-      {/* MODALE NOUVEAU TRANSFERT (identique) */}
+      {/* MODALE NOUVEAU TRANSFERT */}
       {modalOpen && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -927,7 +918,6 @@ export default function StockMovements() {
                 </div>
               )}
               <form onSubmit={handleSubmitMovement} className="space-y-6">
-                {/* Destination (fixe) */}
                 <div className="space-y-2">
                   <label className="block text-xs font-medium text-gray-600">Destination</label>
                   <div className="flex items-center gap-2 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
@@ -936,10 +926,8 @@ export default function StockMovements() {
                   </div>
                 </div>
 
-                {/* Sélection produit */}
                 <ProductDropdown />
 
-                {/* Quantité */}
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-2">Quantité (cartons) *</label>
                   <div className="relative">
@@ -963,7 +951,6 @@ export default function StockMovements() {
                   )}
                 </div>
 
-                {/* Impact sur le stock */}
                 {formData.productId && (
                   <div className="bg-gray-50 rounded-lg p-4 space-y-3">
                     <h4 className="text-xs font-medium text-gray-600">Impact sur le stock</h4>
@@ -980,7 +967,6 @@ export default function StockMovements() {
                   </div>
                 )}
 
-                {/* Date optionnelle */}
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-2">Date (optionnelle)</label>
                   <input
@@ -992,7 +978,6 @@ export default function StockMovements() {
                   />
                 </div>
 
-                {/* Boutons */}
                 <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
                   <button
                     type="button"
@@ -1016,7 +1001,7 @@ export default function StockMovements() {
         </div>
       )}
 
-      {/* MODALE DÉTAILS (identique) */}
+      {/* MODALE DÉTAILS */}
       {selectedMovement && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
@@ -1075,14 +1060,14 @@ export default function StockMovements() {
               <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
                 <div>
                   <p className="text-xs text-gray-500">Produit</p>
-                  <p className="font-medium text-gray-800">{selectedMovement.product}</p>
+                  <p className="font-medium text-gray-800">{selectedMovement.productName}</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-500">Quantité</p>
                   <p className={`font-semibold ${
                     selectedMovement.type === "Entrée" ? "text-green-600" : "text-red-600"
                   }`}>
-                    {selectedMovement.type === "Entrée" ? "+" : "-"}{selectedMovement.quantity} cartons
+                    {selectedMovement.type === "Entrée" ? "+" : "-"}{selectedMovement.qty} cartons
                   </p>
                 </div>
                 <div>
@@ -1102,12 +1087,12 @@ export default function StockMovements() {
                 <div className="col-span-2">
                   <p className="text-xs text-gray-500">Stock avant / après</p>
                   <div className="flex items-center gap-2 mt-1">
-                    <span className="text-gray-700 font-medium">{selectedMovement.stockBefore}</span>
+                    <span className="text-gray-700 font-medium">{selectedMovement.before}</span>
                     <ArrowRight className="text-gray-400" size={14} />
                     <span className={`font-bold ${
                       selectedMovement.type === "Entrée" ? "text-green-600" : "text-red-600"
                     }`}>
-                      {selectedMovement.stockAfter}
+                      {selectedMovement.after}
                     </span>
                     <span className="text-xs text-gray-500">cartons</span>
                   </div>
@@ -1161,7 +1146,6 @@ export default function StockMovements() {
   );
 }
 
-// Composant ArrowRight (inchangé)
 function ArrowRight(props) {
   return (
     <svg
