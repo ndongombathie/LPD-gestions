@@ -33,6 +33,7 @@ import {
    ========================================================================= */
 import { stockAPI } from "../../services/api/stock";
 import { mouvementsAPI } from "../../services/api/mouvements";
+import httpClient from "../../services/http/client";
 import { useStock } from "./StockContext";
 
 /* =========================================================================
@@ -140,7 +141,6 @@ export default function StockMovements() {
       const product = products.find(p => p.id === m.produit_id);
       const stockActuel = product?.nombre_carton || 0;
 
-      // Si les valeurs de l'API sont manquantes ou incohérentes, on recalcule
       if (before === undefined || after === undefined || (before === 0 && after === 0 && stockActuel > 0)) {
         if (m.type === "Entrée") {
           after = stockActuel;
@@ -236,7 +236,7 @@ export default function StockMovements() {
   const startIndex = (currentPage - 1) * pageSize;
   const paginatedData = currentPagination.data.slice(startIndex, startIndex + pageSize);
 
-  /* ==================== COMPOSANT PAGINATION ==================== */
+  /* ==================== COMPOSANT PAGINATION AMÉLIORÉ ==================== */
   const Pagination = ({ currentPage, totalPages, onPageChange, filteredCount, pageSize }) => {
     const startItem = (currentPage - 1) * pageSize + 1;
     const endItem = Math.min(currentPage * pageSize, filteredCount);
@@ -269,17 +269,25 @@ export default function StockMovements() {
     };
 
     return (
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
-        <div className="text-sm text-gray-600">
-          Affichage <span className="font-medium text-gray-800">{startItem}</span> à <span className="font-medium text-gray-800">{endItem}</span> sur <span className="font-medium text-indigo-600">{filteredCount}</span>
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-6 p-4 bg-white rounded-xl shadow-sm border border-gray-100">
+        <div className="text-sm text-gray-500">
+          Affichage <span className="font-medium text-gray-700">{startItem}</span> à{" "}
+          <span className="font-medium text-gray-700">{endItem}</span> sur{" "}
+          <span className="font-medium text-indigo-600">{filteredCount}</span> éléments
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => onPageChange(1)} disabled={currentPage === 1}
-            className="p-2 rounded border bg-white hover:bg-gray-100 disabled:opacity-40 transition-colors">
+          <button
+            onClick={() => onPageChange(1)}
+            disabled={currentPage === 1}
+            className="p-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 transition-colors"
+          >
             <ChevronsLeft size={16} className="text-gray-600" />
           </button>
-          <button onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1}
-            className="p-2 rounded border bg-white hover:bg-gray-100 disabled:opacity-40 transition-colors">
+          <button
+            onClick={() => onPageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="p-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 transition-colors"
+          >
             <ChevronLeft size={16} className="text-gray-600" />
           </button>
           <div className="flex items-center gap-1">
@@ -287,33 +295,45 @@ export default function StockMovements() {
               page === "..." ? (
                 <span key={idx} className="px-2 text-gray-400">...</span>
               ) : (
-                <button key={idx} onClick={() => onPageChange(page)}
-                  className={`w-8 h-8 rounded border flex items-center justify-center text-sm transition-colors ${
+                <button
+                  key={idx}
+                  onClick={() => onPageChange(page)}
+                  className={`w-8 h-8 rounded-lg border flex items-center justify-center text-sm transition-colors ${
                     currentPage === page
                       ? "bg-indigo-600 text-white border-indigo-600"
-                      : "bg-white text-gray-700 hover:bg-gray-100"
-                  }`}>
+                      : "bg-white text-gray-700 hover:bg-gray-100 border-gray-200"
+                  }`}
+                >
                   {page}
                 </button>
               )
             )}
           </div>
-          <button onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages}
-            className="p-2 rounded border bg-white hover:bg-gray-100 disabled:opacity-40 transition-colors">
+          <button
+            onClick={() => onPageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="p-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 transition-colors"
+          >
             <ChevronRight size={16} className="text-gray-600" />
           </button>
-          <button onClick={() => onPageChange(totalPages)} disabled={currentPage === totalPages}
-            className="p-2 rounded border bg-white hover:bg-gray-100 disabled:opacity-40 transition-colors">
+          <button
+            onClick={() => onPageChange(totalPages)}
+            disabled={currentPage === totalPages}
+            className="p-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 transition-colors"
+          >
             <ChevronsRight size={16} className="text-gray-600" />
           </button>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-600">Lignes par page :</span>
-          <select value={pageSize} onChange={(e) => { 
-            setPageSize(Number(e.target.value)); 
-            currentPagination.setPage(1);
-          }}
-            className="text-sm border rounded px-2 py-1 bg-white border-gray-300 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500">
+        <div className="flex items-center gap-2 text-sm">
+          <span className="text-gray-500">Lignes par page :</span>
+          <select
+            value={pageSize}
+            onChange={(e) => {
+              setPageSize(Number(e.target.value));
+              currentPagination.setPage(1);
+            }}
+            className="border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+          >
             <option value="5">5</option>
             <option value="10">10</option>
             <option value="20">20</option>
@@ -390,7 +410,6 @@ export default function StockMovements() {
       return;
     }
 
-    // Vérification du stock disponible
     const product = products.find(p => p.id === productId);
     if (!product) {
       setFormError("Produit introuvable.");
@@ -433,23 +452,29 @@ export default function StockMovements() {
       return;
     }
 
-    console.log("Mouvement à annuler:", mouvement);
-    const transferId = mouvement.transfer_id || mouvement.id;
-    console.log("ID envoyé à l'API:", transferId);
+    const transferId = mouvement.transfer_id;
+    console.log("ID du transfert:", transferId);
 
-    try {
-      await mouvementsAPI.cancelTransfer(transferId);
-      setCancelPendingId(null);
-      await refreshMovements();
-      alert("✅ Transfert annulé.");
-    } catch (err) {
-      console.error("❌ Erreur annulation:", err);
-      if (err.response) {
-        alert(`Erreur ${err.response.status}: ${err.response.data?.message || "Impossible d'annuler"}`);
-      } else {
-        alert("Impossible d'annuler ce transfert.");
+    const payloads = [
+      { transfer_id: transferId },
+      { id: transferId },
+      { transfert_id: transferId },
+      { transferId: transferId },
+    ];
+
+    for (const payload of payloads) {
+      try {
+        await httpClient.put('/annuler-produits-transfer', payload);
+        setCancelPendingId(null);
+        await refreshMovements();
+        alert("✅ Transfert annulé.");
+        return;
+      } catch (err) {
+        console.warn(`Échec avec payload`, payload, err);
       }
     }
+
+    alert("Impossible d'annuler ce transfert après plusieurs tentatives.");
   };
 
   /* ==================== GESTION MODALE ==================== */
@@ -477,7 +502,7 @@ export default function StockMovements() {
     setIsSubmitting(false);
   };
 
-  /* ==================== COMPOSANT DROPDOWN ==================== */
+  /* ==================== COMPOSANT DROPDOWN AMÉLIORÉ ==================== */
   const ProductDropdown = () => (
     <div ref={productDropdownRef} className="relative">
       <label className="block text-xs font-medium text-gray-600 mb-2">
@@ -485,7 +510,7 @@ export default function StockMovements() {
       </label>
       <div className="relative">
         <div
-          className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors"
+          className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors bg-white shadow-sm"
           onClick={() => setProductDropdownOpen(!productDropdownOpen)}
         >
           <div className="flex items-center gap-2">
@@ -559,7 +584,7 @@ export default function StockMovements() {
   /* ==================== RENDU ==================== */
   if (contextLoading) {
     return (
-      <div className="depot-page flex items-center justify-center h-64">
+      <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">Chargement des mouvements...</p>
@@ -570,9 +595,12 @@ export default function StockMovements() {
 
   if (localError) {
     return (
-      <div className="depot-page p-6 bg-red-50 border border-red-200 rounded-lg">
+      <div className="p-6 bg-red-50 border border-red-200 rounded-lg">
         <p className="text-red-600">{localError}</p>
-        <button onClick={() => setLocalError(null)} className="mt-2 text-sm underline text-red-600 hover:text-red-800">
+        <button
+          onClick={() => setLocalError(null)}
+          className="mt-2 text-sm underline text-red-600 hover:text-red-800"
+        >
           Réessayer
         </button>
       </div>
@@ -580,67 +608,67 @@ export default function StockMovements() {
   }
 
   return (
-    <div className="depot-page space-y-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 bg-gray-50 min-h-screen">
       {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-semibold text-gray-800 flex items-center gap-2">
-            <Package className="text-indigo-600" />
+          <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+            <Package className="text-indigo-600" size={28} />
             Gestion des Mouvements de Stock
-          </h2>
+          </h1>
           <p className="text-sm text-gray-500 mt-1">
             Suivi des entrées, sorties et transferts
           </p>
         </div>
         <button
           onClick={openModal}
-          className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg shadow-sm transition-colors"
+          className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-orange-500 text-white rounded-xl shadow-md hover:shadow-lg transition-all transform hover:scale-105 text-sm font-medium"
         >
           <ArrowUpRight size={18} />
           Nouveau transfert
         </button>
       </div>
 
-      {/* STATS */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex items-center justify-between">
+      {/* STATS CARDS */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex items-center justify-between hover:shadow-md transition">
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wider">Entrées</p>
             <p className="text-2xl font-bold text-gray-800 mt-1">{stats.totalEntries}</p>
             <p className="text-xs text-gray-400 mt-1">opérations</p>
           </div>
-          <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center">
-            <ArrowDownRight className="text-green-600" size={20} />
+          <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+            <ArrowDownRight className="text-green-600" size={24} />
           </div>
         </div>
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex items-center justify-between">
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex items-center justify-between hover:shadow-md transition">
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wider">Sorties validées</p>
             <p className="text-2xl font-bold text-gray-800 mt-1">{stats.totalValidated}</p>
             <p className="text-xs text-gray-400 mt-1">opérations</p>
           </div>
-          <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center">
-            <ArrowUpRight className="text-red-600" size={20} />
+          <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+            <ArrowUpRight className="text-red-600" size={24} />
           </div>
         </div>
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex items-center justify-between">
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex items-center justify-between hover:shadow-md transition">
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wider">En attente</p>
             <p className="text-2xl font-bold text-gray-800 mt-1">{stats.totalPending}</p>
             <p className="text-xs text-gray-400 mt-1">transferts</p>
           </div>
-          <div className="w-10 h-10 rounded-full bg-yellow-50 flex items-center justify-center">
-            <Clock className="text-yellow-600" size={20} />
+          <div className="w-12 h-12 rounded-full bg-yellow-100 flex items-center justify-center">
+            <Clock className="text-yellow-600" size={24} />
           </div>
         </div>
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex items-center justify-between">
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex items-center justify-between hover:shadow-md transition">
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wider">Aujourd'hui</p>
             <p className="text-2xl font-bold text-gray-800 mt-1">{stats.todayCount}</p>
             <p className="text-xs text-gray-400 mt-1">mouvements</p>
           </div>
-          <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center">
-            <Activity className="text-indigo-600" size={20} />
+          <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center">
+            <Activity className="text-indigo-600" size={24} />
           </div>
         </div>
       </div>
@@ -684,8 +712,8 @@ export default function StockMovements() {
         </nav>
       </div>
 
-      {/* FILTRES COMMUNS */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 space-y-4">
+      {/* FILTRES */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-4">
         <div className="flex items-center gap-2 text-xs text-gray-500">
           <Filter size={14} />
           <span className="font-medium">Filtres</span>
@@ -738,9 +766,9 @@ export default function StockMovements() {
         </div>
       </div>
 
-      {/* TABLEAU PAR ONGLET */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gray-50">
+      {/* TABLEAU */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50">
           <p className="text-sm font-medium text-gray-700 flex items-center gap-2">
             {activeTab === "historique" && <Activity size={16} className="text-indigo-600" />}
             {activeTab === "en-attente" && <Clock size={16} className="text-yellow-600" />}
@@ -759,14 +787,14 @@ export default function StockMovements() {
           <table className="min-w-full text-sm">
             <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
               <tr>
-                {activeTab !== "en-attente" && <th className="text-left px-4 py-3">Type</th>}
-                <th className="text-left px-4 py-3">Produit</th>
-                {activeTab !== "en-attente" && <th className="text-left px-4 py-3">Source / Destination</th>}
-                {activeTab === "en-attente" && <th className="text-left px-4 py-3">Destination</th>}
-                <th className="text-center px-4 py-3">Quantité</th>
-                <th className="text-center px-4 py-3">Stock Av. / Ap.</th>
-                <th className="text-center px-4 py-3">Date</th>
-                <th className="text-center px-4 py-3">Action</th>
+                {activeTab !== "en-attente" && <th className="text-left px-6 py-3">Type</th>}
+                <th className="text-left px-6 py-3">Produit</th>
+                {activeTab !== "en-attente" && <th className="text-left px-6 py-3">Source / Destination</th>}
+                {activeTab === "en-attente" && <th className="text-left px-6 py-3">Destination</th>}
+                <th className="text-center px-6 py-3">Quantité</th>
+                <th className="text-center px-6 py-3">Stock Av. / Ap.</th>
+                <th className="text-center px-6 py-3">Date</th>
+                <th className="text-center px-6 py-3">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -777,14 +805,14 @@ export default function StockMovements() {
                   onClick={() => setSelectedMovement(item)}
                 >
                   {activeTab !== "en-attente" && (
-                    <td className="px-4 py-3">
+                    <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
                         <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${
                           item.type === "Entrée"
-                            ? "bg-green-50 text-green-700"
+                            ? "bg-green-100 text-green-700"
                             : item.sousType === 'transfert'
-                            ? "bg-blue-50 text-blue-700"
-                            : "bg-orange-50 text-orange-700"
+                            ? "bg-blue-100 text-blue-700"
+                            : "bg-orange-100 text-orange-700"
                         }`}>
                           {item.type === "Entrée" ? (
                             <ArrowDownRight size={14} />
@@ -803,12 +831,12 @@ export default function StockMovements() {
                       </div>
                     </td>
                   )}
-                  <td className="px-4 py-3 text-gray-800 flex items-center gap-2">
+                  <td className="px-6 py-4 text-gray-800 flex items-center gap-2">
                     <Package size={14} className="text-gray-400" />
                     {item.productName}
                   </td>
                   {activeTab !== "en-attente" ? (
-                    <td className="px-4 py-3 text-xs text-gray-700">
+                    <td className="px-6 py-4 text-xs text-gray-700">
                       <div className="flex items-center gap-2">
                         {item.type === "Entrée" ? (
                           <>
@@ -824,21 +852,21 @@ export default function StockMovements() {
                       </div>
                     </td>
                   ) : (
-                    <td className="px-4 py-3 text-xs text-gray-700">
+                    <td className="px-6 py-4 text-xs text-gray-700">
                       <div className="flex items-center gap-2">
                         <Store size={12} className="text-indigo-500" />
                         <span className="text-indigo-600">{item.source}</span>
                       </div>
                     </td>
                   )}
-                  <td className="px-4 py-3 text-center">
+                  <td className="px-6 py-4 text-center">
                     <span className={`font-semibold ${
                       item.type === "Entrée" ? "text-green-600" : "text-red-600"
                     }`}>
                       {item.type === "Entrée" ? "+" : "-"}{item.qty}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-center">
+                  <td className="px-6 py-4 text-center">
                     <div className="flex items-center justify-center gap-1">
                       <span className="text-gray-600">{item.before}</span>
                       <ArrowRight className="text-gray-400" size={12} />
@@ -849,10 +877,10 @@ export default function StockMovements() {
                       </span>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-center text-xs text-gray-500">
+                  <td className="px-6 py-4 text-center text-xs text-gray-500">
                     {formatDateTime(item.date)}
                   </td>
-                  <td className="px-4 py-3 text-center">
+                  <td className="px-6 py-4 text-center">
                     <div className="flex items-center justify-center gap-2">
                       <button
                         onClick={(e) => { e.stopPropagation(); setSelectedMovement(item); }}
@@ -876,7 +904,7 @@ export default function StockMovements() {
               ))}
               {paginatedData.length === 0 && (
                 <tr>
-                  <td colSpan={activeTab === "en-attente" ? 6 : 7} className="px-4 py-6 text-center text-gray-400 text-sm italic">
+                  <td colSpan={activeTab === "en-attente" ? 6 : 7} className="px-6 py-10 text-center text-gray-400 text-sm italic">
                     Aucun élément à afficher.
                   </td>
                 </tr>
@@ -885,7 +913,7 @@ export default function StockMovements() {
           </table>
         </div>
         {filteredByTab.length > 0 && (
-          <div className="px-4 py-3 border-t border-gray-200">
+          <div className="px-6 py-4 border-t border-gray-100">
             <Pagination
               currentPage={currentPage}
               totalPages={totalPages}
@@ -989,7 +1017,7 @@ export default function StockMovements() {
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="px-5 py-2.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-indigo-600 to-orange-500 rounded-lg hover:opacity-90 transition-colors flex items-center gap-2 disabled:opacity-50"
                   >
                     <Save size={16} />
                     {isSubmitting ? "Création..." : "Créer le transfert"}

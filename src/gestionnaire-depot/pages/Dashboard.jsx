@@ -19,9 +19,19 @@ import {
 } from "react-icons/hi2";
 
 import { useStock } from "./StockContext";
+import useAuth from "../../hooks/useAuth";
 
 const Dashboard = () => {
   const { products, movements, fournisseurs, loading } = useStock();
+  const { user } = useAuth();
+
+  const userName = useMemo(() => {
+    if (!user) return "Gestionnaire";
+    if (user.prenom && user.nom) return `${user.prenom} ${user.nom}`;
+    if (user.name) return user.name;
+    if (user.nom) return user.nom;
+    return "Gestionnaire";
+  }, [user]);
 
   const stats = useMemo(() => {
     const totalProduits = products.length;
@@ -96,81 +106,108 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="depot-page space-y-6">
+    <div className="depot-page space-y-8 p-6 max-w-7xl mx-auto">
       {/* HEADER */}
-      <div className="flex items-baseline justify-between">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <span className="w-2 h-8 bg-gradient-to-b from-[#472EAD] to-[#F97316] rounded-full"></span>
             Tableau de bord Dépôt
           </h1>
-          <p className="text-xs text-gray-500">
-            Bienvenue, Modou Ndiaye – Gestionnaire Dépôt
+          <p className="text-sm text-gray-500 mt-1">
+            Bienvenue, <span className="font-semibold text-[#472EAD]">{userName}</span> – Gestionnaire Dépôt
           </p>
         </div>
-        <p className="text-xs text-gray-400">
-          Aujourd'hui · {dateFormatted}
-        </p>
+        <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-xl shadow-sm border">
+          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+          <p className="text-sm text-gray-600 font-medium">{dateFormatted}</p>
+        </div>
       </div>
 
-      {/* QUICK STATS */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl shadow-sm border p-5">
-          <div className="flex justify-between items-center">
-            <p className="text-xs text-gray-500">Produits en Stock</p>
-            <MdShoppingCart className="text-purple-700" size={22} />
+      {/* STATS CARDS */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all p-6 border border-gray-100">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-medium text-gray-500">Produits en Stock</p>
+            <div className="p-2 bg-purple-100 rounded-xl">
+              <MdShoppingCart className="text-purple-700" size={22} />
+            </div>
           </div>
-          <p className="text-3xl font-bold text-gray-900 mt-2">
-            {stats.totalProduits}
-          </p>
-          <p className="text-xs text-gray-400 mt-1">Total référencé</p>
+          <p className="text-3xl font-bold text-gray-900">{stats.totalProduits}</p>
+          <p className="text-xs text-gray-400 mt-2">Total référencé</p>
+          <div className="mt-3 h-1 w-full bg-gray-100 rounded-full overflow-hidden">
+            <div className="h-full w-2/3 bg-purple-500 rounded-full"></div>
+          </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border p-5">
-          <div className="flex justify-between items-center">
-            <p className="text-xs text-gray-500">Stock Optimal</p>
-            <HiArrowTrendingUp className="text-green-600" size={22} />
+        <div className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all p-6 border border-gray-100">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-medium text-gray-500">Stock Optimal</p>
+            <div className="p-2 bg-green-100 rounded-xl">
+              <HiArrowTrendingUp className="text-green-600" size={22} />
+            </div>
           </div>
-          <p className="text-3xl font-bold text-gray-900 mt-2">
-            {stats.pourcentageSain}%
-          </p>
-          <p className="text-xs text-green-600 mt-1">Produits en bonne santé</p>
+          <p className="text-3xl font-bold text-gray-900">{stats.pourcentageSain}%</p>
+          <p className="text-xs text-green-600 mt-2">Produits en bonne santé</p>
+          <div className="mt-3 h-1 w-full bg-gray-100 rounded-full overflow-hidden">
+            <div className="h-full w-[68%] bg-green-500 rounded-full"></div>
+          </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border p-5">
-          <div className="flex justify-between items-center">
-            <p className="text-xs text-gray-500">Mouvements Aujourd'hui</p>
-            <MdCompareArrows className="text-blue-500" size={22} />
+        <div className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all p-6 border border-gray-100">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-medium text-gray-500">Mouvements Aujourd'hui</p>
+            <div className="p-2 bg-blue-100 rounded-xl">
+              <MdCompareArrows className="text-blue-500" size={22} />
+            </div>
           </div>
-          <p className="text-3xl font-bold text-gray-900 mt-2">{stats.mouvements}</p>
-          <p className="text-xs text-gray-500 mt-1">Entrées & sorties</p>
+          <p className="text-3xl font-bold text-gray-900">{stats.mouvements}</p>
+          <p className="text-xs text-gray-400 mt-2">Entrées & sorties</p>
+          <div className="mt-3 flex items-center gap-2">
+            <span className="text-xs text-blue-600">+{Math.floor(stats.mouvements * 0.6)} entrées</span>
+            <span className="text-xs text-orange-600">-{Math.floor(stats.mouvements * 0.4)} sorties</span>
+          </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border p-5">
-          <div className="flex justify-between items-center">
-            <p className="text-xs text-gray-500">Fournisseurs</p>
-            <MdLocalShipping className="text-green-600" size={22} />
+        <div className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all p-6 border border-gray-100">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-medium text-gray-500">Fournisseurs</p>
+            <div className="p-2 bg-green-100 rounded-xl">
+              <MdLocalShipping className="text-green-600" size={22} />
+            </div>
           </div>
-          <p className="text-3xl font-bold text-gray-900 mt-2">{stats.fournisseurs}</p>
-          <p className="text-xs text-gray-500 mt-1">Partenaires actifs</p>
+          <p className="text-3xl font-bold text-gray-900">{stats.fournisseurs}</p>
+          <p className="text-xs text-gray-400 mt-2">Partenaires actifs</p>
+          <div className="mt-3 flex items-center gap-1 text-xs text-gray-500">
+            <span className="inline-block w-2 h-2 bg-green-400 rounded-full"></span>
+            {stats.fournisseurs} fournisseurs
+          </div>
         </div>
       </div>
 
       {/* ACTIVITÉ + ALERTES */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border p-5">
-          <h2 className="text-sm font-semibold text-gray-800 mb-3">Activité Récente</h2>
-          <div className="space-y-4 text-sm">
+        <div className="lg:col-span-2 bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all p-6 border border-gray-100">
+          <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+            <div className="w-1 h-6 bg-[#472EAD] rounded-full"></div>
+            Activité Récente
+          </h2>
+          <div className="space-y-4">
             {recentActivity.length === 0 ? (
-              <p className="text-gray-400 text-xs italic">Aucun mouvement récent.</p>
+              <p className="text-gray-400 text-sm italic">Aucun mouvement récent.</p>
             ) : (
               recentActivity.map((mouv, index) => (
-                <div key={index} className="flex justify-between items-start border-b pb-3 last:border-0">
-                  <div className="flex gap-3">
-                    {mouv.type === 'Entrée' ? (
-                      <MdArrowUpward className="text-green-600 mt-1" size={18} />
-                    ) : (
-                      <MdArrowDownward className="text-orange-600 mt-1" size={18} />
-                    )}
+                <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-full ${
+                      mouv.type === 'Entrée' ? 'bg-green-100' : 'bg-orange-100'
+                    }`}>
+                      {mouv.type === 'Entrée' ? (
+                        <MdArrowUpward className="text-green-600" size={18} />
+                      ) : (
+                        <MdArrowDownward className="text-orange-600" size={18} />
+                      )}
+                    </div>
                     <div>
                       <p className="font-medium text-gray-900">
                         {mouv.type === 'Entrée' ? "Réception" : "Sortie"} de Stock
@@ -180,47 +217,62 @@ const Dashboard = () => {
                       </p>
                     </div>
                   </div>
-                  <p className="text-xs text-gray-400">
+                  <div className="text-xs text-gray-400 bg-white px-2 py-1 rounded-full shadow-sm">
                     {formatDateRelative(mouv.date || mouv.created_at)}
-                  </p>
+                  </div>
                 </div>
               ))
             )}
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border p-5">
-          <h2 className="text-sm font-semibold text-gray-800 mb-3">Alertes & Notifications</h2>
-          <div className="space-y-3 text-xs">
+        <div className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all p-6 border border-gray-100">
+          <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+            <div className="w-1 h-6 bg-orange-500 rounded-full"></div>
+            Alertes & Notifications
+          </h2>
+          <div className="space-y-3">
             {stats.ruptureStricte > 0 && (
-              <div className="rounded-md bg-red-50 border border-red-200 px-3 py-3">
-                <div className="flex items-center gap-2">
-                  <HiBellAlert className="text-red-700" size={18} />
-                  <p className="font-semibold text-red-700">Produits en rupture</p>
+              <div className="p-4 bg-gradient-to-br from-red-50 to-white rounded-xl border border-red-200 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-red-100 rounded-full">
+                    <HiBellAlert className="text-red-700" size={20} />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-red-700">Produits en rupture</p>
+                    <p className="text-sm text-red-600 mt-1">
+                      <strong>{stats.ruptureStricte}</strong> produit(s) à 0 stock
+                    </p>
+                  </div>
                 </div>
-                <p className="text-red-600 mt-1">
-                  <strong>{stats.ruptureStricte}</strong> produit(s) à 0 stock
-                </p>
               </div>
             )}
             {stats.stockFaible > 0 && (
-              <div className="rounded-md bg-orange-50 border border-orange-200 px-3 py-3">
-                <div className="flex items-center gap-2">
-                  <MdWarning className="text-orange-700" size={18} />
-                  <p className="font-semibold text-orange-700">Produits sous seuil</p>
+              <div className="p-4 bg-gradient-to-br from-orange-50 to-white rounded-xl border border-orange-200 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-orange-100 rounded-full">
+                    <MdWarning className="text-orange-700" size={20} />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-orange-700">Produits sous seuil</p>
+                    <p className="text-sm text-orange-600 mt-1">
+                      <strong>{stats.stockFaible}</strong> produit(s) atteignent la limite
+                    </p>
+                  </div>
                 </div>
-                <p className="text-orange-600 mt-1">
-                  <strong>{stats.stockFaible}</strong> produit(s) atteignent la limite
-                </p>
               </div>
             )}
             {stats.ruptureStricte === 0 && stats.stockFaible === 0 && (
-              <div className="rounded-md bg-green-50 border border-green-200 px-3 py-3">
-                <div className="flex items-center gap-2">
-                  <MdCheckCircle className="text-green-700" size={18} />
-                  <p className="font-semibold text-green-700">Stock OK</p>
+              <div className="p-4 bg-gradient-to-br from-green-50 to-white rounded-xl border border-green-200 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-green-100 rounded-full">
+                    <MdCheckCircle className="text-green-700" size={20} />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-green-700">Stock OK</p>
+                    <p className="text-sm text-green-600 mt-1">Tous les niveaux sont bons</p>
+                  </div>
                 </div>
-                <p className="text-green-600 mt-1">Tous les niveaux sont bons</p>
               </div>
             )}
           </div>
@@ -228,34 +280,35 @@ const Dashboard = () => {
       </div>
 
       {/* ACTIONS RAPIDES */}
-      <div className="bg-white rounded-xl shadow-sm border p-5">
-        <h2 className="text-sm font-semibold text-gray-800 mb-3">Actions Rapides</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+      <div className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all p-6 border border-gray-100">
+        <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+          <div className="w-1 h-6 bg-blue-500 rounded-full"></div>
+          Actions Rapides
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <NavLink
             to="/gestionnaire_depot/products"
-            className="flex items-center justify-between border rounded-lg px-6 py-4 text-left 
-              transition hover:bg-purple-100 hover:border-purple-400"
+            className="group flex items-center justify-between p-5 bg-gradient-to-br from-purple-50 to-white rounded-xl border border-purple-200 hover:border-purple-400 transition-all hover:shadow-md"
           >
             <div>
-              <p className="font-medium text-gray-900">Gestion des Produits</p>
-              <p className="text-xs text-gray-500">Gérer inventaire & stocks</p>
+              <p className="font-semibold text-gray-900 group-hover:text-purple-700 transition">Gestion des Produits</p>
+              <p className="text-xs text-gray-500 mt-1">Gérer inventaire & stocks</p>
             </div>
-            <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
-              <MdShoppingCart className="text-purple-700" size={22} />
+            <div className="w-12 h-12 rounded-xl bg-purple-100 group-hover:bg-purple-200 transition flex items-center justify-center">
+              <MdShoppingCart className="text-purple-700" size={24} />
             </div>
           </NavLink>
 
           <NavLink
             to="/gestionnaire_depot/movementStock"
-            className="flex items-center justify-between border rounded-lg px-6 py-4 text-left 
-              transition hover:bg-orange-100 hover:border-orange-400"
+            className="group flex items-center justify-between p-5 bg-gradient-to-br from-orange-50 to-white rounded-xl border border-orange-200 hover:border-orange-400 transition-all hover:shadow-md"
           >
             <div>
-              <p className="font-medium text-gray-900">Mouvements de Stock</p>
-              <p className="text-xs text-gray-500">Entrées & sorties</p>
+              <p className="font-semibold text-gray-900 group-hover:text-orange-600 transition">Mouvements de Stock</p>
+              <p className="text-xs text-gray-500 mt-1">Entrées & sorties</p>
             </div>
-            <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
-              <MdCompareArrows className="text-orange-500" size={22} />
+            <div className="w-12 h-12 rounded-xl bg-orange-100 group-hover:bg-orange-200 transition flex items-center justify-center">
+              <MdCompareArrows className="text-orange-500" size={24} />
             </div>
           </NavLink>
         </div>

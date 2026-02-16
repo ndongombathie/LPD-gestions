@@ -107,29 +107,29 @@ export const StockProvider = ({ children }) => {
   }, []);
 
   const loadFournisseurs = useCallback(async () => {
-  try {
-    const fournisseursData = await fetchAllPaginated('/fournisseurs');
-    console.log('📦 Réponse brute API fournisseurs:', fournisseursData); // AJOUT
-    const normalized = fournisseursData.map(f => ({
-      id: f.id || f.uuid,
-      nom: f.nom || f.name || 'Inconnu',
-      name: f.nom || f.name || 'Inconnu',
-      email: f.email || '',
-       address: f.adresse || f.address || '',
-      contact: f.contactName || f.contact || '',
-      phone: f.phone || '',
-      produits: f.produits || f.products || '',
-      delai: f.delai || f.deliveryDelay || '',
-      ordersCount: f.ordersCount || f.commandes || 0,
-      status: f.status || 'Actif',
-      derniereLivraison: f.derniere_livraison || f.last_delivery || f.last_delivery_date || f.date_derniere_livraison || f.delivery_date || '—',
-    }));
-    setFournisseurs(normalized);
-  } catch (error) {
-    console.error('Erreur chargement fournisseurs:', error);
-    setFournisseurs([]);
-  }
-}, []);
+    try {
+      const fournisseursData = await fetchAllPaginated('/fournisseurs');
+      console.log('📦 Réponse brute API fournisseurs:', fournisseursData);
+      const normalized = fournisseursData.map(f => ({
+        id: f.id || f.uuid,
+        nom: f.nom || f.name || 'Inconnu',
+        name: f.nom || f.name || 'Inconnu',
+        email: f.email || '',
+        address: f.adresse || f.address || '',
+        contact: f.contactName || f.contact || '',
+        phone: f.phone || '',
+        produits: f.produits || f.products || '',
+        delai: f.delai || f.deliveryDelay || '',
+        ordersCount: f.ordersCount || f.commandes || 0,
+        status: f.status || 'Actif',
+        derniereLivraison: f.derniere_livraison || f.last_delivery || f.last_delivery_date || f.date_derniere_livraison || f.delivery_date || '—',
+      }));
+      setFournisseurs(normalized);
+    } catch (error) {
+      console.error('Erreur chargement fournisseurs:', error);
+      setFournisseurs([]);
+    }
+  }, []);
 
   const loadMovements = useCallback(async () => {
     try {
@@ -186,7 +186,7 @@ export const StockProvider = ({ children }) => {
           stockAfter: m.stock_apres || 0,
           after: m.stock_apres || 0,
           manager: m.utilisateur?.nom || 'Gestionnaire',
-          transfer_id: m.transfer_id || m.id,
+          transfer_id: m.transfer_id || m.transfert_id || m.id, // CORRECTION
         };
       });
       setMovements(normalized);
