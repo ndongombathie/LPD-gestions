@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { AlertTriangle, RefreshCw, Eye } from "lucide-react";
+import { AlertTriangle, Eye, Search } from "lucide-react";
 import DataTable from "../components/DataTable";
 import Pagination from "../components/Pagination";
 import LoadingSpinner from "../components/LoadingSpinner";
@@ -17,11 +17,12 @@ const Alertes = () => {
   const [pagination, setPagination] = useState(null);
   const [paginationRupture, setPaginationRupture] = useState(null);
   const [produitDetail, setProduitDetail] = useState(null);
+  const [recherche, setRecherche] = useState("");
 
-  const loadAlertes = async (pageNumber = page) => {
+  const loadAlertes = async (pageNumber = page, search = recherche) => {
     try {
       setLoading(true);
-      const produitsSousSeuilData = await gestionnaireBoutiqueAPI.getProduitsSousSeuil(pageNumber);
+      const produitsSousSeuilData = await gestionnaireBoutiqueAPI.getProduitsSousSeuil(pageNumber, search);
       const produits = produitsSousSeuilData?.data || [];
       setAlertes(Array.isArray(produits) ? produits : []);
       setPagination(produitsSousSeuilData);
@@ -35,10 +36,10 @@ const Alertes = () => {
     }
   };
 
-  const loadProduitsRupture = async (pageNumber = pageRupture) => {
+  const loadProduitsRupture = async (pageNumber = pageRupture, search = recherche) => {
     try {
       setLoadingRupture(true);
-      const produitsRuptureData = await gestionnaireBoutiqueAPI.getProduitsRupture(pageNumber);
+      const produitsRuptureData = await gestionnaireBoutiqueAPI.getProduitsRupture(pageNumber, search);
       const produits = produitsRuptureData?.data || [];
       setProduitsRupture(Array.isArray(produits) ? produits : []);
       setPaginationRupture(produitsRuptureData);
@@ -53,12 +54,12 @@ const Alertes = () => {
   };
 
   useEffect(() => {
-    loadAlertes(page);
-  }, [page]);
+    loadAlertes(page, recherche);
+  }, [page, recherche]);
 
   useEffect(() => {
-    loadProduitsRupture(pageRupture);
-  }, [pageRupture]);
+    loadProduitsRupture(pageRupture, recherche);
+  }, [pageRupture, recherche]);
 
   const handlePageChange = (nextPage) => {
     if (nextPage && nextPage !== page) {
@@ -69,6 +70,27 @@ const Alertes = () => {
   const handlePageChangeRupture = (nextPage) => {
     if (nextPage && nextPage !== pageRupture) {
       setPageRupture(nextPage);
+    }
+  };
+
+  const handleRechercheChange = (event) => {
+    const value = event.target.value;
+    setRecherche(value);
+    if (page !== 1) {
+      setPage(1);
+    }
+    if (pageRupture !== 1) {
+      setPageRupture(1);
+    }
+  };
+
+  const handleClearRecherche = () => {
+    setRecherche("");
+    if (page !== 1) {
+      setPage(1);
+    }
+    if (pageRupture !== 1) {
+      setPageRupture(1);
     }
   };
 
@@ -84,6 +106,30 @@ const Alertes = () => {
             Gestion des Alertes
           </h2>
           <p className="text-gray-600 mt-1">Produits nécessitant une attention particulière</p>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-4">
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="relative flex-1 min-w-[240px]">
+              <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
+              <input
+                type="text"
+                placeholder="Rechercher un produit, un code..."
+                className="w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#472EAD]"
+                value={recherche}
+                onChange={handleRechercheChange}
+              />
+            </div>
+            {recherche && (
+              <button
+                type="button"
+                onClick={handleClearRecherche}
+                className="px-4 py-2 border rounded-lg text-gray-700 hover:bg-gray-50"
+              >
+                Effacer
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Section 1: Produits sous seuil d'alerte */}

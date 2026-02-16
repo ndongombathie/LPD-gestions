@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Eye, Check, AlertCircle, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Eye, Check, AlertCircle, CheckCircle2, AlertTriangle, Search } from "lucide-react";
 import DataTable from "../components/DataTable";
 import Pagination from "../components/Pagination";
 import LoadingSpinner from "../components/LoadingSpinner";
@@ -15,6 +15,7 @@ const Produits = () => {
   const [pendingPage, setPendingPage] = useState(1);
   const [pendingPagination, setPendingPagination] = useState(null);
   const [validating, setValidating] = useState(false);
+  const [recherche, setRecherche] = useState("");
   
   const [selectedTransfert, setSelectedTransfert] = useState(null);
   const [showModal, setShowModal] = useState(false);
@@ -27,12 +28,12 @@ const Produits = () => {
     seuil: "",
   });
 
-  const loadTransferts = async (page = pendingPage) => {
+  const loadTransferts = async (page = pendingPage, search = recherche) => {
     try {
       setLoading(true);
       const [produitsTransferData, transfertsValidesData, produitsDispoData] = await Promise.all([
-        gestionnaireBoutiqueAPI.getProduitsTransfer(page),
-        gestionnaireBoutiqueAPI.getTransfertsValides(),
+        gestionnaireBoutiqueAPI.getProduitsTransfer(page, search),
+        gestionnaireBoutiqueAPI.getTransfertsValides(1, search),
         gestionnaireBoutiqueAPI.getProduitsDisponiblesBoutique()
       ]);
 
@@ -62,12 +63,27 @@ const Produits = () => {
   };
 
   useEffect(() => {
-    loadTransferts(pendingPage);
-  }, [pendingPage]);
+    loadTransferts(pendingPage, recherche);
+  }, [pendingPage, recherche]);
 
   const handlePendingPageChange = (page) => {
     if (page && page !== pendingPage) {
       setPendingPage(page);
+    }
+  };
+
+  const handleRechercheChange = (event) => {
+    const value = event.target.value;
+    setRecherche(value);
+    if (pendingPage !== 1) {
+      setPendingPage(1);
+    }
+  };
+
+  const handleClearRecherche = () => {
+    setRecherche("");
+    if (pendingPage !== 1) {
+      setPendingPage(1);
     }
   };
 
@@ -151,7 +167,7 @@ const Produits = () => {
       setSelectedTransfert(null);
 
       // Recharger les données
-      await loadTransferts();
+      await loadTransferts(pendingPage, recherche);
     } catch (error) {
       console.error('❌ Erreur validation:', error);
       toast.error('Erreur de validation', {
@@ -167,6 +183,30 @@ const Produits = () => {
       <div className="px-6 space-y-6 py-6">
         <div className="flex justify-between items-center">
           <h2 className="text-3xl font-bold text-[#111827]">Réception et Complétion des Produits</h2>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-4">
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="relative flex-1 min-w-[240px]">
+              <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
+              <input
+                type="text"
+                placeholder="Rechercher un produit, un code..."
+                className="w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#472EAD]"
+                value={recherche}
+                onChange={handleRechercheChange}
+              />
+            </div>
+            {recherche && (
+              <button
+                type="button"
+                onClick={handleClearRecherche}
+                className="px-4 py-2 border rounded-lg text-gray-700 hover:bg-gray-50"
+              >
+                Effacer
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Transferts en attente */}

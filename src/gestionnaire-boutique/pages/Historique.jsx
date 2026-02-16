@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { FileText, Filter, Download, Eye } from "lucide-react";
+import { FileText, Filter, Download, Eye, Search } from "lucide-react";
 import DataTable from "../components/DataTable";
 import Pagination from "../components/Pagination";
 import LoadingSpinner from "../components/LoadingSpinner";
@@ -14,6 +14,7 @@ const Historique = () => {
   const [detailEntry, setDetailEntry] = useState(null);
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState(null);
+  const [recherche, setRecherche] = useState("");
 
   const actions = ["Tous", "Transfert reçu", "Produit validé"];
 
@@ -23,49 +24,37 @@ const Historique = () => {
       try {
         setLoading(true);
         
-        // Utiliser Promise.allSettled pour mieux gérer les erreurs
-        const results = await Promise.allSettled([
-          gestionnaireBoutiqueAPI.getProduitsTransfer(page),
-          gestionnaireBoutiqueAPI.getTransfertsValides(page),
-        ]);
+        // Utiliser le nouvel endpoint qui récupère tous les transferts (validés et en attente)
+        const response = await gestionnaireBoutiqueAPI.getAllProduitsTransfer(page, recherche);
         
         if (!mounted) return;
         
-        const [pendingResult, validesResult] = results;
+        // Le backend retourne déjà une structure paginée avec data, current_page, etc.
+        const transferts = Array.isArray(response?.data) ? response.data : [];
         
-        const pendingData = pendingResult.status === 'fulfilled' ? pendingResult.value : { data: [], total: 0 };
-        const validesData = validesResult.status === 'fulfilled' ? validesResult.value : { data: [], total: 0 };
+        // Mapper les données vers le format attendu par l'interface
+        const mapped = transferts.map((t) => {
+          // Déterminer l'action et le statut en fonction de etat
+          const isValide = t.status === 'valide' || t.status === 'validé';
+          
+          return {
+            id: `${isValide ? 'v' : 'p'}-${t.id}`,
+            date: isValide ? (t.updated_at || t.created_at) : t.created_at || new Date().toISOString(),
+            action: isValide ? 'Validé' : 'Reçu',
+            produit: t.produit?.nom || t.nom || `#${t.produit_id}`,
+            code_produit: t.produit?.code || 'N/A',
+            quantite: t.quantite,
+            cartons: t.nombre_carton,
+            utilisateur: isValide ? 'Gestionnaire boutique' : 'Gestionnaire dépôt',
+            statut: isValide ? 'validé' : 'en_attente',
+          };
+        });
         
-        const pending = Array.isArray(pendingData?.data) ? pendingData.data : [];
-        const valides = Array.isArray(validesData?.data) ? validesData.data : [];
+        // Trier par date décroissante
+        const sorted = mapped.sort((a, b) => new Date(b.date) - new Date(a.date));
         
-        const mapPending = pending.map((t) => ({
-          id: `p-${t.id}`,
-          date: t.created_at || new Date().toISOString(),
-          action: 'Transfert reçu',
-          produit: t.produit?.nom || t.nom || `#${t.produit_id}`,
-          code_produit: t.produit?.code || 'N/A',
-          quantite: t.quantite,
-          cartons: t.nombre_carton,
-          utilisateur: 'Gestionnaire dépôt',
-          statut: 'en_attente',
-        }));
-        
-        const mapValides = valides.map((t) => ({
-          id: `v-${t.id}`,
-          date: t.updated_at || t.created_at || new Date().toISOString(),
-          action: 'Produit validé',
-          produit: t.produit?.nom || t.nom || `#${t.produit_id}`,
-          code_produit: t.produit?.code || 'N/A',
-          quantite: t.quantite,
-          cartons: t.nombre_carton,
-          utilisateur: 'Gestionnaire boutique',
-          statut: 'validé',
-        }));
-        
-        const merged = [...mapPending, ...mapValides].sort((a, b) => new Date(b.date) - new Date(a.date));
-        setHistorique(merged);
-        setPagination(pendingData);
+        setHistorique(sorted);
+        setPagination(response);
       } catch (error) {
         console.error('❌ Erreur chargement historique:', error);
         toast.error('Erreur de chargement', { description: "Impossible de charger l'historique" });
@@ -75,7 +64,7 @@ const Historique = () => {
     };
     load();
     return () => { mounted = false; };
-  }, [page]);
+  }, [page, recherche]);
 
   const handlePageChange = (nextPage) => {
     if (nextPage && nextPage !== page) {
@@ -83,9 +72,31 @@ const Historique = () => {
     }
   };
 
-  const historiqueFiltres = historique.filter((h) =>
-    filtreAction === "Tous" || h.action === filtreAction
-  );
+  const handleRechercheChange = (event) => {
+    const value = event.target.value;
+    setRecherche(value);
+    if (page !== 1) {
+      setPage(1);
+    }
+  };
+
+  const handleClearRecherche = () => {
+    setRecherche("");
+    if (page !== 1) {
+      setPage(1);
+    }
+  };
+
+  const historiqueFiltres = historique.filter((h) => {
+    const q = recherche.trim().toLowerCase();
+    const matchAction = filtreAction === "Tous" || h.action === filtreAction;
+    const matchRecherche =
+      !q ||
+      h.produit?.toLowerCase().includes(q) ||
+      h.code_produit?.toLowerCase().includes(q) ||
+      h.action?.toLowerCase().includes(q);
+    return matchAction && matchRecherche;
+  });
 
   const downloadCSV = () => {
     const headers = ["Date", "Action", "Produit", "Quantité", "Utilisateur", "Statut"];
@@ -107,14 +118,10 @@ const Historique = () => {
 
   const getActionColor = (action) => {
     switch (action) {
-      case "Produit validé":
+      case "Validé":
         return "bg-green-100 text-green-800";
-      case "Transfert reçu":
+      case "Reçu":
         return "bg-blue-100 text-blue-800";
-      case "Produit modifié":
-        return "bg-yellow-100 text-yellow-800";
-      case "Produit supprimé":
-        return "bg-red-100 text-red-800";
       default:
         return "bg-gray-100 text-gray-800";
     }
@@ -151,6 +158,30 @@ const Historique = () => {
             <Download size={18} />
             Exporter CSV
           </button>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-4">
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="relative flex-1 min-w-[240px]">
+              <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
+              <input
+                type="text"
+                placeholder="Rechercher un produit, un code, une action..."
+                className="w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#472EAD]"
+                value={recherche}
+                onChange={handleRechercheChange}
+              />
+            </div>
+            {recherche && (
+              <button
+                type="button"
+                onClick={handleClearRecherche}
+                className="px-4 py-2 border rounded-lg text-gray-700 hover:bg-gray-50"
+              >
+                Effacer
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Résumé statistiques */}

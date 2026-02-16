@@ -19,9 +19,9 @@ import httpClient from '../http/client';
  * Récupère la liste des produits transférés par le gestionnaire de dépôt
  * @returns {Promise<Object>} Données paginées avec structure Laravel
  */
-export const getProduitsTransfer = async (page = 1) => {
+export const getProduitsTransfer = async (page = 1, search = "") => {
   try {
-    const response = await httpClient.get('/produits-transfer', { params: { page } });
+    const response = await httpClient.get('/produits-transfer', { params: { page, search } });
     return response.data;
   } catch (error) {
     console.error('❌ Erreur getProduitsTransfer:', error);
@@ -58,9 +58,9 @@ export const validerProduitTransfer = async (data) => {
  * Récupère la liste des produits en sous-seuil (paginée)
  * @returns {Promise<Object>} Données paginées avec structure Laravel
  */
-export const getProduitsSousSeuil = async (page = 1) => {
+export const getProduitsSousSeuil = async (page = 1, search = "") => {
   try {
-    const response = await httpClient.get('/produits-sous-seuil', { params: { page } });
+    const response = await httpClient.get('/produits-sous-seuil', { params: { page, search } });
     // Le backend retourne {current_page, data: [], total, per_page, ...}
     return response.data;
   } catch (error) {
@@ -115,9 +115,9 @@ export const getQuantiteTotaleProduit = async () => {
  * Récupère la liste des transferts validés
  * @returns {Promise<Object>} Données paginées des transferts validés
  */
-export const getTransfertsValides = async (page = 1) => {
+export const getTransfertsValides = async (page = 1, search = "") => {
   try {
-    const response = await httpClient.get('/transfers/valide', { params: { page } });
+    const response = await httpClient.get('/transfers/valide', { params: { page, search } });
     // Le backend retourne directement un array: [...]
     // On le normalise en structure paginée pour compatibilité
     if (Array.isArray(response.data)) {
@@ -141,12 +141,32 @@ export const getTransfertsValides = async (page = 1) => {
 };
 
 /**
+ * Récupère l'historique complet des produits transférés (validés et en attente)
+ * @param {number} page - Numéro de page
+ * @param {string} search - Terme de recherche
+ * @returns {Promise<Object>} Données paginées avec tous les transferts
+ */
+export const getAllProduitsTransfer = async (page = 1, search = "") => {
+  try {
+    const response = await httpClient.get('/all-produits-transfer', { params: { page, search } });
+    return response.data;
+  } catch (error) {
+    console.error('❌ Erreur getAllProduitsTransfer:', error);
+    if (error.code === 'ECONNABORTED' || error.response?.status === 401 || error.response?.status === 404 || error.response?.status === 500) {
+      console.warn('⚠️ MODE DÉGRADÉ activé pour all-produits-transfer (Backend non disponible)');
+      return { current_page: 1, data: [], last_page: 1, total: 0, per_page: 20 };
+    }
+    throw error;
+  }
+};
+
+/**
  * Récupère la liste des produits disponibles dans la boutique
  * @returns {Promise<Array>} Liste des produits disponibles
  */
-export const getProduitsDisponiblesBoutique = async (page = 1) => {
+export const getProduitsDisponiblesBoutique = async (page = 1, search = "") => {
   try {
-    const response = await httpClient.get('/produits-disponibles-boutique', { params: { page } });
+    const response = await httpClient.get('/produits-disponibles-boutique', { params: { page, search } });
     return response.data;
   } catch (error) {
     console.error('❌ Erreur getProduitsDisponiblesBoutique:', error);
@@ -217,9 +237,9 @@ export const getStatistiquesBoutique = async () => {
   }
 };
 
-export const getProduitsRupture = async () => {
+export const getProduitsRupture = async (page = 1, search = "") => {
   try {
-    const response = await httpClient.get('/produits-rupture');
+    const response = await httpClient.get('/produits-rupture', { params: { page, search } });
     return response.data;
   } catch (error) {
     console.error('❌ Erreur getProduitsRupture:', error);
@@ -238,6 +258,7 @@ export default {
   getNombreProduitsTotal,
   getQuantiteTotaleProduit,
   getTransfertsValides,
+  getAllProduitsTransfer,
   getProduitsDisponiblesBoutique,
   getMontantTotalStock,
   getStatistiquesBoutique,

@@ -271,7 +271,6 @@ const Rapports = () => {
                 <CardStat title="Transferts reçus" value={formatNumber(rapport.totalTransferts)} color="bg-[#472EAD]" subtitle={`${formatNumber(rapport.quantiteAttente + rapport.quantiteValide)} unités`} />
                 <CardStat title="En attente" value={formatNumber(rapport.transfertsEnAttente.length)} color="bg-[#F58020]" subtitle={`${formatNumber(rapport.quantiteAttente)} unités`} />
                 <CardStat title="Validés" value={formatNumber(rapport.transfertsValides)} color="bg-green-600" subtitle={`${formatNumber(rapport.quantiteValide)} unités`} />
-                <CardStat title="Historique" value={formatNumber(historique.length)} color="bg-gray-800" subtitle="entrées journalisées" />
               </>
             ) : (
               <>

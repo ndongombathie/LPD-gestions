@@ -10,7 +10,6 @@ import { toast } from "sonner";
 
 const Stock = () => {
   const [recherche, setRecherche] = useState("");
-  const [categorieFiltre, setCategorieFiltre] = useState("Toutes");
   const [produitDetail, setProduitDetail] = useState(null);
   const [produits, setProduits] = useState([]); // Produits validés
   const [stocksFaibles, setStocksFaibles] = useState([]); // Produits sous seuil
@@ -29,7 +28,6 @@ const Stock = () => {
     rupture: produitsRupture.length,
   };
 
-  const categories = ["Toutes", ...new Set(produits.map(p => p.categorie).filter(Boolean))];
 
   useEffect(() => {
     let mounted = true;
@@ -41,7 +39,7 @@ const Stock = () => {
           gestionnaireBoutiqueAPI.getQuantiteTotaleProduit(),
           gestionnaireBoutiqueAPI.getProduitsSousSeuil(),
           gestionnaireBoutiqueAPI.getProduitsRupture(),
-          gestionnaireBoutiqueAPI.getProduitsDisponiblesBoutique(page),
+          gestionnaireBoutiqueAPI.getProduitsDisponiblesBoutique(page, recherche),
         ]);
         if (!mounted) return;
         
@@ -81,7 +79,7 @@ const Stock = () => {
     };
     load();
     return () => { mounted = false; };
-  }, [page]);
+  }, [page, recherche]);
 
   const handlePageChange = (nextPage) => {
     if (nextPage && nextPage !== page) {
@@ -89,11 +87,25 @@ const Stock = () => {
     }
   };
 
+  const handleRechercheChange = (event) => {
+    const value = event.target.value;
+    setRecherche(value);
+    if (page !== 1) {
+      setPage(1);
+    }
+  };
+
+  const handleClearRecherche = () => {
+    setRecherche("");
+    if (page !== 1) {
+      setPage(1);
+    }
+  };
+
   const stocksFiltres = produits.filter(s => {
     const q = recherche.trim().toLowerCase();
     const matchRecherche = !q || s.nom?.toLowerCase().includes(q) || s.code?.toLowerCase().includes(q);
-    const matchCategorie = categorieFiltre === "Toutes" || s.categorie === categorieFiltre;
-    return matchRecherche && matchCategorie;
+    return matchRecherche ;
   });
 
   const handleView = (row) => setProduitDetail(row);
@@ -127,24 +139,22 @@ const Stock = () => {
               <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
               <input
                 type="text"
-                placeholder="Rechercher un produit..."
+                placeholder="Rechercher un produit, un code..."
                 className="w-full pl-10 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#472EAD]"
                 value={recherche}
-                onChange={(e) => setRecherche(e.target.value)}
+                onChange={handleRechercheChange}
               />
             </div>
-            <div className="flex items-center gap-2">
-              <Filter size={18} className="text-gray-500" />
-              <select
-                className="border rounded-lg py-2 px-3 bg-white focus:outline-none focus:ring-2 focus:ring-[#472EAD]"
-                value={categorieFiltre}
-                onChange={(e) => setCategorieFiltre(e.target.value)}
+            {recherche && (
+              <button
+                type="button"
+                onClick={handleClearRecherche}
+                className="px-4 py-2 border rounded-lg text-gray-700 hover:bg-gray-50"
               >
-                {categories.map((cat, index) => (
-                  <option key={index} value={cat}>{cat}</option>
-                ))}
-              </select>
-            </div>
+                Effacer
+              </button>
+            )}
+          
           </div>
         </div>
 

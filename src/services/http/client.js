@@ -36,7 +36,6 @@ httpClient.interceptors.request.use(
     const token = sessionStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-      console.log('🔑 Token ajouté:', token.substring(0, 20) + '...');
     } else {
       console.warn('⚠️ Aucun token trouvé dans sessionStorage');
     }
@@ -61,8 +60,6 @@ httpClient.interceptors.response.use(
     // 401: Token expiré ou invalide
     if (error.response?.status === 401) {
       console.error('❌ 401 Unauthorized - Token expiré ou invalide');
-      console.log('URL appelée:', error.config?.url);
-      console.log('Token utilisé:', error.config?.headers?.Authorization?.substring(0, 30) + '...');
       sessionStorage.removeItem('token');
       sessionStorage.removeItem('user');
       // Événement global pour redirection (les composants peuvent l'écouter)
