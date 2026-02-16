@@ -18,4 +18,7 @@ DELETE          api/commandes/{commande} | supprimer une commande
 GET       api/montant-total-ventes-today 
 
 # commandes traitées
-GET      api/commandes-payees-aujourdhui
+GET       api/commandes-payees-aujourdhui
+
+# produit vendus 
+GET       api/nombre-produits-vendus-aujourdhui
