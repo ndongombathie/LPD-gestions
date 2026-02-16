@@ -36,6 +36,9 @@ PUT     api/produits/{produit}/reduire-stock
 
 GET     api/fournisseurs | Liste des fournisseurs 
 
+# les transfert en attente
+GET     api/produits-transfer
+
 # annuler un tramsfert 
 PUT    api/annuler-produits-transfer | donner en payload (transfer_id) du transfert
 
