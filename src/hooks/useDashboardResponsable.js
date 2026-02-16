@@ -122,19 +122,17 @@ export default function useDashboardResponsable() {
   // 💰 FINANCE
   // ==================================================
 
-  const finance = useMemo(() => {
-    if (!rawData) return null;
+const finance = useMemo(() => {
+  if (!rawData) return null;
 
-    const totalFacture = rawData.ventes.chiffreAffaireTotal;
-    const totalDecaissements = rawData.decaissements.total;
+  return {
+    totalFacture: Number(rawData.ventes.totalTTC || 0),
+    totalEncaissement: Number(rawData.ventes.totalPaye || 0),
+    resteAEncaisser: Number(rawData.ventes.detteTotale || 0),
+  };
 
-    return {
-      totalFacture,
-      totalEncaissement: totalFacture - totalDecaissements,
-      resteAEncaisser: totalDecaissements
-    };
+}, [rawData]);
 
-  }, [rawData]);
 
   // ==================================================
   // 👥 CLIENTS

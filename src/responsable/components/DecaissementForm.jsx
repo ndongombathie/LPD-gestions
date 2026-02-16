@@ -4,8 +4,9 @@
 // ✅ Logique : EDIT → (inputs) → SAVE/CANCEL ou auto-save lors de l’envoi
 // ==========================================================
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState ,useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { utilisateursAPI } from "@/services/api";
 import {
   Loader2,
   Wallet,
@@ -83,22 +84,28 @@ export default function DecaissementForm({
     motifGlobal: initial?.motifGlobal || "",
     methodePrevue: initial?.methodePrevue || "Espèces",
     datePrevue: initial?.datePrevue || new Date().toISOString().slice(0, 10),
+    caissier_id: initial?.caissier_id || null
   });
 
   // Lignes détaillées (libellé + montant)
   const [lignes, setLignes] = useState(initial?.lignes || []);
 
   // Brouillon de ligne en cours (ajout)
-  const [draft, setDraft] = useState({ libelle: "", montant: "" });
+  const [draft, setDraft] = useState({ montant: "" });  const [selectedCaissier, setSelectedCaissier] = useState(null);
 
   // Edition (1 ligne à la fois)
   const [editingId, setEditingId] = useState(null);
-  const [editDraft, setEditDraft] = useState({ libelle: "", montant: "" });
+  const [editDraft, setEditDraft] = useState({ montant: "" });
 
   const [errors, setErrors] = useState({});
 
   // ✅ Toasts (local)
   const [toasts, setToasts] = useState([]);
+  const [searchCaissier, setSearchCaissier] = useState("");
+const [searchDebounced, setSearchDebounced] = useState("");
+const [caissiers, setCaissiers] = useState([]);
+const [loadingCaissiers, setLoadingCaissiers] = useState(false);
+
   const removeToast = (id) => setToasts((t) => t.filter((x) => x.id !== id));
   const toast = (type, title, message) => {
     const id = Date.now();
@@ -112,18 +119,60 @@ export default function DecaissementForm({
   const updateHeader = (k, v) => setHeader((h) => ({ ...h, [k]: v }));
   const updateDraft = (k, v) => setDraft((d) => ({ ...d, [k]: v }));
   const updateEditDraft = (k, v) => setEditDraft((d) => ({ ...d, [k]: v }));
+  useEffect(() => {
+  const timer = setTimeout(() => {
+    setSearchDebounced(searchCaissier);
+  }, 1000);
+
+  return () => clearTimeout(timer);
+}, [searchCaissier]);
+
+useEffect(() => {
+  if (!searchDebounced.trim()) {
+    setCaissiers([]);
+    setLoadingCaissiers(false);
+    return;
+  }
+
+  const load = async () => {
+    try {
+      setLoadingCaissiers(true);
+
+      const res = await utilisateursAPI.getAll({
+        role: "caissier",
+        search: searchDebounced,
+      });
+
+      setCaissiers(res.data || []);
+    } finally {
+      setLoadingCaissiers(false);
+    }
+  };
+
+  load();
+}, [searchDebounced]);
+
+useEffect(() => {
+  if (initial?.caissier) {
+    setSelectedCaissier(initial.caissier);
+  }
+}, [initial]);
 
   const total = useMemo(
     () => lignes.reduce((sum, l) => sum + Number(l.montant || 0), 0),
     [lignes]
   );
+const selectCaissier = (c) => {
+  updateHeader("caissier_id", c.id);
+  setSelectedCaissier(c);
+  setSearchCaissier(`${c.nom} ${c.prenom}`);  setCaissiers([]);
+};
 
   // —————————————————————————————————————
   // ✅ Validation
   // —————————————————————————————————————
   const validateDraft = () => {
     const e = {};
-    if (!draft.libelle.trim()) e.libelle = "Le libellé est obligatoire.";
     if (!draft.montant || Number(draft.montant) <= 0)
       e.montant = "Montant invalide (> 0).";
     return e;
@@ -131,8 +180,7 @@ export default function DecaissementForm({
 
   const validateEditDraft = () => {
     const e = {};
-    if (!String(editDraft.libelle || "").trim())
-      e.libelle = "Le libellé est obligatoire.";
+
     if (!editDraft.montant || Number(editDraft.montant) <= 0)
       e.montant = "Montant invalide (> 0).";
     return e;
@@ -141,18 +189,22 @@ export default function DecaissementForm({
   // ⬇️ On la fait dépendre d’un tableau de lignes passé en paramètre
   const validateAll = (currentLignes) => {
     const e = {};
+    if (!header.caissier_id)
+    e.caissier = "Veuillez sélectionner un caissier.";
 
     if (!header.motifGlobal.trim())
       e.motifGlobal = "Le motif global est obligatoire.";
 
     if (!currentLignes.length)
       e.lignes =
-        "Ajoutez au moins une ligne (libellé + montant) avant d’envoyer à la caisse.";
+        "Ajoutez au moins une ligne de montant avant d’envoyer à la caisse.";
 
     const bad = currentLignes.find(
-      (l) => !String(l.libelle || "").trim() || Number(l.montant || 0) <= 0
+      (l) => Number(l.montant || 0) <= 0
     );
-    if (bad) e.lignes = "Certaines lignes sont invalides (libellé / montant).";
+
+    if (bad) e.lignes = "Certaines lignes ont un montant invalide."
+;
 
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -171,18 +223,16 @@ export default function DecaissementForm({
 
     const nouvelle = {
       id: Date.now(),
-      libelle: draft.libelle.trim(),
       montant: Number(draft.montant),
     };
 
     setLignes((prev) => [...prev, nouvelle]);
-    setDraft({ libelle: "", montant: "" });
-  };
+    setDraft({ montant: "" });  };
 
   const handleRemoveLigne = (id) => {
     if (editingId === id) {
       setEditingId(null);
-      setEditDraft({ libelle: "", montant: "" });
+      setEditDraft({ montant: "" });
       setErrors((prev) => ({
         ...prev,
         editDraft: {},
@@ -199,14 +249,13 @@ export default function DecaissementForm({
     setErrors((prev) => ({ ...prev, editDraft: {}, editing: undefined }));
     setEditingId(ligne.id);
     setEditDraft({
-      libelle: ligne.libelle,
       montant: String(ligne.montant ?? ""),
     });
   };
 
   const cancelEdit = () => {
     setEditingId(null);
-    setEditDraft({ libelle: "", montant: "" });
+    setEditDraft({ montant: "" });
     setErrors((prev) => ({ ...prev, editDraft: {}, editing: undefined }));
   };
 
@@ -222,7 +271,6 @@ export default function DecaissementForm({
       l.id === editingId
         ? {
             ...l,
-            libelle: String(editDraft.libelle || "").trim(),
             montant: Number(editDraft.montant || 0),
           }
         : l
@@ -230,7 +278,8 @@ export default function DecaissementForm({
 
     setLignes(updated);
     setEditingId(null);
-    setEditDraft({ libelle: "", montant: "" });
+    setEditDraft({ montant: "" });
+
   };
 
   // —————————————————————————————————————
@@ -257,7 +306,6 @@ export default function DecaissementForm({
         l.id === editingId
           ? {
               ...l,
-              libelle: String(editDraft.libelle || "").trim(),
               montant: Number(editDraft.montant || 0),
             }
           : l
@@ -265,7 +313,7 @@ export default function DecaissementForm({
 
       setLignes(lignesToUse);
       setEditingId(null);
-      setEditDraft({ libelle: "", montant: "" });
+      setEditDraft({ montant: "" });
       setErrors((prev) => ({
         ...prev,
         editDraft: {},
@@ -281,38 +329,19 @@ export default function DecaissementForm({
       motifGlobal: header.motifGlobal,
       methodePrevue: header.methodePrevue,
       datePrevue: header.datePrevue,
+      caissier_id: header.caissier_id,
       lignes: lignesToUse.map((l) => ({
-        libelle: String(l.libelle || "").trim(),
+ 
         montant: Number(l.montant || 0),
       })),
     };
 
     console.log("👉 Payload décaissement envoyé au parent:", payload);
 
-    try {
-      if (onSubmit) {
-        const res = onSubmit(payload);
+if (onSubmit) {
+  await onSubmit(payload);
+}
 
-        // ✅ si le parent renvoie une Promise (API), on attend
-        if (res && typeof res.then === "function") {
-          await res;
-        }
-      }
-
-      // ✅ Toast succès
-      toast(
-        "success",
-        "Demande envoyée",
-        "La demande de décaissement a été envoyée à la caisse."
-      );
-    } catch (err) {
-      console.error("Erreur envoi décaissement :", err);
-      toast(
-        "error",
-        "Erreur",
-        "Impossible d’envoyer la demande de décaissement."
-      );
-    }
   };
 
   // —————————————————————————————————————
@@ -368,6 +397,59 @@ export default function DecaissementForm({
                 </p>
               )}
             </div>
+            {/* Caissier */}
+            <div className="sm:col-span-2">
+              <label className="block text-sm font-semibold text-[#472EAD] mb-1">
+                Caissier assigné
+              </label>
+
+              <div className="relative">
+                <input
+                  type="text"
+                  value={
+                    selectedCaissier
+                      ? `${selectedCaissier.nom} ${selectedCaissier.prenom}`
+                      : searchCaissier
+                  }
+                  onChange={(e) => {
+                    setSelectedCaissier(null);
+                    updateHeader("caissier_id", null);
+                    setSearchCaissier(e.target.value);
+                  }}
+                  placeholder="Rechercher un caissier..."
+                  className={`w-full rounded-xl border px-3 py-2 text-sm bg-white/60 backdrop-blur-sm focus:ring-2 focus:ring-[#472EAD]/40 focus:border-[#472EAD] transition ${
+                    errors.caissier ? "border-rose-400" : "border-gray-300"
+                  }`}
+                />
+
+                {loadingCaissiers && (
+                  <Loader2 className="w-4 h-4 animate-spin absolute right-3 top-1/2 -translate-y-1/2 text-[#472EAD]" />
+                )}
+              </div>
+
+              {errors.caissier && (
+                <p className="text-xs text-rose-600 mt-1">
+                  {errors.caissier}
+                </p>
+              )}
+
+              {/* Dropdown résultats */}
+              {caissiers.length > 0 && !selectedCaissier && (
+                <div className="mt-1 border border-gray-200 rounded-xl bg-white shadow-md max-h-40 overflow-y-auto">
+                  {caissiers.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => selectCaissier(c)}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-[#F7F5FF]"
+                    >
+                      {c.nom} {c.prenom}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
 
             {/* Méthode prévue */}
             <div>
@@ -392,7 +474,7 @@ export default function DecaissementForm({
             {/* Date */}
             <div>
               <label className="block text-sm font-semibold text-[#472EAD] mb-1">
-                Date du décaissement
+                Date prévu pour le décaissement
               </label>
               <div className="relative">
                 <Calendar className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2 z-10 pointer-events-none" />
@@ -422,30 +504,8 @@ export default function DecaissementForm({
             </div>
 
             {/* Brouillon d'ajout */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
-              <div className="sm:col-span-2">
-                <label className="block text-xs font-semibold text-[#472EAD] mb-1">
-                  Libellé
-                </label>
-                <div className="relative">
-                  <FileText className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2 z-10 pointer-events-none" />
-                  <input
-                    type="text"
-                    value={draft.libelle}
-                    onChange={(e) => updateDraft("libelle", e.target.value)}
-                    className={`pl-9 w-full rounded-xl border px-3 py-2 text-xs bg-white focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD] ${
-                      errors.draft?.libelle
-                        ? "border-rose-400"
-                        : "border-gray-300"
-                    }`}
-                  />
-                </div>
-                {errors.draft?.libelle && (
-                  <p className="text-[11px] text-rose-600 mt-0.5">
-                    {errors.draft.libelle}
-                  </p>
-                )}
-              </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+
 
               <div>
                 <label className="block text-xs font-semibold text-[#472EAD] mb-1">
@@ -496,7 +556,7 @@ export default function DecaissementForm({
               <table className="w-full text-xs">
                 <thead className="bg-[#F7F5FF] text-[#472EAD] uppercase text-[11px] font-semibold">
                   <tr>
-                    <th className="px-3 py-2 text-left">Libellé</th>
+ 
                     <th className="px-3 py-2 text-right">Montant</th>
                     <th className="px-3 py-2 text-center">Actions</th>
                   </tr>
@@ -511,27 +571,7 @@ export default function DecaissementForm({
                           key={l.id}
                           className="border-t border-gray-100 hover:bg-[#F9F9FF]"
                         >
-                          <td className="px-3 py-2">
-                            {isEditing ? (
-                              <>
-                                <input
-                                  type="text"
-                                  value={editDraft.libelle}
-                                  onChange={(e) =>
-                                    updateEditDraft("libelle", e.target.value)
-                                  }
-                                  className="w-full border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-[#472EAD]/40 focus:border-[#472EAD]"
-                                />
-                                {errors.editDraft?.libelle && (
-                                  <p className="text-[11px] text-rose-600 mt-0.5">
-                                    {errors.editDraft.libelle}
-                                  </p>
-                                )}
-                              </>
-                            ) : (
-                              l.libelle
-                            )}
-                          </td>
+
 
                           <td className="px-3 py-2 text-right font-semibold">
                             {isEditing ? (
@@ -604,7 +644,7 @@ export default function DecaissementForm({
                   ) : (
                     <tr>
                       <td
-                        colSpan={3}
+                        colSpan={2}
                         className="px-3 py-3 text-center text-gray-400"
                       >
                         Aucune ligne ajoutée pour le moment.

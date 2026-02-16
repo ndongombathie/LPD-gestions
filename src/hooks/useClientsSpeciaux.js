@@ -21,9 +21,17 @@ export function useClientsSpeciaux(toast, { page, search }) {
         }),
         commandesAPI.getAll({
           type_client: "special",
+          per_page: 1000,
         })
-
       ]);
+
+      // ===============================
+      // STATS BACKEND
+      // ===============================
+      const stats =
+        commandesRes?.stats ||
+        commandesRes?.data?.stats ||
+        null;
 
       // ===============================
       // CLIENTS
@@ -42,7 +50,6 @@ export function useClientsSpeciaux(toast, { page, search }) {
         entreprise: c.entreprise || "",
         adresse: c.adresse || "",
         nbCommandes: Number(c.commandes_count ?? 0),
-
       }));
 
       // ===============================
@@ -64,12 +71,7 @@ export function useClientsSpeciaux(toast, { page, search }) {
         clients: normalizedClients,
         commandes,
         meta,
-        stats: {
-          totalTTC: Number(commandesRes?.stats?.totalTTC ?? 0),
-          totalPaye: Number(commandesRes?.stats?.totalPaye ?? 0),
-          dette: Number(commandesRes?.stats?.dette ?? 0),
-        },
-
+        stats,
       };
     },
 
@@ -86,6 +88,16 @@ export function useClientsSpeciaux(toast, { page, search }) {
   const clients = query.data?.clients ?? [];
   const commandes = query.data?.commandes ?? [];
   const meta = query.data?.meta ?? {};
+
+  // ===============================
+  // STATS GLOBALES (depuis backend)
+  // ===============================
+  const statsGlobales = {
+    nbClients: Number(meta.total ?? 0),
+    totalTTC: Number(query.data?.stats?.totalTTC ?? 0),
+    totalPaye: Number(query.data?.stats?.totalPaye ?? 0),
+    detteTotale: Number(query.data?.stats?.dette ?? 0),
+  };
 
   // ===============================
   // INDEX COMMANDES PAR CLIENT
@@ -111,7 +123,6 @@ export function useClientsSpeciaux(toast, { page, search }) {
   // ===============================
   const clientsEnrichis = useMemo(() => {
     return clients.map((client) => {
-
       const cs = commandesParClient[client.id] || [];
 
       let totalTTC = 0;
@@ -123,26 +134,28 @@ export function useClientsSpeciaux(toast, { page, search }) {
       cs.forEach((cmd) => {
         if (cmd.statut !== "annulee") {
           totalTTC += Number(cmd.totalTTC || 0);
-          totalPaye += Number(cmd.montantPaye || 0);
-          detteTotale += Number(cmd.resteAPayer || 0);
+          (cmd.paiements || []).forEach((p) => {
+            totalPaye += Number(p.montant || 0);
+          });
         }
 
         (cmd.paiements || []).forEach((p) => {
-        if (
-          p.type_paiement === "tranche" &&
-          cmd.statut !== "annulee" &&
-          cmd.resteAPayer > 0
-        )
-{
+          if (
+            p.type_paiement === "tranche" &&
+            cmd.statut !== "annulee" &&
+            cmd.resteAPayer > 0
+          ) {
             nbTranchesEnAttente++;
             montantTranchesEnAttente += Number(p.montant || 0);
           }
         });
       });
 
+      detteTotale = totalTTC - totalPaye;
+      
       return {
         ...client,
-        nbCommandes: client.nbCommandes,        
+        nbCommandes: client.nbCommandes,
         totalTTC,
         totalPaye,
         detteTotale,
@@ -151,13 +164,6 @@ export function useClientsSpeciaux(toast, { page, search }) {
       };
     });
   }, [clients, commandesParClient]);
-
-  const statsGlobales = {
-    nbClients: Number(meta.total ?? 0),
-    totalTTC: Number(query.data?.stats?.totalTTC ?? 0),
-    totalPaye: Number(query.data?.stats?.totalPaye ?? 0),
-    detteTotale: Number(query.data?.stats?.dette ?? 0),
-  };
 
   const invalidate = () =>
     queryClient.invalidateQueries({
@@ -172,7 +178,6 @@ export function useClientsSpeciaux(toast, { page, search }) {
         solde: 0,
       }),
 
-
     onSuccess: (_, variables) => {
       invalidate();
       toast("success", "Client ajouté");
@@ -185,11 +190,9 @@ export function useClientsSpeciaux(toast, { page, search }) {
         "Impossible de créer le client.";
 
       toast("error", "Création impossible", message);
-
       variables?.onError?.();
     },
   });
-
 
   const editMutation = useMutation({
     mutationFn: ({ id, data }) => clientsAPI.update(id, data),

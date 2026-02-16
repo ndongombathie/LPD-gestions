@@ -52,12 +52,13 @@ export const dashboardResponsableAPI = {
         logsClients,
         logsFournisseurs
       ] = await Promise.all([
-        clientsAPI.getSpecial(),
-        commandesAPI.getAll(),
+        clientsAPI.getAll(),        commandesAPI.getAll({
+          withStats: true
+        }),
+
         produitsAPI.getAll(),
         fournisseursAPI.getAll(),
-        utilisateursAPI.getAll(),
-        decaissementsAPI.getAll(),
+        utilisateursAPI.getAll({ per_page: 1000 }),        decaissementsAPI.getAll(),
         rapportsAPI.getLogsClients(),
         rapportsAPI.getLogsFournisseurs()
       ]);
@@ -74,27 +75,22 @@ export const dashboardResponsableAPI = {
       // 🟣 VENTES
       // ==================================================
 
-      const totalCommandes = commandesList.length;
-
-      const chiffreAffaireTotal = sum(commandesList, "total");
-
+      const totalCommandes = Number(commandes?.stats?.nb ?? 0);
+      const chiffreAffaireTotal = sum(commandesList, "totalTTC");
       const commandesAujourdhui = commandesList.filter(c =>
-        c.date?.startsWith(todayString())
-      );
+        (c.dateCommande || c.date || c.created_at || "")
+            .startsWith(todayString())
+        );
 
-      const caJour = sum(commandesAujourdhui, "total");
 
-      const commandesParStatut = commandesList.reduce((acc, c) => {
-        acc[c.statut] = (acc[c.statut] || 0) + 1;
-        return acc;
-      }, {});
+      const caJour = sum(commandesAujourdhui, "totalTTC");
+
 
       // ==================================================
       // 🔵 CLIENTS
       // ==================================================
 
-      const clientsActifs = clientsList.length;
-
+      const clientsActifs = Number(clients?.total ?? clientsList.length);
       const topClients = clientsList
         .map(client => {
           const commandesClient = commandesList.filter(
@@ -104,7 +100,7 @@ export const dashboardResponsableAPI = {
           return {
             id: client.id,
             nom: client.nom,
-            dette: sum(commandesClient, "total"),
+            dette: sum(commandesClient, "totalTTC"),
             transactions: commandesClient.length
           };
         })
@@ -129,7 +125,7 @@ export const dashboardResponsableAPI = {
       // ==================================================
 
       const fournisseursStats = {
-        total: fournisseursList.length,
+        total: Number(fournisseurs?.total ?? fournisseursList.length),
         derniers: fournisseursList.slice(0, 5)
       };
 
@@ -145,10 +141,20 @@ export const dashboardResponsableAPI = {
 
       const utilisateursStats = {
         total: utilisateursList.length,
-        vendeurs: utilisateursList.filter(u => u.role === "vendeur").length,
-        caissiers: utilisateursList.filter(u => u.role === "caissier").length,
-        gestionnaires: utilisateursList.filter(u => u.role === "gestionnaire_boutique").length,
+
+        vendeurs: utilisateursList.filter(
+          u => u.role?.trim().toLowerCase() === "vendeur"
+        ).length,
+
+        caissiers: utilisateursList.filter(
+          u => u.role?.trim().toLowerCase() === "caissier"
+        ).length,
+
+        gestionnaires: utilisateursList.filter(
+          u => u.role?.trim().toLowerCase() === "gestionnaire_boutique"
+        ).length,
       };
+
 
       // ==================================================
       // 🟡 ACTIVITÉS
@@ -170,7 +176,13 @@ export const dashboardResponsableAPI = {
           totalCommandes,
           chiffreAffaireTotal,
           caJour,
-          commandesParStatut
+
+            commandesParStatut:
+            commandes?.stats?.commandesParStatut ?? {},
+          totalTTC: Number(commandes?.stats?.totalTTC ?? 0),
+          totalPaye: Number(commandes?.stats?.totalPaye ?? 0),
+          detteTotale: Number(commandes?.stats?.dette ?? 0),    
+          
         },
 
         clients: {

@@ -151,6 +151,52 @@ export default function Dashboard() {
     !sessionStorage.getItem("dashboard_welcome_seen")
   );
 
+  // ======================================================
+  // 🎨 COULEURS OFFICIELLES DES CAMEMBERTS
+  // ======================================================
+
+  const statutColors = {
+    en_attente_caisse: "#EF4444",
+    partiellement_payee: "#F59E0B",
+    soldee: "#10B981",
+    annulee: "#6366F1",
+  };
+
+const activiteColors = {
+  Ventes: "#472EAD",      // violet (inchangé)
+  Produits: "#10B981",    // ✅ vert
+  Clients: "#F58020",     // ✅ orange
+  Fournisseurs: "#EF4444" // ✅ rouge
+};
+
+
+  // ✅ ORDRE FIXE POUR L'ACTIVITÉ GLOBALE
+  const activiteOrder = [
+    "Ventes",
+    "Clients",
+    "Produits",
+    "Fournisseurs",
+  ];
+
+  // ✅ CRÉATION DE LA VERSION TRIÉE DES DONNÉES
+  const activiteGlobaleSorted = (activiteGlobale ?? [])
+    .slice()
+    .sort(
+      (a, b) =>
+        activiteOrder.indexOf(a.name) -
+        activiteOrder.indexOf(b.name)
+    );
+
+  // ✅ NORMALISATION DES DONNÉES DES COMMANDES PAR STATUT
+  const commandesParStatutData = Array.isArray(ventes?.commandesParStatut)
+    ? ventes.commandesParStatut
+    : Object.entries(ventes?.commandesParStatut ?? {})
+      .map(([name, value]) => ({
+        name,
+        value: Number(value),
+      }));
+
+
   // Animation variants pour les sections
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -301,24 +347,13 @@ export default function Dashboard() {
                       Tableau de bord
                     </p>
                     <p className="text-gray-500 text-sm">
-                      Chargement de vos données...
+                      Bienvenue dans votre espace Responsable 
                     </p>
                   </motion.div>
 
                   {/* Barre de progression améliorée */}
                   <div className="w-48 space-y-2">
-                    <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                      <motion.div
-                        initial={{ width: "0%" }}
-                        animate={{ width: "100%" }}
-                        transition={{ 
-                          duration: 2.5,
-                          repeat: Infinity,
-                          ease: "easeInOut"
-                        }}
-                        className="h-full bg-gradient-to-r from-[#472EAD] to-[#F58020] rounded-full"
-                      />
-                    </div>
+
                     
                     {/* Points de progression animés */}
                     <div className="flex justify-center gap-1.5">
@@ -351,7 +386,7 @@ export default function Dashboard() {
                     }}
                     className="text-xs text-gray-400 mt-2"
                   >
-                    Préparation de votre espace...
+                    Chargement de vos données... 
                   </motion.p>
                 </motion.div>
               </motion.div>
@@ -543,21 +578,20 @@ export default function Dashboard() {
                         {
                           bg: "from-[#472EAD]/5 to-white",
                           label: "Total facturé",
-                          value: formatFCFA(finance?.totalFacture ?? 0),
-                          suffix: "Somme des commandes",
+                          value: formatFCFA(Number(finance?.totalFacture || 0)),                          suffix: "Somme des commandes",
                           valueColor: "text-gray-900"
                         },
                         {
                           bg: "from-green-50 to-white",
                           label: "Total encaissé",
-                          value: formatFCFA(finance?.totalEncaissement ?? 0),
+                          value: formatFCFA(Number(finance?.totalEncaissement || 0)),
                           suffix: "Paiements reçus",
                           valueColor: "text-green-600"
                         },
                         {
                           bg: "from-amber-50 to-white",
                           label: "Reste à encaisser",
-                          value: formatFCFA(finance?.resteAEncaisser ?? 0),
+                          value: formatFCFA(Number(finance?.resteAEncaisser || 0)),
                           suffix: finance?.totalFacture
                             ? `${((finance.resteAEncaisser / finance.totalFacture) * 100).toFixed(1)}% du total`
                             : "0% du total",
@@ -684,7 +718,7 @@ export default function Dashboard() {
                           <h3 className="text-lg font-bold text-gray-900">Commandes par statut</h3>
                         </div>
                         <div className="text-sm text-gray-500">
-                          Total: {(ventes?.commandesParStatut ?? []).reduce((acc, curr) => acc + curr.value, 0) || 0}
+                          Total: {commandesParStatutData.reduce((acc, curr) => acc + curr.value, 0) || 0}
                         </div>
                       </div>
                       {showSkeletons ? (
@@ -693,13 +727,51 @@ export default function Dashboard() {
                         <ChartBox
                           title=""
                           icon={<ShoppingBag size={18} />}
-                          data={ventes?.commandesParStatut ?? []}
+                          data={commandesParStatutData}
                           dataKey1="value"
                           type="pie"
-                          colors={["#10B981", "#F59E0B", "#3B82F6", "#EF4444"]}
+                          colors={commandesParStatutData.map(
+                            item => statutColors[item.name] || "#9CA3AF"
+                          )}
                           theme="light"
                         />
                       )}
+                      <div className="grid grid-cols-2 gap-3 mt-4">
+                        {showSkeletons ? (
+                          <>
+                            <div className="h-6 bg-gray-200 animate-pulse rounded" />
+                            <div className="h-6 bg-gray-200 animate-pulse rounded" />
+                            <div className="h-6 bg-gray-200 animate-pulse rounded" />
+                            <div className="h-6 bg-gray-200 animate-pulse rounded" />
+                          </>
+                        ) : (
+                          commandesParStatutData.map((item, index) => (
+                            <motion.div
+                              key={item.name ?? index}
+                              initial={{ opacity: 0, x: -10 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ delay: index * 0.1 }}
+                              className="flex items-center justify-between"
+                            >
+                              <div className="flex items-center gap-2">
+                                <div
+                                  className="w-3 h-3 rounded-full"
+                                  style={{
+                                    backgroundColor: statutColors[item.name] || "#9CA3AF"                                  }}
+                                />
+                                <span className="text-sm text-gray-600">
+                                  {item.name.replaceAll("_", " ")}
+                                </span>
+                              </div>
+
+                              <span className="text-sm font-medium text-gray-900">
+                                {item.value}
+                              </span>
+                            </motion.div>
+                          ))
+                        )}
+                      </div>
+
                     </motion.div>
 
                     {/* Activité business globale - maintenant côte à côte avec Commandes par statut */}
@@ -724,10 +796,12 @@ export default function Dashboard() {
                         <ChartBox
                           title=""
                           icon={<Activity size={18} />}
-                          data={activiteGlobale ?? []}
+                          data={activiteGlobaleSorted}
                           dataKey1="value"
                           type="pie"
-                          colors={["#472EAD", "#10B981", "#3B82F6", "#F58020"]}
+                          colors={activiteGlobaleSorted.map(
+                            item => activiteColors[item.name] || "#9CA3AF"
+                          )}
                           theme="light"
                         />
                       )}
@@ -741,7 +815,7 @@ export default function Dashboard() {
                             <div className="h-6 bg-gray-200 animate-pulse rounded" />
                           </>
                         ) : (
-                          (activiteGlobale ?? []).map((item, index) => (
+                          activiteGlobaleSorted.map((item, index) => (
                             <motion.div
                               key={item.name ?? index}
                               initial={{ opacity: 0, x: -10 }}
@@ -752,7 +826,7 @@ export default function Dashboard() {
                               <div className="flex items-center gap-2">
                                 <div 
                                   className="w-3 h-3 rounded-full" 
-                                  style={{ backgroundColor: ["#472EAD", "#10B981", "#3B82F6", "#F58020"][index % 4] }} 
+                                  style={{ backgroundColor: activiteColors[item.name] || "#9CA3AF"}} 
                                 />
                                 <span className="text-sm text-gray-600">{item.name}</span>
                               </div>

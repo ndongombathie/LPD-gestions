@@ -668,7 +668,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
   const [dateCommande] = useState(todayISO());
 
   // TVA activée ou non
-  const [applyTVA, setApplyTVA] = useState(true);
+  const [applyTVA, setApplyTVA] = useState(false);
 
   // Modals de recherche
   const [openClientSearch, setOpenClientSearch] = useState(false);
@@ -704,7 +704,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
   useEffect(() => {
     const timer = setTimeout(() => {
       setProduitSearchTerm(produitSearchInput);
-    }, 1000);
+    }, 700);
 
     return () => clearTimeout(timer);
   }, [produitSearchInput]);
@@ -1850,25 +1850,15 @@ export default function Commandes() {
   }, [clientsMap]);
 
   // ✅ 3️⃣ Remplacement de statsGlobales par statsFromBackend
-  const statsGlobales = useMemo(() => {
-    if (!statsFromBackend || typeof statsFromBackend.nb === "undefined") {
-      return {
-        nbCommandes: 0,
-        nbAnnulees: 0,
-        totalTTC: 0,
-        totalPaye: 0,
-        detteTotale: 0,
-      };
-    }
+const statsGlobales = {
+  nbCommandes: Number(statsFromBackend?.nb ?? 0),
+  nbAnnulees: Number(statsFromBackend?.annulees ?? 0),
+  totalTTC: Number(statsFromBackend?.totalTTC ?? 0),
+  totalPaye: Number(statsFromBackend?.totalPaye ?? 0),
+  detteTotale: Number(statsFromBackend?.dette ?? 0),
+};
 
-    return {
-      nbCommandes: statsFromBackend.nb,
-      nbAnnulees: statsFromBackend.annulees,
-      totalTTC: statsFromBackend.totalTTC,
-      totalPaye: statsFromBackend.totalPaye,
-      detteTotale: statsFromBackend.dette,
-    };
-  }, [statsFromBackend]);
+
 
   // ✅ CORRECTION 1 : handleAnnuler aligné avec le backend (annulable tant que non soldée)
   const handleAnnuler = async (commande) => {
@@ -1898,6 +1888,7 @@ export default function Commandes() {
         "Commande annulée",
         `Commande #${commande.numero} pour ${commande.clientNom}`
       );
+      
     } catch (error) {
       logger.error("commandes.cancel", error);
       toast(
@@ -1970,6 +1961,7 @@ export default function Commandes() {
       
       // ✅ OPTIMISATION : reset à la page 1, le useEffect recharge automatiquement
       setPage(1);
+      await fetchCommandes();
 
     } catch (error) {
       logger.error("commandes.create", error);

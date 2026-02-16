@@ -18,6 +18,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Clock3,
+  User,
 } from "lucide-react";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -66,7 +67,13 @@ function DetailDecaissementModal({ open, onClose, decaissement }) {
     statut,
     lignes,
     montantTotal,
+    caissier,
   } = decaissement;
+
+  // ✅ Formatage du nom du caissier
+  const caissierName = caissier 
+    ? `${caissier.prenom || ''} ${caissier.nom || ''}`.trim() 
+    : "-";
 
   return (
     <div className="fixed inset-0 z-[120] bg-black/40 flex items-center justify-center px-3">
@@ -105,13 +112,19 @@ function DetailDecaissementModal({ open, onClose, decaissement }) {
                 {statutLabel(statut).toUpperCase()}
               </span>
             </div>
+            {/* ✅ Ajout du caissier dans la modal */}
+            <div className="sm:col-span-2">
+              <div className="text-[11px] text-gray-500 mb-0.5 flex items-center gap-1">
+                <User className="w-3 h-3" /> Caissier responsable
+              </div>
+              <div className="font-medium text-gray-800">{caissierName}</div>
+            </div>
           </div>
 
           <div className="border rounded-xl overflow-hidden">
             <table className="w-full text-xs">
               <thead className="bg-[#F7F5FF] text-[#472EAD]">
                 <tr>
-                  <th className="px-3 py-2 text-left">Libellé</th>
                   <th className="px-3 py-2 text-right">Montant</th>
                 </tr>
               </thead>
@@ -122,9 +135,6 @@ function DetailDecaissementModal({ open, onClose, decaissement }) {
                       key={idx}
                       className="border-t border-gray-100 hover:bg-[#F9F9FF]"
                     >
-                      <td className="px-3 py-2 text-xs sm:text-[13px]">
-                        {l.libelle}
-                      </td>
                       <td className="px-3 py-2 text-right font-medium">
                         {formatFCFA(l.montant)}
                       </td>
@@ -132,7 +142,7 @@ function DetailDecaissementModal({ open, onClose, decaissement }) {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={2} className="px-3 py-3 text-center text-gray-400">
+                    <td colSpan={1} className="px-3 py-3 text-center text-gray-400">
                       Aucune ligne détaillée.
                     </td>
                   </tr>
@@ -195,7 +205,7 @@ export default function Decaissements() {
   const [loadingPage, setLoadingPage] = useState(false);
   
   // ——————————————————————————————————————————————————
-  // 🔍 Debounce recherche (400ms)
+  // 🔍 Debounce recherche (1000ms)
   // ——————————————————————————————————————————————————
 useEffect(() => {
   
@@ -270,6 +280,10 @@ useEffect(() => {
       return;
     }
 
+      if (!form?.caissier_id) {
+        toast.error("Veuillez sélectionner un caissier.");
+        return;
+      }
     const datePrevue = form?.datePrevue || todayISO();
     if (!datePrevue) {
       toast.error("La date prévue est obligatoire.");
@@ -283,18 +297,16 @@ useEffect(() => {
     }
 
     const lignesPayload = lignes.map((l) => ({
-      libelle: String(l?.libelle || "").trim(),
       montant: Number(l?.montant || 0),
     }));
 
     const ligneInvalide = lignesPayload.find(
-      (l) => !l.libelle || l.montant <= 0
+      (l) => l.montant <= 0
     );
 
     if (ligneInvalide) {
       toast.error(
-        "Chaque ligne doit avoir un libellé et un montant supérieur à 0."
-      );
+        "Chaque ligne doit avoir un montant supérieur à 0."      );
       return;
     }
 
@@ -305,16 +317,17 @@ useEffect(() => {
       motifGlobal,
       methodePrevue: form?.methodePrevue || "Espèces",
       datePrevue,
+      caissier_id: form?.caissier_id,
       lignes: lignesPayload,
     };
+
 
     const toastId = toast.loading("Envoi à la caisse...");
 
     try {
       setSubmitting(true);
 
-      const { data } = await decaissementsAPI.create(payload);
-
+      const data = await decaissementsAPI.create(payload);
       const d = data.decaissement || data;
 
       const normalised = {
@@ -326,10 +339,18 @@ useEffect(() => {
         lignes: d.lignes ?? lignesPayload,
       };
 
-      setDemandes((prev) => [normalised, ...prev]);
       setOpenModal(false);
       toast.success("Demande envoyée à la caisse ✅", { id: toastId });
-      setPage(1);
+
+      if (page !== 1) {
+        setPage(1);
+      } else {
+        loadData();
+      }
+
+
+
+
     } catch (e) {
       const status = e?.response?.status;
       const data = e?.response?.data;
@@ -501,13 +522,15 @@ useEffect(() => {
       autoTable(doc, {
         startY: startTableY,
         margin: { top: startTableY, left: 14, right: 14 },
-        head: [["Date", "Montant total", "Motif global", "Méthode", "Statut"]],
+        head: [["Date", "Caissier", "Méthode", "Montant total", "Statut"]],        
         body: allData.map((d) => [
           d.datePrevue,
-          formatFCFAPdf(d.montantTotal),
-          d.motifGlobal,
+          `${d.caissier?.prenom || ""} ${d.caissier?.nom || ""}`.trim() || "-",
           d.methodePrevue,
+          formatFCFAPdf(d.montantTotal),
           statutLabel(d.statut).toUpperCase(),
+
+
         ]) || [],
         styles: { fontSize: 9, cellPadding: 2, textColor: [55, 65, 81] },
         headStyles: { fillColor: [71, 46, 173], textColor: 255, fontStyle: "bold" },
@@ -532,6 +555,12 @@ useEffect(() => {
       refusé: "bg-rose-100 text-rose-700 border border-rose-300",
       en_attente: "bg-amber-100 text-amber-700 border border-amber-300",
     }[s] || "bg-gray-100 text-gray-600 border border-gray-300");
+
+  // ✅ Formatage du nom du caissier pour le tableau
+  const formatCaissierName = (caissier) => {
+    if (!caissier) return "-";
+    return `${caissier.prenom || ''} ${caissier.nom || ''}`.trim() || "-";
+  };
 
   // Loader
   if (loading && demandes.length === 0)
@@ -743,7 +772,7 @@ useEffect(() => {
                       type="text"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      placeholder="Motif global ou libellé..."
+                      placeholder="Rechercher par motif..."
                       className="pl-7 pr-6 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-[#472EAD] focus:ring-1 focus:ring-[#472EAD] bg-white text-sm" 
                     />
                     {searchTerm && (
@@ -772,7 +801,8 @@ useEffect(() => {
               <thead className="bg-[#F7F5FF] text-[#472EAD] uppercase text-xs font-semibold">
                 <tr>
                   <th className="px-4 py-3 text-left">Date</th>
-                  <th className="px-4 py-3 text-left">Motif global</th>
+                  {/* ✅ Nouvelle colonne Caissier */}
+                  <th className="px-4 py-3 text-left">Caissier</th>
                   <th className="px-4 py-3 text-left">Méthode</th>
                   <th className="px-4 py-3 text-left">Montant total</th>
                   <th className="px-4 py-3 text-left">Statut</th>
@@ -787,10 +817,22 @@ useEffect(() => {
                       className="border-t border-gray-100 hover:bg-[#F9F9FF] transition"
                     >
                       <td className="px-4 py-2">{d.datePrevue}</td>
-                      <td className="px-4 py-2">{d.motifGlobal}</td>
+                      {/* ✅ Affichage du caissier */}
+                      <td className="px-4 py-2">
+                        <div className="flex items-center gap-1">
+                          <User className="w-3.5 h-3.5 text-gray-400" />
+                          <span>{formatCaissierName(d.caissier)}</span>
+                        </div>
+                      </td>
                       <td className="px-4 py-2">{d.methodePrevue}</td>
                       <td className="px-4 py-2 font-medium">
                         {formatFCFA(d.montantTotal)}
+                        {d.lignes?.length > 1 && (
+                          <span className="text-[11px] text-gray-400 ml-1">
+                            ({d.lignes.length} lignes)
+                          </span>
+                        )}
+
                       </td>
                       <td className="px-4 py-2">
                         <span
