@@ -40,7 +40,10 @@ PUT     api/produits/{produit}/reduire-stock
 
 GET     api/fournisseurs | Liste des fournisseurs 
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> a435f8d (produits-transfer)
 # les transfert en attente
 GET     api/produits-transfer
 
