@@ -38,11 +38,19 @@ const Stock = () => {
       try {
         setLoading(true);
         const [nb, qty, sousSeuil, rupture, produitsDispo] = await Promise.all([
+<<<<<<< HEAD
           gestionnaireBoutiqueAPI.getNombreProduitsTotal({ signal: controller.signal }),
           gestionnaireBoutiqueAPI.getQuantiteTotaleProduit({ signal: controller.signal }),
           gestionnaireBoutiqueAPI.getProduitsSousSeuil(1, "", { signal: controller.signal }),
           gestionnaireBoutiqueAPI.getProduitsRupture(1, "", { signal: controller.signal }),
           gestionnaireBoutiqueAPI.getProduitsDisponiblesBoutique(page, debouncedRecherche, { signal: controller.signal }),
+=======
+          gestionnaireBoutiqueAPI.getNombreProduitsTotal(),
+          gestionnaireBoutiqueAPI.getQuantiteTotaleProduit(),
+          gestionnaireBoutiqueAPI.getProduitsSousSeuil(),
+          gestionnaireBoutiqueAPI.getProduitsRupture(),
+          gestionnaireBoutiqueAPI.getProduitsDisponiblesBoutique(page),
+>>>>>>> 58a45ce (optimisations du code)
         ]);
         if (!mounted) return;
         

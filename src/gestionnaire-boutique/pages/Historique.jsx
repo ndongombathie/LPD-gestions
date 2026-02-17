@@ -21,6 +21,7 @@ const Historique = () => {
   const [recherche, setRecherche] = useState("");
   const debouncedRecherche = useDebouncedValue(recherche);
 
+<<<<<<< HEAD
   // États pour les statistiques globales
   const [globalStats, setGlobalStats] = useState({
     total: 0,
@@ -154,6 +155,9 @@ const Historique = () => {
       controller.abort();
     };
   }, [periodFilter, filtreAction, debouncedRecherche]);
+=======
+  const actions = ["Tous", "Transfert reçu", "Produit validé"];
+>>>>>>> 58a45ce (optimisations du code)
 
   useEffect(() => {
     let mounted = true;

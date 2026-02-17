@@ -59,6 +59,7 @@ const Alertes = () => {
     }
   }, [pageRupture, debouncedRecherche]);
 
+
   useEffect(() => {
     const controller = new AbortController();
     loadAlertes(page, debouncedRecherche, { signal: controller.signal });
@@ -70,6 +71,10 @@ const Alertes = () => {
     loadProduitsRupture(pageRupture, debouncedRecherche, { signal: controller.signal });
     return () => controller.abort();
   }, [loadProduitsRupture, pageRupture, debouncedRecherche]);
+
+  useEffect(() => {
+    loadProduitsRupture(pageRupture);
+  }, [pageRupture]);
 
   const handlePageChange = (nextPage) => {
     if (nextPage && nextPage !== page) {
