@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { AlertTriangle, Eye, Search } from "lucide-react";
 import DataTable from "../components/DataTable";
 import Pagination from "../components/Pagination";
 import LoadingSpinner from "../components/LoadingSpinner";
 import EmptyState from "../components/EmptyState";
+import useDebouncedValue from "../hooks/useDebouncedValue";
 import { gestionnaireBoutiqueAPI } from "@/services/api";
 import { toast } from "sonner";
 
@@ -18,48 +19,57 @@ const Alertes = () => {
   const [paginationRupture, setPaginationRupture] = useState(null);
   const [produitDetail, setProduitDetail] = useState(null);
   const [recherche, setRecherche] = useState("");
+  const debouncedRecherche = useDebouncedValue(recherche);
 
-  const loadAlertes = async (pageNumber = page, search = recherche) => {
+  const loadAlertes = useCallback(async (pageNumber = page, search = debouncedRecherche, options = {}) => {
     try {
       setLoading(true);
-      const produitsSousSeuilData = await gestionnaireBoutiqueAPI.getProduitsSousSeuil(pageNumber, search);
+      const produitsSousSeuilData = await gestionnaireBoutiqueAPI.getProduitsSousSeuil(pageNumber, search, options);
       const produits = produitsSousSeuilData?.data || [];
       setAlertes(Array.isArray(produits) ? produits : []);
       setPagination(produitsSousSeuilData);
     } catch (error) {
-      console.error('❌ Erreur chargement alertes:', error);
+      if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') {
+        return;
+      }
       toast.error('Erreur de chargement', {
         description: 'Impossible de charger les produits en alerte'
       });
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, debouncedRecherche]);
 
-  const loadProduitsRupture = async (pageNumber = pageRupture, search = recherche) => {
+  const loadProduitsRupture = useCallback(async (pageNumber = pageRupture, search = debouncedRecherche, options = {}) => {
     try {
       setLoadingRupture(true);
-      const produitsRuptureData = await gestionnaireBoutiqueAPI.getProduitsRupture(pageNumber, search);
+      const produitsRuptureData = await gestionnaireBoutiqueAPI.getProduitsRupture(pageNumber, search, options);
       const produits = produitsRuptureData?.data || [];
       setProduitsRupture(Array.isArray(produits) ? produits : []);
       setPaginationRupture(produitsRuptureData);
     } catch (error) {
-      console.error('❌ Erreur chargement produits en rupture:', error);
+      if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') {
+        return;
+      }
       toast.error('Erreur de chargement', {
         description: 'Impossible de charger les produits en rupture'
       });
     } finally {
       setLoadingRupture(false);
     }
-  };
+  }, [pageRupture, debouncedRecherche]);
 
   useEffect(() => {
-    loadAlertes(page, recherche);
-  }, [page, recherche]);
+    const controller = new AbortController();
+    loadAlertes(page, debouncedRecherche, { signal: controller.signal });
+    return () => controller.abort();
+  }, [loadAlertes, page, debouncedRecherche]);
 
   useEffect(() => {
-    loadProduitsRupture(pageRupture, recherche);
-  }, [pageRupture, recherche]);
+    const controller = new AbortController();
+    loadProduitsRupture(pageRupture, debouncedRecherche, { signal: controller.signal });
+    return () => controller.abort();
+  }, [loadProduitsRupture, pageRupture, debouncedRecherche]);
 
   const handlePageChange = (nextPage) => {
     if (nextPage && nextPage !== page) {

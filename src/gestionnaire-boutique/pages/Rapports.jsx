@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { FileText, TrendingUp, Package, AlertTriangle } from "lucide-react";
+import { FileText, Package, AlertTriangle } from "lucide-react";
 import DataTable from "../components/DataTable";
 import jsPDF from "jspdf";
 import { gestionnaireBoutiqueAPI } from "@/services/api";
@@ -48,8 +48,7 @@ const Rapports = () => {
         setSousSeuil(ss?.data || []);
         setPending(pend?.data || []);
         setValides(val?.data || []);
-      } catch (error) {
-        console.error('❌ Erreur chargement rapports:', error);
+      } catch {
         toast.error('Erreur de chargement', { description: 'Impossible de charger les données des rapports' });
       } finally {
         if (mounted) setLoading(false);

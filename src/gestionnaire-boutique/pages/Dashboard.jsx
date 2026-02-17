@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Activity, AlertTriangle, TrendingUp, Package, CheckCircle, BarChart3 } from "lucide-react";
+import { Activity, AlertTriangle, TrendingUp, Package, CheckCircle } from "lucide-react";
 import CardStat from "../components/CardStat";
 import { gestionnaireBoutiqueAPI } from "@/services/api";
 import { toast } from "sonner";
@@ -59,8 +59,7 @@ const Dashboard = () => {
         setAlertes(produitsSousSeuilData?.data?.slice(0, 3) || []);
         setTransfertsPending((produitsTransferData?.data || []).slice(0, 3));
         
-      } catch (error) {
-        console.error('❌ Erreur chargement dashboard:', error);
+      } catch {
         if (mounted) {
           toast.error('Erreur de chargement', {
             description: 'Impossible de charger les données du tableau de bord'

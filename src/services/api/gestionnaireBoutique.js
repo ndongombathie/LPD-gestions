@@ -15,14 +15,45 @@
 
 import httpClient from '../http/client';
 
+const DEFAULT_CACHE_TTL_MS = 30000;
+const cacheStore = new Map();
+
+const buildCacheKey = (url, params = {}) => {
+  const searchParams = new URLSearchParams();
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      searchParams.append(key, String(value));
+    }
+  });
+  const query = searchParams.toString();
+  return query ? `${url}?${query}` : url;
+};
+
+const cachedGet = async (url, params, options = {}, ttlMs = DEFAULT_CACHE_TTL_MS) => {
+  const key = buildCacheKey(url, params);
+  const now = Date.now();
+  const cached = cacheStore.get(key);
+  if (cached && now - cached.timestamp < ttlMs) {
+    return cached.value;
+  }
+
+  const response = await httpClient.get(url, { params, ...options });
+  const data = response.data;
+  cacheStore.set(key, { timestamp: now, value: data });
+  return data;
+};
+
+export const clearGestionnaireBoutiqueCache = () => {
+  cacheStore.clear();
+};
+
 /**
  * Récupère la liste des produits transférés par le gestionnaire de dépôt
  * @returns {Promise<Object>} Données paginées avec structure Laravel
  */
-export const getProduitsTransfer = async (page = 1, search = "") => {
+export const getProduitsTransfer = async (page = 1, search = "", options = {}) => {
   try {
-    const response = await httpClient.get('/produits-transfer', { params: { page, search } });
-    return response.data;
+    return await cachedGet('/produits-transfer', { page, search }, options);
   } catch (error) {
     console.error('❌ Erreur getProduitsTransfer:', error);
     // Mode dégradé: si timeout, 401, 404, ou 500, retourner structure vide
@@ -47,6 +78,7 @@ export const getProduitsTransfer = async (page = 1, search = "") => {
 export const validerProduitTransfer = async (data) => {
   try {
     const response = await httpClient.put('/valider-produits-transfer', data);
+    clearGestionnaireBoutiqueCache();
     return response.data;
   } catch (error) {
     console.error('❌ Erreur validerProduitTransfer:', error);
@@ -58,11 +90,10 @@ export const validerProduitTransfer = async (data) => {
  * Récupère la liste des produits en sous-seuil (paginée)
  * @returns {Promise<Object>} Données paginées avec structure Laravel
  */
-export const getProduitsSousSeuil = async (page = 1, search = "") => {
+export const getProduitsSousSeuil = async (page = 1, search = "", options = {}) => {
   try {
-    const response = await httpClient.get('/produits-sous-seuil', { params: { page, search } });
     // Le backend retourne {current_page, data: [], total, per_page, ...}
-    return response.data;
+    return await cachedGet('/produits-sous-seuil', { page, search }, options);
   } catch (error) {
     console.error('❌ Erreur getProduitsSousSeuil:', error);
     if (error.code === 'ECONNABORTED' || error.response?.status === 401 || error.response?.status === 404) {
@@ -77,10 +108,9 @@ export const getProduitsSousSeuil = async (page = 1, search = "") => {
  * Récupère le nombre total de produits dans la boutique
  * @returns {Promise<number>} Nombre total de produits
  */
-export const getNombreProduitsTotal = async () => {
+export const getNombreProduitsTotal = async (options = {}) => {
   try {
-    const response = await httpClient.get('/nombre-produits-total');
-    return response.data;
+    return await cachedGet('/nombre-produits-total', {}, options);
   } catch (error) {
     console.error('❌ Erreur getNombreProduitsTotal:', error);
     if (error.code === 'ECONNABORTED' || error.response?.status === 401 || error.response?.status === 404) {
@@ -95,11 +125,11 @@ export const getNombreProduitsTotal = async () => {
  * Récupère la quantité totale de produits
  * @returns {Promise<number>} Quantité totale
  */
-export const getQuantiteTotaleProduit = async () => {
+export const getQuantiteTotaleProduit = async (options = {}) => {
   try {
-    const response = await httpClient.get('/quantite-totale-produit');
     // Le backend retourne {total_quantity: "739"}
-    const totalQuantity = response.data?.total_quantity ? parseInt(response.data.total_quantity) : 0;
+    const response = await cachedGet('/quantite-totale-produit', {}, options);
+    const totalQuantity = response?.total_quantity ? parseInt(response.total_quantity) : 0;
     return totalQuantity;
   } catch (error) {
     console.error('❌ Erreur getQuantiteTotaleProduit:', error);
@@ -115,21 +145,21 @@ export const getQuantiteTotaleProduit = async () => {
  * Récupère la liste des transferts validés
  * @returns {Promise<Object>} Données paginées des transferts validés
  */
-export const getTransfertsValides = async (page = 1, search = "") => {
+export const getTransfertsValides = async (page = 1, search = "", options = {}) => {
   try {
-    const response = await httpClient.get('/transfers/valide', { params: { page, search } });
     // Le backend retourne directement un array: [...]
     // On le normalise en structure paginée pour compatibilité
-    if (Array.isArray(response.data)) {
+    const response = await cachedGet('/transfers/valide', { page, search }, options);
+    if (Array.isArray(response)) {
       return {
         current_page: 1,
-        data: response.data,
+        data: response,
         last_page: 1,
-        total: response.data.length,
-        per_page: response.data.length
+        total: response.length,
+        per_page: response.length
       };
     }
-    return response.data;
+    return response;
   } catch (error) {
     console.error('❌ Erreur getTransfertsValides:', error);
     if (error.code === 'ECONNABORTED' || error.response?.status === 401 || error.response?.status === 404) {
@@ -146,10 +176,9 @@ export const getTransfertsValides = async (page = 1, search = "") => {
  * @param {string} search - Terme de recherche
  * @returns {Promise<Object>} Données paginées avec tous les transferts
  */
-export const getAllProduitsTransfer = async (page = 1, search = "") => {
+export const getAllProduitsTransfer = async (page = 1, search = "", options = {}) => {
   try {
-    const response = await httpClient.get('/all-produits-transfer', { params: { page, search } });
-    return response.data;
+    return await cachedGet('/all-produits-transfer', { page, search }, options);
   } catch (error) {
     console.error('❌ Erreur getAllProduitsTransfer:', error);
     if (error.code === 'ECONNABORTED' || error.response?.status === 401 || error.response?.status === 404 || error.response?.status === 500) {
@@ -164,10 +193,9 @@ export const getAllProduitsTransfer = async (page = 1, search = "") => {
  * Récupère la liste des produits disponibles dans la boutique
  * @returns {Promise<Array>} Liste des produits disponibles
  */
-export const getProduitsDisponiblesBoutique = async (page = 1, search = "") => {
+export const getProduitsDisponiblesBoutique = async (page = 1, search = "", options = {}) => {
   try {
-    const response = await httpClient.get('/produits-disponibles-boutique', { params: { page, search } });
-    return response.data;
+    return await cachedGet('/produits-disponibles-boutique', { page, search }, options);
   } catch (error) {
     console.error('❌ Erreur getProduitsDisponiblesBoutique:', error);
     if (error.code === 'ECONNABORTED' || error.response?.status === 401 || error.response?.status === 404) {
@@ -182,10 +210,9 @@ export const getProduitsDisponiblesBoutique = async (page = 1, search = "") => {
  * Récupère le montant total du stock de la boutique
  * @returns {Promise<number>} Montant total en valeur
  */
-export const getMontantTotalStock = async () => {
+export const getMontantTotalStock = async (options = {}) => {
   try {
-    const response = await httpClient.get('/montant-total-stock');
-    return response.data;
+    return await cachedGet('/montant-total-stock', {}, options);
   } catch (error) {
     console.error('❌ Erreur getMontantTotalStock:', error);
     if (error.code === 'ECONNABORTED' || error.response?.status === 401 || error.response?.status === 404) {
@@ -237,10 +264,9 @@ export const getStatistiquesBoutique = async () => {
   }
 };
 
-export const getProduitsRupture = async (page = 1, search = "") => {
+export const getProduitsRupture = async (page = 1, search = "", options = {}) => {
   try {
-    const response = await httpClient.get('/produits-rupture', { params: { page, search } });
-    return response.data;
+    return await cachedGet('/produits-rupture', { page, search }, options);
   } catch (error) {
     console.error('❌ Erreur getProduitsRupture:', error);
     if (error.code === 'ECONNABORTED' || error.response?.status === 401 || error.response?.status === 404) {
@@ -262,5 +288,6 @@ export default {
   getProduitsDisponiblesBoutique,
   getMontantTotalStock,
   getStatistiquesBoutique,
-  getProduitsRupture
+  getProduitsRupture,
+  clearGestionnaireBoutiqueCache
 };

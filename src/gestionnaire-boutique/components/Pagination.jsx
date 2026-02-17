@@ -20,6 +20,11 @@ const Pagination = ({ pagination, onPageChange }) => {
   if (!pagination || !Array.isArray(pagination.links) || pagination.links.length <= 1) {
     return null;
   }
+  
+  // Vérifier si la page actuelle a des données
+  if (!pagination.data || pagination.data.length === 0) {
+    return null;
+  }
 
   const links = pagination.links;
   const isPrev = (label) => {

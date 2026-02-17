@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { Search, Eye, Filter, BarChart3 } from "lucide-react";
+import { Search, Eye, BarChart3 } from "lucide-react";
 import CardStat from "../components/CardStat";
 import DataTable from "../components/DataTable";
 import Pagination from "../components/Pagination";
 import LoadingSpinner from "../components/LoadingSpinner";
 import EmptyState from "../components/EmptyState";
+import useDebouncedValue from "../hooks/useDebouncedValue";
 import { gestionnaireBoutiqueAPI } from "@/services/api";
 import { toast } from "sonner";
 
@@ -19,6 +20,7 @@ const Stock = () => {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState(null);
+  const debouncedRecherche = useDebouncedValue(recherche);
 
   // Stats
   const stats = {
@@ -31,15 +33,16 @@ const Stock = () => {
 
   useEffect(() => {
     let mounted = true;
+    const controller = new AbortController();
     const load = async () => {
       try {
         setLoading(true);
         const [nb, qty, sousSeuil, rupture, produitsDispo] = await Promise.all([
-          gestionnaireBoutiqueAPI.getNombreProduitsTotal(),
-          gestionnaireBoutiqueAPI.getQuantiteTotaleProduit(),
-          gestionnaireBoutiqueAPI.getProduitsSousSeuil(),
-          gestionnaireBoutiqueAPI.getProduitsRupture(),
-          gestionnaireBoutiqueAPI.getProduitsDisponiblesBoutique(page, recherche),
+          gestionnaireBoutiqueAPI.getNombreProduitsTotal({ signal: controller.signal }),
+          gestionnaireBoutiqueAPI.getQuantiteTotaleProduit({ signal: controller.signal }),
+          gestionnaireBoutiqueAPI.getProduitsSousSeuil(1, "", { signal: controller.signal }),
+          gestionnaireBoutiqueAPI.getProduitsRupture(1, "", { signal: controller.signal }),
+          gestionnaireBoutiqueAPI.getProduitsDisponiblesBoutique(page, debouncedRecherche, { signal: controller.signal }),
         ]);
         if (!mounted) return;
         
@@ -52,7 +55,6 @@ const Stock = () => {
         setProduitsRupture(rupture?.data || []);
         
         // Extraire les produits depuis la réponse paginée ou array direct
-        console.log('📦 Produits disponibles boutique - structure:', produitsDispo);
         let produitsData = Array.isArray(produitsDispo) 
           ? produitsDispo 
           : (produitsDispo?.data || []);
@@ -66,20 +68,23 @@ const Stock = () => {
           return item;
         });
         
-        console.log('📦 Produits extraits:', produitsData.length, 'produits');
-        console.log('📦 Premier produit:', produitsData[0]);
         setProduits(produitsData);
         setPagination(produitsDispo);
       } catch (error) {
-        console.error('❌ Erreur chargement stock:', error);
+        if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') {
+          return;
+        }
         toast.error('Erreur de chargement', { description: 'Impossible de charger les informations de stock' });
       } finally {
         if (mounted) setLoading(false);
       }
     };
     load();
-    return () => { mounted = false; };
-  }, [page, recherche]);
+    return () => {
+      mounted = false;
+      controller.abort();
+    };
+  }, [page, debouncedRecherche]);
 
   const handlePageChange = (nextPage) => {
     if (nextPage && nextPage !== page) {
@@ -169,8 +174,8 @@ const Stock = () => {
               columns={[
                 { label: "Produit", key: "nom" },
                 { label: "Code", key: "code" },
-                { label: "Quantité", key: "quantite", render: (v, row) => row.quantite ?? row.quantite ?? '-' },
-                { label: "Seuil", key: "seuil", render: (v, row) => row.seuil ?? row.seuil ?? '-' },
+                { label: "Quantité", key: "quantite", render: (v, row) => row.quantite ?? '-' },
+                { label: "Seuil", key: "seuil", render: (v, row) => row.seuil ?? '-' },
                 { label: "Cartons", key: "nombre_carton", render: (v, row) => row.nombre_carton ?? '-' },
               ]}
               data={stocksFiltres}
@@ -213,11 +218,11 @@ const Stock = () => {
                 </div>
                 <div className="border-b pb-3">
                   <p className="text-gray-600 font-medium">Quantité (unités)</p>
-                  <p className="text-[#111827] font-semibold mt-1">{produitDetail.quantite ?? produitDetail.quantite ?? '-'}</p>
+                  <p className="text-[#111827] font-semibold mt-1">{produitDetail.quantite ?? '-'}</p>
                 </div>
                 <div className="border-b pb-3">
                   <p className="text-gray-600 font-medium">Seuil d'alerte</p>
-                  <p className="text-[#111827] font-semibold mt-1">{produitDetail.seuil ?? produitDetail.seuil ?? '-'}</p>
+                  <p className="text-[#111827] font-semibold mt-1">{produitDetail.seuil ?? '-'}</p>
                 </div>
                 {produitDetail.nombre_carton != null && (
                   <div className="border-b pb-3">

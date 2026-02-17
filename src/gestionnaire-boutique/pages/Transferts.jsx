@@ -1,32 +1,32 @@
 import React, { useEffect, useState } from "react";
-import { Plus, Search, FileText, Trash2, X, Eye } from "lucide-react";
+import { Search, Eye } from "lucide-react";
 import CardStat from "../components/CardStat";
 import DataTable from "../components/DataTable";
 import Pagination from "../components/Pagination";
 import LoadingSpinner from "../components/LoadingSpinner";
 import EmptyState from "../components/EmptyState";
+import useDebouncedValue from "../hooks/useDebouncedValue";
 import { gestionnaireBoutiqueAPI } from "@/services/api";
 import { toast } from "sonner";
 
 const Transferts = () => {
   const [transferts, setTransferts] = useState([]);
   const [recherche, setRecherche] = useState("");
-  const [showModal, setShowModal] = useState(false);
-  const [nouveau, setNouveau] = useState({ produit: "", source: "", destination: "", quantite: "" });
   const [detailTransfert, setDetailTransfert] = useState(null);
-  const [confirmDelete, setConfirmDelete] = useState(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState(null);
+  const debouncedRecherche = useDebouncedValue(recherche);
 
   useEffect(() => {
     let mounted = true;
+    const controller = new AbortController();
     const load = async () => {
       try {
         setLoading(true);
         const [pending, valides] = await Promise.all([
-          gestionnaireBoutiqueAPI.getProduitsTransfer(page),
-          gestionnaireBoutiqueAPI.getTransfertsValides(page),
+          gestionnaireBoutiqueAPI.getProduitsTransfer(page, debouncedRecherche, { signal: controller.signal }),
+          gestionnaireBoutiqueAPI.getTransfertsValides(page, debouncedRecherche, { signal: controller.signal }),
         ]);
         if (!mounted) return;
         // Harmoniser structure pour l'affichage
@@ -47,15 +47,20 @@ const Transferts = () => {
         setTransferts([...pendingRows, ...validesRows]);
         setPagination(pending);
       } catch (error) {
-        console.error('❌ Erreur chargement transferts:', error);
+        if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') {
+          return;
+        }
         toast.error('Erreur de chargement', { description: 'Impossible de charger les transferts' });
       } finally {
         if (mounted) setLoading(false);
       }
     };
     load();
-    return () => { mounted = false; };
-  }, [page]);
+    return () => {
+      mounted = false;
+      controller.abort();
+    };
+  }, [page, debouncedRecherche]);
 
   const handlePageChange = (nextPage) => {
     if (nextPage && nextPage !== page) {
@@ -63,33 +68,11 @@ const Transferts = () => {
     }
   };
 
-  const transfertsFiltres = transferts.filter(
-    (t) => {
-      const q = recherche.trim().toLowerCase();
-      return (
-        !q ||
-        t.produit.toLowerCase().includes(q) ||
-        t.source.toLowerCase().includes(q) ||
-        t.destination.toLowerCase().includes(q)
-      );
-    }
-  );
-
   const stats = {
     total: transferts.length,
     en_attente: transferts.filter(t => t.statut === "en_attente").length,
     valide: transferts.filter(t => t.statut === "validé").length,
     rejete: transferts.filter(t => t.statut === "rejeté").length,
-  };
-
-  const ajouterTransfert = () => {
-    toast.info('Fonction non disponible', { description: 'La création se fait côté dépôt.' });
-    setShowModal(false);
-  };
-
-  const supprimerTransfert = async () => {
-    toast.info('Suppression non disponible', { description: 'La suppression se gère au niveau du dépôt.' });
-    setConfirmDelete(null);
   };
 
   return (
@@ -104,7 +87,7 @@ const Transferts = () => {
           <CardStat title="Rejeté" value={stats.rejete} color="bg-red-600" />
         </div>
 
-        {/* Recherche et action */}
+        {/* Recherche */}
         <div className="flex justify-between items-center gap-4 flex-wrap">
           <div className="relative w-64">
             <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
@@ -116,19 +99,12 @@ const Transferts = () => {
               onChange={(e) => setRecherche(e.target.value)}
             />
           </div>
-
-          <button
-            onClick={() => setShowModal(true)}
-            className="bg-[#472EAD] text-white px-4 py-2 rounded flex items-center gap-2"
-          >
-            <Plus size={16} /> Ajouter
-          </button>
         </div>
 
         <div className="bg-white rounded-lg shadow p-4 overflow-auto">
           {loading ? (
             <LoadingSpinner />
-          ) : transfertsFiltres.length === 0 ? (
+          ) : transferts.length === 0 ? (
             <EmptyState message="Aucune demande trouvée" />
           ) : (
             <DataTable
@@ -143,41 +119,15 @@ const Transferts = () => {
                   )
                 },
               ]}
-              data={transfertsFiltres}
+              data={transferts}
               actions={[
                 { title: 'Voir', icon: <Eye size={16} />, color: 'text-blue-600', hoverBg: 'bg-blue-50', onClick: (row) => setDetailTransfert(row) },
-                { title: 'Supprimer', icon: <Trash2 size={16} />, color: 'text-red-600', hoverBg: 'bg-red-50', onClick: (row) => setConfirmDelete(row.id) },
               ]}
               onRowClick={(row) => setDetailTransfert(row)}
             />
           )}
           <Pagination pagination={pagination} onPageChange={handlePageChange} />
         </div>
-
-        {/* Modal création */}
-        {showModal && (
-          <div className="fixed inset-0 z-200 bg-black/40 bg-opacity-10 flex justify-center items-center">
-            <div className="relative bg-white w-[95%] sm:w-[420px]  rounded-lg shadow-lg p-6 space-y-4">
-              <h3 className="text-xl font-bold text-[#111827]">Nouvelle demande</h3>
-              <div className="grid grid-cols-2 gap-4">
-                {['produit', 'source', 'destination', 'quantite'].map(f => (
-                  <input
-                    key={f}
-                    type="text"
-                    placeholder={f}
-                    className="border p-2 rounded"
-                    value={nouveau[f]}
-                    onChange={(e) => setNouveau({ ...nouveau, [f]: e.target.value })}
-                  />
-                ))}
-              </div>
-              <div className="flex justify-end gap-3 pt-4">
-                <button onClick={() => setShowModal(false)} className="px-4 py-2 border rounded">Annuler</button>
-                <button onClick={ajouterTransfert} className="px-4 py-2 bg-[#472EAD] text-white rounded">Ajouter</button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Modal détails */}
         {detailTransfert && (
@@ -194,19 +144,6 @@ const Transferts = () => {
               </div>
               <div className="flex justify-end pt-4">
                 <button onClick={() => setDetailTransfert(null)} className="px-4 py-2 bg-[#472EAD] text-white rounded">Fermer</button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Modal confirmation suppression */}
-        {confirmDelete && (
-          <div className="fixed inset-0 z-200 bg-black/40 bg-opacity-10 flex justify-center items-center">
-            <div className="relative z-50 bg-white w-[400px] rounded-lg shadow-lg p-6 space-y-4 text-center">
-              <p className="text-lg">Voulez-vous vraiment supprimer cette demande ?</p>
-              <div className="flex justify-center gap-4 pt-4">
-                <button onClick={() => setConfirmDelete(null)} className="px-4 py-2 border rounded">Annuler</button>
-                <button onClick={supprimerTransfert} className="px-4 py-2 bg-red-600 text-white rounded">Supprimer</button>
               </div>
             </div>
           </div>

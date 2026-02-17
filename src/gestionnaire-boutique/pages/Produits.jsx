@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from "react";
-import { Eye, Check, AlertCircle, CheckCircle2, AlertTriangle, Search } from "lucide-react";
+import React, { useState, useEffect, useCallback } from "react";
+import { Eye, Check, CheckCircle2, AlertTriangle, Search } from "lucide-react";
 import DataTable from "../components/DataTable";
 import Pagination from "../components/Pagination";
 import LoadingSpinner from "../components/LoadingSpinner";
 import EmptyState from "../components/EmptyState";
+import useDebouncedValue from "../hooks/useDebouncedValue";
 import { gestionnaireBoutiqueAPI } from "@/services/api";
 import { toast } from "sonner";
 
@@ -16,6 +17,7 @@ const Produits = () => {
   const [pendingPagination, setPendingPagination] = useState(null);
   const [validating, setValidating] = useState(false);
   const [recherche, setRecherche] = useState("");
+  const debouncedRecherche = useDebouncedValue(recherche);
   
   const [selectedTransfert, setSelectedTransfert] = useState(null);
   const [showModal, setShowModal] = useState(false);
@@ -28,13 +30,13 @@ const Produits = () => {
     seuil: "",
   });
 
-  const loadTransferts = async (page = pendingPage, search = recherche) => {
+  const loadTransferts = useCallback(async (page = pendingPage, search = debouncedRecherche, options = {}) => {
     try {
       setLoading(true);
       const [produitsTransferData, transfertsValidesData, produitsDispoData] = await Promise.all([
-        gestionnaireBoutiqueAPI.getProduitsTransfer(page, search),
-        gestionnaireBoutiqueAPI.getTransfertsValides(1, search),
-        gestionnaireBoutiqueAPI.getProduitsDisponiblesBoutique()
+        gestionnaireBoutiqueAPI.getProduitsTransfer(page, search, options),
+        gestionnaireBoutiqueAPI.getTransfertsValides(1, search, options),
+        gestionnaireBoutiqueAPI.getProduitsDisponiblesBoutique(1, "", options)
       ]);
 
       const produitsList = Array.isArray(produitsDispoData) ? produitsDispoData : (produitsDispoData?.data || []);
@@ -53,18 +55,22 @@ const Produits = () => {
       setPendingPagination(produitsTransferData);
       setTransfertsValides((transfertsValidesData?.data || []).map(enrich));
     } catch (error) {
-      console.error('❌ Erreur chargement transferts:', error);
+      if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') {
+        return;
+      }
       toast.error('Erreur de chargement', {
         description: 'Impossible de charger les transferts'
       });
     } finally {
       setLoading(false);
     }
-  };
+  }, [pendingPage, debouncedRecherche]);
 
   useEffect(() => {
-    loadTransferts(pendingPage, recherche);
-  }, [pendingPage, recherche]);
+    const controller = new AbortController();
+    loadTransferts(pendingPage, debouncedRecherche, { signal: controller.signal });
+    return () => controller.abort();
+  }, [loadTransferts, pendingPage, debouncedRecherche]);
 
   const handlePendingPageChange = (page) => {
     if (page && page !== pendingPage) {
@@ -153,11 +159,9 @@ const Produits = () => {
       prix_seuil_gros: prixSeuilGros,
     };
 
-    console.log('📤 Payload envoyé au backend:', payload);
     setValidating(true);
     try {
-      const response = await gestionnaireBoutiqueAPI.validerProduitTransfer(payload);
-      console.log('✅ Réponse du backend:', response);
+      await gestionnaireBoutiqueAPI.validerProduitTransfer(payload);
       
       toast.success('Produit validé', {
         description: `${selectedTransfert.produit?.nom || 'Produit'} a été validé et ajouté au stock`
@@ -169,7 +173,6 @@ const Produits = () => {
       // Recharger les données
       await loadTransferts(pendingPage, recherche);
     } catch (error) {
-      console.error('❌ Erreur validation:', error);
       toast.error('Erreur de validation', {
         description: error.response?.data?.message || 'Impossible de valider le transfert'
       });

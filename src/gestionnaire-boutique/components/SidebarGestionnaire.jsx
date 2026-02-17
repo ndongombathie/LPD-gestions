@@ -10,7 +10,6 @@ import {
   ClipboardList,
   RefreshCw,
   AlertTriangle,
-  FileText,
 } from "lucide-react";
 
 export default function SidebarGestionnaire() {

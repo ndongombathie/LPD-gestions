@@ -106,7 +106,6 @@ function PasswordModal({ open, onClose, onSuccess, addToast, changePassword }) {
     } catch (err) {
       const msg = err?.response?.data?.message || "Impossible de changer le mot de passe.";
       addToast("error", "Erreur", msg);
-      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -223,7 +222,6 @@ export default function Header() {
 
   // UI
   const [showMenu, setShowMenu] = useState(false);
-  const [showNotif, setShowNotif] = useState(false);
   const [showPwdModal, setShowPwdModal] = useState(false);
 
 
@@ -252,18 +250,15 @@ export default function Header() {
         const normalized = normalizeUser(data);
         setUser(normalized);
         localStorage.setItem("user", JSON.stringify(normalized));
-      } catch (err) {
+      } catch {
         // Fallback sur localStorage si l'API n'est pas dispo
-        console.error(err);
         const saved = localStorage.getItem("user");
         if (saved) {
           try {
             setUser(normalizeUser(JSON.parse(saved)));
           } catch {
-            console.error("Erreur parsing user:", err);
+            // Erreur de parsing, ignorer
           }
-        } else {
-          console.error("Erreur chargement user:", err);
         }
       }
     };
@@ -275,7 +270,6 @@ export default function Header() {
     const handler = (e) => {
       if (menuRef.current && !menuRef.current.contains(e.target)) {
         setShowMenu(false);
-        setShowNotif(false);
       }
     };
     document.addEventListener("mousedown", handler);
@@ -326,7 +320,6 @@ export default function Header() {
                 <button
                   onClick={() => {
                     setShowMenu((v) => !v);
-                    setShowNotif(false);
                   }}
                   className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-full border bg-white hover:bg-gray-50"
                 >
