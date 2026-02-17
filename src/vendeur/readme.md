@@ -10,3 +10,15 @@ POST            api/commandes  | ajouter une nouvelle commande pour un client no
 GET|HEAD        api/commandes/{commande} | afficher les details d'une commande et le client de la commande
 PUT|PATCH       api/commandes/{commande} | modifier une commande specifique
 DELETE          api/commandes/{commande} | supprimer une commande
+
+
+# les elements du tableau de bord
+
+# ventes du jour
+GET       api/montant-total-ventes-today 
+
+# commandes traitées
+GET       api/commandes-payees-aujourdhui
+
+# produit vendus 
+GET       api/nombre-produits-vendus-aujourdhui
