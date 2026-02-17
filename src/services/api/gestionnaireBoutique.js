@@ -264,16 +264,9 @@ export const getStatistiquesBoutique = async () => {
   }
 };
 
-<<<<<<< HEAD
 export const getProduitsRupture = async (page = 1, search = "", options = {}) => {
   try {
     return await cachedGet('/produits-rupture', { page, search }, options);
-=======
-export const getProduitsRupture = async () => {
-  try {
-    const response = await httpClient.get('/produits-rupture');
-    return response.data;
->>>>>>> 58a45ce (optimisations du code)
   } catch (error) {
     console.error('❌ Erreur getProduitsRupture:', error);
     if (error.code === 'ECONNABORTED' || error.response?.status === 401 || error.response?.status === 404) {
@@ -295,10 +288,6 @@ export default {
   getProduitsDisponiblesBoutique,
   getMontantTotalStock,
   getStatistiquesBoutique,
-<<<<<<< HEAD
   getProduitsRupture,
   clearGestionnaireBoutiqueCache
-=======
-  getProduitsRupture
->>>>>>> 58a45ce (optimisations du code)
 };
