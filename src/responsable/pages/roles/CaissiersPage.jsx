@@ -12,25 +12,15 @@ import {
   CheckCircle,
   XCircle,
   User,
-  Award,
-  Activity,
   Eye,
-  Target,
-  Percent,
-  DollarSign,
-  RefreshCw,
-  Calendar,
-  Filter,
-  Download,
-  BarChart3,
-  Clock,
-  AlertCircle,
   Wallet,
 } from "lucide-react";
 
 // Composants
 import CaissierHistoryModal from "../../components/roles/CaissierHistoryModal";
 import FondOuvertureModal from "../../components/roles/FondOuvertureModal";
+import { journalResponsableAPI } from "@/services/api/JournalResponsable";
+
 
 const formatFCFA = (n) =>
   new Intl.NumberFormat("fr-FR", {
@@ -45,126 +35,56 @@ export default function CaissiersPage() {
   const [showHistory, setShowHistory] = useState(false);
   const [showFondOuverture, setShowFondOuverture] = useState(false);
   const [search, setSearch] = useState("");
-const [toasts, setToasts] = useState([]);
+  const [toasts, setToasts] = useState([]);
+  const [encaissementsGlobal, setEncaissementsGlobal] = useState(0);
 
-const removeToast = (id) =>
-  setToasts((t) => t.filter((x) => x.id !== id));
 
-const toast = React.useCallback((type, title, message) => {
-  const id = Date.now();
-  setToasts((t) => [...t, { id, type, title, message }]);
-  setTimeout(() => removeToast(id), 4000);
+  const removeToast = (id) =>
+    setToasts((t) => t.filter((x) => x.id !== id));
+
+  const toast = React.useCallback((type, title, message) => {
+    const id = Date.now();
+    setToasts((t) => [...t, { id, type, title, message }]);
+    setTimeout(() => removeToast(id), 4000);
+  }, []);
+
+ useEffect(() => {
+  let interval;
+
+  const loadCaissiers = async (firstLoad = false) => {
+    try {
+      if (firstLoad) setLoading(true);
+
+      const response = await journalResponsableAPI.getCaissiers();
+
+      setCaissiers(response.data || []);
+      setEncaissementsGlobal(response.encaissementsGlobal || 0);
+
+
+
+
+
+      if (firstLoad) setLoading(false);
+    } catch (error) {
+      console.error(error);
+      setLoading(false);
+    }
+  };
+
+  loadCaissiers(true);
+
+  // refresh auto toutes les 30s comme vendeurs
+  interval = setInterval(() => loadCaissiers(false), 30000);
+
+  return () => clearInterval(interval);
 }, []);
 
-  useEffect(() => {
-    const loadCaissiers = async () => {
-      try {
-        setLoading(true);
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        const simulatedCaissiers = [
-          {
-            id: "CAIS-001",
-            name: "Amadou Diallo",
-            email: "a.diallo@lpd.sn",
-            telephone: "77 123 45 67",
-            status: "actif",
-            date_embauche: "2024-01-15",
-            lastActivity: new Date().toISOString(),
-            stats: {
-              encaissementsTotal: 4525000,
-              decaissementsTotal: 1200000,
-              soldeNet: 3325000,
-              transactionsCount: 128,
-              encaissementsCount: 98,
-              decaissementsCount: 30,
-              tauxErreur: 1.2,
-              joursActifs: 28,
-              objectifAtteint: 95,
-            },
-            badges: ["rapide", "précis", "fiable"],
-          },
-          {
-            id: "CAIS-002",
-            name: "Fatou Ba",
-            email: "f.ba@lpd.sn",
-            telephone: "76 234 56 78",
-            status: "actif",
-            date_embauche: "2024-02-10",
-            lastActivity: new Date(Date.now() - 86400000).toISOString(),
-            stats: {
-              encaissementsTotal: 3215000,
-              decaissementsTotal: 850000,
-              soldeNet: 2365000,
-              transactionsCount: 89,
-              encaissementsCount: 65,
-              decaissementsCount: 24,
-              tauxErreur: 0.8,
-              joursActifs: 25,
-              objectifAtteint: 98,
-            },
-            badges: ["organisé", "vérifié"],
-          },
-          {
-            id: "CAIS-003",
-            name: "Ibrahima Sall",
-            email: "i.sall@lpd.sn",
-            telephone: "78 345 67 89",
-            status: "actif",
-            date_embauche: "2024-03-05",
-            lastActivity: "2024-11-28",
-            stats: {
-              encaissementsTotal: 1678000,
-              decaissementsTotal: 450000,
-              soldeNet: 1228000,
-              transactionsCount: 45,
-              encaissementsCount: 32,
-              decaissementsCount: 13,
-              tauxErreur: 2.5,
-              joursActifs: 15,
-              objectifAtteint: 85,
-            },
-            badges: ["nouveau", "apprentissage"],
-          },
-          {
-            id: "CAIS-004",
-            name: "Aissatou Ndiaye",
-            email: "a.ndiaye@lpd.sn",
-            telephone: "70 456 78 90",
-            status: "actif",
-            date_embauche: "2024-04-20",
-            lastActivity: new Date().toISOString(),
-            stats: {
-              encaissementsTotal: 5890000,
-              decaissementsTotal: 2100000,
-              soldeNet: 3790000,
-              transactionsCount: 167,
-              encaissementsCount: 125,
-              decaissementsCount: 42,
-              tauxErreur: 0.5,
-              joursActifs: 30,
-              objectifAtteint: 102,
-            },
-            badges: ["leader", "efficace", "expert"],
-          },
-        ];
-        
-        setCaissiers(simulatedCaissiers);
-      } catch (error) {
-        toast.error("Erreur de chargement des caissiers");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadCaissiers();
-  }, []);
 
   const filteredCaissiers = caissiers.filter(caissier => {
     if (search) {
       const terme = search.toLowerCase();
-      if (!caissier.name.toLowerCase().includes(terme) &&
-          !caissier.email.toLowerCase().includes(terme)) {
+      if (!caissier.name?.toLowerCase().includes(terme) &&
+          !caissier.email?.toLowerCase().includes(terme)) {
         return false;
       }
     }
@@ -177,13 +97,6 @@ const toast = React.useCallback((type, title, message) => {
     encaissementsTotal: caissiers.reduce((sum, v) => sum + (v.stats?.encaissementsTotal || 0), 0),
     decaissementsTotal: caissiers.reduce((sum, v) => sum + (v.stats?.decaissementsTotal || 0), 0),
     soldeNet: caissiers.reduce((sum, v) => sum + (v.stats?.soldeNet || 0), 0),
-    transactionsTotal: caissiers.reduce((sum, v) => sum + (v.stats?.transactionsCount || 0), 0),
-    tauxErreurMoyen: caissiers.length 
-      ? caissiers.reduce((sum, v) => sum + (v.stats?.tauxErreur || 0), 0) / caissiers.length
-      : 0,
-    objectifMoyen: caissiers.length 
-      ? caissiers.reduce((sum, v) => sum + (v.stats?.objectifAtteint || 0), 0) / caissiers.length
-      : 0,
   };
 
   const handleViewHistory = (caissier) => {
@@ -221,13 +134,13 @@ const toast = React.useCallback((type, title, message) => {
           <div>
             <h2 className="text-base font-bold text-gray-800">Équipe Caissiers</h2>
             <p className="text-xs text-gray-500 mt-1">
-              {globalStats.total} caissiers • {globalStats.transactionsTotal} transactions
+              {globalStats.total} caissiers
             </p>
           </div>
         </div>
 
         {/* STATISTIQUES COMPACTES */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-5">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-5">
           <div className="bg-white border border-gray-200 rounded-lg p-3">
             <div className="flex items-center gap-2 mb-1">
               <Users className="w-3 h-3 text-indigo-600" />
@@ -241,7 +154,7 @@ const toast = React.useCallback((type, title, message) => {
               <TrendingUp className="w-3 h-3 text-emerald-600" />
               <div className="text-xs text-gray-500">Encaissements</div>
             </div>
-            <div className="text-sm font-bold text-emerald-600">{formatFCFA(globalStats.encaissementsTotal)}</div>
+            <div className="text-sm font-bold text-emerald-600">{formatFCFA(encaissementsGlobal)}</div>
           </div>
 
           <div className="bg-white border border-gray-200 rounded-lg p-3">
@@ -260,14 +173,6 @@ const toast = React.useCallback((type, title, message) => {
             <div className={`text-sm font-bold ${globalStats.soldeNet >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
               {formatFCFA(globalStats.soldeNet)}
             </div>
-          </div>
-
-          <div className="bg-white border border-gray-200 rounded-lg p-3">
-            <div className="flex items-center gap-2 mb-1">
-              <Target className="w-3 h-3 text-orange-600" />
-              <div className="text-xs text-gray-500">Taux erreur</div>
-            </div>
-            <div className="text-sm font-bold text-orange-600">{globalStats.tauxErreurMoyen.toFixed(1)}%</div>
           </div>
         </div>
 
@@ -308,16 +213,16 @@ const toast = React.useCallback((type, title, message) => {
                   Caissier
                 </th>
                 <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                  Performance
-                </th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                  Transactions
-                </th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                   Encaissements
                 </th>
                 <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                  Décaissements
+                </th>
+                <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                   Solde net
+                </th>
+                <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                  Fond d'ouverture
                 </th>
                 <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                   Actions
@@ -342,32 +247,23 @@ const toast = React.useCallback((type, title, message) => {
                     </div>
                   </td>
                   <td className="px-3 py-3">
-                    <div className="flex flex-col gap-1">
-                      <div className={`text-xs font-medium px-2 py-0.5 rounded ${caissier.stats?.tauxErreur <= 1 ? 'bg-emerald-100 text-emerald-700' : caissier.stats?.tauxErreur <= 2 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
-                        {caissier.stats?.tauxErreur?.toFixed(1) || 0}% erreurs
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {caissier.stats?.objectifAtteint || 0}% objectif
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-3 py-3">
-                    <div className="text-sm font-semibold text-gray-900">{caissier.stats?.transactionsCount || 0}</div>
-                    <div className="text-xs text-gray-500">
-                      {caissier.stats?.encaissementsCount || 0} enc. / {caissier.stats?.decaissementsCount || 0} déc.
-                    </div>
-                  </td>
-                  <td className="px-3 py-3">
                     <div className="text-sm font-semibold text-emerald-600">
                       {formatFCFA(caissier.stats?.encaissementsTotal || 0)}
                     </div>
-                    <div className="text-xs text-gray-500">
-                      {formatFCFA(caissier.stats?.decaissementsTotal || 0)} déc.
+                  </td>
+                  <td className="px-3 py-3">
+                    <div className="text-sm font-semibold text-red-600">
+                      {formatFCFA(caissier.stats?.decaissementsTotal || 0)}
                     </div>
                   </td>
                   <td className="px-3 py-3">
                     <div className={`text-sm font-bold ${(caissier.stats?.soldeNet || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                       {formatFCFA(caissier.stats?.soldeNet || 0)}
+                    </div>
+                  </td>
+                  <td className="px-3 py-3">
+                    <div className="text-sm font-semibold text-gray-900">
+                      {formatFCFA(caissier.stats?.fondOuverture || 0)}
                     </div>
                   </td>
                   <td className="px-3 py-3">
@@ -406,17 +302,14 @@ const toast = React.useCallback((type, title, message) => {
 
       {/* MODAL FOND D'OUVERTURE */}
       {showFondOuverture && selectedCaissier && (
-      <FondOuvertureModal
-        employee={selectedCaissier}
-        isOpen={showFondOuverture}
-        onClose={() => setShowFondOuverture(false)}
-        onToast={toast}
-      />
-
+        <FondOuvertureModal
+          employee={selectedCaissier}
+          isOpen={showFondOuverture}
+          onClose={() => setShowFondOuverture(false)}
+          onToast={toast}
+        />
       )}
+      
     </div>
-    
   );
-  <Toasts toasts={toasts} remove={removeToast} />
-
 }

@@ -854,8 +854,8 @@ const activiteColors = {
                             <Award className="w-5 h-5 text-[#472EAD]" />
                           </div>
                           <div>
-                            <h3 className="text-lg font-bold text-gray-900">Top 5 Best Sellers</h3>
-                            <p className="text-sm text-gray-500">Produits les plus vendus (par CA)</p>
+                            <h3 className="text-lg font-bold text-gray-900">TOP 5 des produits les pluss vendus</h3>
+                            <p className="text-sm text-gray-500">Produits les plus vendus (par quantité)</p>
                           </div>
                         </div>
                       </div>
@@ -894,9 +894,11 @@ const activiteColors = {
                                 </div>
                               </div>
                               <div className="text-right">
-                                <div className="font-bold text-gray-900">{formatFCFA(produit.chiffreAffaires ?? 0)}</div>
-                                <div className="text-xs text-gray-500">Stock: {produit.stock ?? 0}</div>
+                                <div className="font-medium text-gray-900">
+                                  {produit.quantiteVendue ?? 0} ventes
+                                </div>
                               </div>
+
                             </motion.div>
                           ))
                         )}
@@ -915,10 +917,10 @@ const activiteColors = {
                             <TrendingDown className="w-5 h-5 text-red-600" />
                           </div>
                           <div>
-                            <h3 className="text-lg font-bold text-gray-900">Produits les moins vendus</h3>
+                            <h3 className="text-lg font-bold text-gray-900">TOP 5 des produits les moins vendus</h3>
                             <p className="text-sm text-gray-500">À surveiller (faible rotation)</p>
                           </div>
-                        </div>
+                        </div> 
                       </div>
 
                       <div className="space-y-3">
@@ -955,14 +957,10 @@ const activiteColors = {
                               </div>
                               <div className="text-right">
                                 <div className="font-medium text-gray-900">{produit.quantiteVendue ?? 0} ventes</div>
-                                <div className={`text-xs flex items-center gap-1 ${
-                                  (produit.stock ?? 0) > (produit.seuil ?? 0) * 2 ? 'text-red-600' :
-                                  (produit.stock ?? 0) > (produit.seuil ?? 0) ? 'text-orange-600' :
-                                  'text-green-600'
-                                }`}>
-                                  <Package size={12} />
-                                  Stock: {produit.stock ?? 0}
-                                </div>
+                                  <div className="text-right">
+
+                                  </div>
+
                               </div>
                             </motion.div>
                           ))

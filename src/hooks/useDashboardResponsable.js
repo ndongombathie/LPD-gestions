@@ -66,13 +66,13 @@ export default function useDashboardResponsable() {
 
         const newSignature = createSignature(data);
 
-        // si aucune modification → on ne rerender pas
-        if (lastSignatureRef.current === newSignature) {
+        if (lastSignatureRef.current === newSignature && isRefresh) {
           return;
         }
 
         lastSignatureRef.current = newSignature;
         setRawData(data);
+
 
       } catch (e) {
         console.error("Erreur dashboard hook:", e);
@@ -180,26 +180,17 @@ const finance = useMemo(() => {
   // 🏆 PRODUITS
   // ==================================================
 
-  const produits = useMemo(() => {
-    if (!rawData) return null;
+const produits = useMemo(() => {
+  if (!rawData) return null;
 
-    const data = rawData.produits.stockData || [];
+  return {
+    stockData: rawData.produits.stockData || [],
+    topBestSellers: rawData.produits.topBestSellers || [],
+    topLeastSold: rawData.produits.topLeastSold || []
+  };
 
-    const topBestSellers = [...data]
-      .sort((a, b) => b.chiffreAffaires - a.chiffreAffaires)
-      .slice(0, 5);
+}, [rawData]);
 
-    const topLeastSold = [...data]
-      .sort((a, b) => a.chiffreAffaires - b.chiffreAffaires)
-      .slice(0, 5);
-
-    return {
-      stockData: data,
-      topBestSellers,
-      topLeastSold
-    };
-
-  }, [rawData]);
 
   // ==================================================
   // 🧑‍💼 UTILISATEURS
