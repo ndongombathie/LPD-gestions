@@ -470,23 +470,23 @@ const Produits = () => {
                 </div>
                 <div className="border-b pb-3">
                   <p className="text-gray-600 font-medium">Prix unité carton</p>
-                  <p className="text-[#111827] font-semibold mt-1">{Number(detailTransfert.produit?.prix_unite_carton || 0).toLocaleString('fr-FR')} FCFA</p>
+                  <p className="text-[#111827] font-semibold mt-1">{Number(detailTransfert.prix_unite_carton || 0).toLocaleString('fr-FR')} FCFA</p>
                 </div>
                 <div className="border-b pb-3">
                   <p className="text-gray-600 font-medium">Prix vente détail</p>
-                  <p className="text-[#111827] font-semibold mt-1">{Number(detailTransfert.produit?.prix_vente_detail || 0).toLocaleString('fr-FR')} FCFA</p>
+                  <p className="text-[#111827] font-semibold mt-1">{Number(detailTransfert.prix_vente_detail || 0).toLocaleString('fr-FR')} FCFA</p>
                 </div>
                 <div className="border-b pb-3">
                   <p className="text-gray-600 font-medium">Prix vente gros</p>
-                  <p className="text-[#111827] font-semibold mt-1">{Number(detailTransfert.produit?.prix_vente_gros || 0).toLocaleString('fr-FR')} FCFA</p>
+                  <p className="text-[#111827] font-semibold mt-1">{Number(detailTransfert.prix_vente_gros || 0).toLocaleString('fr-FR')} FCFA</p>
                 </div>
                 <div className="border-b pb-3">
                   <p className="text-gray-600 font-medium">Seuil prix détail</p>
-                  <p className="text-[#111827] font-semibold mt-1">{Number(detailTransfert.produit?.prix_seuil_detail || 0).toLocaleString('fr-FR')} FCFA</p>
+                  <p className="text-[#111827] font-semibold mt-1">{Number(detailTransfert.prix_seuil_detail || 0).toLocaleString('fr-FR')} FCFA</p>
                 </div>
                 <div className="border-b pb-3">
                   <p className="text-gray-600 font-medium">Seuil prix gros</p>
-                  <p className="text-[#111827] font-semibold mt-1">{Number(detailTransfert.produit?.prix_seuil_gros || 0).toLocaleString('fr-FR')} FCFA</p>
+                  <p className="text-[#111827] font-semibold mt-1">{Number(detailTransfert.prix_seuil_gros || 0).toLocaleString('fr-FR')} FCFA</p>
                 </div>
                 <div className="border-b pb-3">
                   <p className="text-gray-600 font-medium">Date validation</p>
