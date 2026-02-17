@@ -22,7 +22,6 @@ const Sidebar = ({ sectionActive, setSectionActive, user }) => {
       id: "historique-commandes",
       label: "Historique",
       icon: Clock,
-      badge: "5",
     },
   ];
 
@@ -79,19 +78,12 @@ const Sidebar = ({ sectionActive, setSectionActive, user }) => {
                     className={isActive ? "text-white" : "text-[#472EAD]"}
                   />
                   <span className="flex-1 text-left">{item.label}</span>
-                  {item.badge && (
-                    <span className="bg-[#F58020] text-white text-xs px-2 py-0.5 rounded-full">
-                      {item.badge}
-                    </span>
-                  )}
                 </button>
               </li>
             );
           })}
         </ul>
       </nav>
-
-      {/* UTILISATEUR EN BAS SUPPRIMÉ */}
     </aside>
   );
 };

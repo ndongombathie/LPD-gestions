@@ -14,7 +14,7 @@ import {
   User,
 } from "lucide-react";
 import useAuth from "../hooks/useAuth";
-import { statsAPI } from "../services/api/stats"; // API des statistiques
+import { commandesAPI } from "../services/api/commandes"; // API des commandes
 import profileAPI from "../services/api/profile"; // API du profil utilisateur
 
 // ================= Utils =================
@@ -72,6 +72,7 @@ function PasswordModal({ open, onClose }) {
   const [success, setSuccess] = useState("");
   const [validationErrors, setValidationErrors] = useState([]);
 
+  // ✅ CORRECTION: Hook appelé au niveau supérieur
   const { changePassword } = useAuth();
 
   // Validation en temps réel
@@ -327,47 +328,87 @@ function PasswordModal({ open, onClose }) {
 }
 
 // ================= HEADER =================
-export default function Header({ user, commandes = [], onLogout }) {
+export default function Header({ user, onLogout }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [pwdOpen, setPwdOpen] = useState(false);
   const [loading, setLoading] = useState({
     stats: false,
     profile: false
   });
-  const [todayStats, setTodayStats] = useState({
-    total_sales: 0,
-    total_orders: 0
-  });
+  const [ventesDuJour, setVentesDuJour] = useState(0);
   const [userProfile, setUserProfile] = useState(null);
 
-  // Récupérer les statistiques du jour via API
-  const fetchTodayStats = async () => {
+  // ✅ CORRECTION: Hooks appelés au niveau supérieur du composant
+  const { logout } = useAuth();
+
+  // Fonction pour vérifier si une date est aujourd'hui
+  const estAujourdhui = (dateString) => {
+    try {
+      const aujourdhui = new Date();
+      const dateCommande = new Date(dateString);
+      return (
+        dateCommande.getDate() === aujourdhui.getDate() &&
+        dateCommande.getMonth() === aujourdhui.getMonth() &&
+        dateCommande.getFullYear() === aujourdhui.getFullYear()
+      );
+    } catch {
+      return false;
+    }
+  };
+
+  // Fonction pour vérifier si une commande est complétée
+  const estCompletee = (statut) => {
+    const statutsComplete = ['complétée', 'completed', 'payee', 'paid', 'delivered', 'livree', 'validée'];
+    const statutLower = String(statut || '').toLowerCase().trim();
+    return statutsComplete.includes(statutLower);
+  };
+
+  // Récupérer les commandes et calculer les ventes du jour
+  const fetchVentesDuJour = async () => {
     try {
       setLoading(prev => ({ ...prev, stats: true }));
-      const stats = await statsAPI.getTodaySales();
       
-      setTodayStats({
-        total_sales: stats?.total_sales || stats?.today_sales || 0,
-        total_orders: stats?.total_orders || stats?.today_orders || 0
+      console.log("Chargement des commandes pour le header...");
+      
+      // Récupérer les commandes récentes
+      const response = await commandesAPI.getAll({
+        perPage: 100,
+        page: 1,
+        sort: 'desc',
+        orderBy: 'date'
       });
+      
+      // Gestion des différents formats de réponse
+      let commandesData = [];
+      if (response.data && Array.isArray(response.data)) {
+        commandesData = response.data;
+      } else if (Array.isArray(response)) {
+        commandesData = response;
+      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
+        commandesData = response.data.data;
+      }
+      
+      if (commandesData && commandesData.length > 0) {
+        // Filtrer les commandes d'aujourd'hui
+        const commandesAujourdhui = commandesData.filter(cmd => {
+          const date = cmd.date || cmd.created_at;
+          return estAujourdhui(date);
+        });
+        
+        // Calculer les ventes du jour (uniquement les commandes complétées)
+        const ventes = commandesAujourdhui
+          .filter(cmd => estCompletee(cmd.statut || cmd.status))
+          .reduce((sum, cmd) => {
+            return sum + (cmd.total_ttc || cmd.total || 0);
+          }, 0);
+        
+        setVentesDuJour(ventes);
+        console.log(`Ventes du jour: ${ventes} FCFA`);
+      }
+      
     } catch (error) {
-      console.error("Erreur chargement des stats:", error);
-      // Fallback sur les commandes locales
-      const localSales = commandes
-        .filter(
-          (c) =>
-            c.statut === "complétée" &&
-            new Date(c.created_at).toDateString() ===
-              new Date().toDateString()
-        )
-        .reduce((s, c) => s + (c.total_ttc || 0), 0);
-      
-      setTodayStats({
-        total_sales: localSales,
-        total_orders: commandes.filter(c => 
-          new Date(c.created_at).toDateString() === new Date().toDateString()
-        ).length
-      });
+      console.error("Erreur chargement des commandes:", error);
+      setVentesDuJour(0);
     } finally {
       setLoading(prev => ({ ...prev, stats: false }));
     }
@@ -382,7 +423,6 @@ export default function Header({ user, commandes = [], onLogout }) {
       setUserProfile(profile);
     } catch (error) {
       console.error("Erreur chargement du profil:", error);
-      // Utiliser les données de base si l'API échoue
       setUserProfile(user);
     } finally {
       setLoading(prev => ({ ...prev, profile: false }));
@@ -391,35 +431,17 @@ export default function Header({ user, commandes = [], onLogout }) {
 
   // Charger les données au montage et périodiquement
   useEffect(() => {
-    fetchTodayStats();
+    fetchVentesDuJour();
     fetchUserProfile();
     
-    // Rafraîchir les stats toutes les minutes
-    const interval = setInterval(fetchTodayStats, 60000);
+    // Rafraîchir les ventes toutes les minutes
+    const interval = setInterval(fetchVentesDuJour, 60000);
     
     return () => clearInterval(interval);
   }, []);
 
-  // Calcul des ventes du jour (avec priorité API, fallback local)
-  const ventesDuJour = useMemo(() => {
-    // Utiliser d'abord les stats API
-    if (todayStats.total_sales > 0) {
-      return todayStats.total_sales;
-    }
-    
-    // Fallback sur les commandes locales
-    return commandes
-      .filter(
-        (c) =>
-          c.statut === "complétée" &&
-          new Date(c.created_at).toDateString() ===
-            new Date().toDateString()
-      )
-      .reduce((s, c) => s + (c.total_ttc || 0), 0);
-  }, [todayStats.total_sales, commandes]);
-
   const formatMoney = (v) =>
-    new Intl.NumberFormat("fr-FR").format(v) + " FCFA";
+    new Intl.NumberFormat("fr-FR").format(v || 0) + " FCFA";
 
   // Récupérer le nom complet (priorité au profil API, fallback user local)
   const displayName = useMemo(() => {
@@ -429,12 +451,11 @@ export default function Header({ user, commandes = [], onLogout }) {
 
   const initials = useMemo(() => getInitials(displayName), [displayName]);
 
-  // Déconnexion
+  // ✅ CORRECTION: Utilisation correcte de logout (plus d'appel à useAuth() ici)
   const handleLogout = async () => {
     if (window.confirm("Voulez-vous vous déconnecter ?")) {
       try {
-        const { logout } = useAuth();
-        await logout();
+        await logout(); // ← Utilisation directe de la fonction logout
         if (onLogout) onLogout();
       } catch (error) {
         console.error("Erreur déconnexion:", error);

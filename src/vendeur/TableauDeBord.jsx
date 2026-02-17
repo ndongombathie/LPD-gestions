@@ -2,229 +2,187 @@
 // 📊 TableauDeBord.jsx — Vendeur PREMIUM (LPD Manager)
 // ==========================================================
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
   TrendingUp,
   ShoppingCart,
   DollarSign,
-  Package,
-  ArrowUp,
   Calendar,
-  Clock,
-  Loader2,
   RefreshCw,
+  Loader2,
   AlertCircle,
+  Clock,
 } from "lucide-react";
 import { motion } from "framer-motion";
-import { statsAPI } from "../services/api/stats";
 import { commandesAPI } from "../services/api/commandes";
 
 const TableauDeBord = () => {
-  const [stats, setStats] = useState({
-    ventesAujourdhui: 0,
-    commandesTraitees: 0,
-    produitsVendus: 0,
-    objectifVentes: 150000,
-    panierMoyen: 0,
-  });
-
+  const [commandes, setCommandes] = useState([]);
   const [commandesRecentes, setCommandesRecentes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [lastUpdate, setLastUpdate] = useState(null);
+  const [aucuneVente, setAucuneVente] = useState(false);
 
-  // Charger les données du dashboard
-  const chargerDashboardData = async () => {
+  // ========== FONCTIONS UTILITAIRES ==========
+  const estAujourdhui = (dateString) => {
+    try {
+      const aujourdhui = new Date();
+      const dateCommande = new Date(dateString);
+      
+      return (
+        dateCommande.getDate() === aujourdhui.getDate() &&
+        dateCommande.getMonth() === aujourdhui.getMonth() &&
+        dateCommande.getFullYear() === aujourdhui.getFullYear()
+      );
+    } catch {
+      return false;
+    }
+  };
+
+  const mapStatut = (statut) => {
+    const statutsComplete = ['complétée', 'completed', 'payee', 'paid', 'delivered', 'livree', 'validée'];
+    const statutsEnAttente = ['en_attente_paiement', 'pending', 'en_attente', 'processing', 'traitement', 'attente', 'à préparer', 'préparée', 'local_only'];
+    const statutsAnnule = ['annulée', 'cancelled', 'annulee'];
+    
+    const statutLower = String(statut || '').toLowerCase().trim();
+    
+    if (statutsComplete.includes(statutLower)) return 'complétée';
+    if (statutsEnAttente.includes(statutLower)) return 'en_attente';
+    if (statutsAnnule.includes(statutLower)) return 'annulée';
+    
+    return statut || 'inconnu';
+  };
+
+  const formaterMontant = (v) => 
+    new Intl.NumberFormat("fr-FR").format(v || 0) + " FCFA";
+
+  // ========== CALCUL DES STATISTIQUES ==========
+  const stats = useMemo(() => {
+    // Si aucune vente, retourner des statistiques à zéro
+    if (aucuneVente || commandes.length === 0) {
+      return {
+        ventesAujourdhui: 0,
+        commandesTraitees: 0,
+        commandesCompletees: 0,
+        commandesEnAttente: 0,
+        commandesAnnulees: 0,
+      };
+    }
+
+    const commandesAujourdhui = commandes.filter(c => estAujourdhui(c.date));
+    
+    const ventesAujourdhui = commandesAujourdhui
+      .filter(c => mapStatut(c.statut) === 'complétée')
+      .reduce((sum, cmd) => sum + (cmd.total_ttc || 0), 0);
+    
+    const commandesTraitees = commandesAujourdhui.length;
+    
+    const commandesCompletees = commandesAujourdhui.filter(c => mapStatut(c.statut) === 'complétée');
+    
+    return {
+      ventesAujourdhui,
+      commandesTraitees,
+      commandesCompletees: commandesCompletees.length,
+      commandesEnAttente: commandesAujourdhui.filter(c => mapStatut(c.statut) === 'en_attente').length,
+      commandesAnnulees: commandesAujourdhui.filter(c => mapStatut(c.statut) === 'annulée').length,
+    };
+  }, [commandes, aucuneVente]);
+
+  // ========== CHARGEMENT DES COMMANDES ==========
+  const chargerCommandes = useCallback(async (showRefreshAnimation = false) => {
     setRefreshing(true);
     setError(null);
+    setAucuneVente(false);
     
     try {
-      console.log("Chargement des données du dashboard...");
+      console.log("Chargement de l'historique des commandes...");
       
-      // Charger toutes les données en parallèle
-      await Promise.all([
-        chargerStatistiquesDuJour(),
-        chargerCommandesRecentes(),
-      ]);
+      const response = await commandesAPI.getAll({
+        perPage: 100,
+        page: 1,
+        sort: 'desc',
+        orderBy: 'date'
+      });
+      
+      // Gestion des différents formats de réponse
+      let commandesData = [];
+      if (response.data && Array.isArray(response.data)) {
+        commandesData = response.data;
+      } else if (Array.isArray(response)) {
+        commandesData = response;
+      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
+        commandesData = response.data.data;
+      }
+      
+      // Vérifier s'il y a des données
+      if (commandesData && commandesData.length > 0) {
+        // Transformer les données
+        const commandesTransformees = commandesData.map(commande => {
+          return {
+            id: commande.id || commande.uuid,
+            client: commande.client_nom || commande.client_name || commande.client?.nom || 'Client',
+            total_ttc: commande.total_ttc || commande.total || 0,
+            statut: mapStatut(commande.statut || commande.status),
+            date: commande.date || commande.created_at || new Date().toISOString(),
+          };
+        })
+        .filter(c => c.date) // Filtrer ceux sans date
+        .sort((a, b) => new Date(b.date) - new Date(a.date)); // Trier du plus récent au plus ancien
+        
+        console.log(`${commandesTransformees.length} commandes chargées`);
+        
+        if (commandesTransformees.length > 0) {
+          setCommandes(commandesTransformees);
+          // Prendre les 4 plus récentes
+          setCommandesRecentes(commandesTransformees.slice(0, 4));
+          setAucuneVente(false);
+        } else {
+          // Pas de commandes après transformation
+          setCommandes([]);
+          setCommandesRecentes([]);
+          setAucuneVente(true);
+        }
+      } else {
+        // Pas de données reçues de l'API
+        console.log("Aucune commande trouvée dans l'API");
+        setCommandes([]);
+        setCommandesRecentes([]);
+        setAucuneVente(true);
+      }
       
       setLastUpdate(new Date());
       
     } catch (err) {
-      console.error("Erreur chargement dashboard:", err);
+      console.error("Erreur chargement des commandes:", err);
       setError("Impossible de charger les données du dashboard");
-      setDonneesDemonstration();
+      
+      // En cas d'erreur, on affiche un état vide mais pas de données mock
+      setCommandes([]);
+      setCommandesRecentes([]);
+      setAucuneVente(true);
       
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
-
-  // Charger les statistiques du jour
-  const chargerStatistiquesDuJour = async () => {
-    try {
-      const response = await statsAPI.getTodaySales();
-      console.log("Réponse stats du jour:", response);
-      
-      if (response) {
-        setStats(prev => ({
-          ...prev,
-          ventesAujourdhui: response.today_sales || response.total || 0,
-          commandesTraitees: response.processed_orders || response.completed_orders || 0,
-          produitsVendus: response.items_sold || response.products_sold || 0,
-          panierMoyen: response.average_cart || 0,
-        }));
-      }
-      
-      return response;
-    } catch (error) {
-      console.error("Erreur statistiques du jour:", error);
-      await chargerStatistiquesFromCommandes();
-      throw error;
-    }
-  };
-
-  // Fallback avec commandesAPI
-  const chargerStatistiquesFromCommandes = async () => {
-    try {
-      const aujourdhui = new Date().toISOString().split('T')[0];
-      
-      const response = await commandesAPI.getAll({
-        perPage: 100,
-        page: 1,
-        date_from: aujourdhui,
-        date_to: aujourdhui,
-      });
-      
-      const commandesAujourdhui = Array.isArray(response.data) ? response.data : response;
-      
-      const ventesAujourdhui = commandesAujourdhui.reduce((sum, cmd) => 
-        sum + (cmd.total_ttc || cmd.total || 0), 0
-      );
-      
-      const commandesCompletees = commandesAujourdhui.filter(cmd => 
-        cmd.status === 'completed' || cmd.statut === 'complétée'
-      ).length;
-      
-      const produitsVendus = commandesAujourdhui.reduce((sum, cmd) => {
-        if (cmd.items && Array.isArray(cmd.items)) {
-          return sum + cmd.items.reduce((itemSum, item) => 
-            itemSum + (item.quantity || 0), 0
-          );
-        }
-        return sum;
-      }, 0);
-      
-      const panierMoyen = commandesCompletees > 0 
-        ? Math.round(ventesAujourdhui / commandesCompletees) 
-        : 0;
-      
-      setStats(prev => ({
-        ...prev,
-        ventesAujourdhui,
-        commandesTraitees: commandesCompletees,
-        produitsVendus,
-        panierMoyen,
-      }));
-      
-    } catch (error) {
-      console.error("Erreur stats depuis commandes:", error);
-      throw error;
-    }
-  };
-
-  // Charger les commandes récentes
-  const chargerCommandesRecentes = async () => {
-    try {
-      // Utiliser statsAPI ou commandesAPI
-      let response;
-      try {
-        response = await statsAPI.getRecentOrders(5);
-      } catch (statsError) {
-        console.log("Fallback sur commandesAPI...");
-        response = await commandesAPI.getAll({
-          perPage: 5,
-          page: 1,
-          sort: 'created_at:desc',
-        });
-      }
-      
-      const commandesData = Array.isArray(response.data) ? response.data : response;
-      
-      if (commandesData && Array.isArray(commandesData)) {
-        const commandesFormatees = commandesData.slice(0, 5).map(cmd => ({
-          id: cmd.id,
-          numero: cmd.numero_commande || cmd.order_number || `CMD-${cmd.id}`,
-          client: cmd.client_nom || cmd.client_name || cmd.client?.nom || 'Client',
-          total: cmd.total_ttc || cmd.total || 0,
-          statut: cmd.statut || cmd.status || 'inconnu',
-          date: cmd.created_at ? new Date(cmd.created_at) : new Date(),
-        }));
-        
-        setCommandesRecentes(commandesFormatees);
-      }
-      
-    } catch (error) {
-      console.error("Erreur commandes récentes:", error);
-      setCommandesRecentes(getCommandesSimulees());
-    }
-  };
-
-  // Données de démonstration
-  const setDonneesDemonstration = () => {
-    setStats({
-      ventesAujourdhui: 125420,
-      commandesTraitees: 24,
-      produitsVendus: 42,
-      objectifVentes: 150000,
-      panierMoyen: 5226,
-    });
-    
-    setCommandesRecentes(getCommandesSimulees());
-  };
-
-  const getCommandesSimulees = () => [
-    {
-      id: 1,
-      numero: "CMD-2024-001",
-      client: "Marie Diop",
-      total: 47200,
-      statut: "complétée",
-      date: new Date(),
-    },
-    {
-      id: 2,
-      numero: "CMD-2024-002",
-      client: "Jean Dupont",
-      total: 85000,
-      statut: "en attente",
-      date: new Date(),
-    },
-    {
-      id: 3,
-      numero: "CMD-2024-003",
-      client: "Sophie Martin",
-      total: 125000,
-      statut: "complétée",
-      date: new Date(),
-    },
-  ];
-
-  // Chargement initial
-  useEffect(() => {
-    chargerDashboardData();
-
-    // Rafraîchissement automatique toutes les 3 minutes
-    const interval = setInterval(() => {
-      if (!loading) {
-        chargerStatistiquesDuJour();
-      }
-    }, 180000);
-
-    return () => clearInterval(interval);
   }, []);
 
+  // ========== CHARGEMENT INITIAL ==========
+  useEffect(() => {
+    chargerCommandes();
+
+    const interval = setInterval(() => {
+      if (!loading) {
+        chargerCommandes(true);
+      }
+    }, 30000); // Rafraîchir toutes les 30 secondes
+
+    return () => clearInterval(interval);
+  }, [chargerCommandes]);
+
+  // ========== RENDU ==========
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[300px] space-y-4">
@@ -259,7 +217,7 @@ const TableauDeBord = () => {
             </div>
           )}
           
-          {lastUpdate && (
+          {lastUpdate && !aucuneVente && (
             <div className="text-sm text-gray-500">
               Dernière mise à jour : {lastUpdate.toLocaleTimeString('fr-FR', { 
                 hour: '2-digit', 
@@ -274,7 +232,7 @@ const TableauDeBord = () => {
               {new Date().toLocaleDateString("fr-FR")}
             </span>
             <button
-              onClick={chargerDashboardData}
+              onClick={() => chargerCommandes(true)}
               disabled={refreshing}
               className="flex items-center gap-1 bg-white px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors disabled:opacity-50"
             >
@@ -285,82 +243,73 @@ const TableauDeBord = () => {
         </div>
       </motion.div>
 
-      {/* ===== 3 KPI CARDS ===== */}
+      {/* ===== 2 KPI CARDS ===== */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="grid grid-cols-1 md:grid-cols-3 gap-6"
+        className="grid grid-cols-1 md:grid-cols-2 gap-6"
       >
-        {/* Ventes du jour */}
+        {/* Carte 1 : Ventes du jour */}
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-          <div className="flex justify-between items-start mb-4">
+          <div className="flex justify-between items-start">
             <div>
               <p className="text-sm font-medium text-gray-500">Ventes du jour</p>
               <h3 className="text-2xl font-bold text-gray-900 mt-1">
-                {stats.ventesAujourdhui.toLocaleString()} FCFA
+                {formaterMontant(stats.ventesAujourdhui)}
               </h3>
+              {!aucuneVente && stats.commandesCompletees > 0 && (
+                <p className="text-xs text-gray-400 mt-1">
+                  {stats.commandesCompletees} commande{stats.commandesCompletees > 1 ? 's' : ''} complétée{stats.commandesCompletees > 1 ? 's' : ''}
+                </p>
+              )}
+              {aucuneVente && (
+                <p className="text-xs text-gray-400 mt-1">
+                  Aucune vente aujourd'hui
+                </p>
+              )}
             </div>
             <div className="bg-[#472EAD]/10 p-3 rounded-xl">
               <DollarSign className="text-[#472EAD]" size={24} />
             </div>
           </div>
-          <div className="flex items-center gap-2 text-sm">
-            <div className="flex items-center gap-1">
-              <span className="text-emerald-600 font-medium">
-                {Math.round((stats.ventesAujourdhui / stats.objectifVentes) * 100)}%
-              </span>
-              <span className="text-gray-500">de l'objectif</span>
-            </div>
-          </div>
-          <div className="mt-3">
-            <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-[#472EAD] rounded-full transition-all duration-500"
-                style={{ width: `${Math.min((stats.ventesAujourdhui / stats.objectifVentes) * 100, 100)}%` }}
-              />
-            </div>
-          </div>
         </div>
 
-        {/* Commandes traitées */}
+        {/* Carte 2 : Commandes traitées */}
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-          <div className="flex justify-between items-start mb-4">
+          <div className="flex justify-between items-start">
             <div>
-              <p className="text-sm font-medium text-gray-500">Commandes traitées</p>
+              <p className="text-sm font-medium text-gray-500">Commandes du jour</p>
               <h3 className="text-2xl font-bold text-gray-900 mt-1">
                 {stats.commandesTraitees}
               </h3>
+              {!aucuneVente && stats.commandesTraitees > 0 && (
+                <div className="flex items-center gap-2 mt-1 text-xs">
+                  {stats.commandesCompletees > 0 && (
+                    <>
+                      <span className="text-green-600">{stats.commandesCompletees} complétée{stats.commandesCompletees > 1 ? 's' : ''}</span>
+                      <span className="text-gray-300">•</span>
+                    </>
+                  )}
+                  {stats.commandesEnAttente > 0 && (
+                    <>
+                      <span className="text-yellow-600">{stats.commandesEnAttente} en attente</span>
+                      <span className="text-gray-300">•</span>
+                    </>
+                  )}
+                  {stats.commandesAnnulees > 0 && (
+                    <span className="text-red-600">{stats.commandesAnnulees} annulée{stats.commandesAnnulees > 1 ? 's' : ''}</span>
+                  )}
+                </div>
+              )}
+              {aucuneVente && (
+                <p className="text-xs text-gray-400 mt-1">
+                  Aucune commande aujourd'hui
+                </p>
+              )}
             </div>
             <div className="bg-[#F58020]/10 p-3 rounded-xl">
               <ShoppingCart className="text-[#F58020]" size={24} />
             </div>
-          </div>
-          <div className="flex items-center gap-2 text-sm">
-            <span className="flex items-center gap-1 text-emerald-600">
-              <ArrowUp size={14} />
-              +{Math.floor(stats.commandesTraitees * 0.2)} aujourd'hui
-            </span>
-          </div>
-        </div>
-
-        {/* Produits vendus */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
-          <div className="flex justify-between items-start mb-4">
-            <div>
-              <p className="text-sm font-medium text-gray-500">Produits vendus</p>
-              <h3 className="text-2xl font-bold text-gray-900 mt-1">
-                {stats.produitsVendus}
-              </h3>
-            </div>
-            <div className="bg-[#10B981]/10 p-3 rounded-xl">
-              <Package className="text-[#10B981]" size={24} />
-            </div>
-          </div>
-          <div className="flex items-center gap-2 text-sm">
-            <span className="flex items-center gap-1 text-emerald-600">
-              <ArrowUp size={14} />
-              +{Math.floor(stats.produitsVendus * 0.15)} unités
-            </span>
           </div>
         </div>
       </motion.div>
@@ -378,56 +327,92 @@ const TableauDeBord = () => {
             </div>
             <div>
               <h2 className="text-lg font-bold text-gray-900">
-                Commandes récentes
+                Dernières commandes
               </h2>
-              <p className="text-sm text-gray-500">Dernières commandes traitées</p>
+              <p className="text-sm text-gray-500">
+                {aucuneVente 
+                  ? "Aucune commande pour le moment" 
+                  : "Les 4 dernières commandes enregistrées"}
+              </p>
             </div>
           </div>
+          {!aucuneVente && commandes.length > 4 && (
+            <span className="text-xs text-gray-400">
+              + {commandes.length - 4} commande{commandes.length - 4 > 1 ? 's' : ''} plus ancienne{commandes.length - 4 > 1 ? 's' : ''}
+            </span>
+          )}
         </div>
 
-        <div className="space-y-4">
-          {commandesRecentes.map((cmd) => (
-            <div
-              key={cmd.id}
-              className="flex items-center justify-between p-4 rounded-xl hover:bg-gray-50 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                  <div className="text-xs font-semibold text-gray-700">
-                    #{cmd.id}
+        <div className="space-y-3">
+          {!aucuneVente && commandesRecentes.length > 0 ? (
+            commandesRecentes.map((cmd, index) => (
+              <div
+                key={cmd.id || index}
+                className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-gray-50 to-white border border-gray-100 hover:shadow-md transition-shadow"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 bg-[#472EAD] rounded-full flex items-center justify-center text-white font-bold text-sm shadow-sm">
+                    {cmd.client?.charAt(0) || 'C'}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-900">
+                      {cmd.client || 'Client'}
+                    </p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        cmd.statut === 'complétée' ? 'bg-emerald-100 text-emerald-800' :
+                        cmd.statut === 'en_attente' ? 'bg-amber-100 text-amber-800' :
+                        cmd.statut === 'annulée' ? 'bg-red-100 text-red-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {cmd.statut === 'complétée' ? 'Complétée' :
+                         cmd.statut === 'en_attente' ? 'En attente' :
+                         cmd.statut === 'annulée' ? 'Annulée' : cmd.statut}
+                      </span>
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <p className="font-semibold text-gray-900">
-                    {cmd.client}
-                  </p>
-                  <p className="text-xs text-gray-500">{cmd.numero}</p>
-                </div>
-              </div>
 
-              <div className="text-right">
-                <p className="text-sm font-semibold text-gray-900">
-                  {cmd.total.toLocaleString()} FCFA
-                </p>
-                <div className="flex items-center justify-end gap-2 mt-1">
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                    cmd.statut === 'complétée' ? 'bg-emerald-100 text-emerald-800' :
-                    cmd.statut === 'en attente' ? 'bg-amber-100 text-amber-800' :
-                    'bg-gray-100 text-gray-800'
-                  }`}>
-                    {cmd.statut}
-                  </span>
-                  <span className="text-xs text-gray-500">
-                    {cmd.date.toLocaleTimeString('fr-FR', { 
+                <div className="text-right">
+                  <p className="text-lg font-bold text-[#472EAD]">
+                    {formaterMontant(cmd.total_ttc)}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    {new Date(cmd.date).toLocaleTimeString('fr-FR', { 
                       hour: '2-digit', 
                       minute: '2-digit' 
                     })}
-                  </span>
+                  </p>
                 </div>
               </div>
+            ))
+          ) : (
+            <div className="text-center py-12">
+              <ShoppingCart className="mx-auto h-12 w-12 text-gray-300 mb-3" />
+              <p className="text-gray-500 font-medium">Aucune commande pour le moment</p>
+              <p className="text-sm text-gray-400 mt-1">
+                Les commandes apparaîtront ici quand vous en aurez
+              </p>
+              <button
+                onClick={() => chargerCommandes(true)}
+                className="mt-4 text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 mx-auto"
+              >
+                <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
+                Actualiser
+              </button>
             </div>
-          ))}
+          )}
         </div>
+
+        {/* Indicateur de mise à jour */}
+        {lastUpdate && !aucuneVente && commandesRecentes.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-gray-100 text-center">
+            <p className="text-xs text-gray-400 flex items-center justify-center gap-1">
+              <RefreshCw size={10} className={refreshing ? "animate-spin" : ""} />
+              Dernière mise à jour: {lastUpdate.toLocaleTimeString('fr-FR')}
+            </p>
+          </div>
+        )}
       </motion.div>
     </div>
   );

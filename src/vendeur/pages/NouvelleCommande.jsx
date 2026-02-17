@@ -31,7 +31,8 @@ import {
   faWarning,
   faInfoCircle,
   faCheckCircle,
-  faExclamationCircle
+  faExclamationCircle,
+  faDatabase
 } from '@fortawesome/free-solid-svg-icons';
 
 //Imports pour ticket 
@@ -87,31 +88,11 @@ const Notification = ({ type, message, onClose }) => {
     }
   };
 
-  const getIconColor = () => {
-    switch (type) {
-      case 'success': return 'text-emerald-50';
-      case 'warning': return 'text-amber-50';
-      case 'error': return 'text-red-50';
-      case 'info': return 'text-blue-50';
-      default: return 'text-gray-50';
-    }
-  };
-
-  const getBorderColor = () => {
-    switch (type) {
-      case 'success': return 'border-emerald-200';
-      case 'warning': return 'border-amber-200';
-      case 'error': return 'border-red-200';
-      case 'info': return 'border-blue-200';
-      default: return 'border-gray-200';
-    }
-  };
-
   return (
-    <div className={`fixed top-4 right-4 z-[1000] animate-slideInRight ${getBgColor()} text-white rounded-xl shadow-2xl overflow-hidden min-w-[320px] max-w-[400px] ${getBorderColor()} border`}>
+    <div className={`fixed top-4 right-4 z-[1000] animate-slideInRight ${getBgColor()} text-white rounded-xl shadow-2xl overflow-hidden min-w-[320px] max-w-[400px] border border-white/20`}>
       <div className="p-4">
         <div className="flex items-start gap-3">
-          <div className={`mt-0.5 ${getIconColor()}`}>
+          <div className="mt-0.5">
             <FontAwesomeIcon icon={getIcon()} className="text-lg" />
           </div>
           <div className="flex-1">
@@ -157,7 +138,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
   const [editionPrix, setEditionPrix] = useState(null);
   const [editionQuantite, setEditionQuantite] = useState(null);
   const [envoiEnCours, setEnvoiEnCours] = useState(false);
-  const [tvaActive, setTvaActive] = useState(true);
+  const [tvaActive, setTvaActive] = useState(false);
   const [produits, setProduits] = useState([]);
   const [loadingProduits, setLoadingProduits] = useState(true);
   const [produitsFiltres, setProduitsFiltres] = useState([]);
@@ -206,6 +187,15 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
     if (!type) return 'detail';
     if (type === 'détail') return 'detail';
     if (type === 'gros') return 'gros';
+    return type;
+  };
+
+  // Fonction pour obtenir l'affichage du type de vente
+  const getTypeVenteAffichage = (type) => {
+    if (!type) return 'détail';
+    if (type === 'detail') return 'détail';
+    if (type === 'gros') return 'gros';
+    if (type === 'mixte') return 'Mixte';
     return type;
   };
 
@@ -268,7 +258,6 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
           role: infosVendeur.role || '',
           photo: infosVendeur.photo || null
         });
-        console.log('✅ Infos vendeur chargées:', infosVendeur);
       }
     } catch (error) {
       console.error('❌ Erreur chargement infos vendeur:', error);
@@ -300,41 +289,6 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
     };
   };
 
-  // Fonction pour vérifier la cohérence des prix
-  const verifierCohérencePrix = () => {
-    console.log('=== VÉRIFICATION DES PRIX ===');
-    
-    produits.forEach((produit, index) => {
-      console.log(`Produit ${index + 1}: ${produit.nom}`);
-      console.log('  - API données:');
-      console.log(`    * prix_vente_detail: ${produit.prix_vente_detail}`);
-      console.log(`    * prix_vente_gros: ${produit.prix_vente_gros}`);
-      console.log(`    * prix_unite_carton: ${produit.prix_unite_carton}`);
-      console.log(`    * prix: ${produit.prix}`);
-      
-      const prixDetail = obtenirPrixParType(produit, 'détail');
-      const prixGros = obtenirPrixParType(produit, 'gros');
-      
-      console.log('  - Calculés:');
-      console.log(`    * Détail: ${prixDetail.prix} (seuil: ${prixDetail.prix_seuil})`);
-      console.log(`    * Gros: ${prixGros.prix} (seuil: ${prixGros.prix_seuil})`);
-    });
-    
-    console.log('=== PANIER ACTUEL ===');
-    panier.forEach((item, index) => {
-      if (item) {
-        console.log(`Item ${index + 1}: ${item.nom}`);
-        console.log(`  - Type: ${item.type_vente}`);
-        console.log(`  - Prix panier: ${item.prix_vente}`);
-        console.log(`  - Prix base: ${item.prix_base}`);
-        console.log(`  - Prix original: ${item.prix_original}`);
-        console.log(`  - Prix détail: ${item.prix_detail}`);
-        console.log(`  - Prix gros: ${item.prix_gros}`);
-        console.log(`  - Unité/carton: ${item.unite_par_carton}`);
-      }
-    });
-  };
-
   // Charger les produits disponibles depuis l'API
   const chargerProduits = async () => {
     try {
@@ -343,20 +297,6 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
 
       // Utiliser l'API des produits disponibles en boutique
       const produitsApi = await produitsDisponiblesAPI.getDisponiblesBoutique();
-
-      // Log pour déboguer la structure des prix
-      console.log('=== STRUCTURE DES PRIX DE L\'API ===');
-      if (produitsApi.length > 0) {
-        const sample = produitsApi[0];
-        console.log('Exemple produit API:', {
-          nom: sample.nom,
-          prix_vente_detail: sample.prix_vente_detail,
-          prix_vente_gros: sample.prix_vente_gros,
-          prix_unite_carton: sample.prix_unite_carton,
-          prix: sample.prix,
-          toutes_cles: Object.keys(sample)
-        });
-      }
 
       // Formatage des données selon vos variables
       const produitsFormates = produitsApi.map(produit => {
@@ -407,67 +347,14 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
       });
 
       setProduits(produitsFormates);
-      console.log(`${produitsFormates.length} produits disponibles chargés`);
 
     } catch (error) {
       console.error('❌ Erreur chargement produits:', error);
-      setErrorMessage('Impossible de charger les produits. Mode démo activé.');
-
-      // Données de démo avec prix cohérents
-      setProduits([
-        {
-          id: 1,
-          nom: 'Bloc Note Mood Diary',
-          code_barre: '694689174174',
-          prix_vente_detail: 350,
-          prix_vente_gros: 2800,
-          prix_achat: 250,
-          prix_total: 6000,
-          prix_seuil_detail: 280,
-          prix_seuil_gros: 2240,
-          stock_global: 15,
-          stock_seuil: 5,
-          stock: 15,
-          seuil_alerte: 5,
-          unite_carton: 24,
-          prix_unite_carton: 2800,
-          nombre_carton: 10,
-          categorie_id: 1,
-          categorie: 'Papeterie',
-          created_at: '2024-01-01',
-          updated_at: '2024-01-01',
-          prix: 350,
-          prix_detail: 350,
-          prix_gros: 2800,
-          prix_seuil: 280
-        },
-        {
-          id: 2,
-          nom: "Bouteille d'eau 1.5L",
-          code_barre: '6044000268101',
-          prix_vente_detail: 400,
-          prix_vente_gros: 3200,
-          prix_achat: 280,
-          prix_total: 4800,
-          prix_seuil_detail: 320,
-          prix_seuil_gros: 2560,
-          stock_global: 50,
-          stock_seuil: 10,
-          stock: 50,
-          seuil_alerte: 10,
-          unite_carton: 12,
-          prix_unite_carton: 3200,
-          nombre_carton: 20,
-          categorie_id: 2,
-          categorie: 'Boissons',
-          created_at: '2024-01-01',
-          updated_at: '2024-01-01',
-          prix: 400,
-          prix_detail: 400,
-          prix_gros: 3200,
-          prix_seuil: 320
-        }
-      ]);
+      setErrorMessage('Impossible de charger les produits depuis l\'API.');
+      
+      // Pas de données de démo - on laisse le tableau vide
+      setProduits([]);
+      
     } finally {
       setLoadingProduits(false);
     }
@@ -482,14 +369,10 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
 
     if (typeNormalise === 'gros') {
       return {
-        // PRIORITÉ 1: prix_vente_gros depuis l'API
-        // PRIORITÉ 2: prix_unite_carton depuis l'API  
-        // PRIORITÉ 3: Calcul basé sur prix détail
         prix: produit.prix_vente_gros || 
               produit.prix_unite_carton || 
               Math.round((produit.prix_vente_detail || produit.prix || 0) * 0.8),
         
-        // Seuil pour vente en gros
         prix_seuil: produit.prix_seuil_gros || 
                     Math.round((produit.prix_seuil || (produit.prix_vente_detail || produit.prix || 0) * 0.7) * 0.8)
       };
@@ -497,13 +380,10 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
     
     // Type détail
     return {
-      // PRIORITÉ 1: prix_vente_detail depuis l'API
-      // PRIORITÉ 2: prix depuis l'API
       prix: produit.prix_vente_detail || 
             produit.prix || 
             0,
       
-      // Seuil pour vente détail
       prix_seuil: produit.prix_seuil_detail || 
                   Math.round((produit.prix_vente_detail || produit.prix || 0) * 0.7)
     };
@@ -548,45 +428,35 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
           ? { 
               ...item, 
               quantite: item.quantite + 1,
-              // Recalculer le prix unitaire si nécessaire
-              prix_unitaire: item.prix_vente // Garder le même prix unitaire
+              prix_unitaire: item.prix_vente
             }
           : item
       ));
       addNotification('success', `${produit.nom} quantité augmentée`);
     } else {
-      // Ajouter tous les prix pertinents au produit du panier
       setPanier([...panier.filter(item => item), {
         ...produit,
         quantite: 1,
         type_vente: typeNormalise,
         
-        // PRIX PRINCIPAL pour cette vente
-        prix_vente: prix, // Prix utilisé pour les calculs
-        
-        // PRIX DE BASE selon le type
-        prix_base: prix, // Prix initial (peut être modifié)
-        
-        // SEUIL MINIMUM
+        prix_vente: prix,
+        prix_base: prix,
         prix_seuil: prix_seuil,
-        
-        // PRIX ORIGINAL (pour réinitialisation)
         prix_original: prix,
         
-        // AJOUTER: Tous les prix disponibles
-        prix_unitaire: prix, // Pour l'API
+        prix_unitaire: prix,
         prix_detail: produit.prix_vente_detail || produit.prix || 0,
         prix_gros: produit.prix_vente_gros || produit.prix_unite_carton || 0,
         
-        // Type d'affichage
         type_vente_affichage: typeVente,
         
-        // Stock actuel pour référence
         stock_initial: produit.stock_global,
         stock_seuil: produit.stock_seuil,
         
-        // AJOUTER: Unité par carton
-        unite_par_carton: produit.unite_carton || 1
+        unite_par_carton: produit.unite_carton || 1,
+        
+        // Catégorie
+        categorie: produit.categorie || 'Non catégorisé'
       }]);
       addNotification('success', `${produit.nom} ajouté au panier`);
     }
@@ -609,36 +479,29 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
           nom: produitTrouve.nom,
           code_barre: produitTrouve.code_barre || '',
           
-          // Prix depuis l'API
           prix_vente_detail: produitTrouve.prix_vente_detail || produitTrouve.prix || 0,
           prix_vente_gros: produitTrouve.prix_vente_gros || produitTrouve.prix_unite_carton || 0,
           prix_achat: produitTrouve.prix_achat || 0,
           prix_total: produitTrouve.prix_total || 0,
           
-          // Seuils
           prix_seuil_detail: produitTrouve.prix_seuil_detail || Math.round((produitTrouve.prix_vente_detail || produitTrouve.prix || 0) * 0.7),
           prix_seuil_gros: produitTrouve.prix_seuil_gros || Math.round((produitTrouve.prix_vente_gros || produitTrouve.prix_unite_carton || 0) * 0.7),
           
-          // Stock
           stock_global: produitTrouve.stock_global || produitTrouve.stock || 0,
           stock_seuil: produitTrouve.stock_seuil || 10,
           stock: produitTrouve.stock_global || produitTrouve.stock || 0,
           seuil_alerte: produitTrouve.stock_seuil || 10,
           
-          // Carton
           unite_carton: produitTrouve.unite_carton || 1,
           prix_unite_carton: produitTrouve.prix_unite_carton || produitTrouve.prix_vente_gros || 0,
           nombre_carton: produitTrouve.nombre_carton || Math.floor((produitTrouve.stock_global || 0) / (produitTrouve.unite_carton || 1)),
           
-          // Catégorie
           categorie_id: produitTrouve.categorie_id,
           categorie: produitTrouve.categorie_nom || 'Non catégorisé',
           
-          // Dates
           created_at: produitTrouve.created_at,
           updated_at: produitTrouve.updated_at,
           
-          // Compatibilité
           prix: produitTrouve.prix_vente_detail || produitTrouve.prix || 0,
           prix_detail: produitTrouve.prix_vente_detail || produitTrouve.prix || 0,
           prix_gros: produitTrouve.prix_vente_gros || produitTrouve.prix_unite_carton || 0,
@@ -651,37 +514,11 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
           inputCodeBarreRef.current.focus();
         }
       } else {
-        // Recherche locale en cas d'erreur API
-        const produitTrouve = produits.find(p =>
-          p && p.code_barre === codeBarre
-        );
-
-        if (produitTrouve) {
-          ajouterAuPanier(produitTrouve, typeVenteGlobal);
-          setCodeBarre('');
-          if (inputCodeBarreRef.current) {
-            inputCodeBarreRef.current.focus();
-          }
-        } else {
-          addNotification('error', 'Aucun produit trouvé avec ce code barre');
-        }
+        addNotification('error', 'Aucun produit trouvé avec ce code barre');
       }
     } catch (error) {
       console.error('❌ Erreur recherche code barre:', error);
-      // Recherche locale en cas d'erreur API
-      const produitTrouve = produits.find(p =>
-        p && p.code_barre === codeBarre
-      );
-
-      if (produitTrouve) {
-        ajouterAuPanier(produitTrouve, typeVenteGlobal);
-        setCodeBarre('');
-        if (inputCodeBarreRef.current) {
-          inputCodeBarreRef.current.focus();
-        }
-      } else {
-        addNotification('error', 'Aucun produit trouvé avec ce code barre');
-      }
+      addNotification('error', 'Erreur lors de la recherche du code barre');
     }
   };
 
@@ -837,30 +674,30 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
   };
 
   const calculerTotaux = () => {
-  const totalHT = panier.reduce((total, item) => {
-    if (!item) return total;
+    const totalHT = panier.reduce((total, item) => {
+      if (!item) return total;
+      const prix = Number(item.prix_vente) || 0;
+      const quantite = Number(item.quantite) || 0;
+      return total + (prix * quantite);
+    }, 0);
 
-    const prix = Number(item.prix_vente) || 0;
-    const quantite = Number(item.quantite) || 0;
+    // Valeurs par défaut
+    let tva = 0;
+    let totalTTC = totalHT; // Par défaut, TTC = HT
 
-    return total + (prix * quantite);
-  }, 0);
+    // SI TVA ACTIVE: on ajoute 18% au total
+    if (tvaActive) {
+      tva = Math.round(totalHT * 0.18);
+      totalTTC = totalHT + tva;
+    }
+    // SI TVA INACTIVE: totalTTC reste = totalHT (pas de changement)
 
-  let tva = 0;
-
-  if (tvaActive) {
-    tva = totalHT * 0.18;
-  }
-
-  const totalTTC = totalHT + tva;
-
-  return {
-    totalHT: Math.round(totalHT),
-    tva: Math.round(tva),
-    totalTTC: Math.round(totalTTC)
+    return {
+      totalHT: Math.round(totalHT),
+      tva: tva,
+      totalTTC: Math.round(totalTTC)
+    };
   };
-};
-
 
   const { totalHT, tva, totalTTC } = calculerTotaux();
 
@@ -872,71 +709,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
       errorMessage.includes('cURL error 7');
   };
 
-  // Fonction pour créer une commande locale en cas d'échec API
-  const creerCommandeLocale = () => {
-    const numeroCommande = `CMD-LOCAL-${Date.now().toString().slice(-8)}`;
-    const vendeurData = getVendeurApiData();
-    const clientNomFinal = client.nom.trim();
-    const clientPrenomFinal = client.prenom.trim();
-    const typeVenteNormalise = normaliserTypeVente(typeVenteGlobal);
-
-    return {
-      id: `local-${Date.now()}`,
-      numero_commande: numeroCommande,
-      date: new Date().toISOString(),
-      client: {
-        id: null,
-        nom: clientNomFinal,
-        prenom: clientPrenomFinal,
-        telephone: client.telephone?.trim() || '',
-        adresse: client.adresse?.trim() || ''
-      },
-      vendeur: {
-        id: vendeurData.vendeur_id,
-        nom_complet: vendeurData.vendeur_nom,
-        nom: vendeurInfo.nom,
-        prenom: vendeurInfo.prenom,
-        email: vendeurInfo.email,
-        telephone: vendeurInfo.telephone,
-        boutique_id: vendeurInfo.boutique_id,
-        role: vendeurInfo.role
-      },
-      type_vente: typeVenteNormalise,
-      type_vente_affichage: typeVenteGlobal,
-      items: panier.filter(item => item).map(item => ({
-        produit_id: item.id,
-        nom: item.nom,
-        code_barre: item.code_barre,
-        quantite: item.quantite,
-        type_vente: item.type_vente,
-        type_vente_affichage: item.type_vente_affichage || typeVenteGlobal,
-        prix_unitaire: item.prix_vente,
-        prix_base: item.prix_base,
-        prix_seuil: item.prix_seuil,
-        prix_original: item.prix_original,
-        sous_total: item.prix_vente * item.quantite,
-        categorie: item.categorie,
-        stock_initial: item.stock_global,
-        // AJOUTER: Informations sur les prix
-        prix_detail: item.prix_detail || 0,
-        prix_gros: item.prix_gros || 0,
-        unite_par_carton: item.unite_par_carton || 1
-      })),
-      total_ht: totalHT,
-      tva: tva,
-      total_ttc: totalTTC,
-      tva_appliquee: tvaActive,
-      statut: 'en_attente_paiement',
-      api_success: false,
-      api_message: 'Créée localement (erreur serveur)',
-      api_error: 'Erreur de connexion Pusher/WebSockets',
-      is_local: true
-    };
-  };
-
   const validerCommande = async () => {
-    console.log('🔄 Début validation commande...');
-
     if (panier.length === 0) {
       addNotification('warning', 'Le panier est vide !');
       return;
@@ -1006,50 +779,130 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
           contact: ''
         };
 
-        console.log('📝 Création nouveau client:', nouveauClient);
         const createResponse = await clientsAPI.create(nouveauClient);
 
         // Extraire l'ID selon la structure de votre API
         if (createResponse && createResponse.data) {
           if (createResponse.data.id) {
             clientId = createResponse.data.id;
-            console.log(`✅ Nouveau client créé avec ID (via data.id): ${clientId}`);
           }
           else if (createResponse.data.data && createResponse.data.data.id) {
             clientId = createResponse.data.data.id;
-            console.log(`✅ Nouveau client créé avec ID (via data.data.id): ${clientId}`);
           }
           else if (createResponse.data && typeof createResponse.data === 'object' && createResponse.data.id) {
             clientId = createResponse.data.id;
-            console.log(`✅ Nouveau client créé avec ID (via data.id simple): ${clientId}`);
           }
         }
         else if (createResponse && createResponse.id) {
           clientId = createResponse.id;
-          console.log(`✅ Nouveau client créé avec ID (via id direct): ${clientId}`);
-        }
-        else {
-          console.warn('⚠️ Structure de réponse inattendue pour la création client:', createResponse);
         }
 
       } catch (clientError) {
-        console.warn('⚠️ Erreur création client:', clientError);
+        console.warn('⚠️ Erreur création client, on continue sans clientId:', clientError);
         // On continue sans clientId, la commande sera créée quand même
-        if (clientError.response?.data?.message) {
-          console.log('⚠️ Détails erreur client:', clientError.response.data.message);
-        }
+      }
+
+      // ✅ ANALYSE DES TYPES DE VENTE DANS LE PANIER
+      const typesDansPanier = [...new Set(panier.filter(item => item).map(item => item.type_vente))];
+      const aDuDetail = typesDansPanier.includes('detail');
+      const aDuGros = typesDansPanier.includes('gros');
+      
+      // Déterminer le type de vente global de la commande
+      let typeVenteGlobalCommande;
+      if (aDuDetail && aDuGros) {
+        typeVenteGlobalCommande = 'mixte'; // Si les deux types sont présents
+      } else if (aDuGros) {
+        typeVenteGlobalCommande = 'gros';
+      } else {
+        typeVenteGlobalCommande = 'detail';
       }
 
       const typeVenteNormalise = normaliserTypeVente(typeVenteGlobal);
+      
+      console.log('🔍 Analyse du panier:', {
+        typesDansPanier,
+        aDuDetail,
+        aDuGros,
+        typeVenteGlobalCommande,
+        typeVenteSelectionne: typeVenteGlobal
+      });
 
       // Récupérer les infos du vendeur
       const vendeurData = getVendeurApiData();
 
-      // 2. Préparer les données pour l'API des commandes
+      // ✅ PRÉPARATION DES ITEMS AVEC LEUR PROPRE TYPE DE VENTE
+      const itemsData = panier.filter(item => item).map(item => {
+        const quantite = parseInt(item.quantite) || 1;
+        const prixUnitaire = parseFloat(item.prix_vente) || 0;
+        
+        // Utiliser le type de vente spécifique de l'article
+        const typeVenteArticle = item.type_vente || normaliserTypeVente(typeVenteGlobal);
+        
+        // Préparer l'objet de base
+        const itemData = {
+          produit_id: item.id,
+          nom: item.nom,
+          code_barre: item.code_barre,
+          quantite: quantite,
+          // ✅ CHAMP IMPORTANT: type_vente pour chaque article
+          type_vente: typeVenteArticle,
+          type_vente_affichage: typeVenteArticle === 'detail' ? 'détail' : 'gros',
+          prix_unitaire: prixUnitaire,
+          prix_detail: parseFloat(item.prix_detail || 0),
+          prix_gros: parseFloat(item.prix_gros || 0),
+          prix_original: parseFloat(item.prix_original || 0),
+          stock_initial: parseInt(item.stock_global),
+          categorie: item.categorie || 'Non catégorisé'
+        };
+        
+        // Ajouter des informations supplémentaires pour le gros
+        if (typeVenteArticle === 'gros') {
+          itemData.unite_par_carton = parseInt(item.unite_par_carton || 1);
+          itemData.est_vente_carton = true;
+          itemData.nombre_cartons = Math.ceil(quantite / (item.unite_par_carton || 1));
+          itemData.unites_restantes = quantite % (item.unite_par_carton || 1);
+        }
+        
+        return itemData;
+      });
+
+      // ✅ RECALCUL DIRECT des totaux
+      let totalHTCalcule = 0;
+      
+      // Parcourir chaque article du panier et additionner (prix * quantité)
+      panier.filter(item => item).forEach(item => {
+        const prix = Number(item.prix_vente) || 0;
+        const quantite = Number(item.quantite) || 0;
+        totalHTCalcule += prix * quantite;
+      });
+      
+      // Arrondir à l'entier
+      totalHTCalcule = Math.round(totalHTCalcule);
+      
+      // Calcul TVA (18% si active)
+      const tvaCalculee = tvaActive ? Math.round(totalHTCalcule * 0.18) : 0;
+      const totalTTCCalcule = totalHTCalcule + tvaCalculee;
+      
+      console.log('💰 TOTAUX FINAUX:', {
+        totalHTCalcule,
+        tvaCalculee,
+        totalTTCCalcule,
+        tvaActive
+      });
+
+      console.log('📦 Types de vente des articles:', itemsData.map(item => ({
+        nom: item.nom,
+        type_vente: item.type_vente,
+        type_vente_affichage: item.type_vente_affichage
+      })));
+
+      // ✅ STRUCTURE POUR L'API
       const commandeData = {
         // Informations client
         client_id: clientId,
         client_nom: `${clientNomFinal} ${clientPrenomFinal}`.trim(),
+        client_prenom: clientPrenomFinal,
+        client_nom_famille: clientNomFinal,
         client_telephone: clientTelephoneFinal,
         client_adresse: clientAdresseFinal,
 
@@ -1060,53 +913,48 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
         vendeur_telephone: vendeurData.vendeur_telephone,
         boutique_id: vendeurData.boutique_id,
 
-        // Type de vente - Normalisé
-        type_vente: typeVenteNormalise,
+        // ✅ TYPE DE VENTE GLOBAL DE LA COMMANDE (important pour l'affichage dans l'historique)
+        type_vente: typeVenteGlobalCommande, // "detail", "gros", ou "mixte"
+        type_vente_original: typeVenteGlobal, // Pour garder une trace de ce que l'utilisateur a sélectionné
+        type_vente_affichage: getTypeVenteAffichage(typeVenteGlobalCommande),
+        
+        // Statistiques des types de vente
+        statistiques_types: {
+          detail: aDuDetail,
+          gros: aDuGros,
+          types_presents: typesDansPanier
+        },
 
-        // Items (produits)
-        items: panier.filter(item => item).map(item => {
-          const itemData = {
-            produit_id: item.id,
-            nom: item.nom,
-            code_barre: item.code_barre,
-            quantite: parseInt(item.quantite),
-            type_vente: item.type_vente, // 'detail' ou 'gros'
-            
-            // PRIX: Utiliser le prix actuel du panier
-            prix_unitaire: parseFloat(item.prix_vente),
-            
-            // AJOUTER: Les prix d'origine pour référence
-            prix_detail: parseFloat(item.prix_detail || 0),
-            prix_gros: parseFloat(item.prix_gros || 0),
-            prix_original: parseFloat(item.prix_original || 0),
-            
-            sous_total: parseFloat(item.prix_vente * item.quantite),
-            stock_initial: parseInt(item.stock_global),
-            
-            // Pour le type gros
-            ...(item.type_vente === 'gros' && {
-              unite_par_carton: parseInt(item.unite_par_carton || 1),
-              est_vente_carton: true
-            })
-          };
-          
-          return itemData;
-        }),
+        // Items (produits) - CHAQUE ARTICLE A SON PROPRE TYPE_VENTE
+        items: itemsData,
 
-        // Totaux
-        montant_ht: parseFloat(totalHT),
-        tva: tvaActive ? parseFloat(tva) : 0,
-        montant_ttc: parseFloat(totalTTC),
+        // ✅ MONTANTS
+        montant_ht: totalHTCalcule,
+        tva: tvaCalculee,
+        montant_ttc: totalTTCCalcule,
+        total: totalTTCCalcule,
+        
+        // ✅ Informations TVA
         tva_appliquee: tvaActive,
+        tva_taux: tvaActive ? 18 : 0,
 
         // Métadonnées
         statut: 'en_attente',
         date_commande: new Date().toISOString(),
         mode_paiement: 'non_paye',
-        notes: ''
+        notes: '',
+
+        // Résumé pour l'historique
+        resume: {
+          nombre_articles_detail: itemsData.filter(i => i.type_vente === 'detail').length,
+          nombre_articles_gros: itemsData.filter(i => i.type_vente === 'gros').length,
+          total_detail: itemsData.filter(i => i.type_vente === 'detail').reduce((sum, i) => sum + (i.prix_unitaire * i.quantite), 0),
+          total_gros: itemsData.filter(i => i.type_vente === 'gros').reduce((sum, i) => sum + (i.prix_unitaire * i.quantite), 0)
+        }
       };
 
-      console.log('📦 Données commande formatées pour API:', JSON.stringify(commandeData, null, 2));
+      console.log('📦 Données commande complètes:', JSON.stringify(commandeData, null, 2));
+      console.log('🎯 Type de vente global envoyé:', commandeData.type_vente);
 
       // 3. Envoyer à l'API des commandes
       let apiResponse = null;
@@ -1114,21 +962,15 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
       let commandeCreee = false;
 
       try {
-        console.log('📤 Tentative d\'envoi à l\'API commandes...');
         apiResponse = await commandesAPI.create(commandeData);
-        console.log('✅ Réponse API commandes:', apiResponse);
+        console.log('✅ Réponse API:', apiResponse);
         commandeCreee = true;
       } catch (error) {
-        console.error('❌ Erreur API commandes:', {
-          message: error.message,
-          response: error.response?.data,
-          status: error.response?.status
-        });
+        console.error('❌ Erreur API commandes:', error);
         apiError = error;
 
         // Vérifier si c'est une erreur Pusher
         if (isPusherError(error)) {
-          console.warn('⚠️ Erreur Pusher détectée - La commande a probablement été créée côté serveur');
           commandeCreee = true;
 
           // Créer une réponse simulée pour continuer le processus
@@ -1138,12 +980,14 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
               id: `temp-pusher-${Date.now()}`,
               numero: `CMD-PSH-${Date.now().toString().slice(-8)}`,
               statut: 'en_attente_paiement',
-              created_at: new Date().toISOString()
+              created_at: new Date().toISOString(),
+              type_vente: typeVenteGlobalCommande,
+              total: commandeData.total,
+              montant_ht: commandeData.montant_ht,
+              tva: commandeData.tva,
+              montant_ttc: commandeData.montant_ttc
             }
           };
-        } else if (error.response?.status === 500) {
-          console.warn('⚠️ Erreur serveur 500 détectée');
-          // On continue avec une commande locale
         }
       }
 
@@ -1156,6 +1000,12 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
           id: apiResponse?.data?.id || apiResponse?.data?.uuid || `temp-${Date.now()}`,
           numero_commande: apiResponse?.data?.numero || `CMD-${Date.now().toString().slice(-8)}`,
           date: apiResponse?.data?.created_at || new Date().toISOString(),
+          
+          // ✅ TYPE DE VENTE GLOBAL (pour l'historique)
+          type_vente: typeVenteGlobalCommande,
+          type_vente_affichage: getTypeVenteAffichage(typeVenteGlobalCommande),
+          type_vente_original: typeVenteGlobal,
+          
           client: {
             id: clientId,
             nom: clientNomFinal,
@@ -1173,15 +1023,16 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
             boutique_id: vendeurInfo.boutique_id,
             role: vendeurInfo.role
           },
-          type_vente: typeVenteNormalise,
-          type_vente_affichage: typeVenteGlobal,
+          
+          // ✅ ITEMS AVEC LEUR PROPRE TYPE DE VENTE (pour l'affichage détaillé)
           items: panier.filter(item => item).map(item => ({
             produit_id: item.id,
             nom: item.nom,
             code_barre: item.code_barre,
             quantite: item.quantite,
+            // Chaque article a son propre type
             type_vente: item.type_vente,
-            type_vente_affichage: item.type_vente_affichage || typeVenteGlobal,
+            type_vente_affichage: item.type_vente === 'detail' ? 'Détail' : 'Gros',
             prix_unitaire: item.prix_vente,
             prix_base: item.prix_base,
             prix_seuil: item.prix_seuil,
@@ -1189,15 +1040,30 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
             sous_total: item.prix_vente * item.quantite,
             categorie: item.categorie,
             stock_initial: item.stock_global,
-            // AJOUTER: Informations sur les prix
             prix_detail: item.prix_detail || 0,
             prix_gros: item.prix_gros || 0,
             unite_par_carton: item.unite_par_carton || 1
           })),
-          total_ht: totalHT,
-          tva: tva,
-          total_ttc: totalTTC,
+          
+          // Statistiques pour l'affichage
+          statistiques: {
+            types_presents: typesDansPanier,
+            nombre_detail: itemsData.filter(i => i.type_vente === 'detail').length,
+            nombre_gros: itemsData.filter(i => i.type_vente === 'gros').length,
+            total_detail: itemsData.filter(i => i.type_vente === 'detail').reduce((sum, i) => sum + (i.prix_unitaire * i.quantite), 0),
+            total_gros: itemsData.filter(i => i.type_vente === 'gros').reduce((sum, i) => sum + (i.prix_unitaire * i.quantite), 0)
+          },
+          
+          // ✅ TOTAUX
+          total_ht: totalHTCalcule,
+          tva: tvaCalculee,
+          total_ttc: totalTTCCalcule,
+          total: totalTTCCalcule,
+          montant_ht: totalHTCalcule,
+          montant_ttc: totalTTCCalcule,
           tva_appliquee: tvaActive,
+          tva_taux: tvaActive ? 18 : 0,
+          
           statut: apiResponse?.data?.statut || 'en_attente_paiement',
           api_success: true,
           api_message: isPusherError(apiError) ? 'Créée avec succès (notification échouée)' : 'Créée avec succès',
@@ -1207,10 +1073,84 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
         };
       } else {
         // Créer une commande locale en cas d'échec total
-        nouvelleCommande = creerCommandeLocale();
+        nouvelleCommande = {
+          id: `local-${Date.now()}`,
+          numero_commande: `CMD-LOCAL-${Date.now().toString().slice(-8)}`,
+          date: new Date().toISOString(),
+          
+          // ✅ TYPE DE VENTE GLOBAL
+          type_vente: typeVenteGlobalCommande,
+          type_vente_affichage: getTypeVenteAffichage(typeVenteGlobalCommande),
+          type_vente_original: typeVenteGlobal,
+          
+          client: {
+            id: null,
+            nom: clientNomFinal,
+            prenom: clientPrenomFinal,
+            telephone: clientTelephoneFinal,
+            adresse: clientAdresseFinal
+          },
+          vendeur: {
+            id: vendeurData.vendeur_id,
+            nom_complet: vendeurData.vendeur_nom,
+            nom: vendeurInfo.nom,
+            prenom: vendeurInfo.prenom,
+            email: vendeurInfo.email,
+            telephone: vendeurInfo.telephone,
+            boutique_id: vendeurInfo.boutique_id,
+            role: vendeurInfo.role
+          },
+          
+          // ✅ ITEMS AVEC LEUR PROPRE TYPE
+          items: panier.filter(item => item).map(item => ({
+            produit_id: item.id,
+            nom: item.nom,
+            code_barre: item.code_barre,
+            quantite: item.quantite,
+            type_vente: item.type_vente,
+            type_vente_affichage: item.type_vente === 'detail' ? 'Détail' : 'Gros',
+            prix_unitaire: item.prix_vente,
+            prix_base: item.prix_base,
+            prix_seuil: item.prix_seuil,
+            prix_original: item.prix_original,
+            sous_total: item.prix_vente * item.quantite,
+            categorie: item.categorie,
+            stock_initial: item.stock_global,
+            prix_detail: item.prix_detail || 0,
+            prix_gros: item.prix_gros || 0,
+            unite_par_carton: item.unite_par_carton || 1
+          })),
+          
+          // Statistiques
+          statistiques: {
+            types_presents: typesDansPanier,
+            nombre_detail: itemsData.filter(i => i.type_vente === 'detail').length,
+            nombre_gros: itemsData.filter(i => i.type_vente === 'gros').length
+          },
+          
+          // ✅ TOTAUX
+          total_ht: totalHTCalcule,
+          tva: tvaCalculee,
+          total_ttc: totalTTCCalcule,
+          total: totalTTCCalcule,
+          montant_ht: totalHTCalcule,
+          montant_ttc: totalTTCCalcule,
+          tva_appliquee: tvaActive,
+          tva_taux: tvaActive ? 18 : 0,
+          
+          statut: 'en_attente_paiement',
+          api_success: false,
+          api_message: 'Créée localement (erreur serveur)',
+          api_error: apiError?.message || 'Erreur de connexion',
+          is_local: true
+        };
       }
 
-      console.log('✅ Commande préparée:', nouvelleCommande);
+      console.log('✅ Commande créée avec type:', nouvelleCommande.type_vente);
+      console.log('📦 Types des articles:', nouvelleCommande.items.map(i => ({
+        nom: i.nom,
+        type: i.type_vente
+      })));
 
       // 5. Appeler le callback parent
       await onCommandeValidee(nouvelleCommande);
@@ -1239,21 +1179,91 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
           details: apiError.response?.data?.message || apiError.message
         });
 
-        addNotification('warning', `Commande ${nouvelleCommande.numero_commande} sauvegardée localement`);
+        addNotification('warning', `Commande ${nouvelleCommande.numero_commande} sauvegardée localement (${totalTTCCalcule.toLocaleString()} FCFA)`);
       } else if (commandeCreee && isPusherError(apiError)) {
         // Succès avec erreur Pusher
-        addNotification('success', `Commande ${nouvelleCommande.numero_commande} créée avec succès !`);
+        addNotification('success', `Commande ${nouvelleCommande.numero_commande} créée avec succès (${totalTTCCalcule.toLocaleString()} FCFA) !`);
         addNotification('info', 'Les notifications temps-réel sont temporairement indisponibles');
       } else {
         // Succès complet
-        addNotification('success', `Commande ${nouvelleCommande.numero_commande} créée avec succès !`);
+        addNotification('success', `Commande ${nouvelleCommande.numero_commande} créée avec succès (${totalTTCCalcule.toLocaleString()} FCFA) !`);
       }
 
     } catch (error) {
       console.error('❌ Erreur validation commande:', error);
 
+      // Analyser les types pour la commande locale
+      const typesDansPanier = [...new Set(panier.filter(item => item).map(item => item.type_vente))];
+      const typeVenteGlobalCommande = typesDansPanier.includes('detail') && typesDansPanier.includes('gros') ? 'mixte' :
+                                    typesDansPanier.includes('gros') ? 'gros' : 'detail';
+
+      // Recalculer les totaux pour la commande locale
+      let totalHTCalcule = 0;
+      panier.filter(item => item).forEach(item => {
+        const prix = Number(item.prix_vente) || 0;
+        const quantite = Number(item.quantite) || 0;
+        totalHTCalcule += prix * quantite;
+      });
+      
+      totalHTCalcule = Math.round(totalHTCalcule);
+      const tvaCalculee = tvaActive ? Math.round(totalHTCalcule * 0.18) : 0;
+      const totalTTCCalcule = totalHTCalcule + tvaCalculee;
+
       // Créer une commande locale en cas d'erreur inattendue
-      const commandeLocale = creerCommandeLocale();
+      const commandeLocale = {
+        id: `local-${Date.now()}`,
+        numero_commande: `CMD-LOCAL-${Date.now().toString().slice(-8)}`,
+        date: new Date().toISOString(),
+        
+        // ✅ TYPE DE VENTE GLOBAL
+        type_vente: typeVenteGlobalCommande,
+        type_vente_affichage: getTypeVenteAffichage(typeVenteGlobalCommande),
+        
+        client: {
+          id: null,
+          nom: client.nom.trim(),
+          prenom: client.prenom.trim(),
+          telephone: client.telephone?.trim() || '',
+          adresse: client.adresse?.trim() || ''
+        },
+        vendeur: getVendeurApiData(),
+        
+        // ✅ ITEMS AVEC LEUR TYPE
+        items: panier.filter(item => item).map(item => ({
+          produit_id: item.id,
+          nom: item.nom,
+          code_barre: item.code_barre,
+          quantite: item.quantite,
+          type_vente: item.type_vente,
+          type_vente_affichage: item.type_vente === 'detail' ? 'Détail' : 'Gros',
+          prix_unitaire: item.prix_vente,
+          prix_base: item.prix_base,
+          prix_seuil: item.prix_seuil,
+          prix_original: item.prix_original,
+          sous_total: item.prix_vente * item.quantite,
+          categorie: item.categorie,
+          stock_initial: item.stock_global,
+          prix_detail: item.prix_detail || 0,
+          prix_gros: item.prix_gros || 0,
+          unite_par_carton: item.unite_par_carton || 1
+        })),
+        
+        total_ht: totalHTCalcule,
+        tva: tvaCalculee,
+        total_ttc: totalTTCCalcule,
+        total: totalTTCCalcule,
+        montant_ht: totalHTCalcule,
+        montant_ttc: totalTTCCalcule,
+        tva_appliquee: tvaActive,
+        tva_taux: tvaActive ? 18 : 0,
+        
+        statut: 'en_attente_paiement',
+        api_success: false,
+        api_message: 'Erreur inattendue',
+        api_error: error.message,
+        is_local: true
+      };
+      
       await onCommandeValidee(commandeLocale);
 
       setApiError({
@@ -1262,7 +1272,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
         details: error.message
       });
 
-      addNotification('warning', `Erreur inattendue. Commande ${commandeLocale.numero_commande} sauvegardée localement`);
+      addNotification('warning', `Erreur inattendue. Commande ${commandeLocale.numero_commande} sauvegardée localement (${totalTTCCalcule.toLocaleString()} FCFA)`);
 
     } finally {
       setEnvoiEnCours(false);
@@ -1333,12 +1343,6 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
   const rechargerProduits = async () => {
     await chargerProduits();
     addNotification('success', 'Produits rechargés avec succès');
-  };
-
-  // Fonction utilitaire pour l'affichage du type de vente
-  const getTypeVenteAffichage = (type) => {
-    if (!type) return 'détail';
-    return type === 'detail' ? 'détail' : 'gros';
   };
 
   const produitsParType = panier.reduce((acc, item) => {
@@ -1530,15 +1534,6 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
               )}
             </div>
           </div>
-
-          {/* Bouton de débogage (optionnel) */}
-          <button
-            onClick={verifierCohérencePrix}
-            className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 py-1 px-3 rounded-lg flex items-center gap-1 transition-colors"
-          >
-            <FontAwesomeIcon icon={faInfoCircle} />
-            Debug Prix
-          </button>
         </div>
 
         {/* Afficher les erreurs API */}
@@ -1712,11 +1707,11 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
               <FontAwesomeIcon icon={faUser} className="text-[#472ead] text-sm" />
               Informations Client
             </h3>
-            <div className="space-y-5"> {/* Augmentation de l'espacement */}
+            <div className="space-y-5">
               
               {/* Nom et Prénom - ligne séparée avec plus d'espace */}
-              <div className="grid grid-cols-2 gap-4"> {/* Augmenté de gap-3 à gap-4 */}
-                <div className="space-y-2"> {/* Ajout d'espace vertical entre label et input */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
                   <label className="text-xs font-medium text-gray-600 block">
                     Nom *
                   </label>
@@ -1734,7 +1729,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
                   </div>
                 </div>
                 
-                <div className="space-y-2"> {/* Ajout d'espace vertical entre label et input */}
+                <div className="space-y-2">
                   <label className="text-xs font-medium text-gray-600 block">
                     Prénom *
                   </label>
@@ -1753,7 +1748,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
               </div>
 
               {/* Téléphone - avec plus d'espace au-dessus */}
-              <div className="space-y-2 pt-1"> {/* Ajout de pt-1 pour plus d'espace */}
+              <div className="space-y-2 pt-1">
                 <label className="text-xs font-medium text-gray-600 block">
                   Téléphone
                   <span className="text-gray-400 text-xs font-normal ml-1">(optionnel)</span>
@@ -1771,7 +1766,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
               </div>
 
               {/* Adresse - avec plus d'espace au-dessus */}
-              <div className="space-y-2 pt-1"> {/* Ajout de pt-1 pour plus d'espace */}
+              <div className="space-y-2 pt-1">
                 <label className="text-xs font-medium text-gray-600 block">
                   Adresse
                   <span className="text-gray-400 text-xs font-normal ml-1">(optionnel)</span>
@@ -1835,12 +1830,14 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
               <>
                 {/* Contrôle TVA */}
                 <div className="bg-gray-50 border-2 border-gray-200 rounded-lg p-4 mb-4">
-                  <div className="mb-0">
+                  <div className="flex items-center justify-between">
                     <label className="flex items-center gap-3 cursor-pointer font-medium text-gray-800 text-sm">
                       <input
                         type="checkbox"
                         checked={tvaActive}
-                        onChange={(e) => setTvaActive(e.target.checked)}
+                        onChange={(e) => {
+                          setTvaActive(e.target.checked);
+                        }}
                         className="hidden"
                       />
                       <span className="flex items-center justify-center w-4 h-4">
@@ -1850,10 +1847,15 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
                         />
                       </span>
                       <span className="flex items-center gap-2 text-sm">
-                        <FontAwesomeIcon icon={faReceipt} className="text-[#472ead] text-sm" />
+                        <FontAwesomeIcon icon={faReceipt} className={`text-sm ${tvaActive ? 'text-green-500' : 'text-gray-400'}`} />
                         TVA (18%)
                       </span>
                     </label>
+                    
+                    {/* Indicateur visuel de l'état de la TVA */}
+                    <span className={`text-xs px-2 py-1 rounded-full ${tvaActive ? 'bg-green-100 text-green-700 font-semibold' : 'bg-gray-100 text-gray-500'}`}>
+                      {tvaActive ? '✓ TVA appliquée' : 'TVA non appliquée'}
+                    </span>
                   </div>
                 </div>
 
@@ -1919,9 +1921,16 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
                                 </div>
                               ) : (
                                 <div className="my-3">
-                                  <span className={`text-sm font-bold ${item.prix_vente !== item.prix_base ? 'text-amber-600' : 'text-gray-800'}`}>
-                                    {item.prix_vente.toLocaleString()} FCFA × {item.quantite}
-                                  </span>
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className={`text-sm font-bold ${item.prix_vente !== item.prix_base ? 'text-amber-600' : 'text-gray-800'}`}>
+                                      {item.prix_vente.toLocaleString()} FCFA × {item.quantite}
+                                    </span>
+                                    {item.categorie && (
+                                      <span className="text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full">
+                                        {item.categorie}
+                                      </span>
+                                    )}
+                                  </div>
                                   <div className="text-xs text-green-600 font-semibold mt-1">
                                     {(item.prix_vente * item.quantite).toLocaleString()} FCFA
                                   </div>
@@ -2021,25 +2030,39 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
                   </div>
                 ))}
 
-                {/* Résumé */}
+                {/* Résumé - TVA */}
                 <div className="bg-gray-50 rounded-lg p-4 mb-4 border-2 border-gray-200">
                   <h4 className="text-sm text-gray-800 mb-3 font-semibold flex items-center gap-2">
                     <FontAwesomeIcon icon={faReceipt} className="text-[#472ead] text-sm" />
-                    Résumé
+                    Résumé de la commande
                   </h4>
+                  
+                  {/* Total HT */}
                   <div className="flex justify-between mb-2 pb-2 border-b border-gray-200 text-sm">
                     <span>Total HT:</span>
-                    <span>{totalHT.toLocaleString()} FCFA</span>
+                    <span className="font-medium">{totalHT.toLocaleString()} FCFA</span>
                   </div>
-                  {tvaActive && (
-                    <div className="flex justify-between mb-2 pb-2 border-b border-gray-200 text-sm">
-                      <span>TVA (18%):</span>
-                      <span>{tva.toLocaleString()} FCFA</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between text-sm font-bold text-gray-800">
+                  
+                  {/* TVA - Toujours affichée avec gestion conditionnelle */}
+                  <div className="flex justify-between mb-2 pb-2 border-b border-gray-200 text-sm">
+                    <span>TVA (18%):</span>
+                    <span className={`font-medium ${tvaActive ? 'text-amber-600' : 'text-gray-400'}`}>
+                      {tvaActive ? `+ ${tva.toLocaleString()}` : '0'} FCFA
+                    </span>
+                  </div>
+                  
+                  {/* Total TTC */}
+                  <div className="flex justify-between text-sm font-bold text-gray-800 mt-2 pt-2 border-t-2 border-gray-300">
                     <strong>Total TTC:</strong>
-                    <strong>{totalTTC.toLocaleString()} FCFA</strong>
+                    <strong className={tvaActive ? 'text-green-600' : 'text-gray-800'}>
+                      {totalTTC.toLocaleString()} FCFA
+                    </strong>
+                  </div>
+                  
+                  {/* Montant en base de données */}
+                  <div className="mt-2 text-xs text-center font-semibold p-2 bg-indigo-50 text-indigo-700 rounded border border-indigo-200">
+                    <FontAwesomeIcon icon={faDatabase} className="mr-1" />
+                    Montant: {totalTTC.toLocaleString()} FCFA
                   </div>
                 </div>
 
@@ -2067,7 +2090,8 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
                     ) : (
                       <>
                         <FontAwesomeIcon icon={faPaperPlane} className="text-sm" />
-                        Envoyer la Commande
+                        Envoyer la Commande - {totalTTC.toLocaleString()} FCFA
+                        {tvaActive && <span className="text-xs ml-1 opacity-75">(TVA incl.)</span>}
                       </>
                     )}
                   </button>
