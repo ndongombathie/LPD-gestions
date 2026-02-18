@@ -250,7 +250,7 @@ const TableauDeBord = () => {
         className="grid grid-cols-1 md:grid-cols-2 gap-6"
       >
         {/* Carte 1 : Ventes du jour */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+        <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
           <div className="flex justify-between items-start">
             <div>
               <p className="text-sm font-medium text-gray-500">Ventes du jour</p>
@@ -275,7 +275,7 @@ const TableauDeBord = () => {
         </div>
 
         {/* Carte 2 : Commandes traitées */}
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+        <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
           <div className="flex justify-between items-start">
             <div>
               <p className="text-sm font-medium text-gray-500">Commandes du jour</p>
@@ -318,7 +318,7 @@ const TableauDeBord = () => {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100"
+        className="bg-gradient-to-br from-white to-gray-50 rounded-2xl p-6 shadow-sm border border-gray-200 mt-8"
       >
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -348,7 +348,7 @@ const TableauDeBord = () => {
             commandesRecentes.map((cmd, index) => (
               <div
                 key={cmd.id || index}
-                className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-gray-50 to-white border border-gray-100 hover:shadow-md transition-shadow"
+                className="flex items-center justify-between p-4 rounded-xl bg-white border border-gray-200 hover:shadow-md transition-shadow"
               >
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 bg-[#472EAD] rounded-full flex items-center justify-center text-white font-bold text-sm shadow-sm">
@@ -387,7 +387,7 @@ const TableauDeBord = () => {
               </div>
             ))
           ) : (
-            <div className="text-center py-12">
+            <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
               <ShoppingCart className="mx-auto h-12 w-12 text-gray-300 mb-3" />
               <p className="text-gray-500 font-medium">Aucune commande pour le moment</p>
               <p className="text-sm text-gray-400 mt-1">
@@ -406,7 +406,7 @@ const TableauDeBord = () => {
 
         {/* Indicateur de mise à jour */}
         {lastUpdate && !aucuneVente && commandesRecentes.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-gray-100 text-center">
+          <div className="mt-4 pt-4 border-t border-gray-200 text-center">
             <p className="text-xs text-gray-400 flex items-center justify-center gap-1">
               <RefreshCw size={10} className={refreshing ? "animate-spin" : ""} />
               Dernière mise à jour: {lastUpdate.toLocaleTimeString('fr-FR')}
