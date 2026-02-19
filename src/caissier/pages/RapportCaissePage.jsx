@@ -26,13 +26,19 @@ const formatCurrencyPdf = (amount) => {
 };
 
 const RapportCaissePage = () => {
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const today = new Date().toISOString().split('T')[0];
+  const [selectedDate, setSelectedDate] = useState(today);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [rapport, setRapport] = useState(null);
   const [ventesParMoyen, setVentesParMoyen] = useState([]);
   const [isClosing, setIsClosing] = useState(false);
   const [isCloseConfirmOpen, setIsCloseConfirmOpen] = useState(false);
+
+  // Vérifier si la date sélectionnée est passée (avant aujourd'hui)
+  const isDatePast = selectedDate < today;
+  // Vérifier si la date sélectionnée est future (après aujourd'hui)
+  const isDateFuture = selectedDate > today;
 
   /** Date au format YYYY-MM-DD en heure locale (pour rapport strictement journalier) */
   const getDatePartLocal = (value) => {
@@ -75,11 +81,14 @@ const RapportCaissePage = () => {
       setErrorMessage('');
 
       try {
+        // Optimisation : charger uniquement les données nécessaires pour la date sélectionnée
         const [journal, ventes, commandesPayeesResponse, decaissementsResponse] = await Promise.all([
           caissierApi.getCaissierCaisseJournal(selectedDate),
           caissierApi.getVentesParMoyen(selectedDate),
+          // Charger seulement les commandes payées (pas toutes les commandes)
           caissierApi.getCommandesPayees(),
-          caissierApi.getDecaissements({ per_page: 200 }),
+          // Charger les décaissements validés (statut "valide") pour la date sélectionnée
+          caissierApi.getDecaissements({ per_page: 500, date: selectedDate }),
         ]);
 
         if (cancelled) return;
@@ -115,9 +124,12 @@ const RapportCaissePage = () => {
 
         ticketsEncaisses.sort((a, b) => String(a.date_ticket || '').localeCompare(String(b.date_ticket || '')));
 
-        // Décaissements du jour = statut "valide" validés ce jour-là
+        // Décaissements du jour = statut "valide" ou "validé" validés ce jour-là (exclure "fait")
         const decaissementsDuJour = (Array.isArray(decaissements) ? decaissements : [])
-          .filter((d) => String(d?.statut || '').toLowerCase() === 'valide')
+          .filter((d) => {
+            const statut = String(d?.statut || '').toLowerCase();
+            return statut === 'valide' || statut === 'validé';
+          })
           .filter((d) => getDatePartLocal(d?.updated_at || d?.date || d?.created_at) === selectedDate)
           .map((d) => {
             const dt = d?.updated_at || d?.date || d?.created_at;
@@ -125,12 +137,22 @@ const RapportCaissePage = () => {
               ? parseFloat(d.montant.replace(/[^\d.-]/g, '')) || 0
               : (d?.montant || 0);
 
+            // Récupérer le responsable (user) et le caissier qui a validé
+            const responsable = d?.user 
+              ? `${d.user.prenom || ''} ${d.user.nom || ''}`.trim() || 'N/A'
+              : 'N/A';
+            const caissier = d?.caissier
+              ? `${d.caissier.prenom || ''} ${d.caissier.nom || ''}`.trim() || 'N/A'
+              : 'N/A';
+
             return ({
               id: d.id,
               heure: getTimeHHMM(dt),
               motif: d.motif || d.libelle || 'Non spécifié',
               montant,
               date: dt,
+              responsable,
+              caissier,
             });
           })
           .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
@@ -349,13 +371,17 @@ const RapportCaissePage = () => {
         doc.setFont(undefined, 'normal');
         const bodyDec = rapport.decaissements.map((d) => [
           d.heure || '',
-          (d.motif || '').substring(0, 50),
+          (d.motif || '').substring(0, 40),
+          (d.responsable || 'N/A').substring(0, 20),
+          (d.caissier || 'N/A').substring(0, 20),
           formatCurrencyPdf(d.montant),
         ]);
-        const colDecMotif = tableWidth - colMontantWidth - 18;
+        const colDecMotif = (tableWidth - colMontantWidth - 18) * 0.4;
+        const colDecResp = (tableWidth - colMontantWidth - 18) * 0.3;
+        const colDecCaissier = (tableWidth - colMontantWidth - 18) * 0.3;
         autoTable(doc, {
           startY: y,
-          head: [['Heure', 'Motif', 'Montant']],
+          head: [['Heure', 'Motif', 'Responsable', 'Validé par', 'Montant']],
           body: bodyDec,
           theme: 'grid',
           margin: { left: margin, right: margin },
@@ -363,21 +389,25 @@ const RapportCaissePage = () => {
           columnStyles: {
             0: { cellWidth: 18 },
             1: { cellWidth: colDecMotif },
-            2: { cellWidth: colMontantWidth, halign: 'right' },
+            2: { cellWidth: colDecResp },
+            3: { cellWidth: colDecCaissier },
+            4: { cellWidth: colMontantWidth, halign: 'right' },
           },
           ...tableStyles,
         });
         const totalDec = rapport.decaissements.reduce((s, d) => s + (d.montant || 0), 0);
         autoTable(doc, {
           startY: doc.lastAutoTable.finalY,
-          body: [['Total', '', formatCurrencyPdf(totalDec)]],
+          body: [['Total', '', '', '', formatCurrencyPdf(totalDec)]],
           theme: 'grid',
           margin: { left: margin, right: margin },
           tableWidth,
           columnStyles: {
             0: { cellWidth: 18 },
             1: { cellWidth: colDecMotif },
-            2: { cellWidth: colMontantWidth, halign: 'right', fontStyle: 'bold' },
+            2: { cellWidth: colDecResp },
+            3: { cellWidth: colDecCaissier },
+            4: { cellWidth: colMontantWidth, halign: 'right', fontStyle: 'bold' },
           },
           ...tableStyles,
         });
@@ -415,15 +445,15 @@ const RapportCaissePage = () => {
             <h1 className="text-3xl font-bold text-[#472EAD]">
               Rapport de caisse journalier
             </h1>
-            {rapport && rapport.cloture && (
+            {rapport && (rapport.cloture || isDatePast) && (
               <Badge variant="success">Clôturé</Badge>
             )}
-            {rapport && !rapport.cloture && (
+            {rapport && !rapport.cloture && !isDatePast && (
               <Badge variant="warning">En cours</Badge>
             )}
           </div>
           <p className="text-gray-600 mt-1">
-            {rapport && rapport.cloture 
+            {rapport && (rapport.cloture || isDatePast)
               ? `Rapport clôturé du ${formatDate(selectedDate)} - Consultation uniquement`
               : `Suivi des encaissements et décaissements du ${formatDate(selectedDate)}`
             }
@@ -433,9 +463,20 @@ const RapportCaissePage = () => {
           <Input
             type="date"
             value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
+            onChange={(e) => {
+              const newDate = e.target.value;
+              // Empêcher la sélection de dates futures
+              if (newDate > today) {
+                toast.error('Date invalide', {
+                  description: 'Vous ne pouvez pas consulter le rapport d\'un jour à venir.'
+                });
+                return;
+              }
+              setSelectedDate(newDate);
+            }}
+            max={today}
             className="w-auto"
-            title="Sélectionner une date pour consulter le rapport"
+            title="Sélectionner une date pour consulter le rapport (maximum: aujourd'hui)"
           />
           <Button 
             variant="outline" 
@@ -447,7 +488,7 @@ const RapportCaissePage = () => {
             </svg>
             Exporter PDF
           </Button>
-          {rapport && !rapport.cloture && (
+          {rapport && !rapport.cloture && !isDatePast && (
             <Button 
               variant="danger" 
               onClick={() => setIsCloseConfirmOpen(true)}
@@ -640,6 +681,12 @@ const RapportCaissePage = () => {
                       <th className="px-5 py-4 text-left text-sm font-medium text-gray-600 uppercase tracking-wider">
                         Motif
                       </th>
+                      <th className="px-5 py-4 text-left text-sm font-medium text-gray-600 uppercase tracking-wider">
+                        Responsable
+                      </th>
+                      <th className="px-5 py-4 text-left text-sm font-medium text-gray-600 uppercase tracking-wider">
+                        Validé par
+                      </th>
                       <th className="px-5 py-4 text-right text-sm font-medium text-gray-600 uppercase tracking-wider">
                         Montant
                       </th>
@@ -654,13 +701,19 @@ const RapportCaissePage = () => {
                         <td className="px-5 py-4 text-sm text-gray-600">
                           {dec.motif}
                         </td>
+                        <td className="px-5 py-4 whitespace-nowrap text-sm text-gray-600">
+                          {dec.responsable || 'N/A'}
+                        </td>
+                        <td className="px-5 py-4 whitespace-nowrap text-sm text-gray-600">
+                          {dec.caissier || 'N/A'}
+                        </td>
                         <td className="px-5 py-4 whitespace-nowrap text-sm text-right font-semibold text-red-600">
                           {formatCurrency(dec.montant)}
                         </td>
                       </tr>
                     ))}
                     <tr className="bg-gray-50 font-bold">
-                      <td colSpan="2" className="px-5 py-4 text-right text-sm text-gray-900">
+                      <td colSpan="4" className="px-5 py-4 text-right text-sm text-gray-900">
                         Total:
                       </td>
                       <td className="px-5 py-4 text-right text-sm text-red-600">

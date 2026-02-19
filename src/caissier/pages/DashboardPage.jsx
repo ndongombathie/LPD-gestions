@@ -4,6 +4,7 @@ import Card, { CardHeader } from '../../components/ui/Card';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import caissierApi from '../services/caissierApi';
 import { initializeEcho } from '../../utils/echo';
+import { toast } from 'sonner';
 
 // Fonction pour formater le temps relatif
 const formatTimeAgo = (date) => {
@@ -40,9 +41,12 @@ const DashboardPage = () => {
   const [activiteRecente, setActiviteRecente] = useState([]);
   const echoRef = useRef(null);
 
-  // Fonction pour charger les données
+  // Fonction pour charger les données (avec protection contre les appels multiples)
+  const loadingRef = useRef(false);
   const loadData = async () => {
+    if (loadingRef.current) return; // Éviter les appels simultanés
     try {
+      loadingRef.current = true;
       setLoading(true);
       
       // Charger toutes les données en parallèle
@@ -58,9 +62,12 @@ const DashboardPage = () => {
       setVentesParHeure(ventesHeure);
       setActiviteRecente(Array.isArray(activite) ? activite.slice(0, 4) : []);
     } catch (error) {
-      // Erreur silencieuse
+      toast.error('Erreur', {
+        description: error.response?.data?.message || 'Impossible de charger les données du tableau de bord.',
+      });
     } finally {
       setLoading(false);
+      loadingRef.current = false;
     }
   };
 

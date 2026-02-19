@@ -137,7 +137,9 @@ export const caissierApi = {
   // ==================== COMMANDES ====================
   
   /**
-   * Récupère les commandes en attente
+   * Récupère les commandes en attente (pagination côté serveur)
+   * @param {Object} filters - { page, per_page, search }
+   * @returns {Object} { data, total, current_page, last_page, per_page, total_amount }
    */
   async getCommandesAttente(filters = {}) {
       const response = await httpClient.get('/commandes-attente', { params: filters });
@@ -192,10 +194,12 @@ export const caissierApi = {
   // ==================== DÉCAISSEMENTS ====================
   
   /**
-   * Récupère les décaissements en attente
+   * Récupère les décaissements en attente (pagination côté serveur)
+   * @param {Object} filters - { page, per_page }
+   * @returns {Object} { data, total, current_page, last_page, per_page, total_amount }
    */
-  async getDecaissementsAttente() {
-      const response = await httpClient.get('/decaissements-attente');
+  async getDecaissementsAttente(filters = {}) {
+      const response = await httpClient.get('/decaissements-attente', { params: filters });
       return response.data;
   },
 
@@ -230,17 +234,23 @@ export const caissierApi = {
   
   /**
    * Récupère l'historique complet (paiements + décaisements + annulations)
+   * @param {Object} filters - { page, per_page, type, dateDebut, dateFin }
    */
   async getHistoriqueComplet(filters = {}) {
+      const { page = 1, per_page = 50, ...otherFilters } = filters;
+      // Pour la pagination côté serveur, charger plus de données de chaque source
+      // puis combiner et paginer côté client (approche hybride)
+      const itemsPerSource = Math.max(per_page * 3, 200); // Charger 3x plus pour avoir assez de données après filtrage
+      
       // Récupérer les commandes payées avec leurs paiements (optimisé)
       const commandesPayeesResponse = await httpClient.get('/commandes-payees', { 
-        params: { per_page: 100, ...filters } 
+        params: { per_page: itemsPerSource, page: 1, ...otherFilters } 
       });
       const commandesPayees = commandesPayeesResponse.data?.data || commandesPayeesResponse.data || [];
       
       // Récupérer les commandes annulées
       const commandesAnnuleesResponse = await httpClient.get('/commandes-annulees', { 
-        params: { per_page: 100, ...filters } 
+        params: { per_page: itemsPerSource, page: 1, ...otherFilters } 
       });
       const commandesAnnulees = commandesAnnuleesResponse.data?.data || commandesAnnuleesResponse.data || [];
       
@@ -273,12 +283,13 @@ export const caissierApi = {
       
       // Récupérer les décaissements validés pour l'historique (statut "valide")
       const decaissementsResponse = await httpClient.get('/decaissements', { 
-        params: { per_page: 200, ...filters } 
+        params: { per_page: itemsPerSource, page: 1, ...otherFilters } 
       });
       const decaissementsRaw = decaissementsResponse.data?.data ?? decaissementsResponse.data ?? [];
       const decaissements = Array.isArray(decaissementsRaw) ? decaissementsRaw : [];
       const isDecaissementValide = (d) => {
         const s = (d?.statut ?? '').toString().toLowerCase();
+        // Uniquement les décaissements avec statut "valide" ou "validé" (exclure "fait", "en_attente", etc.)
         return s === 'valide' || s === 'validé';
       };
       

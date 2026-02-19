@@ -20,6 +20,10 @@ const DecaissementsPage = () => {
   const [decaissementToCancel, setDecaissementToCancel] = useState(null);
   const [isCancelling, setIsCancelling] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalDecaissements, setTotalDecaissements] = useState(0);
+  const [totalAmount, setTotalAmount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const PAGE_SIZE = 15;
   const echoRef = useRef(null);
   const subscriptionsRef = useRef([]);
 
@@ -31,28 +35,18 @@ const DecaissementsPage = () => {
     { value: 'autre', label: 'Autre' },
   ];
 
-  // Fonction pour charger les décaissements en attente
-  const fetchDecaissements = async () => {
+  // Fonction pour charger les décaissements en attente (pagination côté serveur)
+  const fetchingDecaissementsRef = useRef(false);
+  const fetchDecaissements = async (page = 1) => {
+    if (fetchingDecaissementsRef.current) return;
     try {
+      fetchingDecaissementsRef.current = true;
       setLoading(true);
-      const response = await caissierApi.getDecaissementsAttente();
-      
-      // Gérer différents formats de réponse
-      let decaissementsData = [];
-      if (response && typeof response === 'object') {
-        if (response.data) {
-          decaissementsData = Array.isArray(response.data) ? response.data : (response.data.data || []);
-        } else if (Array.isArray(response)) {
-          decaissementsData = response;
-        }
-      }
-      
-      if (!Array.isArray(decaissementsData)) {
-        decaissementsData = [];
-      }
+      const response = await caissierApi.getDecaissementsAttente({ page, per_page: PAGE_SIZE });
+      const decaissementsData = response?.data || [];
       
       // Transformer les données pour correspondre au format attendu
-      const transformed = decaissementsData.map(dec => ({
+      const transformed = (Array.isArray(decaissementsData) ? decaissementsData : []).map(dec => ({
         id: dec.id,
         montant: typeof dec.montant === 'string' ? parseFloat(dec.montant.replace(/[^\d.-]/g, '')) : dec.montant,
         motif: dec.motif || dec.libelle || 'Non spécifié',
@@ -70,6 +64,9 @@ const DecaissementsPage = () => {
       }));
       
       setDecaissements(transformed);
+      setTotalDecaissements(response?.total ?? transformed.length);
+      setTotalAmount(response?.total_amount ?? transformed.reduce((s, d) => s + (d.montant || 0), 0));
+      setTotalPages(Math.max(1, response?.last_page ?? 1));
     } catch (error) {
       toast.error('Erreur', {
         description: 'Impossible de charger les décaissements en attente'
@@ -77,6 +74,7 @@ const DecaissementsPage = () => {
       // Erreur silencieuse - gérée par le composant
     } finally {
       setLoading(false);
+      fetchingDecaissementsRef.current = false;
     }
   };
 
@@ -101,9 +99,13 @@ const DecaissementsPage = () => {
     };
   }, []);
 
-  // Charger les décaissements au montage
+  const loadPage = (page) => {
+    setCurrentPage(page);
+    fetchDecaissements(page);
+  };
+
   useEffect(() => {
-    fetchDecaissements();
+    fetchDecaissements(1);
   }, []);
 
   const handleValiderDecaissement = (decaissement) => {
@@ -145,9 +147,7 @@ const DecaissementsPage = () => {
 
       setIsValidationModalOpen(false);
       setSelectedDecaissement(null);
-
-      // Recharger les décaissements (WebSocket le fera automatiquement si configuré)
-      await fetchDecaissements();
+      await fetchDecaissements(currentPage);
     } catch (error) {
       // Erreur silencieuse - gérée par le composant
       toast.error('Erreur', {
@@ -173,7 +173,7 @@ const DecaissementsPage = () => {
       toast.success('Décaissement annulé', {
         description: 'Le décaissement a été annulé avec succès'
       });
-      await fetchDecaissements();
+      await fetchDecaissements(currentPage);
       setIsCancelModalOpen(false);
       setDecaissementToCancel(null);
     } catch (error) {
@@ -187,20 +187,7 @@ const DecaissementsPage = () => {
     }
   };
 
-  const decaissementsEnAttente = decaissements.filter(d => d.statut === 'en_attente');
-  const totalEnAttente = decaissementsEnAttente.reduce((sum, d) => sum + (d.montant || 0), 0);
-
-  // Pagination (côté client)
-  const PAGE_SIZE = 10;
-  const totalPages = Math.max(1, Math.ceil(decaissementsEnAttente.length / PAGE_SIZE));
-  const paginatedDecaissements = decaissementsEnAttente.slice(
-    (currentPage - 1) * PAGE_SIZE,
-    currentPage * PAGE_SIZE
-  );
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [decaissementsEnAttente.length]);
+  const displayedDecaissements = decaissements;
 
   return (
     <div className="space-y-14 relative z-10">
@@ -223,7 +210,7 @@ const DecaissementsPage = () => {
             <div>
               <p className="text-sm text-gray-600">En attente</p>
               <p className="text-2xl font-bold text-[#F58020] mt-1">
-                {decaissementsEnAttente.length}
+                {totalDecaissements}
               </p>
             </div>
             <div className="w-12 h-12 bg-[#FFF7ED] rounded-full flex items-center justify-center">
@@ -238,7 +225,7 @@ const DecaissementsPage = () => {
             <div>
               <p className="text-sm text-gray-600">Total en attente</p>
               <p className="text-2xl font-bold text-red-600 mt-1">
-                {formatCurrency(totalEnAttente)}
+                {formatCurrency(totalAmount)}
               </p>
             </div>
             <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
@@ -255,45 +242,18 @@ const DecaissementsPage = () => {
       <Card className="bg-white">
         <CardHeader
           title="Décaissements en attente"
-          subtitle={`${decaissementsEnAttente.length} décaissement(s) à valider`}
+          subtitle={`${displayedDecaissements.length} sur cette page / ${totalDecaissements} décaissement(s) à valider`}
         />
         {loading ? (
           <div className="text-center py-12">
             <p className="text-gray-500">Chargement...</p>
           </div>
-        ) : decaissementsEnAttente.length === 0 ? (
+        ) : totalDecaissements === 0 ? (
           <div className="text-center py-12">
             <p className="text-gray-500">Aucun décaissement en attente</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between gap-3 py-2 px-4">
-                <p className="text-sm text-gray-600">
-                  Page {currentPage} / {totalPages}
-                </p>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                    className="bg-white border border-gray-300 text-gray-900 font-semibold hover:bg-gray-100 disabled:opacity-50"
-                  >
-                    Précédent
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={currentPage === totalPages}
-                    className="bg-white border border-gray-300 text-gray-900 font-semibold hover:bg-gray-100 disabled:opacity-50"
-                  >
-                    Suivant
-                  </Button>
-                </div>
-              </div>
-            )}
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
@@ -315,7 +275,7 @@ const DecaissementsPage = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {paginatedDecaissements.map((dec) => (
+                {displayedDecaissements.map((dec) => (
                   <tr 
                     key={dec.id} 
                     className="hover:bg-gray-50"
@@ -359,6 +319,42 @@ const DecaissementsPage = () => {
                 ))}
               </tbody>
             </table>
+            {/* Pagination en bas de page (15 par page) */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between gap-3 py-3 px-4 mt-4 bg-gray-50 rounded-lg border border-gray-200">
+                <p className="text-sm text-gray-600">
+                  Affichage{' '}
+                  <span className="font-medium text-gray-900">
+                    {(currentPage - 1) * PAGE_SIZE + 1}-{Math.min(currentPage * PAGE_SIZE, totalDecaissements)}
+                  </span>
+                  {' '}sur{' '}
+                  <span className="font-medium text-gray-900">{totalDecaissements}</span>
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => loadPage(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1}
+                    className="bg-white border border-gray-300 text-gray-900 font-semibold hover:bg-gray-100 disabled:opacity-50"
+                  >
+                    Précédent
+                  </Button>
+                  <span className="text-sm text-gray-600 px-2">
+                    Page {currentPage} / {totalPages}
+                  </span>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => loadPage(Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage === totalPages}
+                    className="bg-white border border-gray-300 text-gray-900 font-semibold hover:bg-gray-100 disabled:opacity-50"
+                  >
+                    Suivant
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </Card>

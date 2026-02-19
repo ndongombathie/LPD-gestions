@@ -495,37 +495,37 @@ export default function CaissierLayout() {
           </header>
 
           {/* Contenu principal */}
-          <main className="flex-1 overflow-y-auto bg-gradient-to-b from-white to-lpd-light px-3 sm:px-4 lg:px-6 xl:px-8 py-4 sm:py-6 transition-all duration-300 ease-in-out relative z-0">
+          <main className="flex-1 overflow-y-auto bg-gradient-to-b from-white to-lpd-light px-3 sm:px-4 lg:px-6 xl:px-8 py-4 sm:py-6 pb-20 transition-all duration-300 ease-in-out relative z-0">
             <div className="max-w-7xl mx-auto relative z-10 fade-in">
               <Outlet />
-              
-              {/* Footer intégré dans le contenu */}
-              <footer className="mt-8 pt-6 border-t border-lpd-border/80 bg-transparent">
-                <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] sm:text-xs text-gray-500">
-                  <div className="flex items-center gap-1.5">
-                    <span className="h-1.5 w-1.5 rounded-full bg-lpd-accent" />
-                    <span>
-                      © {new Date().getFullYear()}{" "}
-                      <span className="font-semibold text-lpd-header">
-                        SSD Consulting
-                      </span>
-                      {" · "}
-                      <span className="text-gray-400">Tous droits réservés.</span>
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2 text-[11px] sm:text-xs">
-                    <span className="hidden sm:inline-block h-3 w-px bg-gray-200" />
-                    <span className="text-gray-400">LPD Manager</span>
-                    <span className="text-gray-300">•</span>
-                    <span>Interface Caissier</span>
-                    <span className="text-gray-300">•</span>
-                    <span className="font-semibold text-lpd-accent">v1.0.0</span>
-                  </div>
-                </div>
-              </footer>
             </div>
           </main>
+
+          {/* Footer fixe en bas */}
+          <footer className="fixed bottom-0 left-0 right-0 bg-white border-t border-lpd-border/80 z-40 shadow-sm">
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] sm:text-xs text-gray-500">
+              <div className="flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-lpd-accent" />
+                <span>
+                  © {new Date().getFullYear()}{" "}
+                  <span className="font-semibold text-lpd-header">
+                    SSD Consulting
+                  </span>
+                  {" · "}
+                  <span className="text-gray-400">Tous droits réservés.</span>
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2 text-[11px] sm:text-xs">
+                <span className="hidden sm:inline-block h-3 w-px bg-gray-200" />
+                <span className="text-gray-400">LPD Manager</span>
+                <span className="text-gray-300">•</span>
+                <span>Interface Caissier</span>
+                <span className="text-gray-300">•</span>
+                <span className="font-semibold text-lpd-accent">v1.0.0</span>
+              </div>
+            </div>
+          </footer>
         </div>
       </div>
 

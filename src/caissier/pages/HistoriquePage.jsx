@@ -44,25 +44,32 @@ const HistoriquePage = () => {
     }
   };
 
-  // Charger l'historique depuis l'API
+  // Charger l'historique depuis l'API (éviter les appels multiples)
   useEffect(() => {
+    let cancelled = false;
     const fetchHistorique = async () => {
       try {
         setLoading(true);
         const data = await caissierApi.getHistoriqueComplet(filters);
-        setHistorique(data);
+        if (!cancelled) {
+          setHistorique(data);
+        }
       } catch (error) {
-        // Erreur silencieuse - gérée par le composant
-        toast.error('Erreur', {
-          description: 'Impossible de charger l\'historique'
-        });
+        if (!cancelled) {
+          toast.error('Erreur', {
+            description: 'Impossible de charger l\'historique'
+          });
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
     fetchHistorique();
-  }, [filters.type, filters.dateDebut, filters.dateFin]); // Recharger quand les filtres changent
+    return () => { cancelled = true; };
+  }, [filters.type, filters.dateDebut, filters.dateFin]); // Ne pas inclure filters.recherche (filtrage côté client)
 
   // Filtrage côté client (pour la recherche textuelle)
   const filteredHistorique = historique.filter((item) => {
@@ -110,7 +117,7 @@ const HistoriquePage = () => {
   });
 
   // Pagination (côté client)
-  const PAGE_SIZE = 20;
+  const PAGE_SIZE = 15;
   const totalPages = Math.max(1, Math.ceil(filteredHistorique.length / PAGE_SIZE));
   const paginatedHistorique = filteredHistorique.slice(
     (currentPage - 1) * PAGE_SIZE,
@@ -268,42 +275,6 @@ const HistoriquePage = () => {
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Barre de pagination */}
-            <div className="flex flex-wrap items-center justify-between gap-3 py-3 px-4 bg-gray-50 rounded-lg border border-gray-200">
-              <p className="text-sm text-gray-600">
-                Affichage{' '}
-                <span className="font-medium text-gray-900">
-                  {(currentPage - 1) * PAGE_SIZE + 1}-{Math.min(currentPage * PAGE_SIZE, filteredHistorique.length)}
-                </span>
-                {' '}sur{' '}
-                <span className="font-medium text-gray-900">{filteredHistorique.length}</span>
-                {' '}opération(s)
-              </p>
-              <div className="flex items-center gap-2 flex-wrap">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="bg-white border border-gray-300 text-gray-900 font-semibold hover:bg-gray-100 disabled:opacity-50"
-                >
-                  Précédent
-                </Button>
-                <span className="text-sm text-gray-600 px-2">
-                  Page {currentPage} / {totalPages}
-                </span>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                  className="bg-white border border-gray-300 text-gray-900 font-semibold hover:bg-gray-100 disabled:opacity-50"
-                >
-                  Suivant
-                </Button>
-              </div>
-            </div>
-
             {paginatedHistorique.map((item) => (
               <div
                 key={item.id}
@@ -465,11 +436,17 @@ const HistoriquePage = () => {
               </div>
             ))}
 
-            {/* Pagination en bas de liste (si plusieurs pages) */}
+            {/* Pagination en bas de page (15 par page) */}
             {totalPages > 1 && (
-              <div className="flex items-center justify-between gap-3 py-3 px-3 mt-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Page {currentPage} / {totalPages}
+              <div className="flex flex-wrap items-center justify-between gap-3 py-3 px-4 mt-4 bg-gray-50 rounded-lg border border-gray-200">
+                <p className="text-sm text-gray-600">
+                  Affichage{' '}
+                  <span className="font-medium text-gray-900">
+                    {(currentPage - 1) * PAGE_SIZE + 1}-{Math.min(currentPage * PAGE_SIZE, filteredHistorique.length)}
+                  </span>
+                  {' '}sur{' '}
+                  <span className="font-medium text-gray-900">{filteredHistorique.length}</span>
+                  {' '}opération(s)
                 </p>
                 <div className="flex items-center gap-2">
                   <Button
@@ -481,6 +458,9 @@ const HistoriquePage = () => {
                   >
                     Précédent
                   </Button>
+                  <span className="text-sm text-gray-600 px-2">
+                    Page {currentPage} / {totalPages}
+                  </span>
                   <Button
                     variant="secondary"
                     size="sm"

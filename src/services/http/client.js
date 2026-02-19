@@ -53,7 +53,17 @@ httpClient.interceptors.response.use(
     return response;
   },
   (error) => {
-    // 🔴 Erreur globale
+    // 🔴 Erreur globale — retirer toute mention localhost des messages affichés à l'utilisateur
+    const cleanMessage = (msg) => {
+      if (typeof msg !== 'string') return msg;
+      return msg.replace(/https?:\/\/localhost[^\s]*/gi, '').replace(/\s+/g, ' ').trim();
+    };
+    if (error.response?.data?.message) {
+      error.response.data.message = cleanMessage(error.response.data.message);
+    }
+    if (error.message && typeof error.message === 'string') {
+      error.message = cleanMessage(error.message);
+    }
 
     // 401: Token expiré ou invalide
     if (error.response?.status === 401) {
