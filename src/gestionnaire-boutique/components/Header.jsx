@@ -242,10 +242,6 @@ export default function Header() {
   const removeToast = (id) =>
     setToasts((prev) => prev.filter((t) => t.id !== id));
 
-<<<<<<< HEAD
-=======
-
->>>>>>> b6c3a0b (corrections du header)
 
   useEffect(() => {
     const loadUser = async () => {
@@ -261,15 +257,8 @@ export default function Header() {
           try {
             setUser(normalizeUser(JSON.parse(saved)));
           } catch {
-<<<<<<< HEAD
             // Erreur de parsing, ignorer
           }
-=======
-            console.error("Erreur parsing user:", err);
-          }
-        } else {
-          console.error("Erreur chargement user:", err);
->>>>>>> b6c3a0b (corrections du header)
         }
       }
     };
