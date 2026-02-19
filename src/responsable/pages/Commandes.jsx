@@ -1906,7 +1906,7 @@ const statsGlobales = {
       const payload = {
         client_id: commandeDraft.clientId,
         type_vente: "gros",
-        tva: commandeDraft.appliquerTVA ? 0.18 : 0,
+        tva_appliquee: commandeDraft.appliquerTVA ? true : false,
         items: commandeDraft.lignes.map((l) => ({
           produit_id: l.produitId,
           quantite: l.qte,
