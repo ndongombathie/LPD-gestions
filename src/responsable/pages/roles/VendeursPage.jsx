@@ -8,26 +8,16 @@ import {
   Users,
   ShoppingCart,
   DollarSign,
-  TrendingUp,
   Search,
   CheckCircle,
   User,
-  Award,
-  Activity,
   Eye,
-  Target,
-  Percent,
-  Package,
-  Users as Clients,
-  Crown,
-  Medal,
-  BarChart3,
-  Calendar,
-  TrendingDown,
 } from "lucide-react";
 
 // Composants
 import VendeurHistoryModal from "../../components/roles/VendeurHistoryModal";
+import { journalResponsableAPI } from "@/services/api/JournalResponsable";
+
 
 const formatFCFA = (n) =>
   new Intl.NumberFormat("fr-FR", {
@@ -42,141 +32,36 @@ export default function VendeursPage() {
   const [showHistory, setShowHistory] = useState(false);
   const [search, setSearch] = useState("");
 
-  useEffect(() => {
-    const loadVendeurs = async () => {
-      try {
-        setLoading(true);
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        const simulatedVendeurs = [
-          {
-            id: "VEN-001",
-            name: "Mohamed Diarra",
-            email: "m.diarra@lpd.sn",
-            telephone: "77 123 45 67",
-            status: "actif",
-            date_embauche: "2024-01-15",
-            lastActivity: new Date().toISOString(),
-            stats: {
-              totalVentes: 128,
-              montantTotal: 4525000,
-              tauxReussite: 94.5,
-              ticketMoyen: 35351,
-              produitsVendus: 890,
-              clientsServis: 215,
-              ventesMois: 45,
-              croissance: 12.5,
-              joursActifs: 28,
-              objectifAtteint: 92,
-            },
-            badges: ["top-seller", "client-satisfaction", "rapide"],
-          },
-          {
-            id: "VEN-002",
-            name: "Fatou Ndiaye",
-            email: "f.ndiaye@lpd.sn",
-            telephone: "76 234 56 78",
-            status: "actif",
-            date_embauche: "2024-02-10",
-            lastActivity: new Date(Date.now() - 86400000).toISOString(),
-            stats: {
-              totalVentes: 89,
-              montantTotal: 3215000,
-              tauxReussite: 96.2,
-              ticketMoyen: 36124,
-              produitsVendus: 567,
-              clientsServis: 178,
-              ventesMois: 32,
-              croissance: 8.3,
-              joursActifs: 25,
-              objectifAtteint: 85,
-            },
-            badges: ["fidélisation", "up-sell"],
-          },
-          {
-            id: "VEN-003",
-            name: "Ibrahima Sow",
-            email: "i.sow@lpd.sn",
-            telephone: "78 345 67 89",
-            status: "actif",
-            date_embauche: "2024-03-05",
-            lastActivity: "2024-11-28",
-            stats: {
-              totalVentes: 45,
-              montantTotal: 1678000,
-              tauxReussite: 88.3,
-              ticketMoyen: 37289,
-              produitsVendus: 312,
-              clientsServis: 98,
-              ventesMois: 18,
-              croissance: -5.2,
-              joursActifs: 15,
-              objectifAtteint: 67,
-            },
-            badges: ["nouveau"],
-          },
-          {
-            id: "VEN-004",
-            name: "Aminata Fall",
-            email: "a.fall@lpd.sn",
-            telephone: "70 456 78 90",
-            status: "actif",
-            date_embauche: "2024-04-20",
-            lastActivity: new Date().toISOString(),
-            stats: {
-              totalVentes: 167,
-              montantTotal: 5890000,
-              tauxReussite: 97.1,
-              ticketMoyen: 35269,
-              produitsVendus: 1102,
-              clientsServis: 342,
-              ventesMois: 56,
-              croissance: 24.7,
-              joursActifs: 30,
-              objectifAtteint: 104,
-            },
-            badges: ["top-seller", "leader", "efficace"],
-          },
-          {
-            id: "VEN-005",
-            name: "Ousmane Kane",
-            email: "o.kane@lpd.sn",
-            telephone: "77 567 89 01",
-            status: "actif",
-            date_embauche: "2024-05-12",
-            lastActivity: new Date().toISOString(),
-            stats: {
-              totalVentes: 112,
-              montantTotal: 3980000,
-              tauxReussite: 91.8,
-              ticketMoyen: 35536,
-              produitsVendus: 745,
-              clientsServis: 189,
-              ventesMois: 39,
-              croissance: 15.6,
-              joursActifs: 27,
-              objectifAtteint: 88,
-            },
-            badges: ["consistant", "ponctuel"],
-          },
-        ];
-        
-        setVendeurs(simulatedVendeurs);
-      } catch (error) {
-        toast.error("Erreur de chargement des vendeurs");
-      } finally {
-        setLoading(false);
-      }
-    };
+useEffect(() => {
+  let interval;
 
-    loadVendeurs();
-  }, []);
+  const loadVendeurs = async (firstLoad = false) => {
+    try {
+      if (firstLoad) setLoading(true);
+
+      const data = await journalResponsableAPI.getVendeurs();
+      setVendeurs(data);
+
+      if (firstLoad) setLoading(false);
+    } catch (error) {
+      toast.error("Erreur de chargement des vendeurs");
+      if (firstLoad) setLoading(false);
+    }
+  };
+
+  loadVendeurs(true);
+
+  interval = setInterval(() => loadVendeurs(false), 30000);
+
+  return () => clearInterval(interval);
+}, []);
+
 
   const filteredVendeurs = vendeurs.filter(vendeur => {
     if (search) {
       const terme = search.toLowerCase();
-      if (!vendeur.name.toLowerCase().includes(terme) &&
-          !vendeur.email.toLowerCase().includes(terme)) {
+      if (!vendeur.name?.toLowerCase().includes(terme) &&
+          !vendeur.email?.toLowerCase().includes(terme)) {
         return false;
       }
     }
@@ -188,15 +73,6 @@ export default function VendeursPage() {
     total: vendeurs.length,
     totalVentes: vendeurs.reduce((sum, v) => sum + (v.stats?.totalVentes || 0), 0),
     totalChiffre: vendeurs.reduce((sum, v) => sum + (v.stats?.montantTotal || 0), 0),
-    tauxMoyen: vendeurs.length 
-      ? vendeurs.reduce((sum, v) => sum + (v.stats?.tauxReussite || 0), 0) / vendeurs.length
-      : 0,
-    croissanceMoyenne: vendeurs.length 
-      ? vendeurs.reduce((sum, v) => sum + (v.stats?.croissance || 0), 0) / vendeurs.length
-      : 0,
-    objectifMoyen: vendeurs.length 
-      ? vendeurs.reduce((sum, v) => sum + (v.stats?.objectifAtteint || 0), 0) / vendeurs.length
-      : 0,
   };
 
   const handleViewHistory = (vendeur) => {
@@ -233,7 +109,7 @@ export default function VendeursPage() {
         </div>
 
         {/* STATISTIQUES COMPACTES */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-5">
+        <div className="grid grid-cols-2 gap-2 mb-5">
           <div className="bg-white border border-gray-200 rounded-lg p-3">
             <div className="flex items-center gap-2 mb-1">
               <Users className="w-3 h-3 text-indigo-600" />
@@ -248,32 +124,6 @@ export default function VendeursPage() {
               <div className="text-xs text-gray-500">Chiffre</div>
             </div>
             <div className="text-sm font-bold text-emerald-600">{formatFCFA(globalStats.totalChiffre)}</div>
-          </div>
-
-          <div className="bg-white border border-gray-200 rounded-lg p-3">
-            <div className="flex items-center gap-2 mb-1">
-              <TrendingUp className="w-3 h-3 text-purple-600" />
-              <div className="text-xs text-gray-500">Performance</div>
-            </div>
-            <div className="text-sm font-bold text-purple-600">{globalStats.tauxMoyen.toFixed(1)}%</div>
-          </div>
-
-          <div className="bg-white border border-gray-200 rounded-lg p-3">
-            <div className="flex items-center gap-2 mb-1">
-              <Activity className="w-3 h-3 text-blue-600" />
-              <div className="text-xs text-gray-500">Croissance</div>
-            </div>
-            <div className={`text-sm font-bold ${globalStats.croissanceMoyenne >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
-              {globalStats.croissanceMoyenne >= 0 ? '+' : ''}{globalStats.croissanceMoyenne.toFixed(1)}%
-            </div>
-          </div>
-
-          <div className="bg-white border border-gray-200 rounded-lg p-3">
-            <div className="flex items-center gap-2 mb-1">
-              <Target className="w-3 h-3 text-orange-600" />
-              <div className="text-xs text-gray-500">Objectifs</div>
-            </div>
-            <div className="text-sm font-bold text-orange-600">{globalStats.objectifMoyen.toFixed(0)}%</div>
           </div>
         </div>
 
@@ -314,16 +164,10 @@ export default function VendeursPage() {
                   Vendeur
                 </th>
                 <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                  Perf.
-                </th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                   Ventes
                 </th>
                 <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                   Chiffre
-                </th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                  Taux
                 </th>
                 <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                   Actions
@@ -348,32 +192,11 @@ export default function VendeursPage() {
                     </div>
                   </td>
                   <td className="px-3 py-3">
-                    <div className={`text-xs font-medium px-2 py-1 rounded ${vendeur.stats?.croissance >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                      {vendeur.stats?.croissance >= 0 ? '+' : ''}{vendeur.stats?.croissance?.toFixed(1) || 0}%
-                    </div>
-                  </td>
-                  <td className="px-3 py-3">
                     <div className="text-sm font-semibold text-gray-900">{vendeur.stats?.totalVentes || 0}</div>
-                    <div className="text-xs text-gray-500">
-                      {vendeur.stats?.clientsServis || 0} clients
-                    </div>
                   </td>
                   <td className="px-3 py-3">
                     <div className="text-sm font-semibold text-emerald-600">
                       {formatFCFA(vendeur.stats?.montantTotal || 0)}
-                    </div>
-                  </td>
-                  <td className="px-3 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-16 bg-gray-200 rounded-full h-1.5">
-                        <div 
-                          className="bg-emerald-500 h-1.5 rounded-full" 
-                          style={{ width: `${Math.min(100, vendeur.stats?.tauxReussite || 0)}%` }}
-                        />
-                      </div>
-                      <span className="text-xs font-medium text-gray-700">
-                        {vendeur.stats?.tauxReussite?.toFixed(1) || 0}%
-                      </span>
                     </div>
                   </td>
                   <td className="px-3 py-3">
@@ -391,8 +214,6 @@ export default function VendeursPage() {
           </table>
         </div>
       </div>
-
-
 
       {/* MODAL D'HISTORIQUE */}
       {showHistory && selectedVendeur && (

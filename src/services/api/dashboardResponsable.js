@@ -63,10 +63,21 @@ export const dashboardResponsableAPI = {
         rapportsAPI.getLogsFournisseurs()
       ]);
 
+      // ✅ NORMALISATION SAFE DES STATS (IMPORTANT)
+      const stats =
+        commandes?.stats ??
+        commandes?.data?.stats ??
+        {};
+
       // ✅ NORMALISATION UNIQUE
       const clientsList = toArray(clients);
-      const commandesList = toArray(commandes);
+      const commandesList = toArray(commandes?.data ?? commandes);
       const produitsList = toArray(produits);
+
+      const produitsMap = Object.fromEntries(
+        produitsList.map(p => [p.id, p])
+      );
+
       const fournisseursList = toArray(fournisseurs);
       const utilisateursList = toArray(utilisateurs);
       const decaissementsList = toArray(decaissements);
@@ -75,8 +86,7 @@ export const dashboardResponsableAPI = {
       // 🟣 VENTES
       // ==================================================
 
-      const totalCommandes = Number(commandes?.stats?.nb ?? 0);
-      const chiffreAffaireTotal = sum(commandesList, "totalTTC");
+      const totalCommandes = Number(stats.nb ?? 0);      const chiffreAffaireTotal = sum(commandesList, "totalTTC");
       const commandesAujourdhui = commandesList.filter(c =>
         (c.dateCommande || c.date || c.created_at || "")
             .startsWith(todayString())
@@ -94,8 +104,7 @@ export const dashboardResponsableAPI = {
       const topClients = clientsList
         .map(client => {
           const commandesClient = commandesList.filter(
-            c => c.client_id === client.id
-          );
+            c => c.clientId === client.id          );
 
           return {
             id: client.id,
@@ -114,11 +123,9 @@ export const dashboardResponsableAPI = {
       const stockData = produitsList.map(p => ({
         id: p.id,
         nom: p.nom,
+        categorie: p.categorie?.nom || null,
         stock: Number(p.stock_global || 0),
-        seuil: Number(p.seuil || 5),
-        quantiteVendue: Number(p.quantite_vendue || 0),
-        chiffreAffaires: Number(p.ca_total || 0)
-      }));
+        seuil: Number(p.stock_seuil || 0),      }));
 
       // ==================================================
       // 🟠 FOURNISSEURS
@@ -178,10 +185,10 @@ export const dashboardResponsableAPI = {
           caJour,
 
             commandesParStatut:
-            commandes?.stats?.commandesParStatut ?? {},
-          totalTTC: Number(commandes?.stats?.totalTTC ?? 0),
-          totalPaye: Number(commandes?.stats?.totalPaye ?? 0),
-          detteTotale: Number(commandes?.stats?.dette ?? 0),    
+            stats.commandesParStatut ?? {},
+          totalTTC: Number(stats.totalTTC ?? 0),
+          totalPaye: Number(stats.totalPaye ?? 0),
+          detteTotale: Number(stats.dette ?? 0),    
           
         },
 
@@ -191,7 +198,35 @@ export const dashboardResponsableAPI = {
         },
 
         produits: {
-          stockData
+          stockData,
+
+          topBestSellers: (stats.topProduits ?? []).map(p => {
+            const produit = produitsMap[p.produit_id];
+
+            return {
+              id: p.produit_id,
+              nom: produit?.nom ?? "Produit",
+              quantiteVendue: Number(p.total_vendu || 0),
+              stock: Number(produit?.stock_global || 0),
+              seuil: Number(produit?.seuil || 5),
+              categorie: produit?.categorie?.nom || null
+            };
+          }),
+
+
+          topLeastSold: (stats.produitsMoinsVendus ?? []).map(p => {
+            const produit = produitsMap[p.produit_id];
+
+            return {
+              id: p.produit_id,
+              nom: produit?.nom ?? "Produit",
+              quantiteVendue: Number(p.total_vendu || 0),
+              stock: Number(produit?.stock_global || 0),
+              seuil: Number(produit?.seuil || 5),
+              categorie: produit?.categorie?.nom || null
+            };
+          }),
+
         },
 
         fournisseurs: fournisseursStats,
@@ -201,6 +236,7 @@ export const dashboardResponsableAPI = {
         },
 
         utilisateurs: utilisateursStats,
+
 
         activites
       };
