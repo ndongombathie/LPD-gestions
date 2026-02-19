@@ -39,9 +39,24 @@ GET     api/fournisseurs | Liste des fournisseurs
 # annuler un tramsfert 
 PUT    api/annuler-produits-transfer | donner en payload (transfer_id) du transfert
 
-
-
-
+# le nombre de fournisseur
+GET     api/nombre-fournisseurs
+# le nombre de produit
+GET     api/nombre-produits
+# le nombre de mouvement stock aujourd'hui
+GET     api/nombre-mouvements-stock-today
+# le nombre de mouvement 
+GET     api/nombre-mouvements-stock-total
+# le nombre d'entree dans le stock
+GET      api/nombre-entree-stock-total
+# le nombre de sortie dans le stock
+GET      api/nombre-sortie-stock-total
+# nombre de transfert en attente
+GET       api/transfers-en-attente
+# nombre de transfert annuler
+GET       api/transfers-annuler
+# liste des transfert annuler 
+GET       api/liste-transfers-annuler
 
 📝 Note pour l'équipe
 Toutes les modifications sont contenues dans la branche fix/bordures-noires-interface-depot et n'affectent pas les autres rôles (boutique, vendeur, caissier, etc.). Les corrections sont spécifiques à l'interface gestionnaire de dépôt.

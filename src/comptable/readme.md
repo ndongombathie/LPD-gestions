@@ -102,3 +102,14 @@ POST            api/enregistrer-versements | enregistrer un encaissement payload
 
 # tous les decaissement en attente et valide
 GET             api/decaissements-all
+
+# le nombre de produit du depots
+GET     api/nombre-produits
+# le nombre de produit total de le boutique
+GET       api/quantite-totale-produit
+# le nombre de versement
+GET       api/nombre-versement-total
+# la somme total des versements
+GET       api/somme-versement-total
+# la somme total des encaissements
+GET       api/somme-paiements-total
