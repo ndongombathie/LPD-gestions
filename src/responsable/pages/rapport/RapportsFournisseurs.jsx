@@ -270,7 +270,7 @@ export default function RapportsFournisseurs({
         
       } catch (error) {
         console.error("Erreur chargement logs fournisseurs:", error);
-        toast.error("Erreur lors du chargement du journal d'activité");
+        toast.error("Erreur lors du chargement de rapport fournisseurs");
       } finally {
         setLoading(false);
         setLoadingPage(false);
@@ -514,7 +514,7 @@ const exportPDF = async () => {
         <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-white/80 border border-[#E4E0FF] shadow-sm">
           <RefreshCw className="w-5 h-5 text-[#472EAD] animate-spin" />
           <span className="text-sm font-medium text-[#472EAD]">
-            Chargement du journal d'activité...
+            Chargement du rapport fournisseurs...
           </span>
         </div>
       </div>

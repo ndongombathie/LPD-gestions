@@ -854,7 +854,7 @@ const activiteColors = {
                             <Award className="w-5 h-5 text-[#472EAD]" />
                           </div>
                           <div>
-                            <h3 className="text-lg font-bold text-gray-900">TOP 5 des produits les pluss vendus</h3>
+                            <h3 className="text-lg font-bold text-gray-900">TOP 5 des produits les plus vendus</h3>
                             <p className="text-sm text-gray-500">Produits les plus vendus (par quantité)</p>
                           </div>
                         </div>

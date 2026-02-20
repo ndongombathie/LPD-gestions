@@ -227,7 +227,7 @@ export function useClientsSpeciaux(toast, { page, search }) {
     clientsEnrichis,
     statsGlobales,
     totalPages: meta.last_page || 1,
-    loading: query.isLoading || query.isFetching,
+    loading: query.isLoading ,
     handleAdd: addMutation.mutate,
     handleEdit: (data) =>
       data?.id && editMutation.mutate({ id: data.id, data }),

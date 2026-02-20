@@ -571,6 +571,8 @@ function ClientForm({ initial, onSubmit, onCancel, submitting }) {
 export default function ClientsSpeciaux() {
   // ✅ 1️⃣ Ajouter page et searchInput
   const [page, setPage] = useState(1);
+  const [loadingPage, setLoadingPage] = useState(false);
+  const [initialLoad, setInitialLoad] = useState(true);
   const [searchInput, setSearchInput] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   
@@ -584,15 +586,11 @@ export default function ClientsSpeciaux() {
   const [trancheClient, setTrancheClient] = useState(null);
   const [openTranche, setOpenTranche] = useState(false);
 
-  // ✅ 2️⃣ Ajouter le debounce (IMPORTANT)
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setPage(1);
-      setSearchTerm(searchInput);
-    }, 1000);
-
-    return () => clearTimeout(timer);
+    setPage(1);
+    setSearchTerm(searchInput);
   }, [searchInput]);
+
 
   const toast = (type, title, message) => {
     const id = Date.now();
@@ -616,6 +614,31 @@ export default function ClientsSpeciaux() {
     page,
     search: searchTerm,
   });
+
+  // Gestionnaire de changement de page avec loader
+  const handlePageChange = (newPage) => {
+    if (newPage < 1 || newPage > totalPages) return;
+    if (newPage === page) return;
+    if (loadingPage) return; // Éviter les clics multiples
+    
+    setLoadingPage(true);
+    setPage(newPage);
+  };
+
+  // Désactiver le loader de page quand les données sont chargées
+  useEffect(() => {
+    if (!loading) {
+      setLoadingPage(false);
+      setInitialLoad(false);
+    }
+  }, [loading]);
+
+  // Désactiver le loader de page quand les données arrivent (même si loading est encore true)
+  useEffect(() => {
+    if (clientsEnrichis.length > 0) {
+      setLoadingPage(false);
+    }
+  }, [clientsEnrichis]);
 
   const {
     loadPaiementsForClient,
@@ -655,10 +678,10 @@ export default function ClientsSpeciaux() {
     return dette > 0;
   };
 
-  // Loader compact aligné
-  if (loading)
+  // Loader d'affichage initial - UNIQUEMENT au premier chargement
+  if (initialLoad && loading && clientsEnrichis.length === 0) {
     return (
-      <div className="min-h-screen w-full bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white flex items-center justify-center">
+      <div className="flex items-center justify-center min-h-[70vh] bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white">
         <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-white/80 border border-[#E4E0FF] shadow-sm">
           <Loader2 className="w-5 h-5 text-[#472EAD] animate-spin" />
           <span className="text-sm font-medium text-[#472EAD]">
@@ -667,6 +690,7 @@ export default function ClientsSpeciaux() {
         </div>
       </div>
     );
+  }
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white px-3 sm:px-4 lg:px-6 py-6 sm:py-8 overflow-y-auto">
@@ -779,7 +803,7 @@ export default function ClientsSpeciaux() {
             <Search className="absolute left-3 top-2.5 text-gray-400 w-4 h-4" />
             <input
               type="text"
-              placeholder="Rechercher par nom, contact, entreprise, adresse..."
+              placeholder="Rechercher par nom ou email ..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-xl text-sm bg-white/80 shadow-sm focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD] placeholder:text-gray-400"
@@ -801,7 +825,7 @@ export default function ClientsSpeciaux() {
 
           {/* TABLEAU PRINCIPAL */}
           <div className="mt-2">
-            {clientsEnrichis.length === 0 ? (
+            {clientsEnrichis.length === 0 && !loadingPage && !loading ? (
               <div className="flex flex-col items-center justify-center py-14 text-center text-gray-400">
                 <Search className="w-8 h-8 mb-3 opacity-60" />
                 <p className="text-sm font-medium">
@@ -962,8 +986,16 @@ export default function ClientsSpeciaux() {
                   <Pagination
                     page={page}
                     totalPages={totalPages}
-                    onPageChange={setPage}
+                    onPageChange={handlePageChange}
                   />
+                  
+                  {/* Indicateur de chargement pendant le changement de page - UNIQUEMENT CELUI-CI */}
+                  {loadingPage && (
+                    <div className="flex justify-center py-2 text-xs text-gray-400 mt-2">
+                      <Loader2 className="w-3 h-3 mr-1 animate-spin text-[#472EAD]" />
+                      Chargement de la page...
+                    </div>
+                  )}
                 </div>
               </>
             )}

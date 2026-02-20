@@ -1679,6 +1679,7 @@ export default function Commandes() {
   const clientNameFromState = state?.clientNom || state?.client || "";
 
   const [loading, setLoading] = useState(true);
+  const [loadingPage, setLoadingPage] = useState(false);
   const [commandes, setCommandes] = useState([]);
   const [toasts, setToasts] = useState([]);
   const [selectedCommande, setSelectedCommande] = useState(null);
@@ -1719,6 +1720,7 @@ export default function Commandes() {
   // 🔗 Chargement des commandes depuis le backend
   const fetchCommandes = async () => {
     try {
+      setLoadingPage(true);
       setLoading(true);
 
       // ✅ Mapping statuts UI → backend
@@ -1798,6 +1800,7 @@ export default function Commandes() {
       );
     } finally {
       setLoading(false);
+      setLoadingPage(false);
     }
   };
 
@@ -2367,6 +2370,14 @@ const statsGlobales = {
                   }
                 }}
               />
+              
+              {/* Indicateur de chargement pendant le changement de page */}
+              {loadingPage && (
+                <div className="flex justify-center py-2 text-xs text-gray-400 mt-2">
+                  <Loader2 className="w-3 h-3 mr-1 animate-spin text-[#472EAD]" />
+                  Chargement de la page...
+                </div>
+              )}
             </div>
           </section>
 

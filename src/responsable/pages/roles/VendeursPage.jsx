@@ -12,6 +12,7 @@ import {
   CheckCircle,
   User,
   Eye,
+  Calendar,
 } from "lucide-react";
 
 // Composants
@@ -31,6 +32,11 @@ export default function VendeursPage() {
   const [selectedVendeur, setSelectedVendeur] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
   const [search, setSearch] = useState("");
+  
+  // Filtres de période
+  const today = new Date().toISOString().split('T')[0];
+  const [dateDebut, setDateDebut] = useState(today);
+  const [dateFin, setDateFin] = useState(today);
 
 useEffect(() => {
   let interval;
@@ -105,6 +111,31 @@ useEffect(() => {
             <p className="text-xs text-gray-500 mt-1">
               {globalStats.total} vendeurs • {globalStats.totalVentes} ventes
             </p>
+          </div>
+        </div>
+
+        {/* FILTRE DE PÉRIODE */}
+        <div className="bg-white border border-gray-200 rounded-lg p-3 mb-5">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-gray-400" />
+              <span className="text-xs text-gray-600">Période :</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={dateDebut}
+                onChange={(e) => setDateDebut(e.target.value)}
+                className="border border-gray-300 rounded-lg px-2 py-1.5 text-xs"
+              />
+              <span className="text-xs text-gray-500">au</span>
+              <input
+                type="date"
+                value={dateFin}
+                onChange={(e) => setDateFin(e.target.value)}
+                className="border border-gray-300 rounded-lg px-2 py-1.5 text-xs"
+              />
+            </div>
           </div>
         </div>
 

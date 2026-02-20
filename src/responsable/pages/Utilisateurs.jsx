@@ -90,9 +90,14 @@ function Toasts({ toasts, remove }) {
 // ————————————————————————————————————————————————
 export default function Utilisateurs() {
   const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [initialLoad, setInitialLoad] = useState(true);
+  const [loadingRole, setLoadingRole] = useState(false);
+  const [previousRole, setPreviousRole] = useState("Tous");
+
+
   const [searchInput, setSearchInput] = useState(""); // État temporaire pour l'input
-  const [searchTerm, setSearchTerm] = useState(""); // État final pour l'API
+   // État final pour l'API
   const [filterRole, setFilterRole] = useState("Tous");
   const [toasts, setToasts] = useState([]);
   // Pagination backend
@@ -111,77 +116,55 @@ export default function Utilisateurs() {
   }, []);
 
   // Réinitialiser la page quand le filtre change
-  useEffect(() => {
-    setPage(1);
-  }, [filterRole]);
+useEffect(() => {
+  setPage(1);
+}, [filterRole, searchInput]);
 
   // Debounce pour la recherche : attendre que l'utilisateur arrête de taper
   // ET réinitialiser la page en même temps
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setPage(1);
-      setSearchTerm(searchInput);
-    }, 1000);
 
-    return () => clearTimeout(timer);
-  }, [searchInput]);
 
   // Chargement des utilisateurs depuis l'API
-  useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        setLoading(page === 1);
-        setLoadingPage(page !== 1);
+useEffect(() => {
+  const fetchUsers = async () => {
+    setLoadingPage(true);
+    try {
+      const params = {
+        page,
+        search: searchInput || undefined,
+        role: filterRole !== "Tous" ? getRoleKeyFromLabel(filterRole) : undefined,
+      };
 
-        const data = await utilisateursAPI.getAll({
-          page,
-          role: filterRole !== "Tous"
-            ? getRoleKeyFromLabel(filterRole)
-            : undefined,
-          search: searchTerm || undefined,
-        });
+      const data = await utilisateursAPI.getAll(params);
 
-        // Gestion de la pagination Laravel
-        if (!Array.isArray(data)) {
-          const total = data.total || 0;
-          const perPage = data.per_page || 20;
+      // Pagination Laravel
+      const total = data.total || 0;
+      const perPage = data.per_page || 20;
+      setTotalItems(total);
+      setTotalPages(Math.ceil(total / perPage));
 
-          setTotalItems(total);
+      const rawUsers = data.data || [];
+      const normalized = rawUsers.map((u) => ({
+        id: u.id,
+        prenom: u.prenom || "",
+        nom: u.nom || "",
+        email: u.email || "",
+        tel: u.telephone || "",
+        adresse: u.adresse || "",
+        cni: u.numero_cni || "",
+        role: ROLE_LABELS[u.role] || u.role || "",
+      }));
 
-          const pages = Math.ceil(total / perPage);
-          setTotalPages(pages <= 1 ? 1 : pages);
-        }
+      setUsers(normalized);
+    } catch (err) {
+      toast("error", "Erreur", "Impossible de charger la liste des utilisateurs.");
+    } finally {
+      setLoadingPage(false);
+    }
+  };
 
-        // Données Laravel paginées
-        const rawUsers = Array.isArray(data) ? data : data.data || [];
-
-        // Normalisation des données
-        const normalized = rawUsers.map((u) => ({
-          id: u.id,
-          prenom: u.prenom || "",
-          nom: u.nom || "",
-          email: u.email || "",
-          tel: u.telephone || "",
-          adresse: u.adresse || "",
-          cni: u.numero_cni || "",
-          role: ROLE_LABELS[u.role] || u.role || "",
-        }));
-
-        setUsers(normalized);
-      } catch (err) {
-        toast(
-          "error",
-          "Erreur",
-          "Impossible de charger la liste des utilisateurs."
-        );
-      } finally {
-        setLoading(false);
-        setLoadingPage(false);
-      }
-    };
-
-    fetchUsers();
-  }, [toast, page, filterRole, searchTerm]);
+  fetchUsers();
+}, [page, filterRole, searchInput, toast]);
 
   // Statistiques simples
   const stats = useMemo(() => ({
@@ -257,7 +240,7 @@ export default function Utilisateurs() {
               <Search className="absolute left-3 top-2.5 text-gray-400 w-4 h-4" />
               <input
                 type="text"
-                placeholder="Rechercher par nom, email, téléphone, adresse..."
+                placeholder="Rechercher par nom ou email ..."
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-xl text-sm bg-white/80 shadow-sm focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD] placeholder:text-gray-400"
@@ -265,20 +248,25 @@ export default function Utilisateurs() {
             </div>
 
             {/* 🎯 Filtre par rôle */}
-            <div className="flex items-center gap-2 sm:w-56">
+            <div className="flex items-center gap-2 sm:w-56 relative">              
               <span className="text-[11px] text-gray-500 uppercase tracking-wide">
                 Filtrer par rôle
               </span>
-              <select
-                className="flex-1 border border-gray-300 rounded-xl text-sm px-3 py-2.5 bg-white/80 shadow-sm focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD]"
-                value={filterRole}
-                onChange={(e) => setFilterRole(e.target.value)}
-              >
+                <select
+                  disabled={loadingRole}
+                  className="flex-1 border border-gray-300 rounded-xl text-sm px-3 py-2.5 bg-white/80 shadow-sm focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD] disabled:opacity-60"
+                  value={filterRole}
+                  onChange={(e) => setFilterRole(e.target.value)}
+                >
+
                 <option>Tous</option>
                 {ROLES.map((r) => (
                   <option key={r}>{r}</option>
                 ))}
               </select>
+                  {loadingRole && (
+                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-[#472EAD]" />
+                )}
             </div>
           </div>
 
@@ -309,6 +297,8 @@ export default function Utilisateurs() {
               </div>
             ) : (
               <>
+
+
                 <DataTable
                   columns={[
                     {
