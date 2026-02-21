@@ -1,3 +1,4 @@
+
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { clientsAPI, commandesAPI } from "@/services/api";
 import { logger } from "@/utils/logger";
@@ -10,6 +11,7 @@ export function useClientsSpeciaux(toast, { page, search }) {
   const query = useQuery({
     queryKey: ["clients-speciaux", page, search],
     keepPreviousData: true,
+    placeholderData: (previousData) => previousData,
     staleTime: 30000,
 
     queryFn: async () => {
@@ -227,7 +229,7 @@ export function useClientsSpeciaux(toast, { page, search }) {
     clientsEnrichis,
     statsGlobales,
     totalPages: meta.last_page || 1,
-    loading: query.isLoading ,
+    loading: query.isFetching,
     handleAdd: addMutation.mutate,
     handleEdit: (data) =>
       data?.id && editMutation.mutate({ id: data.id, data }),

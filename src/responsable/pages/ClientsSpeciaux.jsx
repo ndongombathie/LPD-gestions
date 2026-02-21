@@ -614,6 +614,17 @@ export default function ClientsSpeciaux() {
     page,
     search: searchTerm,
   });
+  const filteredClients = useMemo(() => {
+  if (!searchInput.trim()) return clientsEnrichis;
+
+  const term = searchInput.toLowerCase();
+
+  return clientsEnrichis.filter((c) =>
+    c.nom?.toLowerCase().includes(term) ||
+    c.contact?.toLowerCase().includes(term) ||
+    c.entreprise?.toLowerCase().includes(term)
+  );
+}, [clientsEnrichis, searchInput]);
 
   // Gestionnaire de changement de page avec loader
   const handlePageChange = (newPage) => {
@@ -814,7 +825,7 @@ export default function ClientsSpeciaux() {
           <div className="flex items-center justify-between text-[11px] text-gray-500 mb-2">
             <span>
               Affichage :{" "}
-              <span className="font-semibold">{clientsEnrichis.length}</span> sur{" "}
+              <span className="font-semibold">{filteredClients.length}</span> sur{" "}
               <span className="font-semibold">{statsGlobales.nbClients}</span>
             </span>
             <span>
@@ -824,8 +835,8 @@ export default function ClientsSpeciaux() {
           </div>
 
           {/* TABLEAU PRINCIPAL */}
-          <div className="mt-2">
-            {clientsEnrichis.length === 0 && !loadingPage && !loading ? (
+          <div className="mt-2 relative">
+            {filteredClients.length === 0 && !loading ? (
               <div className="flex flex-col items-center justify-center py-14 text-center text-gray-400">
                 <Search className="w-8 h-8 mb-3 opacity-60" />
                 <p className="text-sm font-medium">
@@ -928,7 +939,7 @@ export default function ClientsSpeciaux() {
                       ),
                     },
                   ]}
-                  data={clientsEnrichis}
+                  data={filteredClients}
                   actions={[
                     {
                       icon: <BadgeDollarSign size={16} />,
@@ -981,6 +992,7 @@ export default function ClientsSpeciaux() {
                     },
                   ]}
                 />
+
                 
                 <div className="mt-6">
                   <Pagination
