@@ -3,8 +3,6 @@ import {
   LayoutDashboard,
   ShoppingCart,
   Clock,
-  User,
-  Store,
 } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -19,17 +17,14 @@ const Sidebar = ({ sectionActive, setSectionActive, user }) => {
       id: "nouvelle-commande",
       label: "Nouvelle commande",
       icon: ShoppingCart,
-      badge: null,
     },
     {
       id: "historique-commandes",
       label: "Historique",
       icon: Clock,
-      badge: "5",
     },
   ];
 
-  /* ===== Utils utilisateur ===== */
   const getInitialesUtilisateur = () => {
     if (!user?.name) return "LZ";
     const mots = user.name.trim().split(" ");
@@ -38,12 +33,9 @@ const Sidebar = ({ sectionActive, setSectionActive, user }) => {
       : (mots[0][0] + mots[mots.length - 1][0]).toUpperCase();
   };
 
-  const getNomComplet = () => user?.name || "Utilisateur";
-  const getRole = () => user?.role || "Vendeur";
-
   return (
-    <aside className="hidden md:flex fixed left-0 top-0 h-screen w-64 bg-white border-r shadow-lg flex-col z-40">
-      {/* ===== HEADER / LOGO ===== */}
+    <aside className="hidden md:flex fixed left-0 top-0 h-screen w-64 bg-white border-r border-gray-200 shadow-lg flex-col z-40">
+      {/* LOGO */}
       <div className="h-20 flex flex-col items-center justify-center bg-gradient-to-r from-[#472EAD] to-[#4e33c9] text-white">
         <div className="text-3xl font-extrabold tracking-wide text-[#F58020]">
           LPD
@@ -53,7 +45,7 @@ const Sidebar = ({ sectionActive, setSectionActive, user }) => {
         </span>
       </div>
 
-      {/* ===== NAVIGATION ===== */}
+      {/* NAVIGATION */}
       <nav className="flex-1 px-3 py-5">
         <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3">
           Navigation
@@ -81,42 +73,17 @@ const Sidebar = ({ sectionActive, setSectionActive, user }) => {
                       : "text-gray-700 hover:bg-[#F7F5FF] hover:text-[#472EAD]"
                   }`}
                 >
-                  <motion.div whileHover={{ scale: 1.1 }}>
-                    <Icon
-                      size={18}
-                      className={isActive ? "text-white" : "text-[#472EAD]"}
-                    />
-                  </motion.div>
-
+                  <Icon
+                    size={18}
+                    className={isActive ? "text-white" : "text-[#472EAD]"}
+                  />
                   <span className="flex-1 text-left">{item.label}</span>
-
-                  {item.badge && (
-                    <span className="bg-[#F58020] text-white text-xs px-2 py-0.5 rounded-full">
-                      {item.badge}
-                    </span>
-                  )}
                 </button>
               </li>
             );
           })}
         </ul>
       </nav>
-
-      {/* ===== FOOTER / UTILISATEUR ===== */}
-      <div className="border-t px-4 py-4">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-full bg-[#472EAD] text-white flex items-center justify-center font-bold">
-            {getInitialesUtilisateur()}
-          </div>
-
-          <div className="leading-tight">
-            <p className="text-sm font-semibold text-gray-800">
-              {getNomComplet()}
-            </p>
-            <p className="text-xs text-gray-500">{getRole()}</p>
-          </div>
-        </div>
-      </div>
     </aside>
   );
 };

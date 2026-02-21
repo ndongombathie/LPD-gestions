@@ -13,6 +13,7 @@ const ENDPOINTS = {
   UPDATE: '/clients/:id',
   DELETE: '/clients/:id',
   GET_SPECIAL: '/clients?type_client=special',
+  SEARCH: '/clients/search',
 };
 
 export const clientsAPI = {
@@ -26,6 +27,47 @@ export const clientsAPI = {
     } catch (error) {
       console.error('❌ Erreur getAll clients:', error.message);
       throw error;
+    }
+  },
+
+  /**
+   * Rechercher des clients par nom
+   */
+  search: async (nom) => {
+    try {
+      console.log(`🔍 Recherche client: ${nom}`);
+      // Essayer d'abord l'endpoint de recherche dédié
+      const response = await httpClient.get(ENDPOINTS.GET_ALL, {
+        params: { search: nom }
+      });
+      
+      console.log('📡 Réponse recherche clients:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erreur search clients:', error.message);
+      
+      // Fallback: récupérer tous les clients et filtrer localement
+      try {
+        console.log('🔄 Fallback: recherche locale...');
+        const allClientsResponse = await httpClient.get(ENDPOINTS.GET_ALL);
+        if (allClientsResponse.data && allClientsResponse.data.data) {
+          const clients = Array.isArray(allClientsResponse.data.data) 
+            ? allClientsResponse.data.data 
+            : [];
+          
+          const filtered = clients.filter(client => 
+            client && client.nom && 
+            client.nom.toLowerCase().includes(nom.toLowerCase())
+          );
+          
+          console.log(`✅ ${filtered.length} clients trouvés en fallback`);
+          return { data: filtered };
+        }
+        return { data: [] };
+      } catch (fallbackError) {
+        console.error('❌ Erreur fallback search:', fallbackError.message);
+        return { data: [] };
+      }
     }
   },
 
@@ -60,7 +102,9 @@ export const clientsAPI = {
    */
   create: async (data) => {
     try {
+      console.log('📝 Création client:', data);
       const response = await httpClient.post(ENDPOINTS.CREATE, data);
+      console.log('✅ Client créé:', response.data);
       return response.data;
     } catch (error) {
       console.error('❌ Erreur create client:', error.response?.data || error.message);
