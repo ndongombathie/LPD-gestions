@@ -9,15 +9,26 @@ const safeNumber = (v) => {
   return Number.isFinite(n) ? n : 0;
 };
 
-const safeString = (v) => (v ? String(v) : "");
+const safeString = (v) => (v !== null && v !== undefined ? String(v) : "");
 
 const safeDate = (v) => (v ? v : null);
+
+const buildFullName = (user) => {
+  if (!user) return "-";
+
+  const fullName = [user.prenom, user.nom]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+
+  return fullName || "-";
+};
 
 /* ================= SERVICE ================= */
 
 const historiqueVersementAPI = {
 
-  /* ===== GET PAGINÉ ===== */
+  /* ================= GET PAGINÉ ================= */
 
   async getHistorique(params = {}) {
     try {
@@ -34,7 +45,8 @@ const historiqueVersementAPI = {
         montant: safeNumber(v?.montant),
         observation: safeString(v?.observation),
 
-        caissier_nom: safeString(v?.caissier?.nom),
+        // ✅ NOM COMPLET CAISSIER ULTRA SAFE
+        caissier_nom: buildFullName(v?.caissier),
       }));
 
       return {
@@ -63,7 +75,7 @@ const historiqueVersementAPI = {
     }
   },
 
-  /* ===== GET TOUTES LES PAGES (POUR IMPRESSION GLOBALE) ===== */
+  /* ================= GET TOUTES LES PAGES ================= */
 
   async getAllHistorique(params = {}) {
     try {
@@ -87,10 +99,13 @@ const historiqueVersementAPI = {
 
         const mapped = data.map((v) => ({
           id: safeString(v?.id),
+
           date: safeDate(v?.date ?? v?.created_at),
           montant: safeNumber(v?.montant),
           observation: safeString(v?.observation),
-          caissier_nom: safeString(v?.caissier?.nom),
+
+          // ✅ NOM COMPLET CAISSIER ULTRA SAFE
+          caissier_nom: buildFullName(v?.caissier),
         }));
 
         allItems = [...allItems, ...mapped];

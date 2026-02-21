@@ -1,14 +1,12 @@
 // ==========================================================
-// 👥 Utilisateurs.jsx — VERSION 100 ANS
-// CRUD + RECHERCHE + FILTRES + PAGINATION + TOASTS
-// ✅ CORRECTION FILTRES PAR RÔLE
-// ✅ MAPPING COMPLET BACKEND/FRONTEND
-// ✅ SUPPRESSION BOUTON RAFRAÎCHIR
-// ✅ CORRECTION SUPERPOSITION CARTES
-// ✅ ESPACEMENT VERTICAL HARMONIEUX
+// 👥 Utilisateurs.jsx — VERSION FLUIDE 🔥
+// CRUD + RECHERCHE MANUELLE + FILTRES + PAGINATION + TOASTS
+// ✅ RECHERCHE UNIQUEMENT AU CLIC SUR BOUTON RECHERCHER
+// ✅ PERSISTANCE DE LA RECHERCHE
+// ✅ FLUIDITÉ TOTALE (pas de debounce)
 // ==========================================================
 
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   UserPlus,
@@ -26,6 +24,7 @@ import {
   ChevronsRight,
   Filter,
   Users,
+  RefreshCw,
 } from "lucide-react";
 
 import FormModal from "../components/FormModal.jsx";
@@ -52,22 +51,12 @@ const ROLE_DISPLAY_MAPPING = {
   "gestionnaire_boutique": "Gestionnaire Boutique"
 };
 
-// 🔄 MAPPAGE POUR L'ENVOI (UI -> DB)
-const ROLE_API_MAPPING = {
-  "Responsable": "responsable",
-  "Vendeur": "vendeur",
-  "Caissier": "caissier",
-  "Gestionnaire Dépôt": "gestionnaire_depot",
-  "Gestionnaire Boutique": "gestionnaire_boutique"
-};
-
 // 📋 RÔLES POUR L'AFFICHAGE DANS L'UI
 const ROLES_UI = Object.values(ROLE_DISPLAY_MAPPING);
 
 const DEFAULT_PER_PAGE = 20;
-const DEBOUNCE_DELAY = 500;
 
-const cls = (...classes) => classes.filter(Boolean).join(" ");
+const cls = (...classes) => classes.filter(Boolean).join(' ');
 const isEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
 /* ======================= TOASTS ======================= */
@@ -116,7 +105,7 @@ const UserForm = ({ onSubmit, onCancel, isLoading, error }) => {
     telephone: "",
     adresse: "",
     numero_cni: "",
-    role: "Vendeur", // Format UI
+    role: "Vendeur",
   });
 
   const [fieldErrors, setFieldErrors] = useState({});
@@ -223,7 +212,7 @@ const UserForm = ({ onSubmit, onCancel, isLoading, error }) => {
           disabled={isLoading}
         />
 
-        {/* Rôle - AFFICHAGE UI */}
+        {/* Rôle */}
         <select
           className={inputClass}
           value={form.role}
@@ -437,9 +426,14 @@ const Pagination = ({ currentPage, totalPages, onPageChange, totalItems }) => {
 /* ================== FONCTION DE FORMATAGE DES RÔLES ================= */
 const formatRole = (role) => {
   if (!role) return '-';
-  // Convertir le rôle DB -> UI
   return ROLE_DISPLAY_MAPPING[role.toLowerCase()] || 
          role.charAt(0).toUpperCase() + role.slice(1).toLowerCase();
+};
+
+/* ================== FONCTION DE FORMATAGE DU TÉLÉPHONE ================= */
+const formatPhone = (phone) => {
+  if (!phone) return '-';
+  return phone;
 };
 
 /* ================== PAGE PRINCIPALE ================= */
@@ -452,12 +446,13 @@ export default function Utilisateurs() {
   
   // États des filtres
   const [searchTerm, setSearchTerm] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [selectedRole, setSelectedRole] = useState(""); // Format DB (snake_case)
+  const [activeSearch, setActiveSearch] = useState(""); // Terme de recherche actif (celui qui a été validé)
+  const [selectedRole, setSelectedRole] = useState("");
   
   // États de chargement
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
   
   // États des modales
   const [openAdd, setOpenAdd] = useState(false);
@@ -468,6 +463,10 @@ export default function Utilisateurs() {
   
   // États des toasts
   const [toasts, setToasts] = useState([]);
+  
+  // Refs pour éviter les appels multiples
+  const loadingRef = useRef(false);
+  const previousParamsRef = useRef('');
 
   /* ============= GESTION DES TOASTS ============= */
   const addToast = useCallback((title, type = "success") => {
@@ -482,24 +481,44 @@ export default function Utilisateurs() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  /* ============= CHARGEMENT DES DONNÉES ============= */
+  /* ============= GÉNÉRATION DES PARAMÈTRES API (STABLES) ============= */
+  const getApiParams = useCallback((page = currentPage) => {
+    const params = { page };
+    
+    if (activeSearch?.trim()) {
+      params.search = activeSearch.trim();
+    }
+    
+    if (selectedRole) {
+      params.role = selectedRole;
+    }
+    
+    return params;
+  }, [activeSearch, selectedRole, currentPage]);
+
+  /* ============= CHARGEMENT DES DONNÉES (VERSION ROBUSTE) ============= */
   const loadUsers = useCallback(async (page = 1) => {
+    // Éviter les appels multiples simultanés
+    if (loadingRef.current) {
+      console.log("⏳ Chargement déjà en cours, ignoré");
+      return;
+    }
+
     try {
+      loadingRef.current = true;
       setIsLoading(true);
       
-      const params = { page };
+      const params = getApiParams(page);
+      const paramsKey = JSON.stringify(params);
       
-      // Ajout de la recherche
-      if (debouncedSearch?.trim()) {
-        params.search = debouncedSearch.trim();
+      // Éviter les appels avec les mêmes paramètres
+      if (paramsKey === previousParamsRef.current && initialLoadDone) {
+        console.log("📦 Paramètres identiques, chargement ignoré");
+        return;
       }
       
-      // Ajout du filtre rôle - DIRECTEMENT EN FORMAT DB
-      if (selectedRole) {
-        params.role = selectedRole; // Déjà en snake_case
-      }
-
       console.log("📡 Chargement avec params:", params);
+      previousParamsRef.current = paramsKey;
       
       const response = await utilisateursAPI.getAll(params);
       
@@ -517,41 +536,51 @@ export default function Utilisateurs() {
         setCurrentPage(1);
       }
       
+      setInitialLoadDone(true);
+      
     } catch (error) {
       console.error("❌ Erreur chargement:", error);
       addToast("Impossible de charger les utilisateurs", "error");
       setUsers([]);
     } finally {
       setIsLoading(false);
+      loadingRef.current = false;
     }
-  }, [debouncedSearch, selectedRole, addToast]);
+  }, [getApiParams, addToast, initialLoadDone]);
 
-  /* ============= DEBOUNCE RECHERCHE ============= */
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(searchTerm);
-    }, DEBOUNCE_DELAY);
-
-    return () => clearTimeout(timer);
-  }, [searchTerm]);
-
-  /* ============= CHARGEMENT INITIAL ============= */
+  /* ============= EFFET DE CHARGEMENT UNIQUE ============= */
   useEffect(() => {
     loadUsers(1);
-  }, [debouncedSearch, selectedRole]);
+  }, []); // ⚠️ Dépendances vides - ne s'exécute qu'au montage
+
+  /* ============= EFFET POUR LES FILTRES ============= */
+  useEffect(() => {
+    if (initialLoadDone) {
+      loadUsers(1); // Retour à la page 1 quand les filtres changent
+    }
+  }, [activeSearch, selectedRole]); // ⚠️ Dépendances stables (primitives)
+
+  /* ============= CHANGEMENT DE PAGE ============= */
+  const handlePageChange = useCallback((page) => {
+    if (page !== currentPage && initialLoadDone) {
+      loadUsers(page);
+    }
+  }, [currentPage, loadUsers, initialLoadDone]);
+
+  /* ============= RECHERCHE MANUELLE ============= */
+  const handleSearch = useCallback(() => {
+    setActiveSearch(searchTerm);
+  }, [searchTerm]);
 
   /* ============= RÉINITIALISATION DES FILTRES ============= */
   const handleResetFilters = useCallback(() => {
     setSearchTerm("");
+    setActiveSearch("");
     setSelectedRole("");
     addToast("✅ Filtres réinitialisés");
   }, [addToast]);
 
-  /* ============= GESTIONNAIRES D'ÉVÉNEMENTS ============= */
-  const handlePageChange = useCallback((page) => {
-    loadUsers(page);
-  }, [loadUsers]);
-
+  /* ============= GESTIONNAIRES CRUD ============= */
   const handleCreateUser = useCallback(async (formData) => {
     try {
       setIsSubmitting(true);
@@ -561,7 +590,7 @@ export default function Utilisateurs() {
       
       addToast("✅ Utilisateur créé avec succès. Mot de passe envoyé par email.");
       setOpenAdd(false);
-      loadUsers(currentPage);
+      await loadUsers(1); // Retour à la page 1 après création
       
     } catch (error) {
       console.error("❌ Erreur création:", error);
@@ -579,7 +608,7 @@ export default function Utilisateurs() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [addToast, currentPage, loadUsers]);
+  }, [addToast, loadUsers]);
 
   const handleUpdateUser = useCallback(async () => {
     if (!editTarget) return;
@@ -590,12 +619,12 @@ export default function Utilisateurs() {
       await utilisateursAPI.update(editTarget.id, {
         telephone: editTarget.telephone,
         adresse: editTarget.adresse,
-        role: editTarget.role, // Déjà en format UI, l'API convertira
+        role: editTarget.role,
       });
       
       addToast("✅ Utilisateur modifié avec succès");
       setEditTarget(null);
-      loadUsers(currentPage);
+      await loadUsers(currentPage);
       
     } catch (error) {
       console.error("❌ Erreur modification:", error);
@@ -617,9 +646,9 @@ export default function Utilisateurs() {
       setDeleteTarget(null);
       
       if (users.length === 1 && currentPage > 1) {
-        loadUsers(currentPage - 1);
+        await loadUsers(currentPage - 1);
       } else {
-        loadUsers(currentPage);
+        await loadUsers(currentPage);
       }
       
     } catch (error) {
@@ -649,12 +678,20 @@ export default function Utilisateurs() {
     }
   }, [resetTarget, addToast]);
 
+  /* ============= GESTION DE LA TOUCHE ENTRÉE ============= */
+  const handleKeyPress = useCallback((e) => {
+    if (e.key === 'Enter') {
+      handleSearch();
+    }
+  }, [handleSearch]);
+
   /* ============= FORMATAGE DES DONNÉES ============= */
   const formattedUsers = useMemo(() => {
     return users.map((user) => ({
       ...user,
       fullName: `${user.prenom || ''} ${user.nom || ''}`.trim() || '-',
-      formattedRole: formatRole(user.role), // Conversion DB -> UI
+      formattedRole: formatRole(user.role),
+      formattedPhone: formatPhone(user.telephone),
     }));
   }, [users]);
 
@@ -696,23 +733,12 @@ export default function Utilisateurs() {
       key: "email",
     },
     {
-      label: "Rôle",
-      render: (_, user) => user.formattedRole, // Déjà formaté
+      label: "Téléphone",
+      render: (_, user) => user.formattedPhone,
     },
     {
-      label: "Statut",
-      render: (_, user) => (
-        <span className="flex items-center gap-1.5 text-xs">
-          <Circle
-            size={8}
-            className={cls(
-              "fill-current",
-              user.is_online ? "text-green-600" : "text-gray-400"
-            )}
-          />
-          {user.is_online ? "En ligne" : "Hors ligne"}
-        </span>
-      ),
+      label: "Rôle",
+      render: (_, user) => user.formattedRole,
     },
     {
       label: "Actions",
@@ -725,7 +751,7 @@ export default function Utilisateurs() {
     <div className="min-h-screen bg-gray-50 p-6 md:p-8">
       <div className="max-w-7xl mx-auto">
         
-        {/* ESPACEMENT EN-TÊTE - 32px en bas */}
+        {/* EN-TÊTE */}
         <div className="mb-8">
           <div className="bg-white p-6 rounded-2xl shadow-md">
             <div className="flex items-center justify-between">
@@ -741,7 +767,7 @@ export default function Utilisateurs() {
           </div>
         </div>
 
-        {/* ESPACEMENT RECHERCHE ET FILTRES - 32px en bas */}
+        {/* RECHERCHE ET FILTRES */}
         <div className="mb-8">
           <div className="bg-white p-6 rounded-2xl shadow-md">
             <div className="flex flex-col md:flex-row gap-4">
@@ -751,18 +777,34 @@ export default function Utilisateurs() {
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Rechercher par nom, prénom, email ou rôle..."
-                  className="w-full pl-9 pr-10 py-2.5 border rounded-xl text-sm focus:ring-2 focus:ring-[#472EAD]/20 focus:border-[#472EAD] outline-none"
+                  onKeyPress={handleKeyPress}
+                  placeholder="Rechercher par nom, prénom, email... (Appuyez sur Entrée)"
+                  className="w-full pl-9 pr-24 py-2.5 border rounded-xl text-sm focus:ring-2 focus:ring-[#472EAD]/20 focus:border-[#472EAD] outline-none"
                   disabled={isLoading}
                 />
-                {searchTerm && (
+                <div className="absolute right-2 top-1.5 flex gap-1">
+                  {searchTerm && searchTerm !== activeSearch && (
+                    <button
+                      onClick={() => setSearchTerm("")}
+                      className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors"
+                      title="Effacer"
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
                   <button
-                    onClick={() => setSearchTerm("")}
-                    className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600 transition-colors"
+                    onClick={handleSearch}
+                    disabled={isLoading || searchTerm === activeSearch}
+                    className={cls(
+                      "px-3 py-1 rounded-lg text-sm font-medium transition-colors",
+                      searchTerm !== activeSearch
+                        ? "bg-[#472EAD] text-white hover:bg-[#3a2590]"
+                        : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                    )}
                   >
-                    <X size={16} />
+                    Rechercher
                   </button>
-                )}
+                </div>
               </div>
 
               <RoleFilter
@@ -773,16 +815,19 @@ export default function Utilisateurs() {
             </div>
 
             {/* FILTRES ACTIFS */}
-            {(searchTerm || selectedRole) && (
+            {(activeSearch || selectedRole) && (
               <div className="flex items-center gap-3 mt-4 pt-4 border-t border-gray-100">
                 <span className="text-xs font-medium text-gray-500">Filtres actifs :</span>
                 <div className="flex items-center gap-2 flex-wrap">
-                  {searchTerm && (
+                  {activeSearch && (
                     <span className="bg-indigo-50 text-[#472EAD] px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 font-medium">
                       <Search size={12} />
-                      "{searchTerm}"
+                      "{activeSearch}"
                       <button
-                        onClick={() => setSearchTerm("")}
+                        onClick={() => {
+                          setSearchTerm("");
+                          setActiveSearch("");
+                        }}
                         className="ml-1 hover:text-[#3a2590]"
                       >
                         <X size={12} />
@@ -813,7 +858,7 @@ export default function Utilisateurs() {
           </div>
         </div>
 
-        {/* ESPACEMENT BOUTON NOUVEL UTILISATEUR - 32px en bas */}
+        {/* BOUTON NOUVEL UTILISATEUR */}
         <div className="mb-8">
           <div className="bg-white p-6 rounded-2xl shadow-md">
             <div className="flex gap-3">
@@ -831,7 +876,7 @@ export default function Utilisateurs() {
           </div>
         </div>
 
-        {/* ESPACEMENT TABLEAU DES UTILISATEURS - 32px en bas */}
+        {/* TABLEAU DES UTILISATEURS */}
         <div className="mb-8">
           <div className="bg-white rounded-2xl shadow-md overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
@@ -844,11 +889,11 @@ export default function Utilisateurs() {
               <div className="text-center py-16">
                 <Users size={48} className="mx-auto text-gray-300 mb-4" />
                 <p className="text-gray-500 text-lg mb-2">
-                  {searchTerm || selectedRole
+                  {activeSearch || selectedRole
                     ? "Aucun utilisateur ne correspond à vos critères"
                     : "Aucun utilisateur trouvé"}
                 </p>
-                {(searchTerm || selectedRole) && (
+                {(activeSearch || selectedRole) && (
                   <button
                     onClick={handleResetFilters}
                     className="mt-2 text-[#472EAD] hover:underline text-sm font-medium"
@@ -891,9 +936,6 @@ export default function Utilisateurs() {
             </div>
           </div>
         )}
-
-        {/* ESPACE SUPPLEMENTAIRE EN BAS */}
-        <div className="h-4"></div>
 
         {/* MODALES */}
         <FormModal

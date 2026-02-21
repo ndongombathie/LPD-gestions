@@ -79,7 +79,7 @@ const journalCaisseAPI = {
     try {
 
       const response = await httpClient.get(
-        "/caissier/caisses-journal-total_decaissement",
+        "/caissier/caisses-journal-total-decaissement",
         {
           params: buildParams(date),
         }

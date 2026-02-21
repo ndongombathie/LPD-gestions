@@ -1,6 +1,6 @@
 // ==========================================================
-// 🧾 ControleVendeur.jsx — VERSION AVEC MODE DATE INTELLIGENT
-// Journalier par défaut + date du jour auto
+// 🧾 ControleVendeur.jsx — VERSION ENTERPRISE STABLE
+// Filtre date fiable + Pagination stable + Stats réelles + PDF logo
 // ==========================================================
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -10,15 +10,20 @@ import autoTable from "jspdf-autotable";
 import DataTable from "../components/DataTable.jsx";
 import controleVenteAPI from "@/services/api/controleVente";
 
-/* ================= UTILS ================= */
+/* ================= UTILITIES ================= */
 
 const formatFCFA = (value = 0) =>
-  Number(value).toLocaleString("fr-FR");
+  Number(value || 0)
+    .toLocaleString("fr-FR")
+    .replace(/\s/g, ".") + " FCFA";
+
+const formatDateFR = (value) =>
+  value ? new Date(value).toLocaleDateString("fr-FR") : "-";
 
 const getLastDayOfMonth = (year, month) =>
-  new Date(year, month, 0).getDate();
+  new Date(Number(year), Number(month), 0).getDate();
 
-/* ================= COMPOSANT ================= */
+/* ========================================================== */
 
 export default function ControleVendeur() {
 
@@ -26,56 +31,53 @@ export default function ControleVendeur() {
   const currentMonth = new Date().toISOString().slice(0, 7);
 
   const [ventes, setVentes] = useState([]);
+  const [ventesGlobales, setVentesGlobales] = useState([]);
   const [pagination, setPagination] = useState({});
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   const [search, setSearch] = useState("");
   const [mode, setMode] = useState("journalier");
-
   const [date, setDate] = useState(today);
   const [mois, setMois] = useState(currentMonth);
-
   const [page, setPage] = useState(1);
 
-  /* ================= FETCH ================= */
+  /* ================= DATE PARAMS ================= */
+
+  const getDateParams = () => {
+
+    if (mode === "journalier") {
+      return { date_debut: date, date_fin: date };
+    }
+
+    const [year, month] = mois.split("-");
+    const lastDay = getLastDayOfMonth(year, month);
+
+    return {
+      date_debut: `${year}-${month}-01`,
+      date_fin: `${year}-${month}-${lastDay}`,
+    };
+  };
+
+  /* ================= FETCH PAGE ================= */
 
   useEffect(() => {
 
-    const fetchVentes = async () => {
+    const fetchPage = async () => {
 
       try {
         setLoading(true);
 
-        let params = { page };
-
-        if (mode === "journalier") {
-          params.date_debut = date;
-          params.date_fin = date;
-        } else {
-          const [year, month] = mois.split("-");
-          const lastDay = getLastDayOfMonth(year, month);
-
-          params.date_debut = `${year}-${month}-01`;
-          params.date_fin = `${year}-${month}-${lastDay}`;
-        }
-
         const { items, pagination } =
-          await controleVenteAPI.getCommandes(params);
+          await controleVenteAPI.getCommandes({
+            page,
+            per_page: 15,
+            ...getDateParams(),
+          });
 
-        const normalized = items.map((v) => ({
-          id: v.id,
-          date: v.date?.slice(0, 10),
-          quantite: v.quantite,
-          montant: v.montant,
-          vendeur: `${v.vendeur?.prenom ?? ""} ${v.vendeur?.nom ?? ""}`.trim(),
-          produit: v.produit?.nom ?? "-",
-        }));
-
-        setVentes(normalized);
+        setVentes(items);
         setPagination(pagination || {});
-
-      } catch (e) {
-        console.error(e);
+      } catch (error) {
+        console.error("Erreur fetch page :", error);
         setVentes([]);
         setPagination({});
       } finally {
@@ -83,105 +85,128 @@ export default function ControleVendeur() {
       }
     };
 
-    fetchVentes();
+    fetchPage();
 
   }, [page, mode, date, mois]);
 
-  /* ================= FILTRE FRONT ================= */
+  /* ================= FETCH GLOBAL ================= */
+
+  useEffect(() => {
+
+    const fetchGlobal = async () => {
+
+      try {
+
+        let current = 1;
+        let last = 1;
+        let all = [];
+
+        do {
+
+          const { items, pagination } =
+            await controleVenteAPI.getCommandes({
+              page: current,
+              per_page: 100,
+              ...getDateParams(),
+            });
+
+          all = [...all, ...items];
+          last = pagination.lastPage;
+          current++;
+
+        } while (current <= last);
+
+        setVentesGlobales(all);
+
+      } catch (error) {
+        console.error("Erreur fetch global :", error);
+        setVentesGlobales([]);
+      }
+    };
+
+    fetchGlobal();
+
+  }, [mode, date, mois]);
+
+  /* ================= FILTER FRONT ================= */
 
   const ventesFiltrees = useMemo(() => {
     return ventes.filter((v) =>
-      v.vendeur.toLowerCase().includes(search.toLowerCase())
+      (v.vendeurNom || "")
+        .toLowerCase()
+        .includes(search.toLowerCase())
     );
   }, [ventes, search]);
 
-  /* ================= STATS ================= */
+  /* ================= GLOBAL STATS ================= */
 
-  const totalVentes = ventesFiltrees.length;
+  const totalVentes = ventesGlobales.length;
 
-  const totalMontant = ventesFiltrees.reduce(
-    (s, v) => s + Number(v.montant || 0),
-    0
-  );
+  const totalMontant = useMemo(() => {
+    return ventesGlobales.reduce(
+      (sum, v) => sum + Number(v.total || 0),
+      0
+    );
+  }, [ventesGlobales]);
 
   /* ================= PAGINATION ================= */
 
-  const currentPage = Number(pagination?.currentPage || 1);
-  const lastPage = Number(pagination?.lastPage || 1);
-  const total = Number(pagination?.total || 0);
-  const perPage = Number(pagination?.perPage || 15);
+  const currentPage = pagination?.currentPage || 1;
+  const lastPage = pagination?.lastPage || 1;
+  const total = pagination?.total || 0;
+  const perPage = pagination?.perPage || 15;
 
-  const hasPagination =
-    !loading &&
-    total > perPage &&
-    lastPage > 1;
-
-  const disablePrev =
-    loading ||
-    currentPage <= 1;
-
-  const disableNext =
-    loading ||
-    currentPage >= lastPage;
+  const hasPagination = total > perPage && lastPage > 1;
 
   /* ================= PDF ================= */
 
   const imprimerPDF = async () => {
 
-    try {
+    if (!ventesGlobales.length) return;
 
-      let current = 1;
-      let last = 1;
-      let allItems = [];
+    const doc = new jsPDF();
 
-      do {
+    // Logo sécurisé
+    const img = new Image();
+    img.src = "/lpd-logo.png";
 
-        const { items, pagination } =
-          await controleVenteAPI.getCommandes({
-            page: current,
-            ...(mode === "journalier"
-              ? { date_debut: date, date_fin: date }
-              : (() => {
-                  const [year, month] = mois.split("-");
-                  const lastDay = getLastDayOfMonth(year, month);
-                  return {
-                    date_debut: `${year}-${month}-01`,
-                    date_fin: `${year}-${month}-${lastDay}`,
-                  };
-                })()
-            ),
-          });
+    await new Promise((resolve) => {
+      img.onload = resolve;
+    });
 
-        allItems = [...allItems, ...items];
-        last = pagination.lastPage;
-        current++;
+    doc.addImage(img, "PNG", 14, 10, 30, 30);
 
-      } while (current <= last);
+    doc.setFontSize(18);
+    doc.text("LIBRAIRIE PAPETERIE DARADJI", 105, 20, { align: "center" });
 
-      if (!allItems.length) return;
+    doc.setFontSize(12);
+    doc.text("CONTROLE GLOBAL DES VENTES", 105, 28, { align: "center" });
 
-      const doc = new jsPDF();
+    const now = new Date();
+    doc.setFontSize(10);
+    doc.text(
+      `Date impression : ${now.toLocaleDateString("fr-FR")} ${now.toLocaleTimeString("fr-FR")}`,
+      14,
+      45
+    );
 
-      doc.setFontSize(16);
-      doc.text("CONTROLE GLOBAL DES VENTES", 14, 20);
+    autoTable(doc, {
+      startY: 55,
+      head: [["Vendeur", "Client", "Date", "Produits", "Total", "Payé", "Reste"]],
+      body: ventesGlobales.map((v) => [
+        v.vendeurNom,
+        v.clientNom,
+        formatDateFR(v.date),
+        v.nombreProduits,
+        formatFCFA(v.total),
+        formatFCFA(v.totalPaye),
+        formatFCFA(v.reste),
+      ]),
+      headStyles: { fillColor: [71, 46, 173] },
+      styles: { fontSize: 9 },
+    });
 
-      autoTable(doc, {
-        startY: 30,
-        head: [["Vendeur", "Date", "Produit", "Quantité", "Montant"]],
-        body: allItems.map((v) => [
-          `${v.vendeur?.prenom ?? ""} ${v.vendeur?.nom ?? ""}`,
-          v.date?.slice(0, 10),
-          v.produit?.nom ?? "-",
-          v.quantite,
-          formatFCFA(v.montant),
-        ]),
-      });
-
-      doc.save("controle_global_ventes.pdf");
-
-    } catch (error) {
-      console.error(error);
-    }
+    doc.save("controle_global_ventes.pdf");
   };
 
   /* ================= UI ================= */
@@ -193,7 +218,6 @@ export default function ControleVendeur() {
         Contrôle des ventes vendeurs
       </h1>
 
-      {/* FILTRES */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-white p-4 rounded-xl shadow">
 
         <input
@@ -246,30 +270,24 @@ export default function ControleVendeur() {
 
       </div>
 
-      {/* STATS */}
-      {ventesFiltrees.length > 0 ? (
+      {ventesGlobales.length > 0 ? (
         <>
           <div className="grid grid-cols-2 gap-4">
             <StatCard label="Nombre de ventes" value={totalVentes} />
-            <StatCard
-              label="Montant total"
-              value={`${formatFCFA(totalMontant)} FCFA`}
-            />
+            <StatCard label="Montant total" value={formatFCFA(totalMontant)} />
           </div>
 
           <div className="bg-white p-4 rounded-xl shadow">
             <DataTable
               data={ventesFiltrees}
               columns={[
-                { label: "Vendeur", key: "vendeur" },
-                { label: "Date", key: "date" },
-                { label: "Produit", key: "produit" },
-                { label: "Quantité", key: "quantite" },
-                {
-                  label: "Montant",
-                  key: "montant",
-                  render: (v) => formatFCFA(v),
-                },
+                { label: "Vendeur", key: "vendeurNom" },
+                { label: "Client", key: "clientNom" },
+                { label: "Date", key: "date", render: formatDateFR },
+                { label: "Produits", key: "nombreProduits" },
+                { label: "Total", key: "total", render: formatFCFA },
+                { label: "Payé", key: "totalPaye", render: formatFCFA },
+                { label: "Reste", key: "reste", render: formatFCFA },
               ]}
             />
           </div>
@@ -280,30 +298,25 @@ export default function ControleVendeur() {
         </div>
       )}
 
-      {/* PAGINATION */}
       {hasPagination && (
         <div className="flex justify-between items-center mt-4">
-
           <button
-            disabled={disablePrev}
+            disabled={loading || currentPage <= 1}
             onClick={() => setPage((p) => p - 1)}
             className="flex items-center gap-1 px-4 py-2 bg-gray-200 rounded-lg disabled:opacity-40"
           >
             <ChevronLeft size={16} /> Précédent
           </button>
 
-          <span>
-            Page {currentPage} / {lastPage}
-          </span>
+          <span>Page {currentPage} / {lastPage}</span>
 
           <button
-            disabled={disableNext}
+            disabled={loading || currentPage >= lastPage}
             onClick={() => setPage((p) => p + 1)}
             className="flex items-center gap-1 px-4 py-2 bg-gray-200 rounded-lg disabled:opacity-40"
           >
             Suivant <ChevronRight size={16} />
           </button>
-
         </div>
       )}
 

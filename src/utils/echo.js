@@ -1,5 +1,5 @@
 import Echo from 'laravel-echo';
-import Pusher from 'pusher-js';
+//import Pusher from 'pusher-js';
 
 // Configuration de Laravel Echo pour les WebSockets
 let echoInstance = null;
