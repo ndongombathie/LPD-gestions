@@ -56,3 +56,42 @@ GET|HEAD        api/decaissements/{decaissement} ...............................
 PUT|PATCH       api/decaissements/{decaissement} ............................................... | modifier les infos d'un decaissement
 DELETE          api/decaissements/{decaissement} .......................................| supprimer un decaissement
 
+# Nombre total de ventes par vendeur et Total encaissé par vendeur
+GET     api/total-ventes-par-vendeur
+
+# la liste des commndes effectuer un vendeur en cliquer sur le bouton detail voir la liste des commandes
+GET api/commandes-par-vendeur/{id}
+
+# Nombre total de vendeurs
+GET         api/vendeurs-count
+# Nombre totaò de caissier
+GET         api/caissiers-count
+
+# Nombre total de gestionnaire de boutique
+GET         api/gestionnaires-count
+
+# total-vente-par-jour
+GET       api/total-vente-par-jour
+
+# •	Montant total des commandes (clients normaux + spéciaux).
+GET        api/montant-total-commandes
+
+# •	Montant total des paiements encaissés (partiels et complets).
+GET         api/somme-paiements-total
+# Reste total à encaisser.
+GET         api/reste-total-encaisser
+
+# •	Nombre de produits en rupture
+GET         api/nombre-produits-en-rupture
+
+# nombere de produit en nombre-produits-sous-seuil
+GET         api/nombre-produits-sous-seuil
+
+# nombre de normaux.
+GET         api/nombre-produits-en-normaux
+
+# o	Total commandes
+GET         api/total-commandes-payees
+ 
+# o	Commandes en attente caisse
+GET         api/commandes-en-attente-caisse
