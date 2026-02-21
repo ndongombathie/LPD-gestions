@@ -60,3 +60,43 @@ POST            api/commandes  | ajouter une nouvelle commande pour un client no
 GET|HEAD        api/commandes/{commande} | afficher les details d'une commande et le client de la commande
 PUT|PATCH       api/commandes/{commande} | modifier une commande specifique
 DELETE          api/commandes/{commande} | supprimer une commande
+
+# Nombre total de ventes par vendeur et Total encaissé par vendeur
+GET     api/total-ventes-par-vendeur
+
+# la liste des commndes effectuer un vendeur en cliquer sur le bouton detail voir la liste des commandes
+GET api/commandes-par-vendeur/{id}
+
+# Nombre total de vendeurs
+GET         api/vendeurs-count
+# Nombre totaò de caissier
+GET         api/caissiers-count
+
+# Nombre total de gestionnaire de boutique
+GET         api/gestionnaires-count
+
+# total-vente-par-jour
+GET       api/total-vente-par-jour
+
+# •	Montant total des commandes (clients normaux + spéciaux).
+GET        api/montant-total-commandes
+
+# •	Montant total des paiements encaissés (partiels et complets).
+GET         api/somme-paiements-total
+# Reste total à encaisser.
+GET         api/reste-total-encaisser
+
+# •	Nombre de produits en rupture
+GET         api/nombre-produits-en-rupture
+
+# nombere de produit en nombre-produits-sous-seuil
+GET         api/nombre-produits-sous-seuil
+
+# nombre de normaux.
+GET         api/nombre-produits-en-normaux
+
+# o	Total commandes
+GET         api/total-commandes-payees
+ 
+# o	Commandes en attente caisse
+GET         api/commandes-en-attente-caisse
