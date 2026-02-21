@@ -28,17 +28,11 @@ import {
   Ban,
 } from "lucide-react";
 
-/* =========================================================================
-   IMPORT DES API
-   ========================================================================= */
 import { stockAPI } from "../../services/api/stock";
 import { mouvementsAPI } from "../../services/api/mouvements";
 import httpClient from "../../services/http/client";
 import { useStock } from "./StockContext";
 
-/* =========================================================================
-   HELPERS
-   ========================================================================= */
 const formatDateTime = (iso) => {
   if (!iso) return "";
   const d = new Date(iso);
@@ -63,18 +57,19 @@ const todayIsSameDay = (iso) => {
   );
 };
 
-/* =========================================================================
-   COMPOSANT PRINCIPAL
-   ========================================================================= */
 export default function StockMovements() {
   const {
     movements: contextMovements,
     products,
     fournisseurs,
-    loading: contextLoading,
-    refreshMovements,
+    movementsLoading,
+    productsLoading,
+    fournisseursLoading,
+    ensureLoaded,
+    refreshAll,
   } = useStock();
 
+  const [localLoading, setLocalLoading] = useState(true);
   const [localError, setLocalError] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -91,7 +86,6 @@ export default function StockMovements() {
     quantity: "",
     stockBefore: "",
     stockAfter: "",
-    date: "",
   });
 
   const [productDropdownOpen, setProductDropdownOpen] = useState(false);
@@ -106,6 +100,23 @@ export default function StockMovements() {
   const [pendingPage, setPendingPage] = useState(1);
   const [cancelledPage, setCancelledPage] = useState(1);
 
+  // Chargement initial
+  useEffect(() => {
+    const load = async () => {
+      setLocalLoading(true);
+      try {
+        await ensureLoaded();
+      } catch (error) {
+        console.error("Erreur chargement initial mouvements:", error);
+        setLocalError("Impossible de charger les données.");
+      } finally {
+        setLocalLoading(false);
+      }
+    };
+    load();
+  }, [ensureLoaded]);
+
+  // Gestion clic extérieur
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (productDropdownRef.current && !productDropdownRef.current.contains(event.target)) {
@@ -116,10 +127,10 @@ export default function StockMovements() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Calcul de la source et des before/after pour chaque mouvement
+  // Calcul des mouvements enrichis (source + before/after calculés)
   const movements = useMemo(() => {
-    return contextMovements.map(m => {
-      // Source
+    // 1. Ajouter la source si manquante
+    const withSource = contextMovements.map(m => {
       let source = m.source;
       if (!source) {
         if (m.type === "Entrée") {
@@ -134,28 +145,45 @@ export default function StockMovements() {
           source = "Boutique Colobane";
         }
       }
+      return { ...m, source };
+    });
 
-      // Recalcul de before/after
-      let before = m.before;
-      let after = m.after;
-      const product = products.find(p => p.id === m.produit_id);
-      const stockActuel = product?.nombre_carton || 0;
+    // 2. Trier du plus récent au plus ancien pour le calcul
+    const sortedDesc = [...withSource].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
 
-      if (before === undefined || after === undefined || (before === 0 && after === 0 && stockActuel > 0)) {
-        if (m.type === "Entrée") {
-          after = stockActuel;
-          before = Math.max(0, after - m.qty);
-        } else {
-          before = stockActuel;
-          after = Math.max(0, before - m.qty);
-        }
+    // Map pour stocker le stock après chaque mouvement (initialisé avec le stock actuel)
+    const stockAfterMap = new Map();
+    products.forEach(p => {
+      stockAfterMap.set(p.id, p.nombre_carton || 0);
+    });
+
+    // Calculer before/after en remontant le temps
+    const computed = [];
+    for (const m of sortedDesc) {
+      const produitId = m.produit_id;
+      const after = stockAfterMap.get(produitId) || 0;
+      let before;
+
+      if (m.type === "Entrée") {
+        before = after - m.qty;
+      } else {
+        // Sortie
+        before = after + m.qty;
       }
 
-      return { ...m, source, before, after };
-    });
+      // Mettre à jour pour le mouvement précédent (plus ancien)
+      stockAfterMap.set(produitId, before);
+
+      computed.push({ ...m, before, after });
+    }
+
+    // 3. Remettre dans l'ordre chronologique pour l'affichage
+    computed.sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
+
+    return computed;
   }, [contextMovements, products, fournisseurs]);
 
-  /* ==================== STATISTIQUES ==================== */
+  // Statistiques
   const stats = useMemo(() => {
     let totalEntries = 0;
     let totalValidated = 0;
@@ -172,7 +200,7 @@ export default function StockMovements() {
     return { totalEntries, totalValidated, totalPending, todayCount };
   }, [movements]);
 
-  /* ==================== FILTRAGE PAR ONGLET ==================== */
+  // Filtrage par onglet
   const filteredByTab = useMemo(() => {
     const baseFiltered = movements.filter((m) => {
       const term = searchTerm.trim().toLowerCase();
@@ -211,7 +239,7 @@ export default function StockMovements() {
     return [];
   }, [movements, searchTerm, dateFrom, dateTo, activeTab]);
 
-  /* ==================== PAGINATION PAR ONGLET ==================== */
+  // Pagination par onglet
   const paginationByTab = {
     historique: {
       data: filteredByTab,
@@ -236,7 +264,7 @@ export default function StockMovements() {
   const startIndex = (currentPage - 1) * pageSize;
   const paginatedData = currentPagination.data.slice(startIndex, startIndex + pageSize);
 
-  /* ==================== COMPOSANT PAGINATION AMÉLIORÉ ==================== */
+  // Composant Pagination
   const Pagination = ({ currentPage, totalPages, onPageChange, filteredCount, pageSize }) => {
     const startItem = (currentPage - 1) * pageSize + 1;
     const endItem = Math.min(currentPage * pageSize, filteredCount);
@@ -345,7 +373,7 @@ export default function StockMovements() {
     );
   };
 
-  /* ==================== DROPDOWN PRODUIT ==================== */
+  // Dropdown produits
   const filteredProducts = useMemo(() => {
     const term = productSearch.trim().toLowerCase();
     if (!term) return products;
@@ -371,7 +399,7 @@ export default function StockMovements() {
     setProductDropdownOpen(false);
   };
 
-  /* ==================== GESTION FORMULAIRE ==================== */
+  // Gestion formulaire
   const recalcAfter = (newPartial = {}) => {
     const qty = Number(newPartial.quantity ?? formData.quantity ?? 0);
     const before = Number(newPartial.stockBefore ?? formData.stockBefore ?? 0);
@@ -390,14 +418,14 @@ export default function StockMovements() {
     }
   };
 
-  /* ==================== CRÉATION DE TRANSFERT ==================== */
+  // Création de transfert
   const handleSubmitMovement = async (e) => {
     e.preventDefault();
     setFormError("");
     setIsSubmitting(true);
     setLocalError(null);
 
-    const { productId, quantity, date } = formData;
+    const { productId, quantity } = formData;
     if (!productId) {
       setFormError("Veuillez sélectionner un produit.");
       setIsSubmitting(false);
@@ -427,14 +455,12 @@ export default function StockMovements() {
       await stockAPI.transfer({
         produit_id: productId,
         quantite: qtyNum,
-        from_location: "Dépôt",
-        to_location: "Boutique Colobane",
-        date: date || new Date().toISOString(),
       });
 
-      await refreshMovements();
+      await refreshAll();
       alert("✅ Transfert créé et en attente de validation par la boutique.");
       closeModal();
+      setPendingPage(1);
     } catch (err) {
       console.error("❌ Erreur création transfert:", err);
       setFormError(err.response?.data?.message || "Erreur lors du transfert.");
@@ -444,7 +470,7 @@ export default function StockMovements() {
     }
   };
 
-  /* ==================== ANNULATION D'UN TRANSFERT ==================== */
+  // Annulation d'un transfert (version simplifiée)
   const cancelPendingSortie = async (sortieId) => {
     const mouvement = movements.find(m => m.id === sortieId);
     if (!mouvement) {
@@ -453,31 +479,28 @@ export default function StockMovements() {
     }
 
     const transferId = mouvement.transfer_id;
-    console.log("ID du transfert:", transferId);
-
-    const payloads = [
-      { transfer_id: transferId },
-      { id: transferId },
-      { transfert_id: transferId },
-      { transferId: transferId },
-    ];
-
-    for (const payload of payloads) {
-      try {
-        await httpClient.put('/annuler-produits-transfer', payload);
-        setCancelPendingId(null);
-        await refreshMovements();
-        alert("✅ Transfert annulé.");
-        return;
-      } catch (err) {
-        console.warn(`Échec avec payload`, payload, err);
-      }
+    if (!transferId) {
+      alert("ID de transfert manquant dans ce mouvement.");
+      return;
     }
 
-    alert("Impossible d'annuler ce transfert après plusieurs tentatives.");
+    try {
+      await mouvementsAPI.cancelTransfer(transferId);
+      setCancelPendingId(null);
+      await refreshAll();
+      alert("✅ Transfert annulé.");
+      setPendingPage(1);
+    } catch (err) {
+      console.error("❌ Erreur annulation:", err);
+      if (err.response) {
+        alert(err.response.data?.message || `Erreur ${err.response.status} lors de l'annulation.`);
+      } else {
+        alert("Erreur réseau ou serveur indisponible.");
+      }
+    }
   };
 
-  /* ==================== GESTION MODALE ==================== */
+  // Gestion modale
   const openModal = () => {
     setFormData({
       productId: "",
@@ -486,7 +509,6 @@ export default function StockMovements() {
       quantity: "",
       stockBefore: "",
       stockAfter: "",
-      date: "",
     });
     setFormError("");
     setProductSearch("");
@@ -502,7 +524,7 @@ export default function StockMovements() {
     setIsSubmitting(false);
   };
 
-  /* ==================== COMPOSANT DROPDOWN AMÉLIORÉ ==================== */
+  // Dropdown composant
   const ProductDropdown = () => (
     <div ref={productDropdownRef} className="relative">
       <label className="block text-xs font-medium text-gray-600 mb-2">
@@ -581,8 +603,8 @@ export default function StockMovements() {
     </div>
   );
 
-  /* ==================== RENDU ==================== */
-  if (contextLoading) {
+  // Rendu
+  if (localLoading || movementsLoading || productsLoading || fournisseursLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
@@ -994,17 +1016,6 @@ export default function StockMovements() {
                     </div>
                   </div>
                 )}
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-2">Date (optionnelle)</label>
-                  <input
-                    type="datetime-local"
-                    name="date"
-                    value={formData.date}
-                    onChange={handleFormChange}
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                  />
-                </div>
 
                 <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
                   <button

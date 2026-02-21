@@ -1,10 +1,11 @@
+// src/gestionnaire-depot/pages/Products.jsx
 import React, { useEffect, useState, useMemo } from "react";
 import "../styles/depot-fix.css";
 import { produitsAPI } from '../../services/api/produits';
 import { categoriesAPI } from '../../services/api/categories';
 import { fournisseursAPI } from '../../services/api/fournisseurs';
-import httpClient from '../../services/http/client';
 import { useStock } from './StockContext';
+import { historiqueAPI } from '../../services/api/historique';
 
 import {
   FaSearch, FaPlus, FaBoxOpen, FaBarcode, FaTags, FaBoxes, FaCubes,
@@ -18,9 +19,8 @@ import {
 } from "react-icons/fa";
 
 /* =========================================================================
-   2) CALCULS ET UTILITAIRES (avec guards)
+   CALCULS ET UTILITAIRES
    ========================================================================= */
-
 const computeTotalPrice = (p) => {
   const quantite = Number(p?.cartons || 0);
   const prix = Number(p?.pricePerCarton || 0);
@@ -62,16 +62,8 @@ const getTypeIcon = (type) => {
 };
 
 /* =========================================================================
-   FONCTION POUR RÉCUPÉRER TOUTES LES PAGES (conservée)
+   COMPOSANT PRINCIPAL
    ========================================================================= */
-const fetchAllPaginatedData = async (endpoint) => {
-  // ... inchangé
-};
-
-/* =========================================================================
-   3) COMPOSANT PRINCIPAL
-   ========================================================================= */
-
 export default function Products() {
   // Vérification que le contexte est disponible
   const stockContext = useStock();
@@ -82,12 +74,20 @@ export default function Products() {
     products: contextProducts,
     categories: contextCategories,
     fournisseurs: contextFournisseurs,
+    productsLoading,
+    categoriesLoading,
+    fournisseursLoading,
+    ensureLoaded,
     refreshAll,
-    loading: contextLoading,
   } = stockContext;
 
+  // État de chargement local
+  const [localLoading, setLocalLoading] = useState(true);
+
   // --- ÉTATS GLOBAUX ---
-  const [history, setHistory] = useState([]); 
+  const [history, setHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState(null);
   const [activeTab, setActiveTab] = useState("liste");
 
   // --- ÉTATS UI ---
@@ -135,9 +135,95 @@ export default function Products() {
   const [historyDetailModalOpen, setHistoryDetailModalOpen] = useState(false);
 
   /* =========================================================================
-     5) TRANSFORMATION DES DONNÉES (basée sur les données du contexte)
+     CHARGEMENT INITIAL (via ensureLoaded)
      ========================================================================= */
-  
+  useEffect(() => {
+    const loadData = async () => {
+      setLocalLoading(true);
+      try {
+        await ensureLoaded(); // Charge les données si pas encore fait
+      } catch (error) {
+        console.error("Erreur chargement initial produits:", error);
+      } finally {
+        setLocalLoading(false);
+      }
+    };
+    loadData();
+  }, [ensureLoaded]);
+
+  /* =========================================================================
+     CHARGEMENT DE L'HISTORIQUE
+     ========================================================================= */
+  const loadHistory = async () => {
+    setHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      const response = await historiqueAPI.getAll();
+      console.log('📦 Réponse brute historique:', response);
+      
+      // Normaliser la structure de la réponse
+      let data = [];
+      if (Array.isArray(response)) {
+        data = response;
+      } else if (response && Array.isArray(response.data)) {
+        data = response.data;
+      } else if (response && Array.isArray(response.results)) {
+        data = response.results;
+      } else if (response && Array.isArray(response.items)) {
+        data = response.items;
+      } else {
+        console.error('Format de réponse non reconnu:', response);
+        setHistoryError("Format de données incorrect.");
+        setHistory([]);
+        return;
+      }
+      
+      const normalized = data.map(item => ({
+        id: item.id,
+        productName: item.produit_nom || "Produit",
+        type: item.type_action === 'modification' ? 'Modification' : 'Suppression',
+        date: new Date(item.created_at).toLocaleString("fr-FR"),
+        changes: item.details ? JSON.parse(item.details) : null,
+        manager: item.utilisateur_nom || "Utilisateur",
+      }));
+      setHistory(normalized);
+    } catch (error) {
+      console.error("❌ Erreur chargement historique:", error);
+      if (error.response) {
+        console.error('Statut:', error.response.status);
+        console.error('Données:', error.response.data);
+      }
+      setHistoryError("Impossible de charger l'historique.");
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadHistory();
+  }, []);
+
+  /* =========================================================================
+     AJOUT D'UNE ENTRÉE D'HISTORIQUE
+     ========================================================================= */
+  const addHistoryEntry = async ({ product, type, changes }) => {
+    if (type !== "Modification" && type !== "Suppression") return;
+    const productName = product?.nom || product?.name || "Produit";
+    try {
+      await historiqueAPI.create({
+        produit_nom: productName,
+        type_action: type === "Modification" ? 'modification' : 'suppression',
+        details: changes ? JSON.stringify(changes) : null,
+      });
+      await loadHistory(); // Recharger après ajout
+    } catch (error) {
+      console.error("Erreur création historique:", error);
+    }
+  };
+
+  /* =========================================================================
+     TRANSFORMATION DES DONNÉES
+     ========================================================================= */
   const computedProducts = useMemo(() => {
     if (!Array.isArray(contextProducts) || contextProducts.length === 0) return [];
 
@@ -198,9 +284,8 @@ export default function Products() {
   }, [contextProducts, contextCategories, contextFournisseurs]);
 
   /* =========================================================================
-     6) FONCTIONS CRUD (avec refresh après chaque action)
+     FONCTIONS CRUD
      ========================================================================= */
-  
   const handleSubmitProduct = async (e) => {
     e.preventDefault();
     if (!currentProduct) return;
@@ -223,7 +308,7 @@ export default function Products() {
       return;
     }
 
-    // PRÉPARATION DU PAYLOAD AVEC LES NOMS EXACTS DE L'API
+    // PRÉPARATION DU PAYLOAD
     const apiPayload = {
       nom: String(currentProduct.name || "").trim(),
       categorie_id: String(categoryId),
@@ -233,7 +318,7 @@ export default function Products() {
       stock_seuil: parseInt(currentProduct.stockMin) || 5
     };
 
-    // ---------- GESTION DU CODE-BARRE ----------
+    // GESTION DU CODE-BARRE
     const barcode = currentProduct.barcode ? currentProduct.barcode.trim() : '';
     
     if (modalType === "add") {
@@ -270,7 +355,7 @@ export default function Products() {
       }
     }
 
-    // ---------- GESTION DU FOURNISSEUR ----------
+    // GESTION DU FOURNISSEUR
     if (currentProduct.fournisseur_id && 
         currentProduct.fournisseur_id.trim() !== "" &&
         currentProduct.fournisseur_id !== "null") {
@@ -319,7 +404,7 @@ export default function Products() {
         alert("✅ Produit modifié !");
 
         if (Object.keys(changes).length > 0) {
-          addHistoryEntry({
+          await addHistoryEntry({
             product: { nom: oldProduct.nom },
             type: "Modification",
             changes
@@ -328,26 +413,17 @@ export default function Products() {
       }
       
       closeProductModal();
-      await refreshAll();
+      setProductsPage(1); // Revenir à la première page après modification
+      await refreshAll(); // Recharger toutes les données
 
     } catch (error) {
       console.error("❌ Erreur détaillée:", error);
-      // ... gestion d'erreur inchangée
+      if (error.response?.data?.message) {
+        alert(`❌ ${error.response.data.message}`);
+      } else {
+        alert("❌ Erreur lors de l'enregistrement.");
+      }
     }
-  };
-
-  const addHistoryEntry = ({ product, type, changes }) => {
-    if (type !== "Modification" && type !== "Suppression") return;
-    const productName = product?.nom || product?.name || "Produit";
-    const entry = {
-      id: Date.now(),
-      productName,
-      type,
-      date: new Date().toLocaleString("fr-FR"),
-      changes: changes || null,
-      manager: "Utilisateur"
-    };
-    setHistory(prev => [entry, ...prev]);
   };
 
   const handleConfirmDeleteProduct = async () => {
@@ -357,7 +433,7 @@ export default function Products() {
       await produitsAPI.delete(deleteId);
       alert("✅ Produit supprimé avec succès !");
       if (productToDelete) {
-        addHistoryEntry({
+        await addHistoryEntry({
           product: { nom: productToDelete.nom },
           type: "Suppression",
           changes: {
@@ -366,10 +442,15 @@ export default function Products() {
         });
       }
       setDeleteId(null);
+      setProductsPage(1);
       await refreshAll();
     } catch (error) {
       console.error("Erreur suppression:", error);
-      // ... gestion d'erreur inchangée
+      if (error.response?.data?.message) {
+        alert(`❌ ${error.response.data.message}`);
+      } else {
+        alert("❌ Erreur lors de la suppression.");
+      }
     }
   };
 
@@ -403,6 +484,7 @@ export default function Products() {
       }
       
       closeAdjustModal();
+      setProductsPage(1);
       await refreshAll();
 
     } catch (error) {
@@ -416,7 +498,7 @@ export default function Products() {
   };
 
   /* =========================================================================
-     7) GESTION CATÉGORIES (inchangée mais avec guards)
+     GESTION CATÉGORIES
      ========================================================================= */
   const openAddCategoryModal = () => {
     setCategoryModal("add");
@@ -459,11 +541,16 @@ export default function Products() {
       }
       
       closeCategoryModal();
+      setCategoriesPage(1);
       await refreshAll();
 
     } catch (error) {
       console.error("❌ Erreur catégorie:", error);
-      // ... gestion d'erreur inchangée
+      if (error.response?.data?.message) {
+        alert(`❌ ${error.response.data.message}`);
+      } else {
+        alert("❌ Erreur lors de l'opération sur la catégorie.");
+      }
     }
   };
 
@@ -474,6 +561,7 @@ export default function Products() {
         await categoriesAPI.delete(deleteCategoryId);
         alert("✅ Catégorie supprimée avec succès !");
         setDeleteCategoryId(null);
+        setCategoriesPage(1);
         await refreshAll();
     } catch(err) {
         console.error("Erreur suppression catégorie:", err);
@@ -492,9 +580,8 @@ export default function Products() {
   };
 
   /* =========================================================================
-     8) FILTRES ET PAGINATION FRONTEND (avec guards)
+     FILTRES ET PAGINATION
      ========================================================================= */
-  
   const filteredProducts = useMemo(() => {
     if (!Array.isArray(computedProducts)) return [];
     return computedProducts
@@ -546,7 +633,7 @@ export default function Products() {
   const paginatedProducts = filteredProducts.slice(startProductsIndex, startProductsIndex + pageSize);
 
   /* =========================================================================
-     9) GESTION MODALES (inchangée)
+     GESTION MODALES
      ========================================================================= */
   const openAddModal = () => {
     setModalType("add");
@@ -598,7 +685,7 @@ export default function Products() {
     setCurrentProduct((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Filtrer les catégories avec guard
+  // Filtrer les catégories pour le select
   const filteredCategoriesOptions = useMemo(() => {
     if (!Array.isArray(contextCategories)) return [];
     return contextCategories.filter(cat =>
@@ -606,7 +693,7 @@ export default function Products() {
     );
   }, [contextCategories, categoryFilterTerm]);
 
-  // Filtrer les fournisseurs avec guard
+  // Filtrer les fournisseurs pour le select
   const filteredFournisseursOptions = useMemo(() => {
     if (!Array.isArray(contextFournisseurs)) return [];
     return contextFournisseurs.filter(f =>
@@ -615,7 +702,7 @@ export default function Products() {
   }, [contextFournisseurs, fournisseurFilterTerm]);
 
   /* =========================================================================
-     10) AJUSTEMENT DE STOCK (inchangé)
+     AJUSTEMENT DE STOCK
      ========================================================================= */
   const safeProductsForAdjust = Array.isArray(computedProducts) ? computedProducts : [];
   const alertProducts = safeProductsForAdjust.filter((p) =>
@@ -672,51 +759,39 @@ export default function Products() {
   const faibleList = alertFiltered.filter((p) => p.status?.label === "Faible");
 
   /* =========================================================================
-     11) HISTORIQUE (inchangé)
+     FILTRES ET PAGINATION DE L'HISTORIQUE
      ========================================================================= */
-  const filteredHistory = history.filter(h => 
-    h.type === "Modification" || h.type === "Suppression"
-  );
-  
-  const searchedHistory = filteredHistory.filter((h) => {
-    if (!historySearch) return true;
-    const term = historySearch.toLowerCase();
-    return (
-      (h.productName || "").toLowerCase().includes(term) ||
-      (h.type || "").toLowerCase().includes(term)
+  const filteredHistory = useMemo(() => {
+    let filtered = history.filter(h => 
+      h.type === "Modification" || h.type === "Suppression"
     );
-  });
-  
-  const typeFilteredHistory = searchedHistory.filter((h) => {
-    if (historyTypeFilter === "Tous") return true;
-    return h.type === historyTypeFilter;
-  });
-  
-  const sortedHistory = [...typeFilteredHistory].sort((a, b) => {
-    const dateA = new Date(a.date || 0);
-    const dateB = new Date(b.date || 0);
-    if (historySortBy === "date-desc") return dateB - dateA;
-    if (historySortBy === "date-asc") return dateA - dateB;
-    return 0;
-  });
-  
-  const totalHistoryPages = Math.max(1, Math.ceil(sortedHistory.length / pageSize));
+    if (historySearch) {
+      const term = historySearch.toLowerCase();
+      filtered = filtered.filter(h => 
+        (h.productName || "").toLowerCase().includes(term) ||
+        (h.type || "").toLowerCase().includes(term)
+      );
+    }
+    if (historyTypeFilter !== "Tous") {
+      filtered = filtered.filter(h => h.type === historyTypeFilter);
+    }
+    filtered.sort((a, b) => {
+      const dateA = new Date(a.date || 0);
+      const dateB = new Date(b.date || 0);
+      if (historySortBy === "date-desc") return dateB - dateA;
+      if (historySortBy === "date-asc") return dateA - dateB;
+      return 0;
+    });
+    return filtered;
+  }, [history, historySearch, historyTypeFilter, historySortBy]);
+
+  const totalHistoryPages = Math.max(1, Math.ceil(filteredHistory.length / pageSize));
   const currentHistoryPage = Math.min(historyPage, totalHistoryPages);
   const startHistoryIndex = (currentHistoryPage - 1) * pageSize;
-  const paginatedHistory = sortedHistory.slice(startHistoryIndex, startHistoryIndex + pageSize);
-
-  const openHistoryDetailModal = (item) => {
-    setSelectedHistoryItem(item);
-    setHistoryDetailModalOpen(true);
-  };
-
-  const closeHistoryDetailModal = () => {
-    setHistoryDetailModalOpen(false);
-    setSelectedHistoryItem(null);
-  };
+  const paginatedHistory = filteredHistory.slice(startHistoryIndex, startHistoryIndex + pageSize);
 
   /* =========================================================================
-     12) CATÉGORIES (avec guards)
+     CATÉGORIES
      ========================================================================= */
   const filteredCategories = useMemo(() => {
     if (!Array.isArray(contextCategories)) return [];
@@ -733,7 +808,7 @@ export default function Products() {
   const paginatedCategories = filteredCategories.slice(startCategoriesIndex, startCategoriesIndex + pageSize);
 
   /* =========================================================================
-     13) COMPOSANT PAGINATION (avec guards)
+     COMPOSANT PAGINATION
      ========================================================================= */
   const Pagination = ({ currentPage, totalPages, onPageChange, filteredCount }) => {
     if (!filteredCount || filteredCount === 0) return null;
@@ -801,9 +876,22 @@ export default function Products() {
   };
 
   /* =========================================================================
-     14) RENDU (avec vérification du chargement)
+     GESTION DES MODALES DÉTAILS HISTORIQUE
      ========================================================================= */
-  if (contextLoading) {
+  const openHistoryDetailModal = (item) => {
+    setSelectedHistoryItem(item);
+    setHistoryDetailModalOpen(true);
+  };
+
+  const closeHistoryDetailModal = () => {
+    setHistoryDetailModalOpen(false);
+    setSelectedHistoryItem(null);
+  };
+
+  /* =========================================================================
+     RENDU
+     ========================================================================= */
+  if (localLoading || productsLoading || categoriesLoading || fournisseursLoading) {
     return (
       <div className="depot-page flex items-center justify-center h-64">
         <div className="text-center">
@@ -824,7 +912,7 @@ export default function Products() {
             <FaWarehouse className="text-[#472EAD]" />
             Gestion Avancée des Produits
           </h1>
-          {!contextLoading && (
+          {!localLoading && (
             <div className="flex items-center gap-4 mt-2 text-sm">
               <span className="bg-gradient-to-r from-[#472EAD] to-[#6D5BD0] text-white px-3 py-1 rounded-full inline-flex items-center gap-1">
                 <FaBoxOpen /> {contextProducts?.length || 0} produits
@@ -876,8 +964,6 @@ export default function Products() {
           </button>
         ))}
       </div>
-
-      {/* CHARGEMENT - déjà géré au-dessus */}
 
       {/* ONGLET LISTE */}
       {activeTab === "liste" && (
@@ -1012,7 +1098,7 @@ export default function Products() {
       )}
 
       {/* ONGLET AJUSTEMENT */}
-      {activeTab === "ajustement" && !contextLoading && (
+      {activeTab === "ajustement" && !localLoading && (
         <div className="animate-fade-in space-y-6">
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 flex items-center gap-3">
             <FaSearch className="text-[#472EAD]" />
@@ -1136,22 +1222,23 @@ export default function Products() {
               </div>
             </div>
             <div className="mt-3 text-sm text-[#472EAD] font-semibold">
-              {sortedHistory.length} action(s) trouvée(s){historySearch && ` pour "${historySearch}"`}{historyTypeFilter !== "Tous" && ` • Type: ${historyTypeFilter}`}
+              {historyLoading ? "Chargement..." : `${filteredHistory.length} action(s) trouvée(s)`}
+              {historyError && <span className="text-red-600 ml-2">{historyError}</span>}
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-gradient-to-r from-[#472EAD] to-[#6D5BD0] rounded-xl shadow-sm p-4">
               <p className="text-xs text-white/90 flex items-center gap-1"><FaHistory className="text-white" /><span>Total Historique</span></p>
-              <p className="text-2xl font-semibold mt-2 text-white">{filteredHistory.length}</p>
+              <p className="text-2xl font-semibold mt-2 text-white">{history.length}</p>
             </div>
             <div className="bg-gradient-to-r from-[#3B82F6] to-[#60A5FA] rounded-xl shadow-sm p-4">
               <p className="text-xs text-white/90 flex items-center gap-1"><FaEdit className="text-white" /><span>Modifications</span></p>
-              <p className="text-2xl font-semibold mt-2 text-white">{filteredHistory.filter(h => h.type === "Modification").length}</p>
+              <p className="text-2xl font-semibold mt-2 text-white">{history.filter(h => h.type === "Modification").length}</p>
             </div>
             <div className="bg-gradient-to-r from-[#DC2626] to-[#EF4444] rounded-xl shadow-sm p-4">
               <p className="text-xs text-white/90 flex items-center gap-1"><FaTrashAlt className="text-white" /><span>Suppressions</span></p>
-              <p className="text-2xl font-semibold mt-2 text-white">{filteredHistory.filter(h => h.type === "Suppression").length}</p>
+              <p className="text-2xl font-semibold mt-2 text-white">{history.filter(h => h.type === "Suppression").length}</p>
             </div>
           </div>
 
@@ -1167,44 +1254,48 @@ export default function Products() {
                 </tr>
               </thead>
               <tbody>
-                {paginatedHistory.length > 0 ? paginatedHistory.map((item, index) => (
-                  <tr key={item.id || index} className="border-t hover:bg-[#F7F5FF]/30 transition-colors">
-                    <td className="p-3 text-gray-600">
-                      <div className="flex items-center gap-2">
-                        <FaClock className="text-[#472EAD]" />{item.date || "N/A"}
-                      </div>
-                    </td>
-                    <td className="p-3">
-                      <div className="font-medium text-[#472EAD] flex items-center gap-2">
-                        <FaBoxOpen />{item.productName}
-                      </div>
-                    </td>
-                    <td className="p-3">
-                      <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold border ${
-                        item.type === "Modification" ? "bg-gradient-to-r from-blue-100 to-blue-50 text-blue-800 border-blue-200" : 
-                        item.type === "Suppression" ? "bg-gradient-to-r from-red-100 to-red-50 text-red-800 border-red-200" : 
-                        "bg-gradient-to-r from-gray-100 to-gray-50 text-gray-800 border-gray-200"
-                      }`}>
-                        {getTypeIcon(item.type)}{item.type}
-                      </span>
-                    </td>
-                    <td className="p-3">
-                      <button
-                        onClick={() => openHistoryDetailModal(item)}
-                        className="inline-flex items-center gap-1 px-3 py-1 bg-[#472EAD] text-white text-xs rounded hover:bg-[#3a2590] transition"
-                      >
-                        <FaEye size={12} />
-                        Détails
-                      </button>
-                    </td>
-                    <td className="p-3">
-                      <div className="flex items-center gap-2">
-                        <FaUserTie className="text-[#472EAD]" />
-                        <span className="font-medium text-[#472EAD]">{item.manager || "Gestionnaire Dépôt"}</span>
-                      </div>
-                    </td>
-                  </tr>
-                )) : (
+                {historyLoading ? (
+                  <tr><td colSpan={5} className="p-8 text-center">Chargement...</td></tr>
+                ) : paginatedHistory.length > 0 ? (
+                  paginatedHistory.map((item, index) => (
+                    <tr key={item.id || index} className="border-t hover:bg-[#F7F5FF]/30 transition-colors">
+                      <td className="p-3 text-gray-600">
+                        <div className="flex items-center gap-2">
+                          <FaClock className="text-[#472EAD]" />{item.date || "N/A"}
+                        </div>
+                      </td>
+                      <td className="p-3">
+                        <div className="font-medium text-[#472EAD] flex items-center gap-2">
+                          <FaBoxOpen />{item.productName}
+                        </div>
+                      </td>
+                      <td className="p-3">
+                        <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold border ${
+                          item.type === "Modification" ? "bg-gradient-to-r from-blue-100 to-blue-50 text-blue-800 border-blue-200" : 
+                          item.type === "Suppression" ? "bg-gradient-to-r from-red-100 to-red-50 text-red-800 border-red-200" : 
+                          "bg-gradient-to-r from-gray-100 to-gray-50 text-gray-800 border-gray-200"
+                        }`}>
+                          {getTypeIcon(item.type)}{item.type}
+                        </span>
+                      </td>
+                      <td className="p-3">
+                        <button
+                          onClick={() => openHistoryDetailModal(item)}
+                          className="inline-flex items-center gap-1 px-3 py-1 bg-[#472EAD] text-white text-xs rounded hover:bg-[#3a2590] transition"
+                        >
+                          <FaEye size={12} />
+                          Détails
+                        </button>
+                      </td>
+                      <td className="p-3">
+                        <div className="flex items-center gap-2">
+                          <FaUserTie className="text-[#472EAD]" />
+                          <span className="font-medium text-[#472EAD]">{item.manager || "Gestionnaire Dépôt"}</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
                   <tr>
                     <td colSpan={5} className="p-8 text-center">
                       <div className="text-gray-400">
@@ -1217,14 +1308,14 @@ export default function Products() {
               </tbody>
             </table>
           </div>
-          {sortedHistory.length > 0 && (
-            <Pagination currentPage={currentHistoryPage} totalPages={totalHistoryPages} onPageChange={setHistoryPage} filteredCount={sortedHistory.length} />
+          {filteredHistory.length > 0 && (
+            <Pagination currentPage={currentHistoryPage} totalPages={totalHistoryPages} onPageChange={setHistoryPage} filteredCount={filteredHistory.length} />
           )}
         </>
       )}
 
       {/* ONGLET CATÉGORIES */}
-      {activeTab === "categories" && !contextLoading && (
+      {activeTab === "categories" && !localLoading && (
         <>
           <div className="bg-white rounded-xl shadow-sm border p-3">
             <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
@@ -1319,7 +1410,6 @@ export default function Products() {
                     value={currentProduct.categoryId || ""}
                     onChange={(e) => {
                       const selectedValue = e.target.value;
-                      // MODIFICATION: utiliser contextCategories
                       const selectedCat = contextCategories.find(c => c.id === selectedValue);
                       setCurrentProduct(prev => ({
                         ...prev,
@@ -1362,7 +1452,6 @@ export default function Products() {
                     value={currentProduct.fournisseur_id || ""}
                     onChange={(e) => {
                       const selectedValue = e.target.value;
-                      // MODIFICATION: utiliser contextFournisseurs
                       const selectedFournisseur = contextFournisseurs.find(f => f.id === selectedValue);
                       setCurrentProduct(prev => ({
                         ...prev,

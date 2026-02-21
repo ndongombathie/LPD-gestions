@@ -3,7 +3,7 @@ import React, { useState, useMemo } from "react";
 import "../styles/depot-fix.css";
 import { 
   Store, User, Phone, Search, ChevronLeft, ChevronRight, 
-  ChevronsLeft, ChevronsRight, Loader, CheckCircle, XCircle, 
+  ChevronsLeft, ChevronsRight, CheckCircle, XCircle, 
   MapPin, Truck 
 } from "lucide-react";
 import { useStock } from "./StockContext";
@@ -35,7 +35,7 @@ const generateAvatar = (name) => {
    PAGE PRINCIPALE
    ========================================================================= */
 export default function Suppliers() {
-  const { fournisseurs: contextFournisseurs, loading: contextLoading } = useStock();
+  const { fournisseurs: contextFournisseurs } = useStock(); // plus de loading
   const [searchInput, setSearchInput] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(8);
@@ -91,14 +91,7 @@ export default function Suppliers() {
     setCurrentPage(1);
   };
 
-  if (contextLoading) {
-    return (
-      <div className="depot-page flex items-center justify-center h-64">
-        <Loader className="animate-spin text-[#472EAD]" size={32} />
-        <p className="ml-3 text-gray-600">Chargement des fournisseurs...</p>
-      </div>
-    );
-  }
+  // Plus de vérification de chargement – la page s'affiche directement
 
   return (
     <div className="depot-page space-y-6 p-6">
@@ -195,6 +188,11 @@ export default function Suppliers() {
             </div>
           </div>
         ))}
+        {currentSuppliers.length === 0 && (
+          <div className="col-span-full text-center py-10 text-gray-400">
+            Aucun fournisseur trouvé.
+          </div>
+        )}
       </div>
 
       {/* PAGINATION */}
@@ -252,11 +250,10 @@ export default function Suppliers() {
         </div>
       )}
 
-      {/* MODALE DÉTAILS - AMÉLIORÉE */}
+      {/* MODALE DÉTAILS */}
       {selectedSupplier && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all">
-            {/* En-tête avec dégradé */}
             <div className="bg-gradient-to-r from-[#472EAD] to-[#f97316] px-6 py-5">
               <div className="flex items-center justify-between">
                 <h3 className="text-xl font-bold text-white flex items-center gap-2">
@@ -272,9 +269,7 @@ export default function Suppliers() {
               </div>
             </div>
 
-            {/* Contenu */}
             <div className="p-6">
-              {/* Avatar + Nom */}
               <div className="flex items-center gap-4 mb-6">
                 {generateAvatar(selectedSupplier.name)}
                 <div>
@@ -282,9 +277,7 @@ export default function Suppliers() {
                 </div>
               </div>
 
-              {/* Grille d'informations */}
               <div className="space-y-4">
-                {/* Contact */}
                 <div className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg border border-gray-100">
                   <div className="p-2 bg-purple-100 rounded-full">
                     <User size={18} className="text-[#472EAD]" />
@@ -295,7 +288,6 @@ export default function Suppliers() {
                   </div>
                 </div>
 
-                {/* Adresse */}
                 <div className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg border border-gray-100">
                   <div className="p-2 bg-orange-100 rounded-full">
                     <MapPin size={18} className="text-[#f97316]" />
@@ -310,7 +302,6 @@ export default function Suppliers() {
                   </div>
                 </div>
 
-                {/* Statut */}
                 <div className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg border border-gray-100">
                   <div className={`p-2 rounded-full ${selectedSupplier.status === "Actif" ? "bg-green-100" : "bg-gray-200"}`}>
                     {selectedSupplier.status === "Actif" ? (
@@ -329,7 +320,6 @@ export default function Suppliers() {
               </div>
             </div>
 
-            {/* Pied de page */}
             <div className="border-t border-gray-100 px-6 py-4 bg-gray-50 flex justify-end">
               <button
                 onClick={() => setSelectedSupplier(null)}

@@ -1,14 +1,10 @@
-/**
- * 📦 Mouvements de Stock API
- * 
- * Endpoint réel (Laravel) : /api/mouvements-stock
- */
-
+// src/services/api/mouvements.js
 import httpClient from '../http/client';
 
 const ENDPOINTS = {
   BASE: '/mouvements-stock',
-  CANCEL_TRANSFER: '/annuler-produits-transfer', // Endpoint pour annuler un transfert
+  PENDING_TRANSFERS: '/produits-transfer',
+  CANCEL_TRANSFER: '/annuler-produits-transfer',
 };
 
 export const mouvementsAPI = {
@@ -76,8 +72,21 @@ export const mouvementsAPI = {
   },
 
   /**
+   * Récupère la liste des transferts en attente
+   */
+  getPendingTransfers: async () => {
+    try {
+      const response = await httpClient.get(ENDPOINTS.PENDING_TRANSFERS);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erreur getPendingTransfers:', error);
+      throw error;
+    }
+  },
+
+  /**
    * Annule un transfert en attente
-   * @param {number} transferId - ID du transfert à annuler
+   * @param {number|string} transferId - ID du transfert à annuler
    */
   cancelTransfer: async (transferId) => {
     try {

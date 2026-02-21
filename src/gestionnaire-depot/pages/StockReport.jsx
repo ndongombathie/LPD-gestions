@@ -6,8 +6,6 @@ import jsPDF from "jspdf";
 import {
   Activity,
   DownloadCloud,
-  PieChart,
-  BarChart2,
   TrendingUp,
   ChevronLeft,
   ChevronRight,
@@ -18,13 +16,10 @@ import {
   DollarSign,
   ArrowUp,
   ArrowDown,
-  TrendingDown,
   Clock,
   BarChart3,
   Layers,
-  Truck,
   Star,
-  Award,
   Zap,
   Shield,
 } from "lucide-react";
@@ -186,7 +181,7 @@ const InfoCard = ({ title, value, icon: Icon, color = "violet", description }) =
 );
 
 export default function Reports() {
-  const { products, movements, loading } = useStock();
+  const { products, movements } = useStock();
   const [tab, setTab] = useState("resume");
   const [alertSubTab, setAlertSubTab] = useState("rupture");
 
@@ -200,7 +195,7 @@ export default function Reports() {
 
   const reportRef = useRef(null);
 
-  // Produits enrichis
+  // Produits enrichis (gère le cas où products est vide)
   const enriched = useMemo(() => {
     return products.map((p) => {
       const stockGlobal = p.cartons * p.unitsPerCarton;
@@ -218,7 +213,6 @@ export default function Reports() {
   const critiqueProducts = useMemo(() => enriched.filter((p) => p.status === "Critique"), [enriched]);
   const faibleProducts = useMemo(() => enriched.filter((p) => p.status === "Faible"), [enriched]);
 
-  // Pagination des alertes
   const paginatedRupture = ruptureProducts.slice((rupturePage - 1) * ruptureItemsPerPage, rupturePage * ruptureItemsPerPage);
   const paginatedCritique = critiqueProducts.slice((critiquePage - 1) * critiqueItemsPerPage, critiquePage * critiqueItemsPerPage);
   const paginatedFaible = faibleProducts.slice((faiblePage - 1) * faibleItemsPerPage, faiblePage * faibleItemsPerPage);
@@ -282,11 +276,10 @@ export default function Reports() {
   const exitsCount30 = recentMovements.filter((m) => m.type === "Sortie").length;
   const netVariationCount = entriesCount30 - exitsCount30;
 
-  // Total des unités en stock (stockGlobal) et valeur moyenne par produit
   const totalUnits = enriched.reduce((sum, p) => sum + p.stockGlobal, 0);
   const avgValue = totalProducts > 0 ? Math.round(totalValue / totalProducts) : 0;
 
-  // Produits les plus mouvementés (top 5 par nombre de mouvements)
+  // Produits les plus mouvementés
   const productMovementCount = useMemo(() => {
     const countMap = {};
     movements.forEach((m) => {
@@ -302,10 +295,9 @@ export default function Reports() {
       .slice(0, 5);
   }, [movements, enriched]);
 
-  // Indicateur de rotation (exemple fictif, à remplacer par des données réelles si possible)
   const rotationRate = totalProducts > 0 ? ((entriesCount30 + exitsCount30) / totalProducts).toFixed(2) : "0";
 
-  // Export PDF (simplifié mais moderne)
+  // Export PDF
   const exportPDF = async () => {
     try {
       const pdfContainer = document.createElement("div");
@@ -415,17 +407,6 @@ export default function Reports() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="depot-page p-6 flex items-center justify-center h-64">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#472EAD] mx-auto"></div>
-          <p className="mt-4 text-gray-600">Chargement des données...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="depot-page p-6 max-w-7xl mx-auto" style={{ color: PALETTE.text }}>
       {/* En-tête moderne */}
@@ -503,7 +484,7 @@ export default function Reports() {
           </section>
         )}
 
-        {/* Nouvel onglet "Analyse" sans graphiques */}
+        {/* Onglet "Analyse" */}
         {tab === "analyse" && (
           <section className="space-y-6">
             {/* Répartition des statuts */}
@@ -548,14 +529,14 @@ export default function Reports() {
               </div>
             </div>
 
-            {/* Ligne supplémentaire : top par stock global (optionnel) */}
+            {/* Ligne supplémentaire : top par stock global */}
             <div className="mt-4">
               <SimpleList items={topProductsByStockGlobal} title="Top 5 par stock global (unités)" icon={Layers} color="green" valueLabel="unités" />
             </div>
           </section>
         )}
 
-        {/* Onglet Alertes (inchangé mais modernisé) */}
+        {/* Onglet Alertes */}
         {tab === "alerts" && (
           <section>
             <div className="mb-6">

@@ -22,7 +22,7 @@ import { useStock } from "./StockContext";
 import useAuth from "../../hooks/useAuth";
 
 const Dashboard = () => {
-  const { products, movements, fournisseurs, loading } = useStock();
+  const { products, movements, fournisseurs } = useStock(); // plus de loading
   const { user } = useAuth();
 
   const userName = useMemo(() => {
@@ -93,17 +93,6 @@ const Dashboard = () => {
     const date = new Date(dateString);
     return date.toLocaleDateString("fr-FR", { hour: '2-digit', minute: '2-digit' });
   };
-
-  if (loading) {
-    return (
-      <div className="depot-page flex items-center justify-center h-64">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#472EAD] mx-auto"></div>
-          <p className="mt-4 text-gray-600">Chargement du tableau de bord...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="depot-page space-y-8 p-6 max-w-7xl mx-auto">

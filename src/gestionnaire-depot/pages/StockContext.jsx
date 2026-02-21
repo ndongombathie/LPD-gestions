@@ -1,5 +1,5 @@
 // src/gestionnaire-depot/pages/StockContext.jsx
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
 import { produitsAPI } from '../../services/api/produits';
 import { categoriesAPI } from '../../services/api/categories';
 import { fournisseursAPI } from '../../services/api/fournisseurs';
@@ -15,7 +15,14 @@ export const StockProvider = ({ children }) => {
   const [categories, setCategories] = useState([]);
   const [fournisseurs, setFournisseurs] = useState([]);
   const [movements, setMovements] = useState([]);
-  const [loading, setLoading] = useState(true);
+  
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const [fournisseursLoading, setFournisseursLoading] = useState(false);
+  const [movementsLoading, setMovementsLoading] = useState(false);
+  
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
+  const loadingPromise = useRef(null);
 
   const normalizeArray = (data) => {
     if (!data) return [];
@@ -55,13 +62,14 @@ export const StockProvider = ({ children }) => {
         if (page > 50) hasMore = false;
       } catch (error) {
         console.error(`Erreur pagination ${endpoint}:`, error);
-        hasMore = false;
+        throw error;
       }
     }
     return allData;
   };
 
   const loadProducts = useCallback(async () => {
+    setProductsLoading(true);
     try {
       const productsData = await fetchAllPaginated('/produits');
       const normalized = productsData.map(p => ({
@@ -88,10 +96,13 @@ export const StockProvider = ({ children }) => {
     } catch (error) {
       console.error('Erreur chargement produits:', error);
       setProducts([]);
+    } finally {
+      setProductsLoading(false);
     }
   }, []);
 
   const loadCategories = useCallback(async () => {
+    setCategoriesLoading(true);
     try {
       const categoriesData = await fetchAllPaginated('/categories');
       const normalized = categoriesData.map(c => ({
@@ -103,13 +114,15 @@ export const StockProvider = ({ children }) => {
     } catch (error) {
       console.error('Erreur chargement catégories:', error);
       setCategories([]);
+    } finally {
+      setCategoriesLoading(false);
     }
   }, []);
 
   const loadFournisseurs = useCallback(async () => {
+    setFournisseursLoading(true);
     try {
       const fournisseursData = await fetchAllPaginated('/fournisseurs');
-      console.log('📦 Réponse brute API fournisseurs:', fournisseursData);
       const normalized = fournisseursData.map(f => ({
         id: f.id || f.uuid,
         nom: f.nom || f.name || 'Inconnu',
@@ -128,13 +141,46 @@ export const StockProvider = ({ children }) => {
     } catch (error) {
       console.error('Erreur chargement fournisseurs:', error);
       setFournisseurs([]);
+    } finally {
+      setFournisseursLoading(false);
     }
   }, []);
 
   const loadMovements = useCallback(async () => {
+    setMovementsLoading(true);
     try {
+      // 1. Récupérer tous les mouvements
       const movementsData = await mouvementsAPI.getAllPaginated();
-      console.log('📦 Mouvements bruts reçus:', movementsData);
+      
+      // 2. Récupérer les transferts en attente
+      let pendingTransfers = [];
+      try {
+        pendingTransfers = await mouvementsAPI.getPendingTransfers();
+        console.log('📦 Transferts en attente (brut) :', pendingTransfers);
+      } catch (error) {
+        console.warn("Impossible de récupérer les transferts en attente, certains IDs pourraient manquer.");
+      }
+
+      // 3. Construire une map pour associer un mouvement à son transfer_id
+      //    On suppose que chaque transfert a un champ "mouvement_id" et un champ "transfer_id" (ou "id")
+      //    Afficher la structure pour la détecter
+      const transferMap = new Map();
+      if (Array.isArray(pendingTransfers)) {
+        pendingTransfers.forEach(t => {
+          console.log('🔍 Objet transfert :', t);
+          // À adapter selon la structure réelle
+          // Exemple : si t contient { mouvement_id: 123, transfert_id: "uuid" }
+          const mouvementId = t.mouvement_id || t.mouvementId || t.id_mouvement;
+          const transferId = t.transfer_id || t.id || t.transfert_id;
+          if (mouvementId && transferId) {
+            transferMap.set(mouvementId, transferId);
+          } else {
+            console.warn('Impossible de trouver mouvement_id ou transfer_id dans', t);
+          }
+        });
+      }
+
+      // 4. Normaliser les mouvements
       const normalized = movementsData.map(m => {
         let type = m.type === 'entree' ? 'Entrée' : 'Sortie';
         let sousType = '';
@@ -167,6 +213,12 @@ export const StockProvider = ({ children }) => {
           }
         }
 
+        // Récupérer le transfer_id depuis la map si disponible
+        let transfer_id = m.transfer_id || m.transfert_id || m.id;
+        if (transferMap.has(m.id)) {
+          transfer_id = transferMap.get(m.id);
+        }
+
         return {
           id: m.id,
           type,
@@ -186,47 +238,60 @@ export const StockProvider = ({ children }) => {
           stockAfter: m.stock_apres || 0,
           after: m.stock_apres || 0,
           manager: m.utilisateur?.nom || 'Gestionnaire',
-          transfer_id: m.transfer_id || m.transfert_id || m.id, // CORRECTION
+          transfer_id,
         };
       });
       setMovements(normalized);
     } catch (error) {
       console.error('Erreur chargement mouvements:', error);
       setMovements([]);
+    } finally {
+      setMovementsLoading(false);
     }
   }, []);
 
   const refreshAll = useCallback(async () => {
-    setLoading(true);
-    try {
-      await Promise.all([
-        loadProducts(),
-        loadCategories(),
-        loadFournisseurs(),
-        loadMovements(),
-      ]);
-    } catch (error) {
-      console.error('Erreur lors du rafraîchissement:', error);
-    } finally {
-      setLoading(false);
+    if (loadingPromise.current) {
+      return loadingPromise.current;
     }
+    const promise = (async () => {
+      try {
+        await Promise.all([
+          loadProducts(),
+          loadCategories(),
+          loadFournisseurs(),
+          loadMovements(),
+        ]);
+        setInitialLoadDone(true);
+      } catch (error) {
+        console.error('Erreur lors du rafraîchissement:', error);
+      } finally {
+        loadingPromise.current = null;
+      }
+    })();
+    loadingPromise.current = promise;
+    return promise;
   }, [loadProducts, loadCategories, loadFournisseurs, loadMovements]);
 
-  useEffect(() => {
-    refreshAll();
-  }, []);
+  const ensureLoaded = useCallback(async () => {
+    if (initialLoadDone) {
+      return;
+    }
+    return refreshAll();
+  }, [initialLoadDone, refreshAll]);
 
   const value = {
     products,
     categories,
     fournisseurs,
     movements,
-    loading,
+    productsLoading,
+    categoriesLoading,
+    fournisseursLoading,
+    movementsLoading,
+    initialLoadDone,
+    ensureLoaded,
     refreshAll,
-    refreshProducts: loadProducts,
-    refreshCategories: loadCategories,
-    refreshFournisseurs: loadFournisseurs,
-    refreshMovements: loadMovements,
   };
 
   return <StockContext.Provider value={value}>{children}</StockContext.Provider>;
