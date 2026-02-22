@@ -325,159 +325,127 @@ const CaissePage = () => {
   };
 
   const handleQRScan = async (qrData) => {
+    const safeDismiss = () => {
+      try {
+        toast.dismiss('qr-loading');
+      } catch (_e) {}
+    };
+    const safeCloseScanner = () => {
+      try {
+        setIsQRScannerOpen(false);
+      } catch (_e) {}
+    };
+
     try {
       const raw = (qrData ?? '').toString().trim();
+      if (!raw) {
+        toast.error('QR code vide', { description: 'Aucune donnée dans le QR code.' });
+        safeCloseScanner();
+        return;
+      }
 
       // Fonction pour extraire l'ID de commande depuis différents formats de QR code
       const extractCommandeId = (value) => {
         if (!value) return null;
         const s = value.toString().trim();
-
-        // Format JSON: { "commande_id": "...", "id": "..." } ou similaire
         try {
           const obj = JSON.parse(s);
           const candidate = obj?.commande_id || obj?.commandeId || obj?.id;
           if (typeof candidate === 'string' && candidate.length > 0) return candidate;
-        } catch (_e) {
-          // Pas un JSON valide, continuer
-        }
-
-        // UUID dans une string (format standard: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+        } catch (_e) {}
         const uuidMatch = s.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
         if (uuidMatch?.[0]) return uuidMatch[0];
-
-        // Format CMD-XXXXXXXX (numéro de ticket)
-        const cmdMatch = s.match(/CMD-([0-9A-F]{8})/i);
-        if (cmdMatch?.[1]) {
-          // Chercher dans les tickets chargés pour trouver l'ID complet
-          const ticket = tickets.find(t => t.numero?.toUpperCase() === s.toUpperCase());
-          if (ticket?.commande_id) return ticket.commande_id;
-        }
-
-        // Essayer de trouver dans les tickets déjà chargés par numéro complet
         const ticketTrouve = tickets.find((t) => {
           const numero = t?.numero?.toString?.() || '';
           const id = t?.id?.toString?.() || '';
           const commandeId = t?.commande_id?.toString?.() || '';
           return (
-            raw === numero ||
-            raw === id ||
-            raw === commandeId ||
-            (numero && raw.includes(numero)) ||
-            (id && raw.includes(id)) ||
-            (commandeId && raw.includes(commandeId))
+            raw === numero || raw === id || raw === commandeId ||
+            (numero && raw.includes(numero)) || (id && raw.includes(id)) || (commandeId && raw.includes(commandeId))
           );
         });
         if (ticketTrouve?.commande_id) return ticketTrouve.commande_id;
-
         return null;
       };
 
-      // 1) Vérifier d'abord dans les tickets déjà chargés (pour éviter un appel API inutile)
+      // 1) Ticket déjà chargé sur la page
       const ticketLocal = tickets.find((t) => {
         const numero = t?.numero?.toString?.() || '';
         const id = t?.id?.toString?.() || '';
         const commandeId = t?.commande_id?.toString?.() || '';
         return (
-          raw === numero ||
-          raw === id ||
-          raw === commandeId ||
+          raw === numero || raw === id || raw === commandeId ||
           (numero && raw.toUpperCase() === numero.toUpperCase()) ||
-          (numero && raw.includes(numero.replace('CMD-', '')))
+          (numero && raw.includes((numero || '').replace('CMD-', '')))
         );
       });
 
       if (ticketLocal) {
+        safeCloseScanner();
+        toast.success('Ticket trouvé', { description: `Ticket ${ticketLocal.numero} chargé.` });
         handleEncaisse(ticketLocal);
-        setIsQRScannerOpen(false);
-        toast.success('Ticket trouvé', {
-          description: `Ticket ${ticketLocal.numero} chargé avec succès`
-        });
         return;
       }
 
-      // 2) Extraire l'ID de commande depuis le QR code
+      // 2) QR invalide (pas une commande)
       const commandeId = extractCommandeId(raw);
       if (!commandeId) {
+        safeCloseScanner();
         toast.error('QR code invalide', {
-          description: 'Ce QR code ne correspond à aucune commande. Format attendu: UUID ou CMD-XXXXXXXX'
+          description: 'Ce QR code ne correspond à aucune commande. Utilisez le QR code du ticket (UUID ou CMD-XXXXXXXX).'
         });
         return;
       }
 
-      // 3) Récupérer directement les détails complets de la commande via l'API
-      // Cette approche est plus fiable que de chercher dans la liste paginée
+      // 3) Charger la commande depuis l'API
+      safeCloseScanner();
       toast.loading('Chargement du ticket...', { id: 'qr-loading' });
-      
+
       try {
-        // Récupérer les détails complets de la commande (inclut détails produits, vendeur, client)
         const commandeDetails = await caissierApi.getCommandeDetails(commandeId);
-        
-        // Récupérer les paiements de la commande
         const paiements = await caissierApi.getPaiements(commandeId);
-        
-        // Transformer en ticket avec toutes les informations
         const ticketFromDetails = transformCommandeToTicket(
-          commandeDetails, 
+          commandeDetails,
           Array.isArray(paiements) ? paiements : []
         );
 
-        // Vérifier le statut de la commande
         if (ticketFromDetails?.statut === 'encaissé') {
-          toast.dismiss('qr-loading');
+          safeDismiss();
           toast.error('Commande déjà encaissée', {
-            description: `Le ticket ${ticketFromDetails.numero} a déjà été complètement encaissé.`
+            description: `Le ticket ${ticketFromDetails.numero} a déjà été encaissé.`
           });
-          setIsQRScannerOpen(false);
           return;
         }
 
-        // Vérifier si la commande est en attente (statut 'attente')
         if (commandeDetails?.statut !== 'attente') {
-          toast.dismiss('qr-loading');
+          safeDismiss();
           toast.warning('Commande non disponible', {
-            description: `Le ticket ${ticketFromDetails.numero} n'est pas en attente d'encaissement (statut: ${commandeDetails?.statut || 'inconnu'}).`
+            description: `Le ticket ${ticketFromDetails.numero} n'est pas en attente (statut: ${commandeDetails?.statut || 'inconnu'}).`
           });
-          setIsQRScannerOpen(false);
           return;
         }
 
-        // Tout est OK, ouvrir le modal d'encaissement avec toutes les informations
-        toast.dismiss('qr-loading');
-        
-        // Mettre à jour le filtre pour afficher ce ticket dans la liste (optionnel mais utile)
-        // Cela permet de voir le ticket dans la liste même s'il n'était pas sur la page courante
-        const numeroTicket = ticketFromDetails.numero || `CMD-${commandeId.substring(0, 8).toUpperCase()}`;
-        if (!filterText.includes(numeroTicket) && !filterText.includes(commandeId.substring(0, 8))) {
-          // Optionnel : mettre à jour le filtre pour rechercher ce ticket
-          // setFilterText(numeroTicket); // Décommenter si vous voulez filtrer automatiquement
-        }
-        
-        toast.success('Ticket chargé', {
-          description: `Ticket ${numeroTicket} chargé avec succès`
-        });
-        
+        safeDismiss();
+        const numeroTicket = ticketFromDetails.numero || `CMD-${(commandeId || '').toString().substring(0, 8).toUpperCase()}`;
+        toast.success('Ticket chargé', { description: `Ticket ${numeroTicket} chargé.` });
         handleEncaisse(ticketFromDetails);
-        setIsQRScannerOpen(false);
-        
-      } catch (error) {
-        toast.dismiss('qr-loading');
-        
-        // Vérifier si c'est une erreur 404 (commande non trouvée)
-        if (error.response?.status === 404) {
+      } catch (err) {
+        safeDismiss();
+        if (err?.response?.status === 404) {
           toast.error('Commande introuvable', {
             description: 'Cette commande n\'existe pas ou n\'est plus disponible.'
           });
         } else {
-          toast.error('Erreur', {
-            description: 'Erreur lors du chargement du ticket. Veuillez réessayer.'
+          toast.error('QR code non reconnu', {
+            description: 'Impossible de charger ce ticket. Vérifiez que le QR code est bien celui d\'un ticket en attente.'
           });
         }
       }
-    } catch (error) {
-      // Erreur générale lors du traitement
+    } catch (err) {
+      safeDismiss();
+      safeCloseScanner();
       toast.error('Erreur', {
-        description: 'Erreur lors du traitement du QR code. Veuillez réessayer.'
+        description: 'Une erreur s\'est produite. Veuillez réessayer.'
       });
     }
   };
