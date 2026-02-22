@@ -16,7 +16,7 @@ GET             api/montant-total-stock
 GET        api/produits-sous-seuil
 
 # les produits en ruptures
-GET         /produits-rupture
+GET         api/produits-rupture
 
 # nombre de produits total dans le boutique
 GET|HEAD        api/nombre-produits-total
@@ -25,13 +25,5 @@ GET|HEAD        api/nombre-produits-total
 GET       api/quantite-totale-produit
 
 # la liste des produits disponible dans le stock
-<<<<<<< HEAD
-GET             api/produits-disponibles-boutiqueapi
 GET             api/produits-disponibles-boutique
-
-# historique des actons
 GET             api/all-produits-transfer
-(ajout des recherches sur les endpoints de boutiques controller)
-
-=======
-GET             api/produits-disponibles-boutique

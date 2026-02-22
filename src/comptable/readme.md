@@ -99,3 +99,17 @@ GET api/mouvement-stock-boutique/{id} | afficher les mouvement de stock d'un pro
 GET|HEAD        api/enregistrer-versements | historiques des encaissements
 
 POST            api/enregistrer-versements | enregistrer un encaissement payload(caissier_id,montant,observation,la date(optionel))
+
+# tous les decaissement en attente et valide
+GET             api/decaissements-all
+
+# le nombre de produit du depots
+GET     api/nombre-produits
+# le nombre de produit total de le boutique
+GET       api/quantite-totale-produit
+# le nombre de versement
+GET       api/nombre-versement-total
+# la somme total des versements
+GET       api/somme-versement-total
+# la somme total des encaissements
+GET       api/somme-paiements-total
