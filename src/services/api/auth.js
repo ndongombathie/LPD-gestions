@@ -79,6 +79,7 @@ export const authAPI = {
       // Sauvegarder token et user
       if (response.data?.token) {
         tokenManager.setToken(response.data.token);
+        console.log('user:', response.data);
       }
       if (response.data?.user) {
         userManager.setUser(response.data.user);
