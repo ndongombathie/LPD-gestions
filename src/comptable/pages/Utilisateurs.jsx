@@ -12,6 +12,7 @@ import {
   UserPlus,
   Trash2,
   Edit2,
+  Eye,
   Circle,
   CheckCircle2,
   AlertCircle,
@@ -25,6 +26,11 @@ import {
   Filter,
   Users,
   RefreshCw,
+  Mail,
+  Phone,
+  MapPin,
+  IdCard,
+  User,
 } from "lucide-react";
 
 import FormModal from "../components/FormModal.jsx";
@@ -96,6 +102,98 @@ const Toasts = ({ toasts, remove }) => (
   </div>
 );
 
+/* ================== MODALE DE VISUALISATION ================= */
+const ViewUserModal = ({ user, onClose }) => {
+  if (!user) return null;
+
+  return (
+    <FormModal open={!!user} onClose={onClose} title="Détails de l'utilisateur">
+      <div className="space-y-6">
+        {/* En-tête avec avatar */}
+        <div className="flex items-center gap-4 pb-4 border-b">
+          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#472EAD] to-[#6d4fc7] flex items-center justify-center text-white text-2xl font-bold shadow-lg">
+            {user.prenom?.[0]}{user.nom?.[0]}
+          </div>
+          <div>
+            <h3 className="text-xl font-semibold text-gray-900">
+              {user.prenom} {user.nom}
+            </h3>
+            <span className="inline-block mt-1 px-3 py-1 bg-indigo-50 text-[#472EAD] rounded-full text-xs font-medium">
+              {formatRole(user.role)}
+            </span>
+          </div>
+        </div>
+
+        {/* Grille d'informations */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Email */}
+          <div className="bg-gray-50 p-4 rounded-xl">
+            <div className="flex items-center gap-2 text-gray-600 mb-1">
+              <Mail size={16} />
+              <span className="text-xs font-medium uppercase tracking-wider">Email</span>
+            </div>
+            <p className="text-gray-900 font-medium break-all">{user.email || '-'}</p>
+          </div>
+
+          {/* Téléphone */}
+          <div className="bg-gray-50 p-4 rounded-xl">
+            <div className="flex items-center gap-2 text-gray-600 mb-1">
+              <Phone size={16} />
+              <span className="text-xs font-medium uppercase tracking-wider">Téléphone</span>
+            </div>
+            <p className="text-gray-900 font-medium">{formatPhone(user.telephone)}</p>
+          </div>
+
+          {/* CNI */}
+          <div className="bg-gray-50 p-4 rounded-xl">
+            <div className="flex items-center gap-2 text-gray-600 mb-1">
+              <IdCard size={16} />
+              <span className="text-xs font-medium uppercase tracking-wider">Numéro CNI</span>
+            </div>
+            <p className="text-gray-900 font-medium">{user.numero_cni || '-'}</p>
+          </div>
+
+          {/* Adresse */}
+          <div className="bg-gray-50 p-4 rounded-xl md:col-span-2">
+            <div className="flex items-center gap-2 text-gray-600 mb-1">
+              <MapPin size={16} />
+              <span className="text-xs font-medium uppercase tracking-wider">Adresse</span>
+            </div>
+            <p className="text-gray-900 font-medium">{user.adresse || 'Non renseignée'}</p>
+          </div>
+
+          {/* Date de création */}
+          {user.created_at && (
+            <div className="bg-gray-50 p-4 rounded-xl md:col-span-2">
+              <div className="flex items-center gap-2 text-gray-600 mb-1">
+                <User size={16} />
+                <span className="text-xs font-medium uppercase tracking-wider">Membre depuis</span>
+              </div>
+              <p className="text-gray-900 font-medium">
+                {new Date(user.created_at).toLocaleDateString('fr-FR', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric'
+                })}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Bouton de fermeture */}
+        <div className="flex justify-end pt-4 border-t">
+          <button
+            onClick={onClose}
+            className="px-6 py-2 bg-[#472EAD] text-white rounded-lg hover:bg-[#3a2590] transition-colors"
+          >
+            Fermer
+          </button>
+        </div>
+      </div>
+    </FormModal>
+  );
+};
+
 /* ================== FORMULAIRE CRÉATION ================= */
 const UserForm = ({ onSubmit, onCancel, isLoading, error }) => {
   const [form, setForm] = useState({
@@ -120,6 +218,7 @@ const UserForm = ({ onSubmit, onCancel, isLoading, error }) => {
   const validateForm = () => {
     const errors = {};
     
+    // Champs obligatoires
     if (!form.prenom?.trim()) errors.prenom = "Prénom requis";
     if (!form.nom?.trim()) errors.nom = "Nom requis";
     if (!form.email?.trim()) {
@@ -127,6 +226,8 @@ const UserForm = ({ onSubmit, onCancel, isLoading, error }) => {
     } else if (!isEmail(form.email)) {
       errors.email = "Email invalide";
     }
+    if (!form.numero_cni?.trim()) errors.numero_cni = "Numéro CNI requis";
+    if (!form.role) errors.role = "Rôle requis";
 
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
@@ -151,7 +252,7 @@ const UserForm = ({ onSubmit, onCancel, isLoading, error }) => {
       )}
       
       <div className="grid grid-cols-2 gap-4">
-        {/* Prénom */}
+        {/* Prénom (obligatoire) */}
         <div className="space-y-1">
           <input
             className={cls(inputClass, fieldErrors.prenom && errorInputClass)}
@@ -165,7 +266,7 @@ const UserForm = ({ onSubmit, onCancel, isLoading, error }) => {
           )}
         </div>
 
-        {/* Nom */}
+        {/* Nom (obligatoire) */}
         <div className="space-y-1">
           <input
             className={cls(inputClass, fieldErrors.nom && errorInputClass)}
@@ -179,7 +280,7 @@ const UserForm = ({ onSubmit, onCancel, isLoading, error }) => {
           )}
         </div>
 
-        {/* Email */}
+        {/* Email (obligatoire) */}
         <div className="space-y-1">
           <input
             className={cls(inputClass, fieldErrors.email && errorInputClass)}
@@ -194,40 +295,50 @@ const UserForm = ({ onSubmit, onCancel, isLoading, error }) => {
           )}
         </div>
 
-        {/* Téléphone */}
+        {/* Téléphone (optionnel) */}
         <input
           className={inputClass}
-          placeholder="Téléphone"
+          placeholder="Téléphone (optionnel)"
           value={form.telephone}
           onChange={(e) => updateField("telephone", e.target.value)}
           disabled={isLoading}
         />
 
-        {/* CNI */}
-        <input
-          className={inputClass}
-          placeholder="CNI"
-          value={form.numero_cni}
-          onChange={(e) => updateField("numero_cni", e.target.value)}
-          disabled={isLoading}
-        />
+        {/* CNI (obligatoire) */}
+        <div className="space-y-1">
+          <input
+            className={cls(inputClass, fieldErrors.numero_cni && errorInputClass)}
+            placeholder="Numéro CNI *"
+            value={form.numero_cni}
+            onChange={(e) => updateField("numero_cni", e.target.value)}
+            disabled={isLoading}
+          />
+          {fieldErrors.numero_cni && (
+            <p className="text-xs text-rose-600">{fieldErrors.numero_cni}</p>
+          )}
+        </div>
 
-        {/* Rôle */}
-        <select
-          className={inputClass}
-          value={form.role}
-          onChange={(e) => updateField("role", e.target.value)}
-          disabled={isLoading}
-        >
-          {ROLES_UI.map((role) => (
-            <option key={role}>{role}</option>
-          ))}
-        </select>
+        {/* Rôle (obligatoire) */}
+        <div className="space-y-1">
+          <select
+            className={cls(inputClass, fieldErrors.role && errorInputClass)}
+            value={form.role}
+            onChange={(e) => updateField("role", e.target.value)}
+            disabled={isLoading}
+          >
+            {ROLES_UI.map((role) => (
+              <option key={role}>{role}</option>
+            ))}
+          </select>
+          {fieldErrors.role && (
+            <p className="text-xs text-rose-600">{fieldErrors.role}</p>
+          )}
+        </div>
 
-        {/* Adresse */}
+        {/* Adresse (optionnelle) */}
         <input
           className={`${inputClass} col-span-2`}
-          placeholder="Adresse"
+          placeholder="Adresse (optionnelle)"
           value={form.adresse}
           onChange={(e) => updateField("adresse", e.target.value)}
           disabled={isLoading}
@@ -459,6 +570,7 @@ export default function Utilisateurs() {
   const [editTarget, setEditTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [resetTarget, setResetTarget] = useState(null);
+  const [viewTarget, setViewTarget] = useState(null); // Nouvel état pour la visualisation
   const [formError, setFormError] = useState(null);
   
   // États des toasts
@@ -599,6 +711,8 @@ export default function Utilisateurs() {
         const errors = error.response.data?.errors;
         if (errors?.email) {
           setFormError("❌ Cet email est déjà utilisé. Veuillez en choisir un autre.");
+        } else if (errors?.numero_cni) {
+          setFormError("❌ Ce numéro CNI est déjà utilisé.");
         } else {
           setFormError("❌ Erreur de validation. Vérifiez les champs.");
         }
@@ -699,6 +813,13 @@ export default function Utilisateurs() {
   const renderActions = useCallback((user) => (
     <div className="flex items-center gap-2">
       <button
+        onClick={() => setViewTarget(user)}
+        className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+        title="Voir les détails"
+      >
+        <Eye size={16} />
+      </button>
+      <button
         onClick={() => setEditTarget(user)}
         className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
         title="Modifier"
@@ -731,10 +852,6 @@ export default function Utilisateurs() {
     {
       label: "Email",
       key: "email",
-    },
-    {
-      label: "Téléphone",
-      render: (_, user) => user.formattedPhone,
     },
     {
       label: "Rôle",
@@ -1116,6 +1233,9 @@ export default function Utilisateurs() {
             </div>
           )}
         </FormModal>
+
+        {/* MODALE DE VISUALISATION */}
+        <ViewUserModal user={viewTarget} onClose={() => setViewTarget(null)} />
 
         {/* Toasts */}
         <Toasts toasts={toasts} remove={removeToast} />

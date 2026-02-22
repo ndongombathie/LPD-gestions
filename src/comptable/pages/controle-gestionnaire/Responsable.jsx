@@ -1,23 +1,25 @@
-import { useState, useMemo } from "react";
-import { Printer } from "lucide-react";
+import { useState, useMemo, useEffect, useCallback } from "react";
+import { Printer, ChevronLeft, ChevronRight } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import responsableAPI from "@/services/api/responsable";
 
-/* =======================
-   DONNÉES
-======================= */
-const data = [
-  { id: 1, type: "decaissement", date: "2025-01-12", motif: "Achat carburant", montant: 50000 },
-  { id: 2, type: "encaissement", date: "2025-01-12", motif: "Paiement client", montant: 200000 },
-  { id: 3, type: "vente_speciale", date: "2025-04-12", client: "Client A", montant: 120000 },
-  { id: 4, type: "dette", client: "Client B", dette: 100000, paye: 70000 },
-];
+/* ===================== UTILS ===================== */
 
-/* =======================
-   UTILS
-======================= */
 const fcfa = (v) =>
   Number(v || 0).toLocaleString("de-DE") + " FCFA";
+
+const formatDate = (dateString) => {
+  if (!dateString) return "-";
+  return new Date(dateString).toLocaleDateString("fr-FR");
+};
+
+const formatDateInput = (dateString) => {
+  if (!dateString) return null;
+  return new Date(dateString).toISOString().slice(0, 10);
+};
+
+/* ===================== COMPONENT ===================== */
 
 export default function Responsable() {
 
@@ -25,252 +27,243 @@ export default function Responsable() {
   const [dateDebut, setDateDebut] = useState("");
   const [dateFin, setDateFin] = useState("");
 
-  /* =======================
-     DETTES
-  ======================= */
-  const dettes = useMemo(() => {
-    return data
-      .filter(d => d.type === "dette" && d.dette > d.paye)
-      .map(d => ({
-        client: d.client,
-        dette: d.dette,
-        paye: d.paye,
-        reste: d.dette - d.paye,
-      }));
+  const [decaissementsAPI, setDecaissementsAPI] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  /* PAGINATION */
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+
+  /* ================= FETCH API ================= */
+
+  const fetchDecaissements = useCallback(async (page = 1) => {
+    try {
+      setLoading(true);
+
+      const res = await responsableAPI.getAllDecaissements({
+        page,
+        per_page: 8,
+      });
+
+      setDecaissementsAPI(res.data || []);
+      setCurrentPage(res.pagination.currentPage);
+      setTotalPages(res.pagination.lastPage);
+      setTotalItems(res.pagination.total);
+
+    } catch (error) {
+      console.error("Erreur chargement décaissements :", error);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  /* =======================
-     MOUVEMENTS FILTRÉS
-  ======================= */
-  const mouvementsFiltres = useMemo(() => {
-    return data.filter(item => {
+  useEffect(() => {
+    fetchDecaissements(1);
+  }, [fetchDecaissements]);
 
-      if (item.type === "dette") return false;
+  /* ================= FILTRAGE DATE ================= */
 
-      if (
-        typeFiltre !== "tous" &&
-        typeFiltre !== "clients_endettes" &&
-        item.type !== typeFiltre
-      ) return false;
+  const decaissements = useMemo(() => {
+    return decaissementsAPI
+      .filter(item => {
+        const formatted = formatDateInput(item.date);
+        return (
+          (!dateDebut || formatted >= dateDebut) &&
+          (!dateFin || formatted <= dateFin)
+        );
+      })
+      .map(item => ({
+        id: item.id,
+        date: formatDate(item.date),
+        motif: item.motif,
+        montant: item.montant,
+      }));
+  }, [decaissementsAPI, dateDebut, dateFin]);
 
-      if (dateDebut && item.date < dateDebut) return false;
-      if (dateFin && item.date > dateFin) return false;
+  const totalDecaissements = useMemo(() =>
+    decaissements.reduce((sum, item) => sum + item.montant, 0)
+  , [decaissements]);
 
-      return true;
-    });
-  }, [typeFiltre, dateDebut, dateFin]);
+  /* ================= PAGINATION ================= */
 
-  const totalMontant = mouvementsFiltres.reduce(
-    (s, m) => s + (m.montant || 0),
-    0
-  );
+  const handlePageChange = (page) => {
+    if (page >= 1 && page <= totalPages) {
+      fetchDecaissements(page);
+    }
+  };
 
-  /* =======================
-     IMPRESSION PDF
-  ======================= */
+  /* ================= IMPRESSION PDF SELON FILTRE ================= */
+
   const imprimerPDF = async () => {
-
     const doc = new jsPDF();
     let cursorY = 15;
 
-    const img = new Image();
-    img.src = "/lpd-logo.png";
+    /* LOGO */
+    try {
+      const img = new Image();
+      img.src = "/lpd-logo.png";
+      await new Promise(resolve => { img.onload = resolve; });
+      doc.addImage(img, "PNG", 14, cursorY, 40, 20);
+      cursorY += 30;
+    } catch {
+      cursorY += 10;
+    }
 
-    await new Promise(resolve => {
-      img.onload = resolve;
-    });
-
-    doc.addImage(img, "PNG", 14, cursorY, 40, 20);
-    cursorY += 30;
-
-    doc.setFontSize(16);
+    doc.setFontSize(14);
     doc.text("RAPPORT FINANCIER LPD", 14, cursorY);
     cursorY += 8;
 
     doc.setFontSize(10);
-    doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, cursorY);
+    doc.text(
+      `Date d'édition : ${new Date().toLocaleDateString("fr-FR")}`,
+      14,
+      cursorY
+    );
     cursorY += 10;
 
-    if (typeFiltre === "tous") {
-
+    /* SI TOUS OU DÉCAISSEMENT */
+    if (typeFiltre === "tous" || typeFiltre === "decaissement") {
       autoTable(doc, {
         startY: cursorY,
-        head: [["Date", "Type", "Description", "Montant"]],
-        body: mouvementsFiltres.map(m => [
+        head: [["Date", "Motif", "Montant"]],
+        body: decaissements.map(m => [
           m.date,
-          m.type.replace("_", " "),
-          m.motif || m.client,
-          fcfa(m.montant),
+          m.motif,
+          fcfa(m.montant)
         ]),
+        foot: [["", "TOTAL", fcfa(totalDecaissements)]],
+        theme: "striped",
+        headStyles: { fillColor: [71, 46, 173], textColor: 255 },
+        footStyles: { fontStyle: "bold" },
       });
 
-      cursorY = doc.lastAutoTable.finalY + 10;
-
-      autoTable(doc, {
-        startY: cursorY,
-        head: [["Client", "Dette", "Payé", "Reste"]],
-        body: dettes.map(d => [
-          d.client,
-          fcfa(d.dette),
-          fcfa(d.paye),
-          fcfa(d.reste),
-        ]),
-      });
-
-      doc.save("Rapport_Complet_LPD.pdf");
-      return;
+      cursorY = doc.lastAutoTable.finalY + 15;
     }
 
-    if (typeFiltre === "clients_endettes") {
+    const nomFichier =
+      typeFiltre === "tous"
+        ? "Rapport_Complet_LPD.pdf"
+        : `Rapport_${typeFiltre}_LPD.pdf`;
 
-      autoTable(doc, {
-        startY: cursorY,
-        head: [["Client", "Dette", "Payé", "Reste"]],
-        body: dettes.map(d => [
-          d.client,
-          fcfa(d.dette),
-          fcfa(d.paye),
-          fcfa(d.reste),
-        ]),
-      });
-
-      doc.save("Clients_Endettes_LPD.pdf");
-      return;
-    }
-
-    autoTable(doc, {
-      startY: cursorY,
-      head: [["Date", "Type", "Description", "Montant"]],
-      body: mouvementsFiltres.map(m => [
-        m.date,
-        m.type.replace("_", " "),
-        m.motif || m.client,
-        fcfa(m.montant),
-      ]),
-      foot: [["", "", "TOTAL", fcfa(totalMontant)]],
-    });
-
-    doc.save(`Rapport_${typeFiltre}_LPD.pdf`);
+    doc.save(nomFichier);
   };
 
-  /* =======================
-     UI
-  ======================= */
+  /* ================= RENDER ================= */
+
   return (
-    <div className="p-6 space-y-10">
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-7xl mx-auto px-6">
 
-      <h1 className="text-2xl font-bold text-indigo-700">
-        Suivi des activités du Responsable
-      </h1>
+        {/* HEADER */}
+        <div className="bg-white rounded-2xl shadow-md mb-8 p-6">
+          <h1 className="text-2xl font-bold text-[#472EAD]">
+            Tableau de bord Responsable
+          </h1>
+        </div>
 
-      {/* FILTRES */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-white p-4 rounded-xl shadow">
+        {/* FILTRES */}
+        <div className="bg-white rounded-2xl shadow-md mb-8 p-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
 
-        <select
-          className="border px-3 py-2 rounded-lg"
-          value={typeFiltre}
-          onChange={(e) => setTypeFiltre(e.target.value)}
-        >
-          <option value="tous">Tous</option>
-          <option value="decaissement">Décaissement</option>
-          <option value="encaissement">Encaissement</option>
-          <option value="vente_speciale">Vente spéciale</option>
-          <option value="clients_endettes">Clients endettés</option>
-        </select>
+            <select
+              className="border rounded-lg px-4 py-2"
+              value={typeFiltre}
+              onChange={(e) => setTypeFiltre(e.target.value)}
+            >
+              <option value="tous">Tous les rapports</option>
+              <option value="decaissement">Décaissements</option>
+              <option value="vente_speciale">Ventes spéciales</option>
+              <option value="clients_endettes">Clients endettés</option>
+            </select>
 
-        <input
-          type="date"
-          className="border px-3 py-2 rounded-lg"
-          value={dateDebut}
-          onChange={(e) => setDateDebut(e.target.value)}
-        />
+            <input
+              type="date"
+              className="border rounded-lg px-4 py-2"
+              value={dateDebut}
+              onChange={(e) => setDateDebut(e.target.value)}
+            />
 
-        <input
-          type="date"
-          className="border px-3 py-2 rounded-lg"
-          value={dateFin}
-          onChange={(e) => setDateFin(e.target.value)}
-        />
+            <input
+              type="date"
+              className="border rounded-lg px-4 py-2"
+              value={dateFin}
+              onChange={(e) => setDateFin(e.target.value)}
+            />
 
-        <button
-          onClick={imprimerPDF}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex gap-2 items-center justify-center"
-        >
-          <Printer size={18} /> Imprimer PDF
-        </button>
+            <button
+              onClick={imprimerPDF}
+              className="bg-[#472EAD] text-white px-4 py-2 rounded-lg flex items-center gap-2"
+            >
+              <Printer size={18} />
+              Générer PDF
+            </button>
+          </div>
+        </div>
+
+        {/* TABLEAU DÉCAISSEMENTS */}
+        {(typeFiltre === "tous" || typeFiltre === "decaissement") && (
+          <div className="bg-white rounded-2xl shadow-md p-6 mb-6">
+            <h2 className="text-lg font-bold text-[#472EAD] mb-4">
+              Décaissements ({totalItems})
+            </h2>
+
+            {loading ? (
+              <p>Chargement...</p>
+            ) : (
+              <>
+                <table className="w-full">
+                  <thead className="bg-[#472EAD] text-white">
+                    <tr>
+                      <th className="p-4 text-left">Date</th>
+                      <th className="p-4 text-left">Motif</th>
+                      <th className="p-4 text-right">Montant</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {decaissements.map((item) => (
+                      <tr key={item.id} className="border-b">
+                        <td className="p-4">{item.date}</td>
+                        <td className="p-4">{item.motif}</td>
+                        <td className="p-4 text-right font-semibold">
+                          {fcfa(item.montant)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {totalPages > 1 && (
+                  <div className="flex justify-between items-center mt-6">
+                    <button
+                      disabled={currentPage === 1}
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      className="px-4 py-2 border rounded disabled:opacity-40 flex items-center gap-2"
+                    >
+                      <ChevronLeft size={16} />
+                      Précédent
+                    </button>
+
+                    <span>
+                      Page {currentPage} / {totalPages}
+                    </span>
+
+                    <button
+                      disabled={currentPage === totalPages}
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      className="px-4 py-2 border rounded disabled:opacity-40 flex items-center gap-2"
+                    >
+                      Suivant
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
       </div>
-
-      {/* MOUVEMENTS */}
-      {typeFiltre !== "clients_endettes" && (
-        <div className="space-y-6">
-
-          <div className="bg-indigo-50 p-4 rounded-xl shadow text-right font-semibold text-indigo-700">
-            Total mouvements : {fcfa(totalMontant)}
-          </div>
-
-          <div className="bg-white rounded-xl shadow overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-indigo-600 text-white">
-                <tr>
-                  <th className="p-4 text-left">Date</th>
-                  <th className="p-4 text-left">Type</th>
-                  <th className="p-4 text-left">Description</th>
-                  <th className="p-4 text-right">Montant</th>
-                </tr>
-              </thead>
-              <tbody>
-                {mouvementsFiltres.map((m) => (
-                  <tr key={m.id} className="border-b hover:bg-gray-50">
-                    <td className="p-4">{m.date}</td>
-                    <td className="p-4">{m.type.replace("_", " ")}</td>
-                    <td className="p-4">{m.motif || m.client}</td>
-                    <td className="p-4 text-right font-semibold">
-                      {fcfa(m.montant)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* DETTES */}
-      {(typeFiltre === "tous" || typeFiltre === "clients_endettes") && (
-        <div className="space-y-6">
-
-          <h2 className="text-lg font-bold text-red-600">
-            Clients Endettés
-          </h2>
-
-          <div className="bg-white rounded-xl shadow overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-red-600 text-white">
-                <tr>
-                  <th className="p-4 text-left">Client</th>
-                  <th className="p-4 text-right">Dette</th>
-                  <th className="p-4 text-right">Payé</th>
-                  <th className="p-4 text-right">Reste</th>
-                </tr>
-              </thead>
-              <tbody>
-                {dettes.map((d, i) => (
-                  <tr key={i} className="border-b hover:bg-gray-50">
-                    <td className="p-4">{d.client}</td>
-                    <td className="p-4 text-right">{fcfa(d.dette)}</td>
-                    <td className="p-4 text-right">{fcfa(d.paye)}</td>
-                    <td className="p-4 text-right text-red-600 font-bold">
-                      {fcfa(d.reste)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-        </div>
-      )}
-
     </div>
   );
 }

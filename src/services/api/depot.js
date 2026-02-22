@@ -1,17 +1,3 @@
-/**
- * 🏭 Dépôt – Contrôle des produits
- *
- * Endpoints:
- * GET api/produits-controle-depots
- * GET api/mouvements-stock?produit_id=UUID
- *
- * Rôle:
- * - Centraliser l’accès API
- * - Normaliser pagination Laravel
- * - Forcer pagination 25 par défaut
- * - Transformer les données pour le frontend
- */
-
 import httpClient from "../http/client";
 
 const PRODUITS_ENDPOINT = "/produits-controle-depots";
@@ -32,7 +18,6 @@ const getEtatStock = (stockGlobal, stockSeuil) => {
  */
 const getNombreReappro = (mouvements = []) => {
   if (!Array.isArray(mouvements)) return 0;
-
   return mouvements.length;
 };
 
@@ -62,17 +47,32 @@ const depotAPI = {
         ? payload.data
         : [];
 
+      /**
+       * 🔥 TRANSFORMATION CORRIGÉE
+       */
       const data = rawData.map((produit) => ({
         id: produit.id,
         nom: produit.nom,
+        code: produit.code,
+
+        // ✅ ON GARDE LE FOURNISSEUR
+        fournisseur: {
+          id: produit.fournisseur?.id ?? null,
+          nom: produit.fournisseur?.nom ?? "Non défini",
+          contact: produit.fournisseur?.contact ?? null,
+          adresse: produit.fournisseur?.adresse ?? null,
+        },
+
         prix_achat: produit.prix_achat,
         nombre_carton: produit.nombre_carton,
         stock_global: produit.stock_global,
         stock_seuil: produit.stock_seuil,
+
         etat_stock: getEtatStock(
           produit.stock_global,
           produit.stock_seuil
         ),
+
         nombre_reappro: getNombreReappro(
           produit.entreees_sorties
         ),
@@ -99,9 +99,7 @@ const depotAPI = {
   },
 
   /**
-   * 📜 🔥 NOUVEAU – Mouvements d’un produit spécifique
-   *
-   * @param {string} produitId
+   * 📜 Mouvements d’un produit
    */
   getMouvementsProduit: async (produitId) => {
     try {
@@ -112,7 +110,7 @@ const depotAPI = {
       const res = await httpClient.get(MOUVEMENTS_ENDPOINT, {
         params: {
           produit_id: produitId,
-          per_page: 100, // large pour fiche produit
+          per_page: 100,
         },
       });
 
@@ -121,9 +119,6 @@ const depotAPI = {
         ? payload.data
         : [];
 
-      /**
-       * 🔥 Transformation propre pour le frontend
-       */
       const data = rawData.map((mouvement) => ({
         id: mouvement.id,
         type: mouvement.type,
