@@ -21,7 +21,7 @@ export const echo = new Echo({
                 fetch('http://127.0.0.1:8000/api/broadcasting/auth', {
                     method: 'POST',
                     headers: {
-                        'Authorization': `Bearer 1|q8DGe5TrkO68ieHmaFVfyfgo7uKMFZu8mkIKyLXG1491b5fb`,
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`,
                         'Content-Type': 'application/json',
                         'Accept': 'application/json',
                     },

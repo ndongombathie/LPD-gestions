@@ -92,7 +92,7 @@ const CaissePage = () => {
   const [totalTickets, setTotalTickets] = useState(0);
   const [totalAmount, setTotalAmount] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
-  const PAGE_SIZE = 15;
+  const PAGE_SIZE = 10;
 
   // Fonction pour charger les tickets (pagination côté serveur - charge uniquement la page courante)
   const fetchTickets = async (page = 1, search = '') => {
