@@ -14,7 +14,7 @@ import { toast } from 'sonner';
 import { initializeEcho } from '../../utils/echo';
 import { echo } from '../../utils/echo';
 
-const CaissePage = (boutiqueId) => {
+const CaissePage = ({boutiqueId}) => {
   const location = useLocation();
   const navigate = useNavigate();
 
