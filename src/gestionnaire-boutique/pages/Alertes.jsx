@@ -172,7 +172,7 @@ const Alertes = () => {
                   { label: 'Quantité', key: 'quantite' },
                   { label: 'Seuil', key: 'seuil' },
                   { label: 'Cartons', key: 'nombre_carton' },
-                  { label: 'Statut', key: 'status', render: (s) => <span className={`px-2 py-1 rounded text-xs font-medium ${s === 'en_attente' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>{s || 'N/A'}</span> },
+                  { label: 'Statut', key: 'status', render: (s) => <span className={`px-2 py-1 rounded text-xs font-medium ${s === 'en_attente' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-black'}`}>{s || 'N/A'}</span> },
                 ]}
                 data={alertes}
                 actions={[
