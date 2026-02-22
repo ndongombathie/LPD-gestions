@@ -1812,4 +1812,4 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
   );
 };
 
-export default HistoriqueCommandes;
+export default HistoriqueCommandes; 
