@@ -12,8 +12,9 @@ import QRScanner from '../components/QRScanner';
 import caissierApi from '../services/caissierApi';
 import { toast } from 'sonner';
 import { initializeEcho } from '../../utils/echo';
+import { echo } from '../../utils/echo';
 
-const CaissePage = () => {
+const CaissePage = (boutiqueId) => {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -152,7 +153,7 @@ const CaissePage = () => {
 
   useEffect(() => {
     fetchTicketsSafe(1, '');
-    fetchDashboardStats(); // Charger les statistiques pour initialiser le compteur
+    fetchDashboardStats(); // Charger les statistiques pour initialiser le compteur de tickets traités
 
     // Initialiser WebSocket de manière asynchrone pour ne pas bloquer le rendu
     // Utiliser setTimeout pour différer l'initialisation
@@ -184,6 +185,22 @@ const CaissePage = () => {
       }
     };
   }, []); // Seulement au montage
+
+   useEffect(() => {
+          if (!boutiqueId) return;
+          const channel = echo.private(`boutique.${boutiqueId}`);
+          const listener = (event) => {
+              const newOrder = event?.commande ?? event;
+              fetchTicketsSafe(currentPage, filterText.trim());
+          };
+          channel.listen(".commande.validee", listener);
+          return () => {
+              try {
+                  channel.stopListening(".commande.validee");
+                  echo.leave(`private-boutique.${boutiqueId}`);
+              } catch (err) {}
+          };
+      }, [boutiqueId]);
 
   // Si on arrive depuis une notification (selectedTicketId), ouvrir directement le ticket
   const handledSelectedTicketRef = useRef(false);
