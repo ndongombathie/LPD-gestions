@@ -1,249 +1,94 @@
 /**
- * ==========================================================
  * 📊 Dashboard Responsable API
- * ==========================================================
+ * Version ÉQUIPE + ALERTES STOCK + FINANCE
  */
 
-import { clientsAPI } from "./clients";
-import { commandesAPI } from "./commandes";
-import { produitsAPI } from "./produits";
-import { fournisseursAPI } from "./fournisseurs";
-import { utilisateursAPI } from "./utilisateurs";
-import { decaissementsAPI } from "./decaissements";
-import rapportsAPI from "./rapports";
+import httpClient from '../http/client';
 
-// ======================================================
-// 🧠 HELPERS INTERNES
-// ======================================================
+const ENDPOINTS = {
+  VENDEURS_COUNT: '/vendeurs-count',
+  CAISSIERS_COUNT: '/caissiers-count',
+  GESTIONNAIRES_COUNT: '/gestionnaires-count',
 
-// ✅ garantit toujours un tableau
-const toArray = (data) => {
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data?.data)) return data.data;
-  if (Array.isArray(data?.data?.data)) return data.data.data;
-  return [];
+  // ➕ Alertes Stock
+  PRODUITS_RUPTURE: '/nombre-produits-en-rupture',
+  PRODUITS_SOUS_SEUIL: '/nombre-produits-sous-seuil',
+  PRODUITS_NORMAUX: '/nombre-produits-en-normaux',
+
+  // ➕ Finance
+  MONTANT_TOTAL_COMMANDES: '/montant-total-commandes',
+  SOMME_PAIEMENTS_TOTAL: '/somme-paiements-total',
+  RESTE_TOTAL_ENCAISSER: '/reste-total-encaisser',
 };
-
-const sum = (arr, key) =>
-  arr.reduce((acc, item) => acc + Number(item?.[key] || 0), 0);
-
-const todayString = () => {
-  const d = new Date();
-  return d.toISOString().split("T")[0];
-};
-
-// ======================================================
-// 📊 DASHBOARD RESPONSABLE API
-// ======================================================
 
 export const dashboardResponsableAPI = {
-
   getDashboardData: async () => {
-
     try {
 
       const [
-        clients,
-        commandes,
-        produits,
-        fournisseurs,
-        utilisateurs,
-        decaissements,
-        logsClients,
-        logsFournisseurs
-      ] = await Promise.all([
-        clientsAPI.getAll(),        commandesAPI.getAll({
-          withStats: true
-        }),
+        vendeursRes,
+        caissiersRes,
+        gestionnairesRes,
 
-        produitsAPI.getAll(),
-        fournisseursAPI.getAll(),
-        utilisateursAPI.getAll({ per_page: 1000 }),        decaissementsAPI.getAll(),
-        rapportsAPI.getLogsClients(),
-        rapportsAPI.getLogsFournisseurs()
+        // Stock
+        ruptureRes,
+        sousSeuilRes,
+        normauxRes,
+
+        // Finance
+        montantTotalRes,
+        sommePaiementsRes,
+        resteEncaisserRes,
+
+      ] = await Promise.all([
+        httpClient.get(ENDPOINTS.VENDEURS_COUNT),
+        httpClient.get(ENDPOINTS.CAISSIERS_COUNT),
+        httpClient.get(ENDPOINTS.GESTIONNAIRES_COUNT),
+
+        httpClient.get(ENDPOINTS.PRODUITS_RUPTURE),
+        httpClient.get(ENDPOINTS.PRODUITS_SOUS_SEUIL),
+        httpClient.get(ENDPOINTS.PRODUITS_NORMAUX),
+
+        httpClient.get(ENDPOINTS.MONTANT_TOTAL_COMMANDES),
+        httpClient.get(ENDPOINTS.SOMME_PAIEMENTS_TOTAL),
+        httpClient.get(ENDPOINTS.RESTE_TOTAL_ENCAISSER),
       ]);
 
-      // ✅ NORMALISATION SAFE DES STATS (IMPORTANT)
-      const stats =
-        commandes?.stats ??
-        commandes?.data?.stats ??
-        {};
-
-      // ✅ NORMALISATION UNIQUE
-      const clientsList = toArray(clients);
-      const commandesList = toArray(commandes?.data ?? commandes);
-      const produitsList = toArray(produits);
-
-      const produitsMap = Object.fromEntries(
-        produitsList.map(p => [p.id, p])
-      );
-
-      const fournisseursList = toArray(fournisseurs);
-      const utilisateursList = toArray(utilisateurs);
-      const decaissementsList = toArray(decaissements);
-
-      // ==================================================
-      // 🟣 VENTES
-      // ==================================================
-
-      const totalCommandes = Number(stats.nb ?? 0);      const chiffreAffaireTotal = sum(commandesList, "totalTTC");
-      const commandesAujourdhui = commandesList.filter(c =>
-        (c.dateCommande || c.date || c.created_at || "")
-            .startsWith(todayString())
-        );
-
-
-      const caJour = sum(commandesAujourdhui, "totalTTC");
-
-
-      // ==================================================
-      // 🔵 CLIENTS
-      // ==================================================
-
-      const clientsActifs = Number(clients?.total ?? clientsList.length);
-      const topClients = clientsList
-        .map(client => {
-          const commandesClient = commandesList.filter(
-            c => c.clientId === client.id          );
-
-          return {
-            id: client.id,
-            nom: client.nom,
-            dette: sum(commandesClient, "totalTTC"),
-            transactions: commandesClient.length
-          };
-        })
-        .sort((a, b) => b.dette - a.dette)
-        .slice(0, 5);
-
-      // ==================================================
-      // 🟢 PRODUITS
-      // ==================================================
-
-      const stockData = produitsList.map(p => ({
-        id: p.id,
-        nom: p.nom,
-        categorie: p.categorie?.nom || null,
-        stock: Number(p.stock_global || 0),
-        seuil: Number(p.stock_seuil || 0),      }));
-
-      // ==================================================
-      // 🟠 FOURNISSEURS
-      // ==================================================
-
-      const fournisseursStats = {
-        total: Number(fournisseurs?.total ?? fournisseursList.length),
-        derniers: fournisseursList.slice(0, 5)
+      // 👥 UTILISATEURS
+      const utilisateurs = {
+        vendeurs: Number(vendeursRes.data?.vendeurs_count ?? 0),
+        caissiers: Number(caissiersRes.data?.caissiers_count ?? 0),
+        gestionnaires: Number(gestionnairesRes.data?.gestionnaires_count ?? 0),
       };
 
-      // ==================================================
-      // 🔴 DÉCAISSEMENTS
-      // ==================================================
+      // 📦 ALERTES STOCK
+      const rupture = Number(ruptureRes.data ?? 0);
+      const sousSeuil = Number(sousSeuilRes.data ?? 0);
+      const normal = Number(normauxRes.data ?? 0);
 
-      const totalDecaissements = sum(decaissementsList, "montant");
-
-      // ==================================================
-      // ⚫ UTILISATEURS
-      // ==================================================
-
-      const utilisateursStats = {
-        total: utilisateursList.length,
-
-        vendeurs: utilisateursList.filter(
-          u => u.role?.trim().toLowerCase() === "vendeur"
-        ).length,
-
-        caissiers: utilisateursList.filter(
-          u => u.role?.trim().toLowerCase() === "caissier"
-        ).length,
-
-        gestionnaires: utilisateursList.filter(
-          u => u.role?.trim().toLowerCase() === "gestionnaire_boutique"
-        ).length,
+      const alertesStock = {
+        rupture,
+        sousSeuil,
+        normal,
+        totalProduits: rupture + sousSeuil + normal,
       };
 
-
-      // ==================================================
-      // 🟡 ACTIVITÉS
-      // ==================================================
-
-      const activites = [
-        ...(logsClients?.data || []),
-        ...(logsFournisseurs?.data || [])
-      ]
-        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-        .slice(0, 10);
-
-      // ==================================================
-      // ✅ RETURN FINAL
-      // ==================================================
+      // 💰 FINANCE
+      const finance = {
+        totalFacture: Number(montantTotalRes.data ?? 0),
+        totalEncaissement: Number(sommePaiementsRes.data ?? 0),
+        resteAEncaisser: Number(resteEncaisserRes.data ?? 0),
+      };
 
       return {
-        ventes: {
-          totalCommandes,
-          chiffreAffaireTotal,
-          caJour,
-
-            commandesParStatut:
-            stats.commandesParStatut ?? {},
-          totalTTC: Number(stats.totalTTC ?? 0),
-          totalPaye: Number(stats.totalPaye ?? 0),
-          detteTotale: Number(stats.dette ?? 0),    
-          
-        },
-
-        clients: {
-          total: clientsActifs,
-          topClients
-        },
-
-        produits: {
-          stockData,
-
-          topBestSellers: (stats.topProduits ?? []).map(p => {
-            const produit = produitsMap[p.produit_id];
-
-            return {
-              id: p.produit_id,
-              nom: produit?.nom ?? "Produit",
-              quantiteVendue: Number(p.total_vendu || 0),
-              stock: Number(produit?.stock_global || 0),
-              seuil: Number(produit?.seuil || 5),
-              categorie: produit?.categorie?.nom || null
-            };
-          }),
-
-
-          topLeastSold: (stats.produitsMoinsVendus ?? []).map(p => {
-            const produit = produitsMap[p.produit_id];
-
-            return {
-              id: p.produit_id,
-              nom: produit?.nom ?? "Produit",
-              quantiteVendue: Number(p.total_vendu || 0),
-              stock: Number(produit?.stock_global || 0),
-              seuil: Number(produit?.seuil || 5),
-              categorie: produit?.categorie?.nom || null
-            };
-          }),
-
-        },
-
-        fournisseurs: fournisseursStats,
-
-        decaissements: {
-          total: totalDecaissements
-        },
-
-        utilisateurs: utilisateursStats,
-
-
-        activites
+        utilisateurs,
+        finance,
+        alertesStock,
       };
 
     } catch (error) {
-      console.error("❌ Erreur dashboardResponsable:", error);
+      console.error('❌ Erreur getDashboardData:', error.response?.data || error.message);
       throw error;
     }
-  }
+  },
 };

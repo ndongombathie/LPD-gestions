@@ -127,23 +127,33 @@ useEffect(() => {
   // Chargement des utilisateurs depuis l'API
 useEffect(() => {
   const fetchUsers = async () => {
-    setLoadingPage(true);
+    // ✅ Loader plein écran UNIQUEMENT au premier chargement
+    if (initialLoad) {
+      setLoading(true);
+    } else {
+      setLoadingPage(true);
+    }
+
     try {
       const params = {
         page,
         search: searchInput || undefined,
-        role: filterRole !== "Tous" ? getRoleKeyFromLabel(filterRole) : undefined,
+        role:
+          filterRole !== "Tous"
+            ? getRoleKeyFromLabel(filterRole)
+            : undefined,
       };
 
       const data = await utilisateursAPI.getAll(params);
 
-      // Pagination Laravel
       const total = data.total || 0;
       const perPage = data.per_page || 20;
+
       setTotalItems(total);
       setTotalPages(Math.ceil(total / perPage));
 
       const rawUsers = data.data || [];
+
       const normalized = rawUsers.map((u) => ({
         id: u.id,
         prenom: u.prenom || "",
@@ -157,9 +167,15 @@ useEffect(() => {
 
       setUsers(normalized);
     } catch (err) {
-      toast("error", "Erreur", "Impossible de charger la liste des utilisateurs.");
+      toast(
+        "error",
+        "Erreur",
+        "Impossible de charger la liste des utilisateurs."
+      );
     } finally {
+      setLoading(false);
       setLoadingPage(false);
+      setInitialLoad(false); // ✅ très important
     }
   };
 
@@ -174,18 +190,19 @@ useEffect(() => {
   // ————————————————————————————————————————————————
   // ⏳ Loader harmonisé
   // ————————————————————————————————————————————————
-  if (loading)
-    return (
-      <div className="flex items-center justify-center min-h-[70vh] bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white">
-        <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-white/80 border border-[#E4E0FF] shadow-sm">
-          <Loader2 className="w-5 h-5 text-[#472EAD] animate-spin" />
-          <span className="text-sm font-medium text-[#472EAD]">
-            Chargement des utilisateurs...
-          </span>
-        </div>
+// Loader d'affichage initial - UNIQUEMENT au premier chargement
+if (initialLoad && loading && users.length === 0) {
+  return (
+    <div className="flex items-center justify-center min-h-[70vh] bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white">
+      <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-white/80 border border-[#E4E0FF] shadow-sm">
+        <Loader2 className="w-5 h-5 text-[#472EAD] animate-spin" />
+        <span className="text-sm font-medium text-[#472EAD]">
+          Chargement des utilisateurs...
+        </span>
       </div>
-    );
-
+    </div>
+  );
+}
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white px-4 sm:px-6 lg:px-10 py-6 sm:py-8 overflow-y-auto">
       <div className="max-w-6xl mx-auto space-y-8"> {/* Changé de space-y-7 à space-y-8 */}

@@ -1,41 +1,37 @@
 // ==========================================================
-// 🌟 Dashboard.jsx — VERSION AVEC ANALYSE PRODUITS AVANCÉE
-// Design adapté à votre palette de couleurs
-// UI/UX améliorée avec skeleton loading et réorganisation
+// 🌟 Dashboard.jsx — VERSION ÉLÉGANTE & RAFFINÉE
+// Design minimaliste et professionnel
+// Police : Inter (optimisée pour dashboards)
+// Alertes : couleurs renforcées pour plus d'impact visuel
+// Sections alignées sur la même charte colorée
 // ==========================================================
 
 import React, { useState, useEffect } from "react";
 import {
-  TrendingUp,
   Users,
-  Package,
-  ShoppingBag,
   Banknote,
-  Shield,
-  Activity,
-  Bell,
-  Zap,
-  Star,
-  Download,
-  AlertTriangle,
-  UserCog,
-  UserCheck,
-  Truck,
-  PieChart,
-  Wallet,
-  Layers,
-  RefreshCw,
-  TrendingDown,
-  Award,
-  Sparkles,
-  User,
   Store,
-  Settings,
+  UserCheck,
+  Wallet,
+  Bell,
+  AlertTriangle,
+  Shield,
+  Sparkles,
+  TrendingUp,
+  CreditCard,
+  Clock,
+  AlertOctagon,
+  PackageX,
+  PackageMinus,
+  PackageCheck,
+  ShoppingBag,
+  Receipt,
+  Building2,
+  LineChart,
+  DollarSign,
+  Hourglass,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-
-// === Components réutilisables ===
-import ChartBox from "../components/ChartBox";
 
 // === Hooks ===
 import useDashboardResponsable from "@/hooks/useDashboardResponsable";
@@ -49,207 +45,116 @@ const formatFCFA = (n) =>
   }).format(Number(n || 0));
 
 // ==========================================================
-// 🎨 COMPOSANTS SKELETON
-// ==========================================================
-
-const SkeletonStat = () => (
-  <div className="card bg-white p-4 rounded-xl shadow-sm">
-    <div className="flex items-center gap-2 mb-2">
-      <div className="w-2 h-2 rounded-full bg-gray-200 animate-pulse" />
-      <div className="h-4 w-20 bg-gray-200 animate-pulse rounded" />
-    </div>
-    <div className="h-7 w-28 bg-gray-200 animate-pulse rounded mb-2" />
-    <div className="flex items-center gap-2">
-      <div className="w-4 h-4 bg-gray-200 animate-pulse rounded" />
-      <div className="h-4 w-16 bg-gray-200 animate-pulse rounded" />
-    </div>
-  </div>
-);
-
-const SkeletonProductItem = () => (
-  <div className="flex items-center justify-between p-3 rounded-lg">
-    <div className="flex items-center gap-3">
-      <div className="w-8 h-8 bg-gray-200 animate-pulse rounded-lg" />
-      <div>
-        <div className="h-5 w-32 bg-gray-200 animate-pulse rounded mb-1" />
-        <div className="h-4 w-24 bg-gray-200 animate-pulse rounded" />
-      </div>
-    </div>
-    <div className="text-right">
-      <div className="h-5 w-20 bg-gray-200 animate-pulse rounded mb-1" />
-      <div className="h-4 w-16 bg-gray-200 animate-pulse rounded" />
-    </div>
-  </div>
-);
-
-const SkeletonFournisseurItem = () => (
-  <div className="flex items-center justify-between p-3 rounded-lg">
-    <div>
-      <div className="h-5 w-32 bg-gray-200 animate-pulse rounded mb-1" />
-      <div className="h-4 w-24 bg-gray-200 animate-pulse rounded" />
-    </div>
-    <div className="text-right">
-      <div className="h-5 w-20 bg-gray-200 animate-pulse rounded mb-1" />
-      <div className="h-4 w-16 bg-gray-200 animate-pulse rounded ml-auto" />
-    </div>
-  </div>
-);
-
-// ==========================================================
-// 🎨 STYLES STATIQUES POUR LES ALERTES (évite les classes dynamiques)
+// 🎨 STYLES - CHARTE COLORÉE UNIFIÉE
 // ==========================================================
 
 const alertStyles = {
   red: {
     border: "border-red-500",
-    bg: "bg-red-100",
-    text: "text-red-600",
-    badgeBg: "bg-red-50",
-    badgeText: "text-red-700",
+    bg: "bg-gradient-to-br from-red-50 to-red-100/50",
+    text: "text-red-800",
+    icon: "text-red-600",
+    badge: "bg-red-600 text-white font-semibold shadow-sm",
     iconBg: "bg-red-100",
-    iconColor: "text-red-600"
+    lightBg: "bg-red-50",
+    hover: "hover:shadow-red-100/50",
+    gradient: "from-red-500 to-red-600",
+    number: "text-red-700"
   },
   orange: {
     border: "border-orange-500",
-    bg: "bg-orange-100",
-    text: "text-orange-600",
-    badgeBg: "bg-orange-50",
-    badgeText: "text-orange-700",
+    bg: "bg-gradient-to-br from-orange-50 to-amber-100/50",
+    text: "text-orange-800",
+    icon: "text-orange-600",
+    badge: "bg-orange-600 text-white font-semibold shadow-sm",
     iconBg: "bg-orange-100",
-    iconColor: "text-orange-600"
+    lightBg: "bg-orange-50",
+    hover: "hover:shadow-orange-100/50",
+    gradient: "from-orange-500 to-amber-600",
+    number: "text-orange-700"
   },
   green: {
     border: "border-green-500",
-    bg: "bg-green-100",
-    text: "text-green-600",
-    badgeBg: "bg-green-50",
-    badgeText: "text-green-700",
+    bg: "bg-gradient-to-br from-green-50 to-emerald-100/50",
+    text: "text-green-800",
+    icon: "text-green-600",
+    badge: "bg-green-600 text-white font-semibold shadow-sm",
     iconBg: "bg-green-100",
-    iconColor: "text-green-600"
+    lightBg: "bg-green-50",
+    hover: "hover:shadow-green-100/50",
+    gradient: "from-green-500 to-emerald-600",
+    number: "text-green-700"
+  },
+  purple: {
+    border: "border-[#472EAD]",
+    bg: "bg-gradient-to-br from-[#472EAD]/5 to-[#472EAD]/10",
+    text: "text-[#472EAD]",
+    icon: "text-[#472EAD]",
+    badge: "bg-[#472EAD] text-white font-semibold shadow-sm",
+    iconBg: "bg-[#472EAD]/10",
+    lightBg: "bg-[#472EAD]/5",
+    hover: "hover:shadow-[#472EAD]/20",
+    gradient: "from-[#472EAD] to-[#6D4FC7]",
+    number: "text-[#472EAD]"
+  },
+  blue: {
+    border: "border-blue-500",
+    bg: "bg-gradient-to-br from-blue-50 to-blue-100/50",
+    text: "text-blue-800",
+    icon: "text-blue-600",
+    badge: "bg-blue-600 text-white font-semibold shadow-sm",
+    iconBg: "bg-blue-100",
+    lightBg: "bg-blue-50",
+    hover: "hover:shadow-blue-100/50",
+    gradient: "from-blue-500 to-blue-600",
+    number: "text-blue-700"
+  },
+  amber: {
+    border: "border-amber-500",
+    bg: "bg-gradient-to-br from-amber-50 to-amber-100/50",
+    text: "text-amber-800",
+    icon: "text-amber-600",
+    badge: "bg-amber-600 text-white font-semibold shadow-sm",
+    iconBg: "bg-amber-100",
+    lightBg: "bg-amber-50",
+    hover: "hover:shadow-amber-100/50",
+    gradient: "from-amber-500 to-amber-600",
+    number: "text-amber-700"
+  },
+  emerald: {
+    border: "border-emerald-500",
+    bg: "bg-gradient-to-br from-emerald-50 to-emerald-100/50",
+    text: "text-emerald-800",
+    icon: "text-emerald-600",
+    badge: "bg-emerald-600 text-white font-semibold shadow-sm",
+    iconBg: "bg-emerald-100",
+    lightBg: "bg-emerald-50",
+    hover: "hover:shadow-emerald-100/50",
+    gradient: "from-emerald-500 to-emerald-600",
+    number: "text-emerald-700"
   }
 };
 
 // ==========================================================
-// 🏢 COMPOSANT PRINCIPAL — DASHBOARD
+// 🏢 COMPOSANT PRINCIPAL
 // ==========================================================
 
 export default function Dashboard() {
   const {
     loading,
-    isRefreshing,
-    ventes,
     finance,
-    clients,
-    produits,
     alertesStock,
     utilisateurs,
-    fournisseurs,
-    activiteGlobale
   } = useDashboardResponsable();
   
   const [firstLoad, setFirstLoad] = useState(
     !sessionStorage.getItem("dashboard_welcome_seen")
   );
 
-  // ======================================================
-  // 🎨 COULEURS OFFICIELLES DES CAMEMBERTS
-  // ======================================================
-
-  const statutColors = {
-    en_attente_caisse: "#EF4444",
-    partiellement_payee: "#F59E0B",
-    soldee: "#10B981",
-    annulee: "#6366F1",
-  };
-
-const activiteColors = {
-  Ventes: "#472EAD",      // violet (inchangé)
-  Produits: "#10B981",    // ✅ vert
-  Clients: "#F58020",     // ✅ orange
-  Fournisseurs: "#EF4444" // ✅ rouge
-};
-
-
-  // ✅ ORDRE FIXE POUR L'ACTIVITÉ GLOBALE
-  const activiteOrder = [
-    "Ventes",
-    "Clients",
-    "Produits",
-    "Fournisseurs",
-  ];
-
-  // ✅ CRÉATION DE LA VERSION TRIÉE DES DONNÉES
-  const activiteGlobaleSorted = (activiteGlobale ?? [])
-    .slice()
-    .sort(
-      (a, b) =>
-        activiteOrder.indexOf(a.name) -
-        activiteOrder.indexOf(b.name)
-    );
-
-  // ✅ NORMALISATION DES DONNÉES DES COMMANDES PAR STATUT
-  const commandesParStatutData = Array.isArray(ventes?.commandesParStatut)
-    ? ventes.commandesParStatut
-    : Object.entries(ventes?.commandesParStatut ?? {})
-      .map(([name, value]) => ({
-        name,
-        value: Number(value),
-      }));
-
-
-  // Animation variants pour les sections
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1,
-        delayChildren: 0.3,
-      },
-    },
-  };
-
-  const sectionVariants = {
-    hidden: { y: 30, opacity: 0 },
-    visible: {
-      y: 0,
-      opacity: 1,
-      transition: { type: "spring", stiffness: 100, damping: 20 },
-    },
-  };
-
-  const cardVariants = {
-    hidden: { y: 20, opacity: 0 },
-    visible: {
-      y: 0,
-      opacity: 1,
-      transition: { type: "spring", stiffness: 100, damping: 20 },
-    },
-    hover: { 
-      scale: 1.02, 
-      transition: { type: "spring", stiffness: 400, damping: 25 },
-      boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)"
-    },
-  };
-
-  // Déterminer si on a des données
-  const hasData =
-    !!ventes ||
-    !!finance ||
-    !!clients ||
-    !!produits ||
-    !!alertesStock;
-
-  // Skeleton uniquement au premier chargement sans aucune donnée
+  const hasData = !!finance || !!alertesStock || !!utilisateurs;
   const showSkeletons = loading && !hasData;
-
-  // Calcul sécurisé du stock total
-  const stockTotal = (produits?.stockData ?? []).reduce((acc, p) => acc + (p.stock || 0), 0);
-  
-  // Welcome loading uniquement au premier chargement
   const showWelcomeLoading = firstLoad && loading;
 
-  // Mettre à jour firstLoad quand les données sont chargées
   useEffect(() => {
     if (!loading && hasData && firstLoad) {
       sessionStorage.setItem("dashboard_welcome_seen", "true");
@@ -257,724 +162,454 @@ const activiteColors = {
     }
   }, [loading, hasData, firstLoad]);
 
+  // Animations subtiles
+  const fadeUp = {
+    hidden: { opacity: 0, y: 10 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.4 } }
+  };
+
+  const staggerContainer = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.08,
+        delayChildren: 0.1
+      }
+    }
+  };
+
   return (
-    <div className="min-h-screen w-full bg-gray-50">
-      <div className="p-4 lg:p-6">
-        {/* Container principal */}
-        <div className="max-w-7xl mx-auto">
-          <AnimatePresence mode="wait">
-            {showWelcomeLoading ? (
-              <motion.div 
-                key="welcome"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.5 }}
-                className="flex items-center justify-center h-[70vh]"
-              >
-                <motion.div 
-                  initial={{ scale: 0.9, y: 20 }}
-                  animate={{ scale: 1, y: 0 }}
-                  transition={{ 
-                    type: "spring", 
-                    stiffness: 300, 
-                    damping: 25,
-                    delay: 0.1 
-                  }}
-                  className="flex flex-col items-center gap-6 p-8 rounded-2xl bg-white/50 backdrop-blur-sm shadow-xl"
-                >
-                  {/* Logo LPD avec animation de pulse */}
-                  <motion.div
-                    animate={{ 
-                      scale: [1, 1.05, 1],
-                      rotate: [0, 2, -2, 0]
-                    }}
-                    transition={{ 
-                      duration: 3,
-                      repeat: Infinity,
-                      repeatType: "reverse",
-                      ease: "easeInOut"
-                    }}
-                    className="relative"
-                  >
-                    {/* Cercle de fond animé */}
-                    <motion.div
-                      animate={{ 
-                        scale: [1, 1.2, 1],
-                        opacity: [0.3, 0.6, 0.3]
-                      }}
-                      transition={{ 
-                        duration: 2,
-                        repeat: Infinity,
-                        ease: "easeInOut"
-                      }}
-                      className="absolute inset-0 bg-[#472EAD]/20 rounded-full blur-xl"
-                    />
-                    
-                    {/* Logo SVG avec ombre */}
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="70"
-                      height="45"
-                      viewBox="0 0 200 120"
-                      fill="none"
-                      className="relative drop-shadow-2xl"
-                    >
-                      <ellipse cx="100" cy="60" rx="90" ry="45" fill="#472EAD" />
-                      <text
-                        x="50%"
-                        y="66%"
-                        textAnchor="middle"
-                        fill="#F58020"
-                        fontFamily="Arial Black, sans-serif"
-                        fontSize="60"
-                        fontWeight="900"
-                        dy=".1em"
-                      >
-                        LPD
-                      </text>
-                    </svg>
-                  </motion.div>
-
-                  {/* Message avec effet de fade */}
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.3 }}
-                    className="text-center"
-                  >
-                    <p className="text-gray-700 font-medium text-lg mb-1">
+    <div className="min-h-screen w-full bg-[#F8FAFC]" style={{ fontFamily: "'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <AnimatePresence mode="wait">
+          {showWelcomeLoading ? (
+            <motion.div 
+              key="welcome"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex items-center justify-center h-[70vh]"
+            >
+              <div className="flex flex-col items-center gap-4">
+                <div className="relative">
+                  <div className="w-12 h-12 border-2 border-[#472EAD]/20 border-t-[#472EAD] rounded-full animate-spin" />
+                </div>
+                <p className="text-sm text-gray-500 font-medium tracking-wide">Chargement du tableau de bord</p>
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="dashboard"
+              initial="hidden"
+              animate="visible"
+              variants={staggerContainer}
+              className="space-y-10"
+            >
+              {/* === HEADER RAFFINÉ === */}
+              <motion.div variants={fadeUp} className="mb-8">
+                <div className="flex items-end justify-between">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-[#472EAD] tracking-wider uppercase">
+                      <div className="w-1 h-4 bg-[#472EAD] rounded-full" />
+                      <span>Responsable</span>
+                    </div>
+                    <h1 className="text-3xl font-medium tracking-tight text-gray-900">
                       Tableau de bord
-                    </p>
-                    <p className="text-gray-500 text-sm">
-                      Bienvenue dans votre espace Responsable 
-                    </p>
+                    </h1>
+
+                  </div>
+                  
+                  <div className="hidden sm:block">
+
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* === SECTION ÉQUIPE - VERSION COLORÉE === */}
+              <motion.div variants={fadeUp} className="space-y-4">
+                <div className="flex items-center gap-2 px-1">
+                  <div className="w-1 h-5 bg-gradient-to-b from-[#472EAD] to-[#6D4FC7] rounded-full" />
+                  <h2 className="text-xs font-semibold text-gray-500 tracking-wider uppercase">
+                    Équipe
+                  </h2>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                  {/* Vendeurs - Style Violet */}
+                  <motion.div 
+                    whileHover={{ scale: 1.02, y: -2 }}
+                    className={`relative overflow-hidden bg-white rounded-2xl p-6 border-l-4 ${alertStyles.purple.border} shadow-lg hover:shadow-xl transition-all duration-300`}
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-br from-[#472EAD]/5 to-transparent" />
+                    <div className="relative">
+                      <div className="flex items-start justify-between mb-4">
+                        <div className={`p-2.5 ${alertStyles.purple.iconBg} rounded-xl`}>
+                          <ShoppingBag className={`w-5 h-5 ${alertStyles.purple.icon}`} />
+                        </div>
+                        <span className={`text-[10px] font-bold px-2.5 py-1 rounded-md ${alertStyles.purple.badge}`}>
+                          COMMERCIAL
+                        </span>
+                      </div>
+                      <div className="space-y-1">
+                        <div className={`text-3xl font-bold ${alertStyles.purple.number}`}>
+                          {showSkeletons ? <div className="h-8 w-16 bg-gray-100 animate-pulse rounded" /> : utilisateurs?.vendeurs ?? 0}
+                        </div>
+                        <div className="text-xs text-gray-600 font-medium">Vendeurs actifs</div>
+                      </div>
+                      {utilisateurs?.vendeurs > 0 && (
+                        <div className="mt-3 w-full bg-[#472EAD]/10 rounded-full h-1.5">
+                          <div 
+                            className="bg-[#472EAD] h-1.5 rounded-full" 
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+                      )}
+                    </div>
                   </motion.div>
 
-                  {/* Barre de progression améliorée */}
-                  <div className="w-48 space-y-2">
-
-                    
-                    {/* Points de progression animés */}
-                    <div className="flex justify-center gap-1.5">
-                      {[0, 1, 2].map((i) => (
-                        <motion.div
-                          key={i}
-                          animate={{ 
-                            scale: [1, 1.3, 1],
-                            opacity: [0.5, 1, 0.5]
-                          }}
-                          transition={{ 
-                            duration: 1.2,
-                            repeat: Infinity,
-                            delay: i * 0.2,
-                            ease: "easeInOut"
-                          }}
-                          className="w-1.5 h-1.5 rounded-full bg-[#472EAD]"
-                        />
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Message de statut dynamique */}
-                  <motion.p
-                    animate={{ opacity: [0.5, 1, 0.5] }}
-                    transition={{ 
-                      duration: 2,
-                      repeat: Infinity,
-                      ease: "easeInOut"
-                    }}
-                    className="text-xs text-gray-400 mt-2"
+                  {/* Caissiers - Style Bleu */}
+                  <motion.div 
+                    whileHover={{ scale: 1.02, y: -2 }}
+                    className={`relative overflow-hidden bg-white rounded-2xl p-6 border-l-4 ${alertStyles.blue.border} shadow-lg hover:shadow-xl transition-all duration-300`}
                   >
-                    Chargement de vos données... 
-                  </motion.p>
-                </motion.div>
+                    <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent" />
+                    <div className="relative">
+                      <div className="flex items-start justify-between mb-4">
+                        <div className={`p-2.5 ${alertStyles.blue.iconBg} rounded-xl`}>
+                          <Receipt className={`w-5 h-5 ${alertStyles.blue.icon}`} />
+                        </div>
+                        <span className={`text-[10px] font-bold px-2.5 py-1 rounded-md ${alertStyles.blue.badge}`}>
+                          CAISSE
+                        </span>
+                      </div>
+                      <div className="space-y-1">
+                        <div className={`text-3xl font-bold ${alertStyles.blue.number}`}>
+                          {showSkeletons ? <div className="h-8 w-16 bg-gray-100 animate-pulse rounded" /> : utilisateurs?.caissiers ?? 0}
+                        </div>
+                        <div className="text-xs text-gray-600 font-medium">Caissiers actifs</div>
+                      </div>
+                      {utilisateurs?.caissiers > 0 && (
+                        <div className="mt-3 w-full bg-blue-100 rounded-full h-1.5">
+                          <div 
+                            className="bg-blue-600 h-1.5 rounded-full" 
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+
+                  {/* Gestionnaires - Style Ambre */}
+                  <motion.div 
+                    whileHover={{ scale: 1.02, y: -2 }}
+                    className={`relative overflow-hidden bg-white rounded-2xl p-6 border-l-4 ${alertStyles.amber.border} shadow-lg hover:shadow-xl transition-all duration-300`}
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent" />
+                    <div className="relative">
+                      <div className="flex items-start justify-between mb-4">
+                        <div className={`p-2.5 ${alertStyles.amber.iconBg} rounded-xl`}>
+                          <Building2 className={`w-5 h-5 ${alertStyles.amber.icon}`} />
+                        </div>
+                        <span className={`text-[10px] font-bold px-2.5 py-1 rounded-md ${alertStyles.amber.badge}`}>
+                          MANAGEMENT
+                        </span>
+                      </div>
+                      <div className="space-y-1">
+                        <div className={`text-3xl font-bold ${alertStyles.amber.number}`}>
+                          {showSkeletons ? <div className="h-8 w-16 bg-gray-100 animate-pulse rounded" /> : utilisateurs?.gestionnaires ?? 0}
+                        </div>
+                        <div className="text-xs text-gray-600 font-medium">Gestionnaires boutique</div>
+                      </div>
+                      {utilisateurs?.gestionnaires > 0 && (
+                        <div className="mt-3 w-full bg-amber-100 rounded-full h-1.5">
+                          <div 
+                            className="bg-amber-600 h-1.5 rounded-full" 
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                </div>
               </motion.div>
-            ) : (
-              /* Contenu du dashboard - toujours visible */
-              <motion.div
-                key="dashboard"
-                variants={containerVariants}
-                initial="hidden"
-                animate="visible"
-                className="space-y-8"
-              >
-                {/* === HEADER === */}
-                <motion.section variants={sectionVariants} className="space-y-6">
-                  <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
-                    <div>
+
+              {/* === SECTION FLUX FINANCIER - VERSION COLORÉE === */}
+              <motion.div variants={fadeUp} className="space-y-4">
+                <div className="flex items-center gap-2 px-1">
+                  <div className="w-1 h-5 bg-gradient-to-b from-emerald-500 to-green-500 rounded-full" />
+                  <h2 className="text-xs font-semibold text-gray-500 tracking-wider uppercase">
+                    Flux financier
+                  </h2>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                  {showSkeletons ? (
+                    <>
+                      <div className="bg-white rounded-2xl p-6 h-24 animate-pulse" />
+                      <div className="bg-white rounded-2xl p-6 h-24 animate-pulse" />
+                      <div className="bg-white rounded-2xl p-6 h-24 animate-pulse" />
+                    </>
+                  ) : (
+                    <>
+                      {/* Total facturé - Style Violet */}
                       <motion.div 
-                        initial={{ x: -20, opacity: 0 }}
-                        animate={{ x: 0, opacity: 1 }}
-                        transition={{ delay: 0.2 }}
-                        className="flex items-center gap-2 mb-2"
+                        whileHover={{ scale: 1.02, y: -2 }}
+                        className={`relative overflow-hidden bg-white rounded-2xl p-6 border-l-4 ${alertStyles.purple.border} shadow-lg hover:shadow-xl transition-all duration-300`}
                       >
-                        <Sparkles className="w-6 h-6 text-[#472EAD]" />
-                        <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">
-                          Tableau de bord
-                        </h1>
-                      </motion.div>
-                      <motion.p 
-                        initial={{ x: -20, opacity: 0 }}
-                        animate={{ x: 0, opacity: 1 }}
-                        transition={{ delay: 0.3 }}
-                        className="text-gray-600 max-w-2xl"
-                      >
-                        Aperçu global de votre activité. Données mises à jour en temps réel.
-                      </motion.p>
-                      <motion.p 
-                        initial={{ x: -20, opacity: 0 }}
-                        animate={{ x: 0, opacity: 1 }}
-                        transition={{ delay: 0.4 }}
-                        className="text-xs text-gray-400 mt-1"
-                      >
-                        
-                      </motion.p>
-                    </div>
-
-                  </div>
-                </motion.section>
-
-                {/* === CARTES ÉQUIPE === */}
-                <motion.section variants={sectionVariants}>
-                  <motion.div 
-                    variants={{
-                      hidden: { opacity: 0 },
-                      visible: {
-                        opacity: 1,
-                        transition: { staggerChildren: 0.1 }
-                      }
-                    }}
-                    className="grid grid-cols-1 md:grid-cols-3 gap-6"
-                  >
-                    {/* Carte Vendeurs */}
-                    <motion.div
-                      variants={cardVariants}
-                      whileHover="hover"
-                      className="card relative overflow-hidden bg-white p-6 rounded-xl shadow-sm border-l-4 border-[#472EAD]"
-                    >
-                      <div className="absolute top-0 right-0 w-20 h-20 bg-[#472EAD]/10 rounded-full -translate-y-6 translate-x-6 opacity-50" />
-                      <div className="relative z-10">
-                        <div className="flex items-center justify-between mb-4">
-                          <div className="p-3 rounded-lg bg-[#472EAD]/10">
-                            <User className="w-6 h-6 text-[#472EAD]" />
-                          </div>
-                          <div className="px-3 py-1 rounded-full bg-[#472EAD]/10 text-[#472EAD] text-xs font-medium">
-                            COMMERCIAL
-                          </div>
-                        </div>
-                        <div className="mb-2">
-                          <div className="text-3xl font-bold text-gray-900">
-                            {showSkeletons ? (
-                              <div className="h-8 w-16 bg-gray-200 animate-pulse rounded" />
-                            ) : (
-                              utilisateurs?.vendeurs ?? 0
-                            )}
-                          </div>
-                          <div className="text-gray-500 text-sm">Vendeurs actifs</div>
-                        </div>
-                        <div className="flex items-center gap-2 mt-2 text-xs text-gray-400">
-                          <UserCheck size={14} className="text-green-600" />
-                          <span>Équipe commerciale</span>
-                        </div>
-                      </div>
-                    </motion.div>
-
-                    {/* Carte Caissiers */}
-                    <motion.div
-                      variants={cardVariants}
-                      whileHover="hover"
-                      className="card relative overflow-hidden bg-white p-6 rounded-xl shadow-sm border-l-4 border-blue-500"
-                    >
-                      <div className="absolute top-0 right-0 w-20 h-20 bg-blue-100 rounded-full -translate-y-6 translate-x-6 opacity-50" />
-                      <div className="relative z-10">
-                        <div className="flex items-center justify-between mb-4">
-                          <div className="p-3 rounded-lg bg-blue-100">
-                            <UserCheck className="w-6 h-6 text-blue-600" />
-                          </div>
-                          <div className="px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-medium">
-                            CAISSE
-                          </div>
-                        </div>
-                        <div className="mb-2">
-                          <div className="text-3xl font-bold text-gray-900">
-                            {showSkeletons ? (
-                              <div className="h-8 w-16 bg-gray-200 animate-pulse rounded" />
-                            ) : (
-                              utilisateurs?.caissiers ?? 0
-                            )}
-                          </div>
-                          <div className="text-gray-500 text-sm">Caissiers actifs</div>
-                        </div>
-                        <div className="flex items-center gap-2 mt-2 text-xs text-gray-400">
-                          <Banknote size={14} className="text-green-600" />
-                          <span>Équipe caisse</span>
-                        </div>
-                      </div>
-                    </motion.div>
-
-                    {/* Carte Gestionnaires boutique */}
-                    <motion.div
-                      variants={cardVariants}
-                      whileHover="hover"
-                      className="card relative overflow-hidden bg-white p-6 rounded-xl shadow-sm border-l-4 border-amber-500"
-                    >
-                      <div className="absolute top-0 right-0 w-20 h-20 bg-amber-100 rounded-full -translate-y-6 translate-x-6 opacity-50" />
-                      <div className="relative z-10">
-                        <div className="flex items-center justify-between mb-4">
-                          <div className="p-3 rounded-lg bg-amber-100">
-                            <Store className="w-6 h-6 text-amber-600" />
-                          </div>
-                          <div className="px-3 py-1 rounded-full bg-amber-50 text-amber-700 text-xs font-medium">
-                            MANAGEMENT
-                          </div>
-                        </div>
-                        <div className="mb-2">
-                          <div className="text-3xl font-bold text-gray-900">
-                            {showSkeletons ? (
-                              <div className="h-8 w-16 bg-gray-200 animate-pulse rounded" />
-                            ) : (
-                              utilisateurs?.gestionnaires ?? 0
-                            )}
-                          </div>
-                          <div className="text-gray-500 text-sm">Gestionnaires boutique</div>
-                        </div>
-                        <div className="flex items-center gap-2 mt-2 text-xs text-gray-400">
-                          <Settings size={14} className="text-green-600" />
-                          <span>Supervision</span>
-                        </div>
-                      </div>
-                    </motion.div>
-                  </motion.div>
-                </motion.section>
-
-                {/* === FLUX FINANCIER RÉEL === */}
-                <motion.section variants={sectionVariants}>
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="p-2 rounded-lg bg-gradient-to-br from-green-100 to-green-50">
-                      <Wallet className="w-5 h-5 text-green-600" />
-                    </div>
-                    <h2 className="text-xl font-bold text-gray-900">Flux financier réel</h2>
-                  </div>
-
-                  <motion.div 
-                    variants={{
-                      hidden: { opacity: 0 },
-                      visible: {
-                        opacity: 1,
-                        transition: { staggerChildren: 0.1 }
-                      }
-                    }}
-                    className="grid grid-cols-1 lg:grid-cols-3 gap-6"
-                  >
-                    {showSkeletons ? (
-                      <>
-                        <div className="card bg-white p-6 rounded-xl shadow-sm h-24 animate-pulse" />
-                        <div className="card bg-white p-6 rounded-xl shadow-sm h-24 animate-pulse" />
-                        <div className="card bg-white p-6 rounded-xl shadow-sm h-24 animate-pulse" />
-                      </>
-                    ) : (
-                      [
-                        {
-                          bg: "from-[#472EAD]/5 to-white",
-                          label: "Total facturé",
-                          value: formatFCFA(Number(finance?.totalFacture || 0)),                          suffix: "Somme des commandes",
-                          valueColor: "text-gray-900"
-                        },
-                        {
-                          bg: "from-green-50 to-white",
-                          label: "Total encaissé",
-                          value: formatFCFA(Number(finance?.totalEncaissement || 0)),
-                          suffix: "Paiements reçus",
-                          valueColor: "text-green-600"
-                        },
-                        {
-                          bg: "from-amber-50 to-white",
-                          label: "Reste à encaisser",
-                          value: formatFCFA(Number(finance?.resteAEncaisser || 0)),
-                          suffix: finance?.totalFacture
-                            ? `${((finance.resteAEncaisser / finance.totalFacture) * 100).toFixed(1)}% du total`
-                            : "0% du total",
-                          valueColor: "text-amber-600"
-                        }
-                      ].map((item, index) => (
-                        <motion.div
-                          key={index}
-                          variants={cardVariants}
-                          whileHover="hover"
-                          className={`card bg-gradient-to-br ${item.bg} p-6 rounded-xl shadow-sm`}
-                        >
-                          <div className="text-sm text-gray-500 mb-1">{item.label}</div>
-                          <div className={`text-2xl font-bold ${item.valueColor}`}>{item.value}</div>
-                          <div className="text-xs text-gray-400 mt-1">{item.suffix}</div>
-                        </motion.div>
-                      ))
-                    )}
-                  </motion.div>
-                </motion.section>
-
-                {/* === ALERTES STOCK === */}
-                <motion.section variants={sectionVariants}>
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="p-2 rounded-lg bg-gradient-to-br from-red-100 to-red-50">
-                      <Bell className="w-5 h-5 text-red-600" />
-                    </div>
-                    <h2 className="text-xl font-bold text-gray-900">Alertes Stock</h2>
-                    <span className="text-xs text-gray-400 ml-2">Basé sur {alertesStock?.totalProduits ?? 0} produits actifs</span>
-                  </div>
-
-                  <motion.div 
-                    variants={{
-                      hidden: { opacity: 0 },
-                      visible: {
-                        opacity: 1,
-                        transition: { staggerChildren: 0.1 }
-                      }
-                    }}
-                    className="grid grid-cols-1 md:grid-cols-3 gap-6"
-                  >
-                    {showSkeletons ? (
-                      <>
-                        <div className="card bg-white p-6 rounded-xl shadow-sm h-32 animate-pulse" />
-                        <div className="card bg-white p-6 rounded-xl shadow-sm h-32 animate-pulse" />
-                        <div className="card bg-white p-6 rounded-xl shadow-sm h-32 animate-pulse" />
-                      </>
-                    ) : (
-                      [
-                        {
-                          color: "red",
-                          icon: AlertTriangle,
-                          title: "Produits en rupture",
-                          value: alertesStock?.rupture ?? 0,
-                          badge: "CRITIQUE",
-                          description: "Stock = 0 - Réapprovisionnement urgent"
-                        },
-                        {
-                          color: "orange",
-                          icon: Bell,
-                          title: "Produits sous seuil",
-                          value: alertesStock?.sousSeuil ?? 0,
-                          badge: "ATTENTION",
-                          description: "Stock < seuil minimum - À surveiller"
-                        },
-                        {
-                          color: "green",
-                          icon: Shield,
-                          title: "Produits en stock normal",
-                          value: alertesStock?.normal ?? 0,
-                          badge: "OK",
-                          description: "Stock > seuil - Situation stable"
-                        }
-                      ].map((alerte, index) => {
-                        const styles = alertStyles[alerte.color];
-                        const IconComponent = alerte.icon;
-                        
-                        return (
-                          <motion.div
-                            key={index}
-                            variants={cardVariants}
-                            whileHover="hover"
-                            className={`card relative overflow-hidden border-l-4 ${styles.border} bg-white p-6 rounded-xl shadow-sm`}
-                          >
-                            <div className={`absolute top-0 right-0 w-20 h-20 ${styles.bg} rounded-full -translate-y-6 translate-x-6 opacity-50`} />
-                            <div className="relative z-10">
-                              <div className="flex items-center justify-between mb-4">
-                                <div className={`p-2 rounded-lg ${styles.iconBg}`}>
-                                  <IconComponent className={`w-6 h-6 ${styles.iconColor}`} />
-                                </div>
-                                <div className={`px-2 py-1 rounded-full ${styles.badgeBg} ${styles.badgeText} text-xs font-medium`}>
-                                  {alerte.badge}
-                                </div>
-                              </div>
-                              <div className="mb-2">
-                                <div className="text-3xl font-bold text-gray-900">{alerte.value}</div>
-                                <div className="text-gray-500 text-sm">{alerte.title}</div>
-                              </div>
-                              <div className="text-xs text-gray-400 mt-2">
-                                {alerte.description}
-                              </div>
+                        <div className="absolute inset-0 bg-gradient-to-br from-[#472EAD]/5 to-transparent" />
+                        <div className="relative">
+                          <div className="flex items-center gap-3 mb-3">
+                            <div className={`p-2 ${alertStyles.purple.iconBg} rounded-xl`}>
+                              <LineChart className={`w-4 h-4 ${alertStyles.purple.icon}`} />
                             </div>
-                          </motion.div>
-                        );
-                      })
-                    )}
-                  </motion.div>
-                </motion.section>
-
-                {/* === GRAPHIQUES CÔTE À CÔTE === */}
-                <motion.section variants={sectionVariants}>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Commandes par statut */}
-                    <motion.div 
-                      variants={cardVariants}
-                      whileHover="hover"
-                      className="card bg-white p-6 rounded-xl shadow-sm"
-                    >
-                      <div className="flex items-center justify-between mb-6">
-                        <div className="flex items-center gap-2">
-                          <div className="p-2 rounded-lg bg-[#472EAD]/10">
-                            <PieChart className="w-5 h-5 text-[#472EAD]" />
+                            <span className="text-xs text-gray-400 font-medium">FACTURÉ</span>
                           </div>
-                          <h3 className="text-lg font-bold text-gray-900">Commandes par statut</h3>
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          Total: {commandesParStatutData.reduce((acc, curr) => acc + curr.value, 0) || 0}
-                        </div>
-                      </div>
-                      {showSkeletons ? (
-                        <div className="h-64 bg-gray-200 animate-pulse rounded-lg" />
-                      ) : (
-                        <ChartBox
-                          title=""
-                          icon={<ShoppingBag size={18} />}
-                          data={commandesParStatutData}
-                          dataKey1="value"
-                          type="pie"
-                          colors={commandesParStatutData.map(
-                            item => statutColors[item.name] || "#9CA3AF"
+                          <div className={`text-2xl font-bold ${alertStyles.purple.number} tracking-tight`}>
+                            {formatFCFA(Number(finance?.totalFacture || 0))}
+                          </div>
+                          {finance?.totalFacture > 0 && (
+                            <div className="mt-2 text-[10px] text-gray-400 font-medium">
+                              Total des ventes
+                            </div>
                           )}
-                          theme="light"
-                        />
-                      )}
-                      <div className="grid grid-cols-2 gap-3 mt-4">
-                        {showSkeletons ? (
-                          <>
-                            <div className="h-6 bg-gray-200 animate-pulse rounded" />
-                            <div className="h-6 bg-gray-200 animate-pulse rounded" />
-                            <div className="h-6 bg-gray-200 animate-pulse rounded" />
-                            <div className="h-6 bg-gray-200 animate-pulse rounded" />
-                          </>
-                        ) : (
-                          commandesParStatutData.map((item, index) => (
-                            <motion.div
-                              key={item.name ?? index}
-                              initial={{ opacity: 0, x: -10 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              transition={{ delay: index * 0.1 }}
-                              className="flex items-center justify-between"
-                            >
-                              <div className="flex items-center gap-2">
-                                <div
-                                  className="w-3 h-3 rounded-full"
-                                  style={{
-                                    backgroundColor: statutColors[item.name] || "#9CA3AF"                                  }}
-                                />
-                                <span className="text-sm text-gray-600">
-                                  {item.name.replaceAll("_", " ")}
-                                </span>
+                        </div>
+                      </motion.div>
+
+                      {/* Total encaissé - Style Emerald */}
+                      <motion.div 
+                        whileHover={{ scale: 1.02, y: -2 }}
+                        className={`relative overflow-hidden bg-white rounded-2xl p-6 border-l-4 ${alertStyles.emerald.border} shadow-lg hover:shadow-xl transition-all duration-300`}
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent" />
+                        <div className="relative">
+                          <div className="flex items-center gap-3 mb-3">
+                            <div className={`p-2 ${alertStyles.emerald.iconBg} rounded-xl`}>
+                              <DollarSign className={`w-4 h-4 ${alertStyles.emerald.icon}`} />
+                            </div>
+                            <span className="text-xs text-gray-400 font-medium">ENCAISSÉ</span>
+                          </div>
+                          <div className={`text-2xl font-bold ${alertStyles.emerald.number} tracking-tight`}>
+                            {formatFCFA(Number(finance?.totalEncaissement || 0))}
+                          </div>
+                          {finance?.totalEncaissement > 0 && (
+                            <div className="mt-2 w-full bg-emerald-100 rounded-full h-1.5">
+                              <div 
+                                className="bg-emerald-600 h-1.5 rounded-full" 
+                                style={{ width: `${(finance.totalEncaissement / finance.totalFacture) * 100}%` }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </motion.div>
+
+                      {/* Reste à encaisser - Style Ambre */}
+                      <motion.div 
+                        whileHover={{ scale: 1.02, y: -2 }}
+                        className={`relative overflow-hidden bg-white rounded-2xl p-6 border-l-4 ${alertStyles.amber.border} shadow-lg hover:shadow-xl transition-all duration-300`}
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent" />
+                        <div className="relative">
+                          <div className="flex items-center gap-3 mb-3">
+                            <div className={`p-2 ${alertStyles.amber.iconBg} rounded-xl`}>
+                              <Hourglass className={`w-4 h-4 ${alertStyles.amber.icon}`} />
+                            </div>
+                            <span className="text-xs text-gray-400 font-medium">À ENCAISSER</span>
+                          </div>
+                          <div className={`text-2xl font-bold ${alertStyles.amber.number} tracking-tight`}>
+                            {formatFCFA(Number(finance?.resteAEncaisser || 0))}
+                          </div>
+                          {finance?.totalFacture > 0 && (
+                            <>
+                              <div className="text-[10px] text-gray-400 mt-2 font-medium">
+                                {((finance.resteAEncaisser / finance.totalFacture) * 100).toFixed(1)}% du total
                               </div>
-
-                              <span className="text-sm font-medium text-gray-900">
-                                {item.value}
-                              </span>
-                            </motion.div>
-                          ))
-                        )}
-                      </div>
-
-                    </motion.div>
-
-                    {/* Activité business globale - maintenant côte à côte avec Commandes par statut */}
-                    <motion.div 
-                      variants={cardVariants}
-                      whileHover="hover"
-                      className="card bg-white p-6 rounded-xl shadow-sm"
-                    >
-                      <div className="flex items-center gap-3 mb-6">
-                        <div className="p-2 rounded-lg bg-gradient-to-br from-indigo-100 to-indigo-50">
-                          <Layers className="w-5 h-5 text-indigo-600" />
-                        </div>
-                        <div>
-                          <h3 className="text-lg font-bold text-gray-900">Activité business globale</h3>
-                          <p className="text-sm text-gray-500">Vue d'ensemble des transactions</p>
-                        </div>
-                      </div>
-                      
-                      {showSkeletons ? (
-                        <div className="h-64 bg-gray-200 animate-pulse rounded-lg" />
-                      ) : (
-                        <ChartBox
-                          title=""
-                          icon={<Activity size={18} />}
-                          data={activiteGlobaleSorted}
-                          dataKey1="value"
-                          type="pie"
-                          colors={activiteGlobaleSorted.map(
-                            item => activiteColors[item.name] || "#9CA3AF"
-                          )}
-                          theme="light"
-                        />
-                      )}
-                      
-                      <div className="grid grid-cols-2 gap-3 mt-4">
-                        {showSkeletons ? (
-                          <>
-                            <div className="h-6 bg-gray-200 animate-pulse rounded" />
-                            <div className="h-6 bg-gray-200 animate-pulse rounded" />
-                            <div className="h-6 bg-gray-200 animate-pulse rounded" />
-                            <div className="h-6 bg-gray-200 animate-pulse rounded" />
-                          </>
-                        ) : (
-                          activiteGlobaleSorted.map((item, index) => (
-                            <motion.div
-                              key={item.name ?? index}
-                              initial={{ opacity: 0, x: -10 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              transition={{ delay: index * 0.1 }}
-                              className="flex items-center justify-between"
-                            >
-                              <div className="flex items-center gap-2">
+                              <div className="mt-2 w-full bg-amber-100 rounded-full h-1.5">
                                 <div 
-                                  className="w-3 h-3 rounded-full" 
-                                  style={{ backgroundColor: activiteColors[item.name] || "#9CA3AF"}} 
+                                  className="bg-amber-600 h-1.5 rounded-full" 
+                                  style={{ width: `${(finance.resteAEncaisser / finance.totalFacture) * 100}%` }}
                                 />
-                                <span className="text-sm text-gray-600">{item.name}</span>
                               </div>
-                              <span className="text-sm font-medium text-gray-900">{item.value}</span>
-                            </motion.div>
-                          ))
-                        )}
-                      </div>
-                    </motion.div>
-                  </div>
-                </motion.section>
-
-                {/* === ANALYSE PRODUITS === */}
-                <motion.section variants={sectionVariants}>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* TOP 5 BEST SELLERS */}
-                    <motion.div 
-                      variants={cardVariants}
-                      whileHover="hover"
-                      className="card bg-white p-6 rounded-xl shadow-sm"
-                    >
-                      <div className="flex items-center justify-between mb-6">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-lg bg-gradient-to-br from-[#472EAD]/10 to-[#472EAD]/5">
-                            <Award className="w-5 h-5 text-[#472EAD]" />
-                          </div>
-                          <div>
-                            <h3 className="text-lg font-bold text-gray-900">TOP 5 des produits les plus vendus</h3>
-                            <p className="text-sm text-gray-500">Produits les plus vendus (par quantité)</p>
-                          </div>
+                            </>
+                          )}
                         </div>
-                      </div>
-
-                      <div className="space-y-3">
-                        {showSkeletons ? (
-                          <>
-                            <SkeletonProductItem />
-                            <SkeletonProductItem />
-                            <SkeletonProductItem />
-                            <SkeletonProductItem />
-                            <SkeletonProductItem />
-                          </>
-                        ) : (
-                          (produits?.topBestSellers ?? []).map((produit, index) => (
-                            <motion.div
-                              key={produit.id ?? index}
-                              initial={{ opacity: 0, x: -20 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              transition={{ delay: index * 0.1 }}
-                              whileHover={{ scale: 1.02, backgroundColor: "#F9FAFB" }}
-                              className="flex items-center justify-between p-3 rounded-lg transition-colors"
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold ${
-                                  index === 0 ? 'bg-amber-100 text-amber-700' :
-                                  index === 1 ? 'bg-gray-100 text-gray-700' :
-                                  index === 2 ? 'bg-orange-100 text-orange-700' :
-                                  'bg-blue-100 text-blue-700'
-                                }`}>
-                                  {index + 1}
-                                </div>
-                                <div>
-                                  <div className="font-medium text-gray-900">{produit.nom}</div>
-                                  <div className="text-xs text-gray-500">{produit.categorie || "-"} • {produit.quantiteVendue ?? 0} ventes</div>
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <div className="font-medium text-gray-900">
-                                  {produit.quantiteVendue ?? 0} ventes
-                                </div>
-                              </div>
-
-                            </motion.div>
-                          ))
-                        )}
-                      </div>
-                    </motion.div>
-
-                    {/* PRODUITS LES MOINS VENDUS */}
-                    <motion.div 
-                      variants={cardVariants}
-                      whileHover="hover"
-                      className="card bg-white p-6 rounded-xl shadow-sm"
-                    >
-                      <div className="flex items-center justify-between mb-6">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-lg bg-gradient-to-br from-red-100 to-red-50">
-                            <TrendingDown className="w-5 h-5 text-red-600" />
-                          </div>
-                          <div>
-                            <h3 className="text-lg font-bold text-gray-900">TOP 5 des produits les moins vendus</h3>
-                            <p className="text-sm text-gray-500">À surveiller (faible rotation)</p>
-                          </div>
-                        </div> 
-                      </div>
-
-                      <div className="space-y-3">
-                        {showSkeletons ? (
-                          <>
-                            <SkeletonProductItem />
-                            <SkeletonProductItem />
-                            <SkeletonProductItem />
-                            <SkeletonProductItem />
-                            <SkeletonProductItem />
-                          </>
-                        ) : (
-                          (produits?.topLeastSold ?? []).map((produit, index) => (
-                            <motion.div
-                              key={produit.id ?? index}
-                              initial={{ opacity: 0, x: -20 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              transition={{ delay: index * 0.1 }}
-                              whileHover={{ scale: 1.02, backgroundColor: "#F9FAFB" }}
-                              className="flex items-center justify-between p-3 rounded-lg transition-colors"
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                                  produit.indicateur === 'danger' ? 'bg-red-100 text-red-700' :
-                                  produit.indicateur === 'warning' ? 'bg-orange-100 text-orange-700' :
-                                  'bg-green-100 text-green-700'
-                                }`}>
-                                  {index + 1}
-                                </div>
-                                <div>
-                                  <div className="font-medium text-gray-900">{produit.nom}</div>
-                                  <div className="text-xs text-gray-500">{produit.categorie || "-"}</div>
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <div className="font-medium text-gray-900">{produit.quantiteVendue ?? 0} ventes</div>
-                                  <div className="text-right">
-
-                                  </div>
-
-                              </div>
-                            </motion.div>
-                          ))
-                        )}
-                      </div>
-                    </motion.div>
-                  </div>
-                </motion.section>
-
-
+                      </motion.div>
+                    </>
+                  )}
+                </div>
               </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+
+              {/* === SECTION ALERTES STOCK - VERSION RENFORCÉE === */}
+              <motion.div variants={fadeUp} className="space-y-4">
+                <div className="flex items-center justify-between px-1">
+                  <div className="flex items-center gap-2">
+                    <div className="w-1 h-5 bg-gradient-to-b from-rose-500 to-red-500 rounded-full" />
+                    <h2 className="text-xs font-semibold text-gray-500 tracking-wider uppercase">
+                      Alertes stock
+                    </h2>
+                  </div>
+                  {!showSkeletons && alertesStock?.totalProduits > 0 && (
+                    <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-semibold text-gray-500 bg-white/80 backdrop-blur-sm border border-gray-200/60 px-3 py-1.5 rounded-full shadow-sm">
+                      <span className="text-[#472EAD] font-bold">{alertesStock?.totalProduits ?? 0}</span> produits actifs
+                    </span>
+
+                    </div>
+                  )}
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                  {showSkeletons ? (
+                    <>
+                      <div className="bg-white rounded-2xl p-6 h-28 animate-pulse" />
+                      <div className="bg-white rounded-2xl p-6 h-28 animate-pulse" />
+                      <div className="bg-white rounded-2xl p-6 h-28 animate-pulse" />
+                    </>
+                  ) : (
+                    <>
+                      {/* Rupture - Version alarmante */}
+                      <motion.div 
+                        whileHover={{ scale: 1.02, y: -2 }}
+                        className={`relative overflow-hidden bg-white rounded-2xl p-6 border-l-4 ${alertStyles.red.border} shadow-lg hover:shadow-xl transition-all duration-300 ${alertStyles.hover}`}
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 to-transparent" />
+                        <div className="relative">
+                          <div className="flex items-center justify-between mb-4">
+                            <div className={`p-2.5 ${alertStyles.red.iconBg} rounded-xl`}>
+                              <PackageX className={`w-5 h-5 ${alertStyles.red.icon}`} />
+                            </div>
+                            <span className={`text-[10px] font-bold px-2.5 py-1 rounded-md ${alertStyles.red.badge} flex items-center gap-1`}>
+                              <AlertOctagon className="w-3 h-3" />
+                              URGENT
+                            </span>
+                          </div>
+                          <div className={`text-3xl font-bold ${alertStyles.red.number} mb-1`}>
+                            {alertesStock?.rupture ?? 0}
+                          </div>
+                          <div className="text-xs text-gray-600 font-medium flex items-center gap-1">
+                            <span>Produits en rupture</span>
+                            {alertesStock?.rupture > 0 && (
+                              <span className="text-red-500 text-[10px] font-bold">• Action requise</span>
+                            )}
+                          </div>
+                          {alertesStock?.rupture > 0 && (
+                            <div className="mt-3 w-full bg-red-100 rounded-full h-1.5">
+                              <div 
+                                className="bg-red-600 h-1.5 rounded-full" 
+                                style={{ width: `${Math.min(100, (alertesStock.rupture / alertesStock.totalProduits) * 100)}%` }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </motion.div>
+
+                      {/* Sous seuil - Version attention */}
+                      <motion.div 
+                        whileHover={{ scale: 1.02, y: -2 }}
+                        className={`relative overflow-hidden bg-white rounded-2xl p-6 border-l-4 ${alertStyles.orange.border} shadow-lg hover:shadow-xl transition-all duration-300 ${alertStyles.hover}`}
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 to-transparent" />
+                        <div className="relative">
+                          <div className="flex items-center justify-between mb-4">
+                            <div className={`p-2.5 ${alertStyles.orange.iconBg} rounded-xl`}>
+                              <PackageMinus className={`w-5 h-5 ${alertStyles.orange.icon}`} />
+                            </div>
+                            <span className={`text-[10px] font-bold px-2.5 py-1 rounded-md ${alertStyles.orange.badge} flex items-center gap-1`}>
+                              <AlertTriangle className="w-3 h-3" />
+                              ATTENTION
+                            </span>
+                          </div>
+                          <div className={`text-3xl font-bold ${alertStyles.orange.number} mb-1`}>
+                            {alertesStock?.sousSeuil ?? 0}
+                          </div>
+                          <div className="text-xs text-gray-600 font-medium flex items-center gap-1">
+                            <span>Produits sous seuil</span>
+                            {alertesStock?.sousSeuil > 0 && (
+                              <span className="text-orange-500 text-[10px] font-bold">• À réapprovisionner</span>
+                            )}
+                          </div>
+                          {alertesStock?.sousSeuil > 0 && (
+                            <div className="mt-3 w-full bg-orange-100 rounded-full h-1.5">
+                              <div 
+                                className="bg-orange-600 h-1.5 rounded-full" 
+                                style={{ width: `${Math.min(100, (alertesStock.sousSeuil / alertesStock.totalProduits) * 100)}%` }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </motion.div>
+
+                      {/* Stock normal - Version rassurante */}
+                      <motion.div 
+                        whileHover={{ scale: 1.02, y: -2 }}
+                        className={`relative overflow-hidden bg-white rounded-2xl p-6 border-l-4 ${alertStyles.green.border} shadow-lg hover:shadow-xl transition-all duration-300 ${alertStyles.hover}`}
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-transparent" />
+                        <div className="relative">
+                          <div className="flex items-center justify-between mb-4">
+                            <div className={`p-2.5 ${alertStyles.green.iconBg} rounded-xl`}>
+                              <PackageCheck className={`w-5 h-5 ${alertStyles.green.icon}`} />
+                            </div>
+                            <span className={`text-[10px] font-bold px-2.5 py-1 rounded-md ${alertStyles.green.badge} flex items-center gap-1`}>
+                              <Shield className="w-3 h-3" />
+                              STABLE
+                            </span>
+                          </div>
+                          <div className={`text-3xl font-bold ${alertStyles.green.number} mb-1`}>
+                            {alertesStock?.normal ?? 0}
+                          </div>
+                          <div className="text-xs text-gray-600 font-medium">
+                            Produits en stock normal
+                          </div>
+                          {alertesStock?.normal > 0 && (
+                            <div className="mt-3 w-full bg-green-100 rounded-full h-1.5">
+                              <div 
+                                className="bg-green-600 h-1.5 rounded-full" 
+                                style={{ width: `${Math.min(100, (alertesStock.normal / alertesStock.totalProduits) * 100)}%` }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </motion.div>
+                    </>
+                  )}
+                </div>
+
+                {/* Message d'alerte global si nécessaire */}
+                {!showSkeletons && (alertesStock?.rupture > 0 || alertesStock?.sousSeuil > 0) && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-2xl mt-4"
+                  >
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-semibold text-amber-800">
+                          {alertesStock?.rupture > 0 
+                            ? `${alertesStock.rupture} produit(s) en rupture immédiate` 
+                            : `${alertesStock?.sousSeuil} produit(s) sous seuil critique`}
+                        </p>
+                        <p className="text-xs text-amber-700 mt-1">
+                          {alertesStock?.rupture > 0 
+                            ? "Réapprovisionnement requis en urgence pour éviter les ruptures de vente."
+                            : "Prévoyez un réapprovisionnement dans les plus brefs délais."}
+                        </p>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </motion.div>
+
+              {/* === FOOTER SUBTIL === */}
+              <motion.div variants={fadeUp} className="pt-4 border-t border-gray-100">
+                <p className="text-[10px] text-gray-300 text-right tracking-wide">
+                  
+                </p>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
