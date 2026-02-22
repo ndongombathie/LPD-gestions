@@ -2,7 +2,7 @@
 // 💸 Decaissements.jsx — Interface Responsable (LPD Manager)
 // ✅ Architecture 100% backend : pagination, filtres, recherche, KPI
 // ✅ Debounce recherche 400ms, normalisation statuts, export aligné
-// ✅ Solution professionnelle sans calcul frontend
+// ✅ Version simplifiée avec montant unique
 // ==========================================================
 
 import React, { useEffect, useState } from "react";
@@ -65,7 +65,6 @@ function DetailDecaissementModal({ open, onClose, decaissement }) {
     methodePrevue,
     datePrevue,
     statut,
-    lignes,
     montantTotal,
     caissier,
   } = decaissement;
@@ -129,24 +128,11 @@ function DetailDecaissementModal({ open, onClose, decaissement }) {
                 </tr>
               </thead>
               <tbody>
-                {lignes && lignes.length ? (
-                  lignes.map((l, idx) => (
-                    <tr
-                      key={idx}
-                      className="border-t border-gray-100 hover:bg-[#F9F9FF]"
-                    >
-                      <td className="px-3 py-2 text-right font-medium">
-                        {formatFCFA(l.montant)}
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={1} className="px-3 py-3 text-center text-gray-400">
-                      Aucune ligne détaillée.
-                    </td>
-                  </tr>
-                )}
+                <tr className="border-t border-gray-100">
+                  <td className="px-3 py-2 text-right font-medium">
+                    {formatFCFA(montantTotal)}
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -266,7 +252,7 @@ useEffect(() => {
   }, [page, filterStatut, filterStartDate, filterEndDate, searchDebounced]);
 
   // ——————————————————————————————————————————————————
-  // 💾 Ajout (POST API) — en camelCase pour matcher le backend
+  // 💾 Ajout (POST API) — VERSION SIMPLIFIÉE AVEC MONTANT UNIQUE
   // ——————————————————————————————————————————————————
   const handleAdd = async (form) => {
     if (submitting) return;
@@ -280,64 +266,41 @@ useEffect(() => {
       return;
     }
 
-      if (!form?.caissier_id) {
-        toast.error("Veuillez sélectionner un caissier.");
-        return;
-      }
+    if (!form?.caissier_id) {
+      toast.error("Veuillez sélectionner un caissier.");
+      return;
+    }
+    
     const datePrevue = form?.datePrevue || todayISO();
     if (!datePrevue) {
       toast.error("La date prévue est obligatoire.");
       return;
     }
 
-    const lignes = Array.isArray(form?.lignes) ? form.lignes : [];
-    if (lignes.length === 0) {
-      toast.error("Ajoutez au moins une ligne de décaissement.");
-      return;
-    }
-
-    const lignesPayload = lignes.map((l) => ({
-      montant: Number(l?.montant || 0),
-    }));
-
-    const ligneInvalide = lignesPayload.find(
-      (l) => l.montant <= 0
-    );
-
-    if (ligneInvalide) {
-      toast.error(
-        "Chaque ligne doit avoir un montant supérieur à 0."      );
+    // ✅ Validation du montant unique
+    const montant = Number(form?.montant || 0);
+    if (!montant || montant <= 0) {
+      toast.error("Le montant doit être supérieur à 0.");
       return;
     }
 
     // ———————————————————————————
-    // ✅ PAYLOAD FINAL
+    // ✅ PAYLOAD FINAL SIMPLIFIÉ
     // ———————————————————————————
     const payload = {
       motifGlobal,
       methodePrevue: form?.methodePrevue || "Espèces",
       datePrevue,
       caissier_id: form?.caissier_id,
-      lignes: lignesPayload,
+      montant,
     };
-
 
     const toastId = toast.loading("Envoi à la caisse...");
 
     try {
       setSubmitting(true);
 
-      const data = await decaissementsAPI.create(payload);
-      const d = data.decaissement || data;
-
-      const normalised = {
-        ...d,
-        motifGlobal: d.motifGlobal ?? payload.motifGlobal,
-        methodePrevue: d.methodePrevue ?? payload.methodePrevue,
-        datePrevue: d.datePrevue ?? payload.datePrevue,
-        montantTotal: Number(d.montantTotal ?? 0),
-        lignes: d.lignes ?? lignesPayload,
-      };
+      await decaissementsAPI.create(payload);
 
       setOpenModal(false);
       toast.success("Demande envoyée à la caisse ✅", { id: toastId });
@@ -347,9 +310,6 @@ useEffect(() => {
       } else {
         loadData();
       }
-
-
-
 
     } catch (e) {
       const status = e?.response?.status;
@@ -529,8 +489,6 @@ useEffect(() => {
           d.methodePrevue,
           formatFCFAPdf(d.montantTotal),
           statutLabel(d.statut).toUpperCase(),
-
-
         ]) || [],
         styles: { fontSize: 9, cellPadding: 2, textColor: [55, 65, 81] },
         headStyles: { fillColor: [71, 46, 173], textColor: 255, fontStyle: "bold" },
@@ -827,12 +785,7 @@ useEffect(() => {
                       <td className="px-4 py-2">{d.methodePrevue}</td>
                       <td className="px-4 py-2 font-medium">
                         {formatFCFA(d.montantTotal)}
-                        {d.lignes?.length > 1 && (
-                          <span className="text-[11px] text-gray-400 ml-1">
-                            ({d.lignes.length} lignes)
-                          </span>
-                        )}
-
+                        {/* ❌ Suppression du compteur de lignes */}
                       </td>
                       <td className="px-4 py-2">
                         <span
@@ -870,8 +823,6 @@ useEffect(() => {
             </table>
 
             {/* ✅ Pagination footer corrigée */}
-  
-
             <div className="mt-6 mb-4"> {/* Ajout de mt-6 mb-4 */}
               <Pagination
                 page={page}
