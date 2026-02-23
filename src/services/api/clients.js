@@ -13,8 +13,8 @@
     UPDATE: '/clients/:id',
     DELETE: '/clients/:id',
     GET_SPECIAL: '/clients?type_client=special',
+    GET_ALL_SPECIAUX: '/clients/speciaux/all', // ✅ AJOUT ICI
   };
-
   export const clientsAPI = {
     /**
      * Récupérer tous les clients
@@ -90,6 +90,21 @@
         return response.data;
       } catch (error) {
         console.error('❌ Erreur delete client:', error.response?.data || error.message);
+        throw error;
+      }
+    },
+
+    /**
+     * Récupérer tous les clients spéciaux (sans pagination)
+     */
+    getAllSpeciaux: async (params = {}) => {
+      try {
+        return await httpClient.get(
+          ENDPOINTS.GET_ALL_SPECIAUX,
+          { params }
+        );
+      } catch (error) {
+        console.error('❌ Erreur getAllSpeciaux:', error.message);
         throw error;
       }
     },

@@ -81,8 +81,6 @@ function unwrapApi(res) {
   }
 
   // Already unwrapped
-  
-
   return {
     data: [],
     total: 0,
@@ -133,129 +131,6 @@ function Toasts({ toasts, remove }) {
           </motion.div>
         ))}
       </AnimatePresence>
-    </div>
-  );
-}
-
-// ==========================================================
-// 🔎 Modal de recherche (Clients / Produits) - CORRIGÉ ✅
-// ==========================================================
-function SearchModal({
-  open,
-  title,
-  items,
-  onClose,
-  onSelect,
-  getLabel,
-  getSubLabel,
-  onSearch,
-  loading,
-}) {
-  const [query, setQuery] = useState("");
-
-  useEffect(() => {
-    if (open) setQuery("");
-  }, [open]);
-
-  if (!open) return null;
-
-  // ✅ CORRIGÉ : plus de filtre côté client, on utilise directement items du backend
-  const filtered = items;
-
-  return (
-    <div className="fixed inset-0 z-[130] bg-black/40 backdrop-blur-sm flex items-center justify-center px-3">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.97, y: 10 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]"
-      >
-        {/* Header */}
-        <div className="px-4 py-3 border-b flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-[#472EAD] flex items-center gap-2">
-            <Search className="w-4 h-4" />
-            {title}
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-800 rounded-full p-1 hover:bg-gray-50"
-          >
-            <X size={16} />
-          </button>
-        </div>
-
-        {/* Barre de recherche */}
-        <div className="px-4 py-3 border-b">
-          <div className="relative">
-            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              autoFocus
-              type="text"
-              placeholder="Rechercher..."
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                onSearch?.(e.target.value);
-              }}
-              className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-xl bg-white shadow-sm focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD] placeholder:text-gray-400"
-            />
-          </div>
-          <div className="mt-1 text-[11px] text-gray-500">
-            Résultats :{" "}
-            <span className="font-semibold">{filtered.length}</span>
-          </div>
-        </div>
-
-        {/* Liste des résultats - avec loader ✅ */}
-        <div className="flex-1 overflow-auto">
-          {loading ? (
-            <div className="py-6 text-center text-xs text-gray-400">
-              <Loader2 className="w-4 h-4 animate-spin mx-auto mb-2" />
-              Recherche en cours...
-            </div>
-          ) : filtered.length ? (
-            <ul className="divide-y divide-gray-100">
-              {filtered.map((item) => (
-                <li
-                  key={item.id}
-                  className="px-4 py-3 hover:bg-[#F7F5FF] cursor-pointer flex justify-between items-center"
-                  onClick={() => {
-                    onSelect(item);
-                    onClose();
-                  }}
-                >
-                  <div>
-                    <div className="text-sm font-medium text-gray-800">
-                      {getLabel(item)}
-                    </div>
-                    {getSubLabel && (
-                      <div className="text-[11px] text-gray-500">
-                        {getSubLabel(item)}
-                      </div>
-                    )}
-                  </div>
-                  <span className="text-[11px] px-2 py-1 rounded-full bg-[#F7F5FF] text-[#472EAD] border border-[#E4E0FF]">
-                    Sélectionner
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="h-full flex items-center justify-center text-xs text-gray-400 py-8">
-              Aucun résultat trouvé. Affinez votre recherche.
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="px-4 py-2 border-t text-right">
-          <button
-            onClick={onClose}
-            className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50"
-          >
-            Fermer
-          </button>
-        </div>
-      </motion.div>
     </div>
   );
 }
@@ -479,7 +354,6 @@ function QrCommandeModal({ open, onClose, commande, qrPayload }) {
           <div className="bg-[#F9FAFF] border border-[#E4E0FF] rounded-xl px-3 py-2 text-[11px] text-gray-600">
             Le QR contient le numéro de commande. 
             La caisse recharge automatiquement les informations depuis le système.
-
           </div>
 
           {/* Boutons */}
@@ -644,39 +518,43 @@ function FactureModal({ open, onClose, commande }) {
 }
 
 // ======================================================================
-// 🧩 Formulaire Commande (multi-lignes produits + branché sur API refs) - CORRIGÉ ✅
+// 🧩 Formulaire Commande (multi-lignes produits + dropdown client instantané)
 // ======================================================================
 function CommandeForm({ clientInitial, onCreate, toast }) {
-  // ✅ REF pour l'input produit (correction bug)
+  // ✅ REF pour l'input produit
   const produitInputRef = useRef(null);
   
-  // Clients spéciaux & catalogue produits depuis l'API
-  const [clientSearchInput, setClientSearchInput] = useState("");
-  const [clientSearchTerm, setClientSearchTerm] = useState("");
+  // ✅ CLIENT - States pour dropdown client
+  const [allClients, setAllClients] = useState([]);
   const [clientsLoading, setClientsLoading] = useState(false);
-
-  const [clients, setClients] = useState([]);
+  const [isClientOpen, setIsClientOpen] = useState(false);
+  const [searchClient, setSearchClient] = useState("");
+  const [hasLoadedClients, setHasLoadedClients] = useState(false);
   
-  // ✅ RECHERCHE DYNAMIQUE PRODUITS (comme clients)
-  const [produitSearchInput, setProduitSearchInput] = useState("");
-  const [produitSearchTerm, setProduitSearchTerm] = useState("");
-  const [produitsLoading, setProduitsLoading] = useState(false);
+  // ✅ CLIENT - State dédié pour le client sélectionné
+  const [selectedClient, setSelectedClient] = useState(null);
   
+  // ✅ PRODUIT - Chargement unique
   const [catalogue, setCatalogue] = useState([]);
+  const [produitsLoading, setProduitsLoading] = useState(false);
+  const [hasLoadedProduits, setHasLoadedProduits] = useState(false);
 
-  const [clientId, setClientId] = useState(clientInitial || "");
+  // ✅ PRODUIT - States pour dropdown produit (comme le client)
+  const [isProduitOpen, setIsProduitOpen] = useState(false);
+  const [searchProduit, setSearchProduit] = useState("");
+  const [selectedProduit, setSelectedProduit] = useState(null);
+
   const [dateCommande] = useState(todayISO());
 
   // TVA activée ou non
   const [applyTVA, setApplyTVA] = useState(false);
 
-  // Modals de recherche
-  const [openClientSearch, setOpenClientSearch] = useState(false);
-  const [openProduitSearch, setOpenProduitSearch] = useState(false);
+  // ✅ OPTIONNEL : spinner sur le bouton d'envoi
+  const [submitting, setSubmitting] = useState(false);
 
   // Champ de saisie "ligne en cours"
   const [ligneProduitId, setLigneProduitId] = useState("");
-  const [ligneLibelle, setLigneLibelle] = useState(""); // champ unique: libellé OU code-barres
+  const [ligneLibelle, setLigneLibelle] = useState(""); // gardé pour compatibilité
   const [ligneQte, setLigneQte] = useState("");
   const [lignePrix, setLignePrix] = useState("");
   const [ligneMode, setLigneMode] = useState("gros"); // "detail" | "gros" (défaut : gros)
@@ -686,44 +564,55 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
   // Lignes de la commande
   const [lignes, setLignes] = useState([]);
 
-  const produitSelectionne = useMemo(
-    () =>
-      catalogue.find((p) => String(p.id) === String(ligneProduitId)) || null,
-    [catalogue, ligneProduitId]
+  // ✅ FILTRAGE SIMPLE DES PRODUITS (comme pour les clients)
+  const filteredProduits = catalogue.filter((p) =>
+    (p.libelle || "").toLowerCase().includes(searchProduit.toLowerCase())
   );
 
-  // 🔎 Liste des produits qui matchent le champ unique (nom / ref / code-barres)
-  const produitsFiltres = catalogue;
+  // ✅ Chargement unique de tous les clients spéciaux
+  const loadAllClients = async () => {
+    if (hasLoadedClients || clientsLoading) return;
 
-  const hasTypedProduitRef = useRef(false);
+    try {
+      setClientsLoading(true);
+      const res = await clientsAPI.getAllSpeciaux();
+      const payload = unwrapApi(res);
 
+      const normalized = (payload.data || []).map((c) => ({
+        id: c.id,
+        nom: c.nom || c.entreprise || "",
+        code:
+          c.code_client ||
+          c.code ||
+          (c.id ? `CL-${String(c.id).padStart(3, "0")}` : ""),
+      }));
 
+      setAllClients(normalized);
+      setHasLoadedClients(true);
+    } catch (e) {
+      logger.error("clients.load.all", e);
+      toast(
+        "error",
+        "Erreur de chargement",
+        "Impossible de charger la liste des clients."
+      );
+    } finally {
+      setClientsLoading(false);
+    }
+  };
 
-
-  // ✅ RECHERCHE PRODUITS DYNAMIQUE - Debounce
+  // ✅ Chargement unique de tous les produits
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setProduitSearchTerm(produitSearchInput);
-    }, 700);
+    const loadAllProduits = async () => {
+      if (hasLoadedProduits) return;
 
-    return () => clearTimeout(timer);
-  }, [produitSearchInput]);
-
-  // ✅ RECHERCHE PRODUITS DYNAMIQUE - Fetch API
-  useEffect(() => {
-    const fetchProduits = async () => {
       try {
         setProduitsLoading(true);
 
-        const params = {};
-        if (produitSearchTerm) {
-          params.search = produitSearchTerm;
-        }
+        // ✅ Utiliser l'endpoint qui retourne TOUS les produits
+        const res = await produitsAPI.getAllProduits();
 
-        const produitsRes = await produitsAPI.getAll(params);
-        const produitsPayload = unwrapApi(produitsRes);
-
-        const normalizedProduits = (produitsPayload.data || []).map((p) => {
+        const normalized = (Array.isArray(res) ? res : []).map((p) => {
           const prixDetail = Number(
             p.prix_basique_detail ??
               p.prix_vente ??
@@ -768,9 +657,10 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
           };
         });
 
-        setCatalogue(normalizedProduits);
+        setCatalogue(normalized);
+        setHasLoadedProduits(true);
       } catch (error) {
-        logger.error("produits.load", error);
+        logger.error("produits.load.all", error);
         toast(
           "error",
           "Erreur de chargement",
@@ -781,68 +671,46 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
       }
     };
 
-    fetchProduits();
+    loadAllProduits();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [produitSearchTerm]);
+  }, [hasLoadedProduits]);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setClientSearchTerm(clientSearchInput);
-    }, 1000);
+  // ✅ Rafraîchir la liste des clients (optionnel)
+  const refreshClients = async () => {
+    setHasLoadedClients(false);
+    await loadAllClients();
+  };
 
-    return () => clearTimeout(timer);
-  }, [clientSearchInput]);
-
-  useEffect(() => {
-    if (
-      hasTypedProduitRef.current &&
-      !produitsLoading &&
-      document.activeElement !== produitInputRef.current
-    ) {
-      produitInputRef.current?.focus();
-    }
-  }, [produitsLoading]);
-
-
-
-  // ✅ Étape B — VRAI FETCH CLIENTS avec recherche backend ✅
-  useEffect(() => {
-    const fetchClients = async () => {
-      try {
-        setClientsLoading(true);
-
-        const res = await clientsAPI.getAll({
-          type_client: "special",
-          search: clientSearchTerm,
-        });
-
-        const payload = unwrapApi(res);
-
-        const normalized = (payload.data || []).map((c) => ({
-          id: c.id,
-          nom: c.nom || c.entreprise || "",
-          code:
-            c.code_client ||
-            c.code ||
-            (c.id ? `CL-${String(c.id).padStart(3, "0")}` : ""),
-        }));
-
-        setClients(normalized);
-
-      } catch (e) {
-        logger.error("clients.search", e);
-      } finally {
-        setClientsLoading(false);
-      }
-    };
-
-    fetchClients();
-  }, [clientSearchTerm]);
-
-  const clientActuel = useMemo(
-    () => clients.find((c) => String(c.id) === String(clientId)) || null,
-    [clientId, clients]
+  // ✅ Filtrage instantané frontend clients (sécurisé contre les null)
+  const filteredClients = allClients.filter((c) =>
+    (c.nom || "").toLowerCase().includes(searchClient.toLowerCase())
   );
+
+  // ✅ Initialisation du client sélectionné à partir de clientInitial
+  useEffect(() => {
+    if (clientInitial && !selectedClient) {
+      const fetchInitialClient = async () => {
+        try {
+          const res = await clientsAPI.getById(clientInitial);
+          if (res?.data) {
+            const client = {
+              id: res.data.id,
+              nom: res.data.nom || res.data.entreprise || "",
+              code: res.data.code_client || res.data.code || "",
+            };
+            setSelectedClient(client);
+            setSearchClient(client.nom);
+          }
+        } catch (e) {
+          logger.error("client.fetch.initial", e);
+        }
+      };
+      
+      fetchInitialClient();
+    }
+  }, [clientInitial, selectedClient]);
+
+
 
   const totalHT = useMemo(
     () => lignes.reduce((sum, l) => sum + Number(l.totalHT || 0), 0),
@@ -857,6 +725,8 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
   const resetLigne = () => {
     setLigneProduitId("");
     setLigneLibelle("");
+    setSelectedProduit(null);
+    setSearchProduit("");
     setLigneQte("");
     setLignePrix("");
   };
@@ -866,7 +736,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
 
   const handleChangeMode = (mode) => {
     setLigneMode(mode);
-    const p = produitSelectionne;
+    const p = selectedProduit;
     if (!p) return;
 
     if (mode === "detail" && p.prixDetail) {
@@ -876,106 +746,12 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
     }
   };
 
-  // 🧩 Appliquer la sélection d'un produit (peu importe la source : scan / saisie / modal)
-  const applyProduitSelection = (p) => {
-    if (!p) return;
-
-    setLigneProduitId(p.id);
-    setLigneLibelle(p.libelle || "");
-
-    const prixPropose =
-      ligneMode === "gros"
-        ? p.prixGros || p.prixDetail || p.prix || 0
-        : p.prixDetail || p.prixGros || p.prix || 0;
-
-    setLignePrix(String(prixPropose || 0));
-
-    // Focus sur la quantité pour enchaîner vite
-    if (qteInputRef.current) {
-      qteInputRef.current.focus();
-    }
-  };
-
-  // ✅ Champ unique : saisie libellé / code-barres / scan
-  const handleProduitInputChange = (e) => {
-    hasTypedProduitRef.current = true;
-
-    const value = e.target.value;
-    setLigneLibelle(value);
-    setProduitSearchInput(value); // ✅ Déclenche la recherche dynamique
-
-    // Tant qu'on tape, on considère qu'on n'a pas encore confirmé le produit
-    // (permet aussi le cas "produit hors catalogue")
-    setLigneProduitId("");
-
-    const trimmed = value.trim();
-    const isNumeric = /^\d+$/.test(trimmed);
-    
-    // ✅ Sécurité : éviter le spam API sur les scans longs
-    if (isNumeric && trimmed.length >= 6) {
-      setProduitSearchTerm(trimmed); // bypass debounce pour scan immédiat
-    }
-
-    if (!trimmed) return;
-
-    // Cas "code-barres" saisi ou scanné
-    if (isNumeric && trimmed.length >= 6) {
-      const exact = catalogue.find((p) => {
-        const code = (p.codeBarre || "").toString().trim();
-        const ref = (p.ref || "").toString().trim();
-        return code === trimmed || ref === trimmed;
-      });
-
-      if (exact) {
-        applyProduitSelection(exact);
-      }
-    }
-  };
-
-  const handleProduitInputKeyDown = (e) => {
-    if (e.key !== "Enter" && e.key !== "NumpadEnter") return;
-
-    e.preventDefault();
-    const q = (ligneLibelle || "").trim();
-    if (!q) return;
-
-    const isNumeric = /^\d+$/.test(q);
-
-    if (isNumeric) {
-      // Essayer d'abord un match exact sur code-barres / ref
-      const exact = catalogue.find((p) => {
-        const code = (p.codeBarre || "").toString().trim();
-        const ref = (p.ref || "").toString().trim();
-        return code === q || ref === q;
-      });
-
-      if (exact) {
-        applyProduitSelection(exact);
-        return;
-      }
-    }
-
-    // Sinon, utiliser les produits filtrés (par nom / ref)
-    if (produitsFiltres.length === 1) {
-      applyProduitSelection(produitsFiltres[0]);
-    } else if (produitsFiltres.length > 1) {
-      // On prend le premier pour aller vite (comportement "autocomplete")
-      applyProduitSelection(produitsFiltres[0]);
-    } else {
-      toast(
-        "error",
-        "Produit introuvable",
-        "Aucun produit ne correspond à cette recherche."
-      );
-    }
-  };
-
   const handleAddLigne = () => {
-    if (!ligneLibelle.trim() || !ligneQte || !lignePrix) {
+    if (!selectedProduit || !ligneQte || !lignePrix) {
       toast(
         "error",
         "Ligne incomplète",
-        "Veuillez renseigner produit, quantité et prix."
+        "Veuillez sélectionner un produit, renseigner quantité et prix."
       );
       return;
     }
@@ -992,7 +768,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
       return;
     }
 
-    const p = produitSelectionne;
+    const p = selectedProduit;
     if (p) {
       const unitsPerCarton = p.unitesParCarton || 1;
       const stockGlobal = p.stockGlobal ?? null;
@@ -1025,24 +801,24 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
       }
     }
 
-    const unitsPerCarton = produitSelectionne?.unitesParCarton || 1;
+    const unitsPerCarton = selectedProduit?.unitesParCarton || 1;
     const quantiteUnites = ligneMode === "gros" ? qteNum * unitsPerCarton : qteNum;
 
     const totalHTLigne = qteNum * prixNum;
     const totalTTCLigne = applyTVA ? totalHTLigne * 1.18 : totalHTLigne;
 
-    const ref = produitSelectionne?.ref || null;
+    const ref = selectedProduit?.ref || null;
 
     const nouvelle = {
       id: Date.now(),
-      produitId: ligneProduitId || null,
-      libelle: ligneLibelle.trim(),
+      produitId: selectedProduit.id,
+      libelle: selectedProduit.libelle,
       ref,
       qte: qteNum,
       prixUnitaire: prixNum,
       totalHT: totalHTLigne,
       totalTTC: totalTTCLigne,
-      modeVente: ligneMode, // "detail" | "gros"
+      modeVente: ligneMode,
       quantiteUnites,
     };
 
@@ -1057,10 +833,6 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
 
   const handleRemoveLigne = (id) =>
     setLignes((prev) => prev.filter((l) => l.id !== id));
-
-  const handleSelectProduitFromModal = (p) => {
-    applyProduitSelection(p);
-  };
 
   // 🔧 Édition d'une ligne (qte + prix uniquement)
   const [editingId, setEditingId] = useState(null);
@@ -1157,11 +929,11 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
     setEditingPrix("");
   };
 
-  // ✅ Soumission du formulaire : on construit un brouillon et on délègue au parent
-  const handleSubmit = (e) => {
+  // ✅ Soumission du formulaire
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!clientActuel) {
+    if (!selectedClient) {
       toast(
         "error",
         "Client manquant",
@@ -1179,37 +951,65 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
       return;
     }
 
-    const commandeDraft = {
-      clientId,
-      clientNom: clientActuel.nom,
-      clientCode: clientActuel.code,
-      dateCommande,
-      appliquerTVA: applyTVA,
-      totalHT,
-      totalTVA,
-      totalTTC,
-      lignes,
-    };
+    setSubmitting(true);
 
-    onCreate(commandeDraft);
+    try {
+      const commandeDraft = {
+        clientId: selectedClient.id,
+        clientNom: selectedClient.nom,
+        clientCode: selectedClient.code,
+        dateCommande,
+        appliquerTVA: applyTVA,
+        totalHT,
+        totalTVA,
+        totalTTC,
+        lignes,
+      };
 
-    // Option : reset formulaire
-    setLignes([]);
-    setLigneProduitId("");
-    setLigneLibelle("");
-    setLigneQte("");
-    setLignePrix("");
-    setLigneMode("gros");
+      await onCreate(commandeDraft);
+
+      // ✅ Optionnel : rafraîchir les listes
+      refreshClients();
+
+      // Reset du formulaire
+      setLignes([]);
+      setLigneProduitId("");
+      setLigneLibelle("");
+      setLigneQte("");
+      setLignePrix("");
+      setLigneMode("gros");
+      setSelectedClient(null);
+      setSearchClient("");
+      setSelectedProduit(null);
+      setSearchProduit("");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const shouldShowSuggestions =
-    ligneLibelle &&
-    produitsFiltres.length > 0 &&
-    !(
-      produitSelectionne &&
-      ligneLibelle.trim().toLowerCase() ===
-        (produitSelectionne.libelle || "").toLowerCase()
-    );
+  // Gestionnaire de clic en dehors du dropdown client
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (!e.target.closest(".client-combobox")) {
+        setIsClientOpen(false);
+      }
+    };
+
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, []);
+
+  // Gestionnaire de clic en dehors du dropdown produit
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (!e.target.closest(".produit-combobox")) {
+        setIsProduitOpen(false);
+      }
+    };
+
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, []);
 
   return (
     <>
@@ -1231,36 +1031,93 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
 
         {/* Ligne client + date */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="sm:col-span-2">
+          {/* BLOC CLIENT - SIMPLE ET STABLE */}
+          <div className="sm:col-span-2 relative client-combobox">
             <label className="block text-xs text-gray-500 mb-1">
               Client spécial
             </label>
-            <button
-              type="button"
-              onClick={() => setOpenClientSearch(true)}
-              className={cls(
-                "w-full px-3 py-2 text-sm rounded-xl flex items-center justify-between border bg-white shadow-sm",
-                clientActuel
-                  ? "border-gray-300"
-                  : "border-dashed border-gray-300 bg-gray-50 text-gray-500"
+
+            <div className="relative">
+              <input
+                type="text"
+                value={searchClient}
+                onClick={() => {
+                  setIsClientOpen(prev => !prev);
+                  loadAllClients();
+                }}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setSearchClient(value);
+                  
+                  if (!value) {
+                    setSelectedClient(null);
+                  }
+                  
+                  setIsClientOpen(true);
+                }}
+                placeholder="Rechercher un client spécial..."
+                className={baseInput}
+              />
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsClientOpen((prev) => !prev);
+                  loadAllClients();
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <svg
+                  className={`w-4 h-4 transition-transform ${
+                    isClientOpen ? "rotate-180" : ""
+                  }`}
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                >
+                  <path d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {clientsLoading && (
+                <Loader2 className="w-4 h-4 animate-spin absolute right-9 top-1/2 -translate-y-1/2 text-[#472EAD]" />
               )}
-              disabled={clientsLoading}
-            >
-              <span>
-                {clientsLoading
-                  ? "Chargement..."
-                  : clientActuel
-                  ? clientActuel.nom
-                  : "Rechercher un client spécial..."}
-              </span>
-              <Search className="w-4 h-4 text-gray-400" />
-            </button>
-            {clientActuel && (
+            </div>
+
+            {isClientOpen && (
+              <div className="absolute z-50 mt-1 w-full border border-gray-200 rounded-xl bg-white shadow-lg max-h-60 overflow-y-auto">
+                {filteredClients.length > 0 ? (
+                  filteredClients.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedClient(c);
+                        setSearchClient(c.nom);
+                        setIsClientOpen(false);
+                      }}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-[#F7F5FF]"
+                    >
+                      {c.nom}
+                    </button>
+                  ))
+                ) : (
+                  <div className="px-3 py-2 text-sm text-gray-500">
+                    Aucun client trouvé
+                  </div>
+                )}
+              </div>
+            )}
+
+            {selectedClient && (
               <div className="mt-1 text-[11px] text-gray-500">
-                Code client : <span className="font-semibold">{clientActuel.code}</span>
+                Code client :{" "}
+                <span className="font-semibold">{selectedClient.code}</span>
               </div>
             )}
           </div>
+
           <div>
             <label className="block text-xs text-gray-500 mb-1">Date</label>
             <div className="px-3 py-2 rounded-xl text-sm bg-gray-50 border border-gray-200">
@@ -1305,26 +1162,26 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
               </div>
             </div>
 
-            {produitSelectionne && (
+            {selectedProduit && (
               <div className="text-[11px] text-gray-600 space-y-0.5">
                 <div>
                   Stock :{" "}
                   <span className="font-semibold">
-                    {produitSelectionne.stockGlobal} unité(s)
+                    {selectedProduit.stockGlobal} unité(s)
                   </span>{" "}
                   —{" "}
                   <span className="font-semibold">
-                    {produitSelectionne.nombreCartons} carton(s)
+                    {selectedProduit.nombreCartons} carton(s)
                   </span>
                 </div>
                 <div>
                   Prix ref. détail :{" "}
                   <span className="font-semibold">
-                    {formatFCFA(produitSelectionne.prixDetail || 0)}
+                    {formatFCFA(selectedProduit.prixDetail || 0)}
                   </span>{" "}
                   | gros :{" "}
                   <span className="font-semibold">
-                    {formatFCFA(produitSelectionne.prixGros || 0)}
+                    {formatFCFA(selectedProduit.prixGros || 0)}
                   </span>
                 </div>
               </div>
@@ -1332,64 +1189,99 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-start mt-3">
-            <div className="sm:col-span-2">
+            {/* ✅ BLOC PRODUIT - SIMPLE COMME LE CLIENT */}
+            <div className="sm:col-span-2 relative produit-combobox">
               <label className="block text-xs text-gray-500 mb-1">
-                Produit (nom, référence ou code-barres)
+                Produit
               </label>
 
               <div className="relative">
                 <input
-                  ref={produitInputRef} // ✅ Ajout du ref manquant
+                  ref={produitInputRef}
                   type="text"
-                  value={ligneLibelle}
-                  onChange={handleProduitInputChange}
-                  onKeyDown={handleProduitInputKeyDown}
-                  placeholder="Tapez le libellé, scannez ou saisissez un code-barres..."
-                  className={cls(baseInput, "pr-9")}
+                  value={searchProduit}
+                  onClick={() => setIsProduitOpen(prev => !prev)}
+                  onChange={(e) => {
+                    setSearchProduit(e.target.value);
+                    setIsProduitOpen(true);
+                  }}
+                  placeholder="Rechercher un produit..."
+                  className={baseInput}
                   disabled={produitsLoading}
                 />
+
                 <button
                   type="button"
-                  onClick={() => setOpenProduitSearch(true)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-gray-100 text-gray-500"
-                  title="Ouvrir le catalogue"
+                  onClick={() => setIsProduitOpen(prev => !prev)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                 >
-                  <Search className="w-4 h-4" />
+                  <svg
+                    className={`w-4 h-4 transition-transform ${
+                      isProduitOpen ? "rotate-180" : ""
+                    }`}
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M19 9l-7 7-7-7" />
+                  </svg>
                 </button>
+
+                {produitsLoading && (
+                  <Loader2 className="w-4 h-4 animate-spin absolute right-9 top-1/2 -translate-y-1/2 text-[#472EAD]" />
+                )}
               </div>
 
-              {shouldShowSuggestions && (
-                <div className="mt-1 max-h-44 overflow-auto rounded-xl border border-gray-200 bg-white shadow-lg text-xs z-20 relative">
-                  {produitsFiltres.slice(0, 10).map((p) => (
-                    <button
-                      type="button"
-                      key={p.id}
-                      onClick={() => applyProduitSelection(p)}
-                      className="w-full px-3 py-2 flex items-center justify-between hover:bg-[#F7F5FF]"
-                    >
-                      <div className="text-left">
-                        <div className="font-medium text-gray-800">{p.libelle}</div>
-                        <div className="text-[10px] text-gray-500">
-                          {(p.ref || "—") +
-                            " • Détail: " +
-                            formatFCFA(p.prixDetail) +
-                            " • Gros: " +
-                            (p.prixGros ? formatFCFA(p.prixGros) : "--")}
-                        </div>
-                      </div>
-                      <span className="text-[10px] px-2 py-1 rounded-full bg-[#F7F5FF] text-[#472EAD] border border-[#E4E0FF]">
-                        Choisir
-                      </span>
-                    </button>
-                  ))}
+              {isProduitOpen && (
+                <div className="absolute z-50 mt-1 w-full border border-gray-200 rounded-xl bg-white shadow-lg max-h-60 overflow-y-auto">
+                  {filteredProduits.length > 0 ? (
+                    filteredProduits.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedProduit(p);
+                          setSearchProduit(p.libelle);
+                          setLigneProduitId(p.id);
+                          setLigneLibelle(p.libelle);
+
+                          const prix =
+                            ligneMode === "gros"
+                              ? p.prixGros || p.prixDetail
+                              : p.prixDetail || p.prixGros;
+
+                          setLignePrix(String(prix || 0));
+                          setIsProduitOpen(false);
+                          
+                          // Focus sur la quantité pour enchaîner
+                          if (qteInputRef.current) {
+                            qteInputRef.current.focus();
+                          }
+                        }}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-[#F7F5FF]"
+                      >
+                        {p.libelle}
+                        {p.ref && (
+                          <span className="ml-2 text-[10px] text-gray-500">
+                            ({p.ref})
+                          </span>
+                        )}
+                      </button>
+                    ))
+                  ) : (
+                    <div className="px-3 py-2 text-sm text-gray-500">
+                      Aucun produit trouvé
+                    </div>
+                  )}
                 </div>
               )}
 
-              <p className="mt-1 text-[10px] text-gray-500">
-                Placez le curseur dans ce champ puis{" "}
-                <span className="font-semibold">scannez le code-barres</span> ou
-                tapez directement le libellé / les chiffres du code.
-              </p>
+              {selectedProduit && (
+                <div className="mt-1 text-[10px] text-gray-500">
+                  Réf : {selectedProduit.ref || "—"}
+                </div>
+              )}
             </div>
 
             <div>
@@ -1406,10 +1298,10 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
                 placeholder={ligneMode === "gros" ? "Ex: 3 cartons" : "Ex: 24 unités"}
               />
               {ligneMode === "gros" &&
-                produitSelectionne &&
-                produitSelectionne.unitesParCarton && (
+                selectedProduit &&
+                selectedProduit.unitesParCarton && (
                   <div className="mt-1 text-[10px] text-gray-500">
-                    1 carton = {produitSelectionne.unitesParCarton} unité(s)
+                    1 carton = {selectedProduit.unitesParCarton} unité(s)
                   </div>
                 )}
             </div>
@@ -1605,49 +1497,24 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
 
             <button
               type="submit"
-              className="px-5 py-2 rounded-lg bg-gradient-to-r from-[#472EAD] to-[#6A4DF5] text-white text-sm font-semibold hover:opacity-95 shadow-sm transition disabled:opacity-60 disabled:cursor-not-allowed"
-              disabled={!clientActuel || !lignes.length}
+              disabled={!selectedClient || !lignes.length || submitting}
+              className={cls(
+                "px-5 py-2 rounded-lg bg-gradient-to-r from-[#472EAD] to-[#6A4DF5] text-white text-sm font-semibold hover:opacity-95 shadow-sm transition disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2",
+                submitting && "opacity-80"
+              )}
             >
-              Envoyer à la caisse
+              {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
+              {submitting ? "Envoi en cours..." : "Envoyer à la caisse"}
             </button>
           </div>
         </div>
       </motion.form>
-
-      {/* ✅ MODALS DE RECHERCHE - CORRIGÉES ✅ */}
-      <SearchModal
-        open={openClientSearch}
-        onClose={() => setOpenClientSearch(false)}
-        title="Rechercher un client spécial"
-        items={clients}
-        loading={clientsLoading}
-        onSearch={setClientSearchInput}
-        onSelect={(client) => setClientId(client.id)}
-        getLabel={(c) => c.nom}
-        getSubLabel={(c) => c.code}
-      />
-
-      <SearchModal
-        open={openProduitSearch}
-        onClose={() => setOpenProduitSearch(false)}
-        title="Rechercher un produit"
-        items={catalogue}
-        loading={produitsLoading}
-        onSearch={setProduitSearchInput}
-        onSelect={handleSelectProduitFromModal}
-        getLabel={(p) => p.libelle}
-        getSubLabel={(p) =>
-          `${p.ref || "—"} • Détail: ${formatFCFA(p.prixDetail)} • Gros: ${
-            p.prixGros ? formatFCFA(p.prixGros) : "--"
-          }`
-        }
-      />
     </>
   );
 }
 
 // ======================================================================
-// 🔐 Construction du payload QR (Option 2 : toutes les infos dans le code)
+// 🔐 Construction du payload QR
 // ======================================================================
 function buildQrPayloadFromCommande(commande) {
   if (!commande) return "";
@@ -1661,11 +1528,6 @@ function buildQrPayloadFromCommande(commande) {
 
   return numero ? String(numero) : "";
 }
-
-
-// ======================================================================
-// 🔧 Helper : normaliser une commande provenant du backend
-// ======================================================================
 
 // ==========================================================
 // 📦 Page Commandes (Responsable)
@@ -1861,16 +1723,14 @@ const statsGlobales = {
   detteTotale: Number(statsFromBackend?.dette ?? 0),
 };
 
-
-
   // ✅ CORRECTION 1 : handleAnnuler aligné avec le backend (annulable tant que non soldée)
   const handleAnnuler = async (commande) => {
-    // ✅ CORRECTION : Vérifier seulement si la commande est déjà soldée
-    if (commande.statut === "soldee") {
+    // ✅ CORRECTION : Vérifier si la commande est déjà soldée OU déjà annulée
+    if (commande.statut === "soldee" || commande.statut === "annulee") {
       toast(
         "error",
         "Annulation impossible",
-        "Une commande soldée ne peut plus être annulée."
+        `Une commande ${commande.statut === "soldee" ? "soldée" : "déjà annulée"} ne peut plus être modifiée.`
       );
       return;
     }
@@ -1931,7 +1791,6 @@ const statsGlobales = {
       if (response && typeof response === "object") {
         normalized = normalizeCommande(response);
 
-
         // Complétion des infos client si manquantes
         if (!normalized.clientNom && commandeDraft.clientNom) {
           normalized = {
@@ -1962,9 +1821,11 @@ const statsGlobales = {
         `${normalized.clientNom || "Client"} — ${formatFCFA(normalized.totalTTC)}`
       );
       
-      // ✅ OPTIMISATION : reset à la page 1, le useEffect recharge automatiquement
+      // ✅ OPTIMISATION : reset à la page 1 SANS refetch immédiat
+      // Le useEffect sur page va automatiquement recharger
       setPage(1);
       await fetchCommandes();
+      // ✅ SUPPRESSION du double fetch : await fetchCommandes();
 
     } catch (error) {
       logger.error("commandes.create", error);
@@ -1982,8 +1843,6 @@ const statsGlobales = {
         );
       }
     }
-
-
   };
 
   const badgeStatut = (statut) => {
@@ -2007,7 +1866,6 @@ const statsGlobales = {
     setFilterEndDate("");
     setPage(1);
   };
-
 
   const exportPDF = () => {
     const doc = new jsPDF();
@@ -2123,7 +1981,6 @@ const statsGlobales = {
                 enregistrée{statsGlobales.nbCommandes > 1 ? "s" : ""}.
               </p>
             </div>
-
           </motion.header>
 
           {/* CARTES STATS GLOBALES */}

@@ -9,6 +9,7 @@ const ENDPOINTS = {
   CREATE: '/produits',
   UPDATE: '/produits/:id',
   DELETE: '/produits/:id',
+   GET_ALL_FULL: '/produits/catalogue',
 };
 
 export const produitsAPI = {
@@ -58,6 +59,16 @@ export const produitsAPI = {
       return response.data;
     } catch (error) {
       console.error('❌ Erreur delete produit:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+  // ✅ Liste complète SANS pagination (pour la barre recherche commande)
+  getAllProduits: async () => {
+    try {
+      const response = await httpClient.get(ENDPOINTS.GET_ALL_FULL);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erreur getAllProduits:', error.message);
       throw error;
     }
   },
