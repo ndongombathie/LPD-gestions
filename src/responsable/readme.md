@@ -100,3 +100,9 @@ GET         api/total-commandes-payees
  
 # o	Commandes en attente caisse
 GET         api/commandes-en-attente-caisse
+
+# paiement par tranche
+POST    api/commandes/{commande}/paiements-tranches  | effectuer un paiement par tranche pour une commande
+
+# la liste des paiement associer a une commande
+GET    api/commandes/{commande}/paiements  | obtenir la liste des paiements associer a une commande
