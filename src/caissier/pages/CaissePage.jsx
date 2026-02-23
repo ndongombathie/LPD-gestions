@@ -11,14 +11,12 @@ import { printInvoice } from '../components/InvoicePrint';
 import QRScanner from '../components/QRScanner';
 import caissierApi from '../services/caissierApi';
 import { toast } from 'sonner';
-import { initializeEcho } from '../../utils/echo';
 import { echo } from '../../utils/echo';
 
-const CaissePage = ({boutiqueId}) => {
+const CaissePage = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const boutiqueId = localStorage.getItem('boutique_id');
-
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
@@ -49,6 +47,9 @@ const CaissePage = ({boutiqueId}) => {
     const totalTTC = commande.total || 0;
     const totalHT = totalTTC / (1 + tauxTVA);
     const tva = totalTTC - totalHT;
+    console.log('boutiqueId:', boutiqueId);
+  
+    
 
     // Calculer le reste dû à partir des paiements
     const totalPaye = paiements.reduce((sum, p) => sum + (p.montant || 0), 0);
