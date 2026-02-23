@@ -156,7 +156,7 @@ export default function DashboardComptable() {
           <span className="font-semibold">
             {fcfa(stats.sommeEncaissements)}
           </span>{" "}
-          pour un total de{" "}
+          sur un {" "}
           <span className="font-semibold">
             {stats.nombreVersements}
           </span>{" "}

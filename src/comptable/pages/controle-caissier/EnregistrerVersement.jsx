@@ -1,12 +1,11 @@
 // ==========================================================
 // 💰 EnregistrerVersement.jsx — VERSION ENTREPRISE STABLE
-// Liste déroulante caissiers + gestion erreurs Laravel
+// Liste déroulante caissiers via api/caissiers/all
 // Durable 100 ans
 // ==========================================================
 
 import React, { useEffect, useState } from "react";
 import versementAPI from "@/services/api/versementAPI";
-import httpClient from "@/services/http/client";
 
 export default function EnregistrerVersement() {
 
@@ -26,7 +25,7 @@ export default function EnregistrerVersement() {
   const [success, setSuccess] = useState(null);
 
   /* =========================================================
-     🔄 CHARGEMENT DES CAISSIERS
+     🔄 CHARGEMENT DES CAISSIERS (API PROPRE)
   ========================================================= */
 
   useEffect(() => {
@@ -36,16 +35,15 @@ export default function EnregistrerVersement() {
       try {
 
         setLoadingUsers(true);
+        setError(null);
 
-        const response = await httpClient.get("/utilisateurs");
+        const result = await versementAPI.getAllCaissiers();
 
-        const users = response?.data?.data || response?.data || [];
-
-        const onlyCaissiers = users.filter(
-          (u) => u.role?.toLowerCase() === "caissier"
-        );
-
-        setCaissiers(onlyCaissiers);
+        if (result.success) {
+          setCaissiers(result.data || []);
+        } else {
+          setError(result.message);
+        }
 
       } catch (err) {
 
@@ -126,14 +124,12 @@ export default function EnregistrerVersement() {
       {/* CARD */}
       <div className="bg-white rounded-2xl shadow-lg p-8 max-w-2xl">
 
-        {/* SUCCESS */}
         {success && (
           <div className="mb-4 p-3 bg-green-100 text-green-700 rounded-lg text-sm">
             {success}
           </div>
         )}
 
-        {/* ERROR */}
         {error && (
           <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">
             {error}
@@ -163,7 +159,7 @@ export default function EnregistrerVersement() {
 
               {caissiers.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.nom} {c.prenom}
+                  {c.nom_complet}
                 </option>
               ))}
             </select>
