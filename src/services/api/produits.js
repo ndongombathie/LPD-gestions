@@ -109,4 +109,15 @@ export const produitsAPI = {
     const response = await httpClient.get(`${BASE}/produits-ruptures`);
     return response.data;
   },
+  getNombre: async () => {
+  try {
+    const response = await httpClient.get('/nombre-produits');
+    if (typeof response.data === 'number') return response.data;
+    if (response.data && typeof response.data.count === 'number') return response.data.count;
+    return parseInt(response.data, 10) || 0;
+  } catch (error) {
+    console.error('❌ Erreur getNombre produits:', error);
+    return 0;
+  }
+}
 };

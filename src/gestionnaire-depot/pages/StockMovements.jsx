@@ -28,13 +28,12 @@ import {
   Ban,
 } from "lucide-react";
 
-import { stockAPI } from "../../services/api/stock";
-import { mouvementsAPI } from "../../services/api/mouvements";
-import httpClient from "../../services/http/client";
-import { useStock } from "./StockContext";
+// ===== IMPORTS =====
+import { produitsAPI } from "../../services/api/produits";
+import { useMouvements } from "../hooks/useMouvements";
 
+// ===== HELPERS =====
 const formatDateTime = (iso) => {
-  if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleString("fr-FR", {
@@ -46,36 +45,24 @@ const formatDateTime = (iso) => {
   });
 };
 
-const todayIsSameDay = (iso) => {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return false;
-  const now = new Date();
-  return (
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate()
-  );
-};
-
 export default function StockMovements() {
-  const {
-    movements: contextMovements,
-    products,
-    fournisseurs,
-    movementsLoading,
-    productsLoading,
-    fournisseursLoading,
-    ensureLoaded,
-    refreshAll,
-  } = useStock();
+  // ===== ÉTATS POUR LES PRODUITS (pour le dropdown) =====
+  const [products, setProducts] = useState([]);
+  const [loadingProducts, setLoadingProducts] = useState(false);
 
-  const [localLoading, setLocalLoading] = useState(true);
-  const [localError, setLocalError] = useState(null);
+  // ===== ÉTATS DES FILTRES =====
   const [searchTerm, setSearchTerm] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [activeTab, setActiveTab] = useState("historique");
+  const [activeTab, setActiveTab] = useState("historique"); // "historique", "en-attente", "annulees"
 
+  // ===== PAGINATION =====
+  const [pageSize, setPageSize] = useState(10);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [pendingPage, setPendingPage] = useState(1);
+  const [cancelledPage, setCancelledPage] = useState(1);
+
+  // ===== ÉTATS POUR MODALES =====
   const [modalOpen, setModalOpen] = useState(false);
   const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -86,320 +73,80 @@ export default function StockMovements() {
     quantity: "",
     stockBefore: "",
     stockAfter: "",
+    date: "",
   });
-
   const [productDropdownOpen, setProductDropdownOpen] = useState(false);
   const [productSearch, setProductSearch] = useState("");
   const productDropdownRef = useRef(null);
-
   const [selectedMovement, setSelectedMovement] = useState(null);
   const [cancelPendingId, setCancelPendingId] = useState(null);
 
-  const [pageSize, setPageSize] = useState(10);
-  const [historyPage, setHistoryPage] = useState(1);
-  const [pendingPage, setPendingPage] = useState(1);
-  const [cancelledPage, setCancelledPage] = useState(1);
+  // ===== HOOK PERSONNALISÉ =====
+  const {
+    movements,
+    totalMovements,
+    loadingMovements,
+    errorMovements,
+    stats,
+    loadingStats,
+    fetchMovements,
+    fetchStats,
+    createTransfer,
+    cancelTransfer,
+  } = useMouvements();
 
-  // Chargement initial
+  // ===== CHARGEMENT DES PRODUITS POUR LE DROPDOWN =====
   useEffect(() => {
-    const load = async () => {
-      setLocalLoading(true);
+    const fetchProducts = async () => {
+      setLoadingProducts(true);
       try {
-        await ensureLoaded();
-      } catch (error) {
-        console.error("Erreur chargement initial mouvements:", error);
-        setLocalError("Impossible de charger les données.");
+        const res = await produitsAPI.getAll({ per_page: 1000 });
+        const productsData = Array.isArray(res) ? res : res.data || [];
+        const formatted = productsData.map(p => ({
+          id: p.id,
+          nom: p.nom,
+          code_barre: p.code_barre || "",
+          nombre_carton: p.nombre_carton || 0,
+          prix_unite_carton: p.prix_unite_carton || 0,
+          categorie: p.categorie || null,
+        }));
+        setProducts(formatted);
+      } catch (err) {
+        console.error("❌ Erreur chargement produits:", err);
       } finally {
-        setLocalLoading(false);
+        setLoadingProducts(false);
       }
     };
-    load();
-  }, [ensureLoaded]);
-
-  // Gestion clic extérieur
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (productDropdownRef.current && !productDropdownRef.current.contains(event.target)) {
-        setProductDropdownOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    fetchProducts();
   }, []);
 
-  // Calcul des mouvements enrichis (source + before/after calculés)
-  const movements = useMemo(() => {
-    // 1. Ajouter la source si manquante
-    const withSource = contextMovements.map(m => {
-      let source = m.source;
-      if (!source) {
-        if (m.type === "Entrée") {
-          const product = products.find(p => p.id === m.produit_id);
-          if (product && product.fournisseur_id) {
-            const fournisseur = fournisseurs.find(f => f.id === product.fournisseur_id);
-            source = fournisseur?.nom || "Fournisseur inconnu";
-          } else {
-            source = "Fournisseur inconnu";
-          }
-        } else {
-          source = "Boutique Colobane";
-        }
-      }
-      return { ...m, source };
-    });
+  // ===== EFFET POUR CHARGER LES MOUVEMENTS =====
+  useEffect(() => {
+    let currentPage = 1;
+    if (activeTab === "historique") currentPage = historyPage;
+    else if (activeTab === "en-attente") currentPage = pendingPage;
+    else if (activeTab === "annulees") currentPage = cancelledPage;
 
-    // 2. Trier du plus récent au plus ancien pour le calcul
-    const sortedDesc = [...withSource].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+    const filters = { searchTerm, dateFrom, dateTo, activeTab };
+    fetchMovements(currentPage, pageSize, filters);
+  }, [activeTab, historyPage, pendingPage, cancelledPage, pageSize, searchTerm, dateFrom, dateTo, fetchMovements]);
 
-    // Map pour stocker le stock après chaque mouvement (initialisé avec le stock actuel)
-    const stockAfterMap = new Map();
-    products.forEach(p => {
-      stockAfterMap.set(p.id, p.nombre_carton || 0);
-    });
-
-    // Calculer before/after en remontant le temps
-    const computed = [];
-    for (const m of sortedDesc) {
-      const produitId = m.produit_id;
-      const after = stockAfterMap.get(produitId) || 0;
-      let before;
-
-      if (m.type === "Entrée") {
-        before = after - m.qty;
-      } else {
-        // Sortie
-        before = after + m.qty;
-      }
-
-      // Mettre à jour pour le mouvement précédent (plus ancien)
-      stockAfterMap.set(produitId, before);
-
-      computed.push({ ...m, before, after });
-    }
-
-    // 3. Remettre dans l'ordre chronologique pour l'affichage
-    computed.sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
-
-    return computed;
-  }, [contextMovements, products, fournisseurs]);
-
-  // Statistiques
-  const stats = useMemo(() => {
-    let totalEntries = 0;
-    let totalValidated = 0;
-    let totalPending = 0;
-    let todayCount = 0;
-
-    movements.forEach((m) => {
-      if (m.type === "Entrée") totalEntries += 1;
-      if (m.type === "Sortie" && m.status === "validated") totalValidated += 1;
-      if (m.type === "Sortie" && m.status === "pending") totalPending += 1;
-      if (todayIsSameDay(m.date)) todayCount += 1;
-    });
-
-    return { totalEntries, totalValidated, totalPending, todayCount };
-  }, [movements]);
-
-  // Filtrage par onglet
-  const filteredByTab = useMemo(() => {
-    const baseFiltered = movements.filter((m) => {
-      const term = searchTerm.trim().toLowerCase();
-      const matchesSearch = !term ||
-        (m.productName?.toLowerCase() || "").includes(term) ||
-        (m.source?.toLowerCase() || "").includes(term) ||
-        (m.manager?.toLowerCase() || "").includes(term);
-
-      const d = new Date(m.date);
-      if (Number.isNaN(d.getTime())) return matchesSearch;
-
-      let matchesDate = true;
-      if (dateFrom) {
-        const from = new Date(dateFrom);
-        from.setHours(0, 0, 0, 0);
-        if (d < from) matchesDate = false;
-      }
-      if (dateTo) {
-        const to = new Date(dateTo);
-        to.setHours(23, 59, 59, 999);
-        if (d > to) matchesDate = false;
-      }
-
-      return matchesSearch && matchesDate;
-    });
-
-    if (activeTab === "historique") {
-      return baseFiltered.filter(m => 
-        m.type === "Entrée" || (m.type === "Sortie" && m.status === "validated")
-      );
-    } else if (activeTab === "en-attente") {
-      return baseFiltered.filter(m => m.type === "Sortie" && m.status === "pending");
-    } else if (activeTab === "annulees") {
-      return baseFiltered.filter(m => m.type === "Sortie" && m.status === "cancelled");
-    }
-    return [];
-  }, [movements, searchTerm, dateFrom, dateTo, activeTab]);
-
-  // Pagination par onglet
-  const paginationByTab = {
-    historique: {
-      data: filteredByTab,
-      page: historyPage,
-      setPage: setHistoryPage,
-    },
-    "en-attente": {
-      data: filteredByTab,
-      page: pendingPage,
-      setPage: setPendingPage,
-    },
-    annulees: {
-      data: filteredByTab,
-      page: cancelledPage,
-      setPage: setCancelledPage,
-    },
+  // ===== GESTION DU CHANGEMENT DE PAGE =====
+  const handlePageChange = (newPage) => {
+    if (activeTab === "historique") setHistoryPage(newPage);
+    else if (activeTab === "en-attente") setPendingPage(newPage);
+    else if (activeTab === "annulees") setCancelledPage(newPage);
   };
 
-  const currentPagination = paginationByTab[activeTab];
-  const totalPages = Math.max(1, Math.ceil(currentPagination.data.length / pageSize));
-  const currentPage = Math.min(currentPagination.page, totalPages);
-  const startIndex = (currentPage - 1) * pageSize;
-  const paginatedData = currentPagination.data.slice(startIndex, startIndex + pageSize);
-
-  // Composant Pagination
-  const Pagination = ({ currentPage, totalPages, onPageChange, filteredCount, pageSize }) => {
-    const startItem = (currentPage - 1) * pageSize + 1;
-    const endItem = Math.min(currentPage * pageSize, filteredCount);
-
-    const getPageNumbers = () => {
-      const pages = [];
-      const maxVisible = 5;
-      if (totalPages <= maxVisible) {
-        for (let i = 1; i <= totalPages; i++) pages.push(i);
-      } else {
-        if (currentPage <= 3) {
-          for (let i = 1; i <= 4; i++) pages.push(i);
-          pages.push("...");
-          pages.push(totalPages);
-        } else if (currentPage >= totalPages - 2) {
-          pages.push(1);
-          pages.push("...");
-          for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
-        } else {
-          pages.push(1);
-          pages.push("...");
-          pages.push(currentPage - 1);
-          pages.push(currentPage);
-          pages.push(currentPage + 1);
-          pages.push("...");
-          pages.push(totalPages);
-        }
-      }
-      return pages;
-    };
-
-    return (
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-6 p-4 bg-white rounded-xl shadow-sm border border-gray-100">
-        <div className="text-sm text-gray-500">
-          Affichage <span className="font-medium text-gray-700">{startItem}</span> à{" "}
-          <span className="font-medium text-gray-700">{endItem}</span> sur{" "}
-          <span className="font-medium text-indigo-600">{filteredCount}</span> éléments
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => onPageChange(1)}
-            disabled={currentPage === 1}
-            className="p-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 transition-colors"
-          >
-            <ChevronsLeft size={16} className="text-gray-600" />
-          </button>
-          <button
-            onClick={() => onPageChange(currentPage - 1)}
-            disabled={currentPage === 1}
-            className="p-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 transition-colors"
-          >
-            <ChevronLeft size={16} className="text-gray-600" />
-          </button>
-          <div className="flex items-center gap-1">
-            {getPageNumbers().map((page, idx) =>
-              page === "..." ? (
-                <span key={idx} className="px-2 text-gray-400">...</span>
-              ) : (
-                <button
-                  key={idx}
-                  onClick={() => onPageChange(page)}
-                  className={`w-8 h-8 rounded-lg border flex items-center justify-center text-sm transition-colors ${
-                    currentPage === page
-                      ? "bg-indigo-600 text-white border-indigo-600"
-                      : "bg-white text-gray-700 hover:bg-gray-100 border-gray-200"
-                  }`}
-                >
-                  {page}
-                </button>
-              )
-            )}
-          </div>
-          <button
-            onClick={() => onPageChange(currentPage + 1)}
-            disabled={currentPage === totalPages}
-            className="p-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 transition-colors"
-          >
-            <ChevronRight size={16} className="text-gray-600" />
-          </button>
-          <button
-            onClick={() => onPageChange(totalPages)}
-            disabled={currentPage === totalPages}
-            className="p-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 transition-colors"
-          >
-            <ChevronsRight size={16} className="text-gray-600" />
-          </button>
-        </div>
-        <div className="flex items-center gap-2 text-sm">
-          <span className="text-gray-500">Lignes par page :</span>
-          <select
-            value={pageSize}
-            onChange={(e) => {
-              setPageSize(Number(e.target.value));
-              currentPagination.setPage(1);
-            }}
-            className="border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-          >
-            <option value="5">5</option>
-            <option value="10">10</option>
-            <option value="20">20</option>
-            <option value="50">50</option>
-            <option value="100">100</option>
-          </select>
-        </div>
-      </div>
-    );
+  // ===== RÉINITIALISATION DES FILTRES =====
+  const handleResetFilters = () => {
+    setSearchTerm("");
+    setDateFrom("");
+    setDateTo("");
+    handlePageChange(1);
   };
 
-  // Dropdown produits
-  const filteredProducts = useMemo(() => {
-    const term = productSearch.trim().toLowerCase();
-    if (!term) return products;
-    return products.filter(p =>
-      (p.nom?.toLowerCase() || "").includes(term) ||
-      (p.code_barre?.toLowerCase() || "").includes(term) ||
-      (p.categorie?.nom?.toLowerCase() || "").includes(term)
-    );
-  }, [products, productSearch]);
-
-  const handleProductSelect = (product) => {
-    const before = Number(product.nombre_carton || 0);
-    const after = Math.max(0, before - Number(formData.quantity || 0));
-    setFormData(prev => ({
-      ...prev,
-      productId: product.id,
-      product: product.nom,
-      barcode: product.code_barre || "",
-      stockBefore: String(before),
-      stockAfter: String(after),
-    }));
-    setProductSearch(product.nom);
-    setProductDropdownOpen(false);
-  };
-
-  // Gestion formulaire
+  // ===== GESTION FORMULAIRE DE TRANSFERT =====
   const recalcAfter = (newPartial = {}) => {
     const qty = Number(newPartial.quantity ?? formData.quantity ?? 0);
     const before = Number(newPartial.stockBefore ?? formData.stockBefore ?? 0);
@@ -418,14 +165,27 @@ export default function StockMovements() {
     }
   };
 
-  // Création de transfert
+  const handleProductSelect = (product) => {
+    const before = Number(product.nombre_carton || 0);
+    const after = Math.max(0, before - Number(formData.quantity || 0));
+    setFormData(prev => ({
+      ...prev,
+      productId: product.id,
+      product: product.nom,
+      barcode: product.code_barre || "",
+      stockBefore: String(before),
+      stockAfter: String(after),
+    }));
+    setProductSearch(product.nom);
+    setProductDropdownOpen(false);
+  };
+
   const handleSubmitMovement = async (e) => {
     e.preventDefault();
     setFormError("");
     setIsSubmitting(true);
-    setLocalError(null);
 
-    const { productId, quantity } = formData;
+    const { productId, quantity, date } = formData;
     if (!productId) {
       setFormError("Veuillez sélectionner un produit.");
       setIsSubmitting(false);
@@ -438,93 +198,65 @@ export default function StockMovements() {
       return;
     }
 
-    const product = products.find(p => p.id === productId);
-    if (!product) {
-      setFormError("Produit introuvable.");
-      setIsSubmitting(false);
-      return;
-    }
-    const stockDisponible = Number(product.nombre_carton || 0);
-    if (qtyNum > stockDisponible) {
-      setFormError(`Stock insuffisant. Disponible: ${stockDisponible} cartons.`);
-      setIsSubmitting(false);
-      return;
-    }
+    const transferData = {
+      produit_id: productId,
+      quantite: qtyNum,
+      source: "depot",
+      destination: "Boutique Colobane",
+      motif: "Transfert vers boutique",
+      date: date || new Date().toISOString(),
+    };
 
-    try {
-      await stockAPI.transfer({
-        produit_id: productId,
-        quantite: qtyNum,
-      });
+    const result = await createTransfer(transferData);
 
-      await refreshAll();
-      alert("✅ Transfert créé et en attente de validation par la boutique.");
+    if (result.success) {
+      const currentPage = activeTab === "historique" ? historyPage : activeTab === "en-attente" ? pendingPage : cancelledPage;
+      const filters = { searchTerm, dateFrom, dateTo, activeTab };
+      await fetchMovements(currentPage, pageSize, filters);
+      await fetchStats();
+      alert("✅ Transfert créé !");
       closeModal();
-      setPendingPage(1);
-    } catch (err) {
-      console.error("❌ Erreur création transfert:", err);
-      setFormError(err.response?.data?.message || "Erreur lors du transfert.");
-      setLocalError(err.response?.data?.message || "Erreur lors du transfert.");
-    } finally {
-      setIsSubmitting(false);
+    } else {
+      setFormError(result.error);
     }
-  };
-
-  // Annulation d'un transfert (version simplifiée)
-  const cancelPendingSortie = async (sortieId) => {
-    const mouvement = movements.find(m => m.id === sortieId);
-    if (!mouvement) {
-      alert("Mouvement introuvable.");
-      return;
-    }
-
-    const transferId = mouvement.transfer_id;
-    if (!transferId) {
-      alert("ID de transfert manquant dans ce mouvement.");
-      return;
-    }
-
-    try {
-      await mouvementsAPI.cancelTransfer(transferId);
-      setCancelPendingId(null);
-      await refreshAll();
-      alert("✅ Transfert annulé.");
-      setPendingPage(1);
-    } catch (err) {
-      console.error("❌ Erreur annulation:", err);
-      if (err.response) {
-        alert(err.response.data?.message || `Erreur ${err.response.status} lors de l'annulation.`);
-      } else {
-        alert("Erreur réseau ou serveur indisponible.");
-      }
-    }
-  };
-
-  // Gestion modale
-  const openModal = () => {
-    setFormData({
-      productId: "",
-      product: "",
-      barcode: "",
-      quantity: "",
-      stockBefore: "",
-      stockAfter: "",
-    });
-    setFormError("");
-    setProductSearch("");
-    setProductDropdownOpen(false);
-    setModalOpen(true);
-  };
-
-  const closeModal = () => {
-    setModalOpen(false);
-    setFormError("");
-    setProductSearch("");
-    setProductDropdownOpen(false);
     setIsSubmitting(false);
   };
 
-  // Dropdown composant
+  const cancelPendingSortie = async (sortieId) => {
+    const result = await cancelTransfer(sortieId);
+    if (result.success) {
+      setCancelPendingId(null);
+      const currentPage = activeTab === "historique" ? historyPage : activeTab === "en-attente" ? pendingPage : cancelledPage;
+      const filters = { searchTerm, dateFrom, dateTo, activeTab };
+      await fetchMovements(currentPage, pageSize, filters);
+      await fetchStats();
+      alert("✅ Transfert annulé.");
+    } else {
+      alert(result.error);
+    }
+  };
+
+  // ===== DROPDOWN PRODUIT =====
+  const filteredProducts = useMemo(() => {
+    const term = productSearch.trim().toLowerCase();
+    if (!term) return products;
+    return products.filter(p =>
+      (p.nom?.toLowerCase() || "").includes(term) ||
+      (p.code_barre?.toLowerCase() || "").includes(term) ||
+      (p.categorie?.nom?.toLowerCase() || "").includes(term)
+    );
+  }, [products, productSearch]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (productDropdownRef.current && !productDropdownRef.current.contains(event.target)) {
+        setProductDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const ProductDropdown = () => (
     <div ref={productDropdownRef} className="relative">
       <label className="block text-xs font-medium text-gray-600 mb-2">
@@ -532,7 +264,7 @@ export default function StockMovements() {
       </label>
       <div className="relative">
         <div
-          className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors bg-white shadow-sm"
+          className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors"
           onClick={() => setProductDropdownOpen(!productDropdownOpen)}
         >
           <div className="flex items-center gap-2">
@@ -586,11 +318,6 @@ export default function StockMovements() {
                       {product.nombre_carton || 0} cartons
                     </div>
                   </div>
-                  {product.prix_unite_carton > 0 && (
-                    <div className="text-xs text-gray-500 mt-1">
-                      Prix: {product.prix_unite_carton.toLocaleString("fr-FR")} F CFA
-                    </div>
-                  )}
                 </div>
               ))}
               {filteredProducts.length === 0 && (
@@ -603,94 +330,183 @@ export default function StockMovements() {
     </div>
   );
 
-  // Rendu
-  if (localLoading || movementsLoading || productsLoading || fournisseursLoading) {
+  // ===== COMPOSANT PAGINATION =====
+  const Pagination = ({ currentPage, totalPages, onPageChange, filteredCount, pageSize }) => {
+    const startItem = (currentPage - 1) * pageSize + 1;
+    const endItem = Math.min(currentPage * pageSize, filteredCount);
+
+    const getPageNumbers = () => {
+      const pages = [];
+      const maxVisible = 5;
+      if (totalPages <= maxVisible) {
+        for (let i = 1; i <= totalPages; i++) pages.push(i);
+      } else {
+        if (currentPage <= 3) {
+          for (let i = 1; i <= 4; i++) pages.push(i);
+          pages.push("...");
+          pages.push(totalPages);
+        } else if (currentPage >= totalPages - 2) {
+          pages.push(1);
+          pages.push("...");
+          for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
+        } else {
+          pages.push(1);
+          pages.push("...");
+          pages.push(currentPage - 1);
+          pages.push(currentPage);
+          pages.push(currentPage + 1);
+          pages.push("...");
+          pages.push(totalPages);
+        }
+      }
+      return pages;
+    };
+
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Chargement des mouvements...</p>
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+        <div className="text-sm text-gray-600">
+          Affichage <span className="font-medium text-gray-800">{startItem}</span> à <span className="font-medium text-gray-800">{endItem}</span> sur <span className="font-medium text-indigo-600">{filteredCount}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={() => onPageChange(1)} disabled={currentPage === 1}
+            className="p-2 rounded border bg-white hover:bg-gray-100 disabled:opacity-40 transition-colors">
+            <ChevronsLeft size={16} className="text-gray-600" />
+          </button>
+          <button onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1}
+            className="p-2 rounded border bg-white hover:bg-gray-100 disabled:opacity-40 transition-colors">
+            <ChevronLeft size={16} className="text-gray-600" />
+          </button>
+          <div className="flex items-center gap-1">
+            {getPageNumbers().map((page, idx) =>
+              page === "..." ? (
+                <span key={idx} className="px-2 text-gray-400">...</span>
+              ) : (
+                <button key={idx} onClick={() => onPageChange(page)}
+                  className={`w-8 h-8 rounded border flex items-center justify-center text-sm transition-colors ${
+                    currentPage === page
+                      ? "bg-indigo-600 text-white border-indigo-600"
+                      : "bg-white text-gray-700 hover:bg-gray-100"
+                  }`}>
+                  {page}
+                </button>
+              )
+            )}
+          </div>
+          <button onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages}
+            className="p-2 rounded border bg-white hover:bg-gray-100 disabled:opacity-40 transition-colors">
+            <ChevronRight size={16} className="text-gray-600" />
+          </button>
+          <button onClick={() => onPageChange(totalPages)} disabled={currentPage === totalPages}
+            className="p-2 rounded border bg-white hover:bg-gray-100 disabled:opacity-40 transition-colors">
+            <ChevronsRight size={16} className="text-gray-600" />
+          </button>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-600">Lignes par page :</span>
+          <select value={pageSize} onChange={(e) => { 
+            setPageSize(Number(e.target.value)); 
+            handlePageChange(1);
+          }}
+            className="text-sm border rounded px-2 py-1 bg-white border-gray-300 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500">
+            <option value="5">5</option>
+            <option value="10">10</option>
+            <option value="20">20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
         </div>
       </div>
     );
-  }
+  };
 
-  if (localError) {
-    return (
-      <div className="p-6 bg-red-50 border border-red-200 rounded-lg">
-        <p className="text-red-600">{localError}</p>
-        <button
-          onClick={() => setLocalError(null)}
-          className="mt-2 text-sm underline text-red-600 hover:text-red-800"
-        >
-          Réessayer
-        </button>
-      </div>
-    );
-  }
+  // ===== MODALES =====
+  const openModal = () => {
+    setFormData({
+      productId: "",
+      product: "",
+      barcode: "",
+      quantity: "",
+      stockBefore: "",
+      stockAfter: "",
+      date: "",
+    });
+    setFormError("");
+    setProductSearch("");
+    setProductDropdownOpen(false);
+    setModalOpen(true);
+  };
 
+  const closeModal = () => {
+    setModalOpen(false);
+    setFormError("");
+    setProductSearch("");
+    setProductDropdownOpen(false);
+    setIsSubmitting(false);
+  };
+
+  // ===== RENDU =====
   return (
-    <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 bg-gray-50 min-h-screen">
+    <div className="depot-page space-y-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-            <Package className="text-indigo-600" size={28} />
+          <h2 className="text-2xl font-semibold text-gray-800 flex items-center gap-2">
+            <Package className="text-indigo-600" />
             Gestion des Mouvements de Stock
-          </h1>
+          </h2>
           <p className="text-sm text-gray-500 mt-1">
             Suivi des entrées, sorties et transferts
           </p>
         </div>
         <button
           onClick={openModal}
-          className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-orange-500 text-white rounded-xl shadow-md hover:shadow-lg transition-all transform hover:scale-105 text-sm font-medium"
+          className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg shadow-sm transition-colors"
         >
           <ArrowUpRight size={18} />
           Nouveau transfert
         </button>
       </div>
 
-      {/* STATS CARDS */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex items-center justify-between hover:shadow-md transition">
+      {/* STATISTIQUES */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex items-center justify-between">
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wider">Entrées</p>
-            <p className="text-2xl font-bold text-gray-800 mt-1">{stats.totalEntries}</p>
+            <p className="text-2xl font-bold text-gray-800 mt-1">{loadingStats ? '...' : stats.totalEntries}</p>
             <p className="text-xs text-gray-400 mt-1">opérations</p>
           </div>
-          <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
-            <ArrowDownRight className="text-green-600" size={24} />
+          <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center">
+            <ArrowDownRight className="text-green-600" size={20} />
           </div>
         </div>
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex items-center justify-between hover:shadow-md transition">
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex items-center justify-between">
           <div>
-            <p className="text-xs text-gray-500 uppercase tracking-wider">Sorties validées</p>
-            <p className="text-2xl font-bold text-gray-800 mt-1">{stats.totalValidated}</p>
+            <p className="text-xs text-gray-500 uppercase tracking-wider">Sorties</p>
+            <p className="text-2xl font-bold text-gray-800 mt-1">{loadingStats ? '...' : stats.totalValidated}</p>
             <p className="text-xs text-gray-400 mt-1">opérations</p>
           </div>
-          <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
-            <ArrowUpRight className="text-red-600" size={24} />
+          <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center">
+            <ArrowUpRight className="text-red-600" size={20} />
           </div>
         </div>
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex items-center justify-between hover:shadow-md transition">
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex items-center justify-between">
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wider">En attente</p>
-            <p className="text-2xl font-bold text-gray-800 mt-1">{stats.totalPending}</p>
+            <p className="text-2xl font-bold text-gray-800 mt-1">{loadingStats ? '...' : stats.totalPending}</p>
             <p className="text-xs text-gray-400 mt-1">transferts</p>
           </div>
-          <div className="w-12 h-12 rounded-full bg-yellow-100 flex items-center justify-center">
-            <Clock className="text-yellow-600" size={24} />
+          <div className="w-10 h-10 rounded-full bg-yellow-50 flex items-center justify-center">
+            <Clock className="text-yellow-600" size={20} />
           </div>
         </div>
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex items-center justify-between hover:shadow-md transition">
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex items-center justify-between">
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wider">Aujourd'hui</p>
-            <p className="text-2xl font-bold text-gray-800 mt-1">{stats.todayCount}</p>
+            <p className="text-2xl font-bold text-gray-800 mt-1">{loadingStats ? '...' : stats.todayCount}</p>
             <p className="text-xs text-gray-400 mt-1">mouvements</p>
           </div>
-          <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center">
-            <Activity className="text-indigo-600" size={24} />
+          <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center">
+            <Activity className="text-indigo-600" size={20} />
           </div>
         </div>
       </div>
@@ -734,8 +550,8 @@ export default function StockMovements() {
         </nav>
       </div>
 
-      {/* FILTRES */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-4">
+      {/* FILTRES COMMUNS */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 space-y-4">
         <div className="flex items-center gap-2 text-xs text-gray-500">
           <Filter size={14} />
           <span className="font-medium">Filtres</span>
@@ -750,7 +566,7 @@ export default function StockMovements() {
                 placeholder="Produit, fournisseur..."
                 className="w-full border border-gray-300 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                 value={searchTerm}
-                onChange={(e) => { setSearchTerm(e.target.value); currentPagination.setPage(1); }}
+                onChange={(e) => { setSearchTerm(e.target.value); handlePageChange(1); }}
               />
             </div>
           </div>
@@ -760,7 +576,7 @@ export default function StockMovements() {
               type="date"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
               value={dateFrom}
-              onChange={(e) => { setDateFrom(e.target.value); currentPagination.setPage(1); }}
+              onChange={(e) => { setDateFrom(e.target.value); handlePageChange(1); }}
             />
           </div>
           <div>
@@ -769,18 +585,13 @@ export default function StockMovements() {
               type="date"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
               value={dateTo}
-              onChange={(e) => { setDateTo(e.target.value); currentPagination.setPage(1); }}
+              onChange={(e) => { setDateTo(e.target.value); handlePageChange(1); }}
             />
           </div>
         </div>
         <div className="flex justify-end">
           <button
-            onClick={() => {
-              setSearchTerm("");
-              setDateFrom("");
-              setDateTo("");
-              currentPagination.setPage(1);
-            }}
+            onClick={handleResetFilters}
             className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-gray-600"
           >
             Réinitialiser
@@ -788,9 +599,9 @@ export default function StockMovements() {
         </div>
       </div>
 
-      {/* TABLEAU */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50">
+      {/* TABLEAU PAR ONGLET */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gray-50">
           <p className="text-sm font-medium text-gray-700 flex items-center gap-2">
             {activeTab === "historique" && <Activity size={16} className="text-indigo-600" />}
             {activeTab === "en-attente" && <Clock size={16} className="text-yellow-600" />}
@@ -798,152 +609,152 @@ export default function StockMovements() {
             {activeTab === "historique" && "Historique des mouvements"}
             {activeTab === "en-attente" && "Transferts en attente de validation"}
             {activeTab === "annulees" && "Transferts annulés"}
-            <span className="text-xs text-gray-500 ml-2">({filteredByTab.length})</span>
+            <span className="text-xs text-gray-500 ml-2">({totalMovements})</span>
           </p>
           <div className="flex items-center gap-2 text-xs text-gray-500">
             <Info size={14} />
             <span>Cliquez sur une ligne pour plus de détails</span>
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
-              <tr>
-                {activeTab !== "en-attente" && <th className="text-left px-6 py-3">Type</th>}
-                <th className="text-left px-6 py-3">Produit</th>
-                {activeTab !== "en-attente" && <th className="text-left px-6 py-3">Source / Destination</th>}
-                {activeTab === "en-attente" && <th className="text-left px-6 py-3">Destination</th>}
-                <th className="text-center px-6 py-3">Quantité</th>
-                <th className="text-center px-6 py-3">Stock Av. / Ap.</th>
-                <th className="text-center px-6 py-3">Date</th>
-                <th className="text-center px-6 py-3">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {paginatedData.map((item) => (
-                <tr
-                  key={item.id}
-                  className="hover:bg-gray-50 transition-colors cursor-pointer"
-                  onClick={() => setSelectedMovement(item)}
-                >
-                  {activeTab !== "en-attente" && (
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${
-                          item.type === "Entrée"
-                            ? "bg-green-100 text-green-700"
-                            : item.sousType === 'transfert'
-                            ? "bg-blue-100 text-blue-700"
-                            : "bg-orange-100 text-orange-700"
-                        }`}>
-                          {item.type === "Entrée" ? (
-                            <ArrowDownRight size={14} />
-                          ) : item.sousType === 'transfert' ? (
-                            <Truck size={14} />
-                          ) : (
-                            <MinusCircle size={14} />
-                          )}
-                          {item.type === "Entrée" ? 'Entrée' : (item.sousType === 'transfert' ? 'Transfert' : 'Diminution')}
-                        </span>
-                        {activeTab === "annulees" && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-800 rounded-full text-xs">
-                            <Ban size={10} /> Annulé
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                  )}
-                  <td className="px-6 py-4 text-gray-800 flex items-center gap-2">
-                    <Package size={14} className="text-gray-400" />
-                    {item.productName}
-                  </td>
-                  {activeTab !== "en-attente" ? (
-                    <td className="px-6 py-4 text-xs text-gray-700">
-                      <div className="flex items-center gap-2">
-                        {item.type === "Entrée" ? (
-                          <>
-                            <Building size={12} className="text-green-500" />
-                            <span className="text-green-600">{item.source}</span>
-                          </>
-                        ) : (
-                          <>
+
+        {loadingMovements ? (
+          <div className="p-8 text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
+            <p className="mt-2 text-gray-500">Chargement des mouvements...</p>
+          </div>
+        ) : errorMovements ? (
+          <div className="p-4 text-center text-red-600">{errorMovements}</div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
+                  <tr>
+                    {activeTab !== "en-attente" && <th className="text-left px-4 py-3">Type</th>}
+                    <th className="text-left px-4 py-3">Produit</th>
+                    {activeTab !== "en-attente" && <th className="text-left px-4 py-3">Source / Destination</th>}
+                    {activeTab === "en-attente" && <th className="text-left px-4 py-3">Destination</th>}
+                    <th className="text-center px-4 py-3">Quantité</th>
+                    <th className="text-center px-4 py-3">Date</th>
+                    <th className="text-center px-4 py-3">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {movements.map((item) => (
+                    <tr
+                      key={item.id}
+                      className="hover:bg-gray-50 transition-colors cursor-pointer"
+                      onClick={() => setSelectedMovement(item)}
+                    >
+                      {activeTab !== "en-attente" && (
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${
+                              item.type === "Entrée"
+                                ? "bg-green-50 text-green-700"
+                                : item.sousType === 'transfert'
+                                ? "bg-blue-50 text-blue-700"
+                                : "bg-orange-50 text-orange-700"
+                            }`}>
+                              {item.type === "Entrée" ? (
+                                <ArrowDownRight size={14} />
+                              ) : item.sousType === 'transfert' ? (
+                                <Truck size={14} />
+                              ) : (
+                                <MinusCircle size={14} />
+                              )}
+                              {item.type === "Entrée" ? 'Entrée' : (item.sousType === 'transfert' ? 'Transfert' : 'Diminution')}
+                            </span>
+                            {activeTab === "annulees" && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-800 rounded-full text-xs">
+                                <Ban size={10} /> Annulé
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                      <td className="px-4 py-3 text-gray-800 flex items-center gap-2">
+                        <Package size={14} className="text-gray-400" />
+                        {item.product}
+                      </td>
+                      {activeTab !== "en-attente" ? (
+                        <td className="px-4 py-3 text-xs text-gray-700">
+                          <div className="flex items-center gap-2">
+                            {item.type === "Entrée" ? (
+                              <>
+                                <Building size={12} className="text-green-500" />
+                                <span className="text-green-600">{item.source}</span>
+                              </>
+                            ) : (
+                              <>
+                                <Store size={12} className="text-indigo-500" />
+                                <span className="text-indigo-600">{item.source}</span>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      ) : (
+                        <td className="px-4 py-3 text-xs text-gray-700">
+                          <div className="flex items-center gap-2">
                             <Store size={12} className="text-indigo-500" />
                             <span className="text-indigo-600">{item.source}</span>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  ) : (
-                    <td className="px-6 py-4 text-xs text-gray-700">
-                      <div className="flex items-center gap-2">
-                        <Store size={12} className="text-indigo-500" />
-                        <span className="text-indigo-600">{item.source}</span>
-                      </div>
-                    </td>
-                  )}
-                  <td className="px-6 py-4 text-center">
-                    <span className={`font-semibold ${
-                      item.type === "Entrée" ? "text-green-600" : "text-red-600"
-                    }`}>
-                      {item.type === "Entrée" ? "+" : "-"}{item.qty}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <div className="flex items-center justify-center gap-1">
-                      <span className="text-gray-600">{item.before}</span>
-                      <ArrowRight className="text-gray-400" size={12} />
-                      <span className={`font-bold ${
-                        item.type === "Entrée" ? "text-green-600" : "text-red-600"
-                      }`}>
-                        {item.after}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-center text-xs text-gray-500">
-                    {formatDateTime(item.date)}
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setSelectedMovement(item); }}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
-                      >
-                        <Info size={14} className="text-gray-500" />
-                        Détails
-                      </button>
-                      {activeTab === "en-attente" && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setCancelPendingId(item.id); }}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-red-300 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50 transition-colors shadow-sm"
-                        >
-                          <XCircle size={14} />
-                          Annuler
-                        </button>
+                          </div>
+                        </td>
                       )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {paginatedData.length === 0 && (
-                <tr>
-                  <td colSpan={activeTab === "en-attente" ? 6 : 7} className="px-6 py-10 text-center text-gray-400 text-sm italic">
-                    Aucun élément à afficher.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        {filteredByTab.length > 0 && (
-          <div className="px-6 py-4 border-t border-gray-100">
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={currentPagination.setPage}
-              filteredCount={filteredByTab.length}
-              pageSize={pageSize}
-            />
-          </div>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`font-semibold ${
+                          item.type === "Entrée" ? "text-green-600" : "text-red-600"
+                        }`}>
+                          {item.type === "Entrée" ? "+" : "-"}{item.quantity}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center text-xs text-gray-500">
+                        {formatDateTime(item.date)}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setSelectedMovement(item); }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
+                          >
+                            <Info size={14} className="text-gray-500" />
+                            Détails
+                          </button>
+                          {activeTab === "en-attente" && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setCancelPendingId(item.id); }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-red-300 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50 transition-colors shadow-sm"
+                            >
+                              <XCircle size={14} />
+                              Annuler
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {movements.length === 0 && (
+                    <tr>
+                      <td colSpan={activeTab === "en-attente" ? 5 : 6} className="px-4 py-6 text-center text-gray-400 text-sm italic">
+                        Aucun élément à afficher.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            {totalMovements > 0 && (
+              <div className="px-4 py-3 border-t border-gray-200">
+                <Pagination
+                  currentPage={activeTab === "historique" ? historyPage : activeTab === "en-attente" ? pendingPage : cancelledPage}
+                  totalPages={Math.ceil(totalMovements / pageSize)}
+                  onPageChange={handlePageChange}
+                  filteredCount={totalMovements}
+                  pageSize={pageSize}
+                />
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -1017,6 +828,17 @@ export default function StockMovements() {
                   </div>
                 )}
 
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-2">Date (optionnelle)</label>
+                  <input
+                    type="datetime-local"
+                    name="date"
+                    value={formData.date}
+                    onChange={handleFormChange}
+                    className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                </div>
+
                 <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
                   <button
                     type="button"
@@ -1028,7 +850,7 @@ export default function StockMovements() {
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-indigo-600 to-orange-500 rounded-lg hover:opacity-90 transition-colors flex items-center gap-2 disabled:opacity-50"
+                    className="px-5 py-2.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Save size={16} />
                     {isSubmitting ? "Création..." : "Créer le transfert"}
@@ -1099,14 +921,14 @@ export default function StockMovements() {
               <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
                 <div>
                   <p className="text-xs text-gray-500">Produit</p>
-                  <p className="font-medium text-gray-800">{selectedMovement.productName}</p>
+                  <p className="font-medium text-gray-800">{selectedMovement.product}</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-500">Quantité</p>
                   <p className={`font-semibold ${
                     selectedMovement.type === "Entrée" ? "text-green-600" : "text-red-600"
                   }`}>
-                    {selectedMovement.type === "Entrée" ? "+" : "-"}{selectedMovement.qty} cartons
+                    {selectedMovement.type === "Entrée" ? "+" : "-"}{selectedMovement.quantity} cartons
                   </p>
                 </div>
                 <div>
@@ -1122,19 +944,6 @@ export default function StockMovements() {
                 <div>
                   <p className="text-xs text-gray-500">Date</p>
                   <p className="text-sm text-gray-700">{formatDateTime(selectedMovement.date)}</p>
-                </div>
-                <div className="col-span-2">
-                  <p className="text-xs text-gray-500">Stock avant / après</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-gray-700 font-medium">{selectedMovement.before}</span>
-                    <ArrowRight className="text-gray-400" size={14} />
-                    <span className={`font-bold ${
-                      selectedMovement.type === "Entrée" ? "text-green-600" : "text-red-600"
-                    }`}>
-                      {selectedMovement.after}
-                    </span>
-                    <span className="text-xs text-gray-500">cartons</span>
-                  </div>
                 </div>
                 {selectedMovement.motif && (
                   <div className="col-span-2">
