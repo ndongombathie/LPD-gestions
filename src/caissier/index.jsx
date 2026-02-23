@@ -13,7 +13,7 @@ const CaissierRoutes = () => {
       <Routes>
         <Route path="/" element={<Navigate to="/caissier/dashboard" replace />} />
         <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/caisse" element={<CaissePage boutiqueId={localStorage.getItem('boutiqueId')} />} />
+        <Route path="/caisse" element={<CaissePage />} />
         <Route path="/decaissements" element={<DecaissementsPage />} />
         <Route path="/historique" element={<HistoriquePage />} />
         <Route path="/rapport" element={<RapportCaissePage />} />

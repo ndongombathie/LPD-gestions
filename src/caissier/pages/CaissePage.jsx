@@ -11,13 +11,12 @@ import { printInvoice } from '../components/InvoicePrint';
 import QRScanner from '../components/QRScanner';
 import caissierApi from '../services/caissierApi';
 import { toast } from 'sonner';
-import { initializeEcho } from '../../utils/echo';
 import { echo } from '../../utils/echo';
 
-const CaissePage = ({boutiqueId}) => {
+const CaissePage = () => {
   const location = useLocation();
   const navigate = useNavigate();
-
+  const boutiqueId = localStorage.getItem('boutique_id');
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
@@ -47,6 +46,9 @@ const CaissePage = ({boutiqueId}) => {
     const totalTTC = commande.total || 0;
     const totalHT = totalTTC / (1 + tauxTVA);
     const tva = totalTTC - totalHT;
+    console.log('boutiqueId:', boutiqueId);
+  
+    
 
     // Calculer le reste dû à partir des paiements
     const totalPaye = paiements.reduce((sum, p) => sum + (p.montant || 0), 0);
@@ -154,36 +156,6 @@ const CaissePage = ({boutiqueId}) => {
   useEffect(() => {
     fetchTicketsSafe(1, '');
     fetchDashboardStats(); // Charger les statistiques pour initialiser le compteur de tickets traités
-
-    // Initialiser WebSocket de manière asynchrone pour ne pas bloquer le rendu
-    // Utiliser setTimeout pour différer l'initialisation
-    const timeoutId = setTimeout(() => {
-      try {
-        const echo = initializeEcho();
-        if (echo) {
-          echoRef.current = echo;
-        }
-      } catch (e) {
-        // Ignorer les erreurs WebSocket - ne pas bloquer l'application
-      }
-    }, 2000); // Démarrer après 2 secondes pour ne pas ralentir le chargement initial
-
-    return () => {
-      clearTimeout(timeoutId);
-      // Nettoyage WebSocket si nécessaire
-      if (echoRef.current) {
-        try {
-          subscriptionsRef.current.forEach(sub => {
-            if (sub.channel && echoRef.current) {
-              echoRef.current.leave(sub.channel);
-            }
-          });
-        } catch (e) {
-          // Ignorer les erreurs de nettoyage
-        }
-        subscriptionsRef.current = [];
-      }
-    };
   }, []); // Seulement au montage
 
    useEffect(() => {
