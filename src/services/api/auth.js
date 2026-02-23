@@ -81,7 +81,6 @@ export const authAPI = {
         tokenManager.setToken(response.data.token);
         localStorage.setItem('token', response.data.token);
         localStorage.setItem('boutique_id', response.data.user.boutique_id);
-        console.log('user:', localStorage.getItem('token'));
       }
       if (response.data?.user) {
         userManager.setUser(response.data.user);
