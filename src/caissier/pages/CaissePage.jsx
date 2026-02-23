@@ -83,7 +83,7 @@ const CaissePage = () => {
       tva: tva,
       total_ttc: totalTTC,
       moyen_paiement: moyenPaiementDefini, // Pour les clients spéciaux, récupéré depuis les paiements
-      statut: resteDu > 0 ? (totalPaye > 0 ? 'partiellement_paye' : 'en_attente') : 'encaissé',
+      statut: resteDu > 0 ? (totalPaye > 0 ? 'partiellement_payee' : 'attente') : 'encaissé',
       client_special: isClientSpecial,
       client_nom: commande.client ? `${commande.client.prenom || ''} ${commande.client.nom || ''}`.trim() : null,
       lignes: lignes,
@@ -582,7 +582,7 @@ const CaissePage = () => {
                       {ticket.client_special && (
                         <Badge variant="accent" className="text-xs">Client spécial</Badge>
                       )}
-                      {ticket.statut === 'partiellement_paye' ? (
+                      {ticket.statut === 'partiellement_payee' ? (
                         <Badge variant="info" className="text-xs">Partiellement payé</Badge>
                       ) : (
                         <Badge variant="warning" className="text-xs">En attente</Badge>
