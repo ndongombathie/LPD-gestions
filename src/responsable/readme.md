@@ -117,3 +117,6 @@ GET     api/caissier/caisses-journals
 
 # la liste de tous les paiemnent effectuer un caissier | sur la carte caissier en cliquant sur le button detail d'un caissier
 GET     api/commandes-par-caissier/{id}
+
+# attribuer une fond de caisse a un caissier
+POST    api/fond-caisse/{id} | attribuer une fond de caisse a un caissier en donnant sur la route id du cassier (http://127.0.0.1:8000/api/fond-caisse/019c8cb0-734c-7075-aaff-53f064488ab9) et en payload le montant ex: { "montant":20000 }
