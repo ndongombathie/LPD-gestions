@@ -106,3 +106,11 @@ POST    api/commandes/{commande}/paiements-tranches  | effectuer un paiement par
 
 # la liste des paiement associer a une commande
 GET    api/commandes/{commande}/paiements  | obtenir la liste des paiements associer a une commande
+
+
+# • Liste paginée des caissiers avec :
+    ◦ Total encaissements et décaissements
+    ◦ Fond d’ouverture fourni
+    ◦ Solde net = Encaissement − Décaissement − Fond d’ouverture 
+    
+GET     api/caissier/caisses-journals
