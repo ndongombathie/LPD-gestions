@@ -117,12 +117,21 @@ export default function InventaireDepot() {
 
   /* ================= IMPRESSION + HISTORIQUE ================= */
   const imprimerInventaire = () => {
+    // ✅ VALIDATION
+    if (!dateDebut || !dateFin) {
+      alert("Veuillez renseigner une date de début et une date de fin.");
+      return;
+    }
+
+    if (dateDebut > dateFin) {
+      alert("La date de début ne peut pas être supérieure à la date de fin.");
+      return;
+    }
+
     const doc = new jsPDF();
     let y = 20;
 
-    const periode = `${dateDebut ? formatDate(dateDebut) : "Début"} → ${
-      dateFin ? formatDate(dateFin) : "Aujourd’hui"
-    }`;
+    const periode = `${formatDate(dateDebut)} → ${formatDate(dateFin)}`;
 
     /* ===== PDF ===== */
     doc.setFontSize(14);
@@ -165,7 +174,7 @@ export default function InventaireDepot() {
 
     doc.save("Inventaire_Depot.pdf");
 
-    /* ===== 🔥 ENREGISTREMENT AUTOMATIQUE HISTORIQUE ===== */
+    /* ===== HISTORIQUE ===== */
     setHistoriqueInventaires((prev) => [
       ...prev,
       {

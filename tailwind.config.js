@@ -66,6 +66,7 @@ export default {
           white: '#FFFFFF', // Blanc pur
         }
       },
+      
 
       fontFamily: {
         sans: ['Inter', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'sans-serif'],

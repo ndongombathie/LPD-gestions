@@ -12,6 +12,7 @@ const QRScanner = ({ onScan, onClose }) => {
       // Nettoyer à la fermeture
       stopScanning();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const startScanning = async () => {
@@ -27,7 +28,6 @@ const QRScanner = ({ onScan, onClose }) => {
         await startHtml5QRCode();
       }
     } catch (err) {
-      console.error('Erreur d\'accès à la caméra:', err);
       setError('Impossible d\'accéder à la caméra. Vérifiez les permissions ou installez html5-qrcode: npm install html5-qrcode');
       setIsScanning(false);
     }
@@ -60,7 +60,7 @@ const QRScanner = ({ onScan, onClose }) => {
       }
       
       if (scannerRef.current) {
-        scannerRef.current.innerHTML = '';
+        scannerRef.current.replaceChildren();
         scannerRef.current.appendChild(video);
         scannerRef.current.style.display = 'block';
       }
@@ -82,7 +82,7 @@ const QRScanner = ({ onScan, onClose }) => {
             onScan(qrData);
             return;
           }
-        } catch (err) {
+        } catch (_err) {
           // Ignorer les erreurs de détection et continuer
         }
 
@@ -92,8 +92,8 @@ const QRScanner = ({ onScan, onClose }) => {
       };
 
       detectQR();
-    } catch (err) {
-      throw err;
+    } catch (_err) {
+      throw _err;
     }
   };
 
@@ -158,7 +158,7 @@ const QRScanner = ({ onScan, onClose }) => {
     }
     
     if (scannerRef.current) {
-      scannerRef.current.innerHTML = '';
+      scannerRef.current.replaceChildren();
     }
     
     setIsScanning(false);

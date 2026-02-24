@@ -20,7 +20,7 @@ export default function LayoutGestionnaire({ children }) {
         </main>
         
         <footer className="bg-white border-t border-gray-200 shadow-inner text-sm text-gray-500 text-center py-4">
-          © {new Date().getFullYear()} <strong className="text-[#472EAD] font-semibold">LPD Consulting</strong> — Interface Gestionnaire <span className="text-[#F58020] font-semibold">v1.0.0</span>
+          © {new Date().getFullYear()} <strong className="text-[#472EAD] font-semibold">SSD Consulting</strong> — Interface Gestionnaire <span className="text-[#F58020] font-semibold">v1.0.0</span>
         </footer>
       </div>
     </div>

@@ -1,6 +1,7 @@
 // src/gestionnaire-depot/pages/Suppliers.jsx
 import React, { useMemo, useState } from "react";
-import { Package, User, Phone, Store, Search as SearchIcon } from "lucide-react";
+import "../styles/depot-fix.css";
+import { Package, User, Phone, Store, Search as SearchIcon, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 
 /* =========================================================================
    DONNÉES DE DÉPART
@@ -58,6 +59,10 @@ const generateAvatar = (name) => {
    ========================================================================= */
 export default function Suppliers() {
   const [suppliers] = useState(suppliersData);
+  
+  // État pour la pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // champ recherche direct
   const [searchInput, setSearchInput] = useState("");
@@ -83,8 +88,37 @@ export default function Suppliers() {
     });
   }, [suppliers, searchInput]);
 
+  /* =========================================================================
+     LOGIQUE DE PAGINATION
+     ========================================================================= */
+  const totalItems = filteredSuppliers.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  
+  // S'assurer que la page actuelle est valide
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages || 1);
+  
+  // Calculer les indices de début et fin
+  const startIndex = (safeCurrentPage - 1) * itemsPerPage;
+  const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
+  
+  // Obtenir les fournisseurs pour la page actuelle
+  const currentSuppliers = filteredSuppliers.slice(startIndex, endIndex);
+
+  // Fonction pour changer de page
+  const goToPage = (page) => {
+    const newPage = Math.max(1, Math.min(page, totalPages));
+    setCurrentPage(newPage);
+  };
+
+  // Fonction pour changer le nombre d'éléments par page
+  const handleItemsPerPageChange = (e) => {
+    const newValue = parseInt(e.target.value);
+    setItemsPerPage(newValue);
+    setCurrentPage(1); // Retour à la première page
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="depot-page space-y-6">
       {/* HEADER SECTION */}
       <div>
         <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
@@ -141,15 +175,35 @@ export default function Suppliers() {
             placeholder="Rechercher un fournisseur, contact, email, téléphone..."
             className="w-full border rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#472EAD]"
             value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
+            onChange={(e) => {
+              setSearchInput(e.target.value);
+              setCurrentPage(1); // Retour à la première page lors d'une recherche
+            }}
           />
         </div>
       </div>
 
       {/* TABLEAU FOURNISSEURS */}
       <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
-        <div className="border-b px-4 py-3 text-sm font-semibold text-gray-700">
-          Liste des Fournisseurs ({filteredSuppliers.length})
+        <div className="border-b px-4 py-3 text-sm font-semibold text-gray-700 flex justify-between items-center">
+          <span>Liste des Fournisseurs ({filteredSuppliers.length})</span>
+          
+          {/* Sélecteur d'éléments par page */}
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-gray-500">Afficher :</span>
+            <select
+              value={itemsPerPage}
+              onChange={handleItemsPerPageChange}
+              className="border rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-[#472EAD]"
+            >
+              <option value="5">5</option>
+              <option value="10">10</option>
+              <option value="20">20</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+            <span className="text-gray-500">éléments</span>
+          </div>
         </div>
 
         <table className="min-w-full text-sm">
@@ -166,7 +220,7 @@ export default function Suppliers() {
           </thead>
 
           <tbody className="divide-y">
-            {filteredSuppliers.map((s) => (
+            {currentSuppliers.map((s) => (
               <tr key={s.id} className="hover:bg-gray-50">
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
@@ -213,7 +267,7 @@ export default function Suppliers() {
               </tr>
             ))}
 
-            {filteredSuppliers.length === 0 && (
+            {currentSuppliers.length === 0 && (
               <tr>
                 <td
                   colSpan={7}
@@ -225,6 +279,80 @@ export default function Suppliers() {
             )}
           </tbody>
         </table>
+
+        {/* PAGINATION */}
+        {totalItems > 0 && (
+          <div className="border-t px-4 py-3 flex flex-col sm:flex-row justify-between items-center gap-3">
+            <div className="text-xs text-gray-500">
+              Affichage de {startIndex + 1} à {endIndex} sur {totalItems} fournisseurs
+            </div>
+            
+            <div className="flex items-center gap-2">
+              {/* Boutons de navigation */}
+              <button
+                onClick={() => goToPage(1)}
+                disabled={safeCurrentPage === 1}
+                className={`p-1 rounded-md ${safeCurrentPage === 1 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600 hover:bg-gray-100'}`}
+                title="Première page"
+              >
+                <ChevronsLeft size={16} />
+              </button>
+              
+              <button
+                onClick={() => goToPage(safeCurrentPage - 1)}
+                disabled={safeCurrentPage === 1}
+                className={`p-1 rounded-md ${safeCurrentPage === 1 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600 hover:bg-gray-100'}`}
+                title="Page précédente"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              
+              {/* Indicateur de page */}
+              <div className="flex items-center gap-1 text-xs">
+                <span className="text-gray-700">Page</span>
+                <span className="font-semibold text-[#472EAD]">{safeCurrentPage}</span>
+                <span className="text-gray-700">sur</span>
+                <span className="font-semibold">{totalPages}</span>
+              </div>
+              
+              <button
+                onClick={() => goToPage(safeCurrentPage + 1)}
+                disabled={safeCurrentPage === totalPages}
+                className={`p-1 rounded-md ${safeCurrentPage === totalPages ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600 hover:bg-gray-100'}`}
+                title="Page suivante"
+              >
+                <ChevronRight size={16} />
+              </button>
+              
+              <button
+                onClick={() => goToPage(totalPages)}
+                disabled={safeCurrentPage === totalPages}
+                className={`p-1 rounded-md ${safeCurrentPage === totalPages ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600 hover:bg-gray-100'}`}
+                title="Dernière page"
+              >
+                <ChevronsRight size={16} />
+              </button>
+            </div>
+            
+            {/* Sélecteur de page directe */}
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-gray-500">Aller à :</span>
+              <input
+                type="number"
+                min="1"
+                max={totalPages}
+                value={safeCurrentPage}
+                onChange={(e) => {
+                  const page = parseInt(e.target.value);
+                  if (page >= 1 && page <= totalPages) {
+                    goToPage(page);
+                  }
+                }}
+                className="w-12 border rounded-md px-2 py-1 text-center focus:outline-none focus:ring-1 focus:ring-[#472EAD]"
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* MODALE DETAILS */}

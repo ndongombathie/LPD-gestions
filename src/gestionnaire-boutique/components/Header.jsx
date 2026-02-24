@@ -451,7 +451,7 @@ export default function Header() {
                 <h1 className="text-base font-semibold text-[#472EAD]">
                   LPD Manager
                   <span className="text-gray-500 font-normal text-sm">
-                    {" "} | Interface Gestionnaire
+                    {" "} | Interface Gestionnaire Boutique
                   </span>
                 </h1>
                 <p className="hidden sm:block text-xs text-gray-400">
@@ -463,45 +463,6 @@ export default function Header() {
             {/* ACTIONS */}
             <div className="flex items-center gap-4">
 
-              {/* 🆕 RACCOURCIS */}
-              <div className="relative hidden sm:block">
-                <button
-                  onClick={() => {
-                    setShowQuick((v) => !v);
-                    setShowNotif(false);
-                    setShowMenu(false);
-                  }}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-[#F7F5FF] hover:text-[#472EAD] transition"
-                >
-                  <LayoutGrid size={18} className="text-[#472EAD]" />
-                  <span>Raccourcis</span>
-                </button>
-
-                {showQuick && (
-                  <div className="absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-lg shadow-lg p-2 z-30">
-                    <p className="text-xs font-semibold text-gray-500 px-2 py-1">
-                      Accès rapide (4 dernières pages)
-                    </p>
-                    <ul className="text-sm text-gray-700">
-                      {recentPaths.map((path) => {
-                        const item = SHORTCUT_ITEMS.find((i) => i.path === path);
-                        if (!item) return null;
-                        const Icon = item.icon;
-                        return (
-                          <li
-                            key={path}
-                            onClick={() => handleGoShortcut(path)}
-                            className="flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer hover:bg-[#F7F5FF]"
-                          >
-                            <Icon size={16} className="text-[#472EAD]" />
-                            <span>{item.name}</span>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-                )}
-              </div>
 
               {/* NOTIFS */}
               <div className="relative">

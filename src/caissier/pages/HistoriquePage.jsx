@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Card, { CardHeader } from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
@@ -6,62 +6,12 @@ import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import { formatCurrency, formatDateTime } from '../../utils/formatters';
 import { printInvoice } from '../components/InvoicePrint';
+import caissierApi from '../services/caissierApi';
+import { toast } from 'sonner';
 
 const HistoriquePage = () => {
-  // Données fictives
-  const historiqueFictif = [
-    {
-      id: 'encaissement_1',
-      type: 'encaissement',
-      date: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-      ticket: {
-        id: 'ticket-1',
-        numero: 'TKT-2025-000001',
-        date_ticket: new Date(Date.now() - 3600000).toISOString(),
-        vendeur_nom: 'Amadou Diallo',
-        total_ht: 100000,
-        tva: 18000,
-        total_ttc: 118000,
-        moyen_paiement: 'especes',
-        lignes: [
-          { produit: 'Produit A', quantite: 2, prix: 50000 },
-        ],
-      },
-      montant: 118000,
-    },
-    {
-      id: 'decaissement_1',
-      type: 'decaissement',
-      date: new Date(Date.now() - 7200000).toISOString(),
-      created_at: new Date(Date.now() - 7200000).toISOString(),
-      montant: 15000,
-      motif: 'Achat de matériel de bureau',
-      cree_par: 'Ibrahima Sall',
-      fait_par: 'Amadou Diallo',
-    },
-    {
-      id: 'encaissement_2',
-      type: 'encaissement',
-      date: new Date(Date.now() - 10800000).toISOString(),
-      created_at: new Date(Date.now() - 10800000).toISOString(),
-      ticket: {
-        id: 'ticket-2',
-        numero: 'TKT-2025-000002',
-        date_ticket: new Date(Date.now() - 10800000).toISOString(),
-        vendeur_nom: 'Fatou Ba',
-        total_ht: 85000,
-        tva: 15300,
-        total_ttc: 100300,
-        moyen_paiement: 'carte',
-        lignes: [
-          { produit: 'Produit B', quantite: 1, prix: 85000 },
-        ],
-      },
-      montant: 100300,
-    },
-  ];
-
+  const [historique, setHistorique] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState({
     type: 'tous',
     dateDebut: '',
@@ -69,8 +19,28 @@ const HistoriquePage = () => {
     recherche: '',
   });
 
-  // Filtrage côté client
-  const filteredHistorique = historiqueFictif.filter((item) => {
+  // Charger l'historique depuis l'API
+  useEffect(() => {
+    const fetchHistorique = async () => {
+      try {
+        setLoading(true);
+        const data = await caissierApi.getHistoriqueComplet(filters);
+        setHistorique(data);
+      } catch (error) {
+        // Erreur silencieuse - gérée par le composant
+        toast.error('Erreur', {
+          description: 'Impossible de charger l\'historique'
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchHistorique();
+  }, [filters.type, filters.dateDebut, filters.dateFin]); // Recharger quand les filtres changent
+
+  // Filtrage côté client (pour la recherche textuelle)
+  const filteredHistorique = historique.filter((item) => {
     // Filtre par type
     if (filters.type !== 'tous' && item.type !== filters.type) {
       return false;
@@ -92,14 +62,19 @@ const HistoriquePage = () => {
     // Filtre par recherche
     if (filters.recherche) {
       const searchLower = filters.recherche.toLowerCase();
-      if (item.type === 'encaissement' && item.ticket) {
-        if (!item.ticket.numero?.toLowerCase().includes(searchLower) &&
-            !item.ticket.vendeur_nom?.toLowerCase().includes(searchLower)) {
+      if (item.type === 'encaissement' && item.commande) {
+        const commandeNum = `CMD-${item.commande.id?.substring(0, 8).toUpperCase()}`;
+        const vendeurNom = item.commande.vendeur 
+          ? `${item.commande.vendeur.prenom || ''} ${item.commande.vendeur.nom || ''}`.trim()
+          : '';
+        if (!commandeNum.toLowerCase().includes(searchLower) &&
+            !vendeurNom.toLowerCase().includes(searchLower)) {
           return false;
         }
       }
-      if (item.type === 'decaissement' && item.motif) {
-        if (!item.motif.toLowerCase().includes(searchLower)) {
+      if (item.type === 'decaissement' && item.decaissement) {
+        const motif = item.decaissement.motif || item.decaissement.libelle || '';
+        if (!motif.toLowerCase().includes(searchLower)) {
           return false;
         }
       }
@@ -121,10 +96,10 @@ const HistoriquePage = () => {
       {/* En-tête */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-text-primarytext-white">
+          <h1 className="text-3xl font-bold text-[#472EAD]">
             Historique des opérations
           </h1>
-          <p className="text-gray-600text-gray-400 mt-1">
+          <p className="text-gray-600 mt-1">
             Consultez l'historique de tous vos encaissements et décaissements
           </p>
         </div>
@@ -140,6 +115,7 @@ const HistoriquePage = () => {
               { value: 'tous', label: 'Tous' },
               { value: 'encaissement', label: 'Encaissements' },
               { value: 'decaissement', label: 'Décaissements' },
+              { value: 'annulation', label: 'Annulations' },
             ]}
             value={filters.type}
             onChange={(e) => setFilters({ ...filters, type: e.target.value })}
@@ -170,15 +146,15 @@ const HistoriquePage = () => {
         <Card className="border-l-4 border-l-green-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600text-gray-400">Total encaissements</p>
-              <p className="text-2xl font-bold text-green-600text-green-400 mt-1">
+              <p className="text-sm text-gray-600">Total encaissements</p>
+              <p className="text-2xl font-bold text-green-600 mt-1">
                 {formatCurrency(
                   filteredHistorique
                     .filter(item => item.type === 'encaissement')
-                    .reduce((sum, item) => sum + (item.ticket?.total_ttc || 0), 0)
+                    .reduce((sum, item) => sum + (item.paiement?.montant || item.commande?.total || 0), 0)
                 )}
               </p>
-              <p className="text-xs text-gray-500text-gray-400 mt-1">
+              <p className="text-xs text-gray-500 mt-1">
                 {filteredHistorique.filter(item => item.type === 'encaissement').length} opération(s)
               </p>
             </div>
@@ -192,15 +168,15 @@ const HistoriquePage = () => {
         <Card className="border-l-4 border-l-red-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600text-gray-400">Total décaissements</p>
-              <p className="text-2xl font-bold text-red-600text-red-400 mt-1">
+              <p className="text-sm text-gray-600">Total décaissements</p>
+              <p className="text-2xl font-bold text-red-600 mt-1">
                 {formatCurrency(
                   filteredHistorique
                     .filter(item => item.type === 'decaissement')
-                    .reduce((sum, item) => sum + (item.montant || 0), 0)
+                    .reduce((sum, item) => sum + (parseFloat(item.decaissement?.montant?.replace(/[^\d.-]/g, '')) || 0), 0)
                 )}
               </p>
-              <p className="text-xs text-gray-500text-gray-400 mt-1">
+              <p className="text-xs text-gray-500 mt-1">
                 {filteredHistorique.filter(item => item.type === 'decaissement').length} opération(s)
               </p>
             </div>
@@ -214,15 +190,15 @@ const HistoriquePage = () => {
         <Card className="border-l-4 border-l-[#472EAD]">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600text-gray-400">Solde net</p>
-              <p className="text-2xl font-bold text-[#472EAD]text-primary-400 mt-1">
+              <p className="text-sm text-gray-600">Solde net</p>
+              <p className="text-2xl font-bold text-[#472EAD] mt-1">
                 {formatCurrency(
                   filteredHistorique
                     .filter(item => item.type === 'encaissement')
-                    .reduce((sum, item) => sum + (item.ticket?.total_ttc || 0), 0) -
+                    .reduce((sum, item) => sum + (item.paiement?.montant || item.commande?.total || 0), 0) -
                   filteredHistorique
                     .filter(item => item.type === 'decaissement')
-                    .reduce((sum, item) => sum + (item.montant || 0), 0)
+                    .reduce((sum, item) => sum + (parseFloat(item.decaissement?.montant?.replace(/[^\d.-]/g, '')) || 0), 0)
                 )}
               </p>
             </div>
@@ -241,9 +217,14 @@ const HistoriquePage = () => {
           title="Historique des opérations"
           subtitle={`${filteredHistorique.length} opération(s) trouvée(s)`}
         />
-        {filteredHistorique.length === 0 ? (
+        {loading ? (
           <div className="text-center py-12">
-            <p className="text-gray-500text-gray-400">Aucune opération trouvée</p>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#472EAD] mx-auto"></div>
+            <p className="mt-4 text-gray-600">Chargement de l'historique...</p>
+          </div>
+        ) : filteredHistorique.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-gray-500">Aucune opération trouvée</p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -260,72 +241,129 @@ const HistoriquePage = () => {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <Badge
-                        variant={item.type === 'encaissement' ? 'success' : 'danger'}
+                        variant={
+                          item.type === 'encaissement' ? 'success' : 
+                          item.type === 'annulation' ? 'warning' : 
+                          'danger'
+                        }
                         className="text-xs"
                       >
-                        {item.type === 'encaissement' ? 'Encaissement' : 'Décaissement'}
+                        {item.type === 'encaissement' ? 'Encaissement' : 
+                         item.type === 'annulation' ? 'Annulation' : 
+                         'Décaissement'}
                       </Badge>
-                      <span className="text-xs text-gray-500text-gray-400">
+                      <span className="text-xs text-gray-500">
                         {formatDateTime(item.created_at)}
                       </span>
                     </div>
 
-                    {item.type === 'encaissement' && item.ticket ? (
+                    {item.type === 'encaissement' && item.commande ? (
                       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
                         <div className="min-w-0">
-                          <span className="text-gray-500text-gray-400">Ticket:</span>
-                          <p className="font-semibold text-gray-900text-white truncate">
-                            {item.ticket.numero}
+                          <span className="text-gray-500">Ticket:</span>
+                          <p className="font-semibold text-gray-900 truncate">
+                            CMD-{item.commande.id?.substring(0, 8).toUpperCase()}
                           </p>
                         </div>
                         <div className="min-w-0">
-                          <span className="text-gray-500text-gray-400">Vendeur:</span>
-                          <p className="font-medium text-gray-700text-gray-300 truncate">
-                            {item.ticket.vendeur_nom}
+                          <span className="text-gray-500">Vendeur:</span>
+                          <p className="font-medium text-gray-700 truncate">
+                            {item.commande.vendeur 
+                              ? `${item.commande.vendeur.prenom || ''} ${item.commande.vendeur.nom || ''}`.trim()
+                              : 'N/A'}
                           </p>
                         </div>
                         <div className="min-w-0">
-                          <span className="text-gray-500text-gray-400">Paiement:</span>
-                          <p className="font-medium text-gray-700text-gray-300 truncate">
-                            {moyensPaiementLabels[item.ticket.moyen_paiement] || item.ticket.moyen_paiement}
+                          <span className="text-gray-500">Paiement:</span>
+                          <p className="font-medium text-gray-700 truncate">
+                            {moyensPaiementLabels[item.paiement?.type_paiement] || item.paiement?.type_paiement || 'N/A'}
                           </p>
                         </div>
                         <div className="min-w-0">
-                          <span className="text-gray-500text-gray-400">TTC:</span>
-                          <p className="font-bold text-green-600text-green-400">
-                            {formatCurrency(item.ticket.total_ttc)}
+                          <span className="text-gray-500">Montant:</span>
+                          <p className="font-bold text-green-600">
+                            {formatCurrency(item.paiement?.montant || item.commande.total || 0)}
                           </p>
                         </div>
                         <div className="min-w-0">
-                          <span className="text-gray-500text-gray-400">THT/TVA:</span>
-                          <p className="font-medium text-gray-600text-gray-400 text-xs">
-                            {formatCurrency(item.ticket.total_ht)} / {formatCurrency(item.ticket.tva)}
+                          <span className="text-gray-500">Total commande:</span>
+                          <p className="font-medium text-gray-600 text-xs">
+                            {formatCurrency(item.commande.total || 0)}
                           </p>
                         </div>
                       </div>
-                    ) : (
+                    ) : item.type === 'decaissement' && item.decaissement ? (
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
                         <div>
-                          <span className="text-gray-500text-gray-400">Montant:</span>
-                          <p className="font-bold text-red-600text-red-400">
-                            {formatCurrency(item.montant)}
+                          <span className="text-gray-500">Montant:</span>
+                          <p className="font-bold text-red-600">
+                            {formatCurrency(parseFloat(item.decaissement.montant?.replace(/[^\d.-]/g, '')) || 0)}
                           </p>
                         </div>
                         <div className="md:col-span-2 min-w-0">
-                          <span className="text-gray-500text-gray-400">Motif:</span>
-                          <p className="font-medium text-gray-700text-gray-300 truncate">
-                            {item.motif}
+                          <span className="text-gray-500">Motif:</span>
+                          <p className="font-medium text-gray-700 truncate">
+                            {item.decaissement.motif || item.decaissement.libelle || 'N/A'}
                           </p>
                         </div>
                       </div>
-                    )}
+                    ) : item.type === 'annulation' && item.commande ? (
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                        <div className="min-w-0">
+                          <span className="text-gray-500">Ticket:</span>
+                          <p className="font-semibold text-gray-900 truncate">
+                            CMD-{item.commande.id?.substring(0, 8).toUpperCase()}
+                          </p>
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-gray-500">Vendeur:</span>
+                          <p className="font-medium text-gray-700 truncate">
+                            {item.commande.vendeur 
+                              ? `${item.commande.vendeur.prenom || ''} ${item.commande.vendeur.nom || ''}`.trim()
+                              : 'N/A'}
+                          </p>
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-gray-500">Total:</span>
+                          <p className="font-bold text-orange-600">
+                            {formatCurrency(item.commande.total || 0)}
+                          </p>
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-gray-500">Statut:</span>
+                          <p className="font-medium text-gray-700">
+                            Annulée
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
 
-                  {item.type === 'encaissement' && item.ticket && (
+                  {item.type === 'encaissement' && item.commande && (
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => printInvoice(item.ticket)}
+                      onClick={() => {
+                        // Transformer la commande en format ticket pour l'impression
+                        const ticket = {
+                          id: item.commande.id,
+                          numero: `CMD-${item.commande.id?.substring(0, 8).toUpperCase()}`,
+                          date_ticket: item.commande.date || item.commande.created_at,
+                          vendeur_nom: item.commande.vendeur 
+                            ? `${item.commande.vendeur.prenom || ''} ${item.commande.vendeur.nom || ''}`.trim()
+                            : 'N/A',
+                          total_ht: item.commande.total / 1.18,
+                          tva: item.commande.total * 0.18 / 1.18,
+                          total_ttc: item.commande.total,
+                          moyen_paiement: item.paiement?.type_paiement,
+                          lignes: item.commande.details?.map(d => ({
+                            produit: d.produit?.nom || 'Produit',
+                            quantite: d.quantite,
+                            prix: d.prix_unitaire,
+                          })) || [],
+                        };
+                        printInvoice(ticket);
+                      }}
                       className="flex-shrink-0 border-2 border-[#472EAD] text-[#472EAD] hover:bg-[#F7F5FF] font-semibold"
                     >
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

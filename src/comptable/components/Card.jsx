@@ -1,16 +1,12 @@
 // ==========================================================
 // 💠 Card.jsx — Composant Statistique Ultra Premium (LPD Manager)
-// Élément de dashboard animé, élégant et réutilisable
-// Inclut :
-//  - <Card /> : grande version (Dashboard principal)
-//  - <CardCompact /> : version compacte (Inventaire, Rapports, etc.)
 // ==========================================================
 
 import React from "react";
 import { motion } from "framer-motion";
 
 // ==========================================================
-// 🟣 VERSION PRINCIPALE — Dashboard principal
+// 🟣 VERSION PRINCIPALE — Dashboard
 // ==========================================================
 export default function Card({
   label,
@@ -19,8 +15,8 @@ export default function Card({
   trend,
   gradient = "from-[#472EAD] via-[#6B4CF5] to-[#F58020]",
 }) {
-  const isPositive = trend?.startsWith("+");
-  const isNegative = trend?.startsWith("−");
+  const isPositive = typeof trend === "string" && trend.startsWith("+");
+  const isNegative = typeof trend === "string" && trend.startsWith("−");
 
   return (
     <motion.div
@@ -30,21 +26,20 @@ export default function Card({
       transition={{ type: "spring", stiffness: 220, damping: 18 }}
       className="relative overflow-hidden rounded-2xl border border-black shadow-md bg-white/70 backdrop-blur-xl hover:shadow-2xl hover:-translate-y-1 transition-all duration-500"
     >
-      {/* — Halo lumineux réactif — */}
+      {/* Halo lumineux */}
       <div
         className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-0 hover:opacity-20 transition-all duration-700`}
       />
 
-      {/* — Contenu — */}
       <div className="relative z-10 flex items-center justify-between p-5">
-        {/* Infos principales */}
         <div>
           <p className="text-sm text-gray-600 font-medium tracking-wide">
             {label}
           </p>
-          <h3 className="text-3xl font-extrabold text-gray-900 mt-1 drop-shadow-sm">
+          <h3 className="text-3xl font-extrabold text-gray-900 mt-1">
             {value}
           </h3>
+
           {trend && (
             <p
               className={`text-xs font-semibold mt-1 ${
@@ -60,7 +55,6 @@ export default function Card({
           )}
         </div>
 
-        {/* Icône principale */}
         <motion.div
           whileHover={{ rotate: 10, scale: 1.15 }}
           transition={{ type: "spring", stiffness: 300, damping: 20 }}
@@ -70,22 +64,18 @@ export default function Card({
         </motion.div>
       </div>
 
-      {/* — Glow décoratif — */}
       <div
         className="absolute bottom-0 left-0 right-0 h-[3px]"
         style={{
-          background: `linear-gradient(90deg, ${gradient.replace(
-            " ",
-            ", "
-          )})`,
+          background: `linear-gradient(90deg, ${gradient.replace(" ", ", ")})`,
         }}
-      ></div>
+      />
     </motion.div>
   );
 }
 
 // ==========================================================
-// 🟠 VERSION COMPACTE — pour Inventaire / Rapports / Stats secondaires
+// 🟠 VERSION COMPACTE — Inventaire / Rapports
 // ==========================================================
 export function CardCompact({
   title,
@@ -94,8 +84,8 @@ export function CardCompact({
   color = "#472EAD",
   trend,
 }) {
-  const isPositive = trend?.startsWith("+");
-  const isNegative = trend?.startsWith("−");
+  const isPositive = typeof trend === "string" && trend.startsWith("+");
+  const isNegative = typeof trend === "string" && trend.startsWith("−");
 
   return (
     <motion.div
@@ -105,7 +95,6 @@ export function CardCompact({
       transition={{ duration: 0.4 }}
       className="relative bg-white/90 border border-black rounded-xl shadow-md p-4 flex items-center justify-between hover:shadow-lg hover:-translate-y-1 transition-all duration-400 backdrop-blur-md"
     >
-      {/* Glow subtil */}
       <div
         className="absolute inset-0 opacity-0 hover:opacity-10 transition-all duration-700 rounded-xl"
         style={{
@@ -113,12 +102,12 @@ export function CardCompact({
         }}
       />
 
-      {/* Contenu */}
       <div className="relative z-10">
         <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">
           {title}
         </p>
         <h4 className="text-xl font-bold text-gray-900">{value}</h4>
+
         {trend && (
           <p
             className={`text-xs font-semibold mt-0.5 ${
@@ -134,7 +123,6 @@ export function CardCompact({
         )}
       </div>
 
-      {/* Icône */}
       <div
         className="p-2.5 rounded-lg shadow-inner"
         style={{ backgroundColor: `${color}15`, color }}
