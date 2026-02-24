@@ -1,11 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import TableauDeBord from './TableauDeBord';
 import NouvelleCommande from './pages/NouvelleCommande';
 import HistoriqueCommandes from './pages/HistoriqueCommandes';
-import Footer from './Footer'; // Import du footer
+import Footer from './Footer';
 import './css/VendeurInterface.css';
 import { useNavigate } from 'react-router-dom';
 import useAuth from '../hooks/useAuth';
@@ -17,26 +16,42 @@ const VendeurInterface = () => {
   const [historiqueCommandes, setHistoriqueCommandes] = useState([]);
   const [isLoggedIn, setIsLoggedIn] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const navigate = useNavigate();
   const { logout } = useAuth();
 
-  // Simuler la récupération des produits depuis l'API du gestionnaire de stock
   useEffect(() => {
     chargerProduitsDepuisStock();
     chargerHistoriqueCommandes();
     chargerDonneesUtilisateur();
   }, []);
 
+  // Gestion de la fermeture du sidebar lors du redimensionnement
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth > 1024) {
+        setSidebarOpen(false);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Fermer le sidebar quand on change de section sur mobile
+  useEffect(() => {
+    if (window.innerWidth <= 1024) {
+      setSidebarOpen(false);
+    }
+  }, [sectionActive]);
+
   const chargerDonneesUtilisateur = async () => {
     try {
-      // Récupérer depuis le localStorage (format de l'API Laravel)
       const userStr = localStorage.getItem('user');
       
       if (userStr) {
         const apiUser = JSON.parse(userStr);
-        console.log('✅ Utilisateur chargé depuis localStorage:', apiUser);
         
-        // Mapper les données API vers le format utilisé dans l'interface
         const mappedUser = {
           id: apiUser.id,
           prenom: apiUser.prenom || '',
@@ -59,8 +74,6 @@ const VendeurInterface = () => {
         return;
       }
 
-      // Fallback si aucune donnée dans le localStorage
-      console.warn('⚠️ Aucune donnée utilisateur trouvée dans localStorage');
       const defaultUser = {
         id: null,
         name: "Utilisateur",
@@ -90,20 +103,14 @@ const VendeurInterface = () => {
     }
   };
 
-  // Fonction pour mettre à jour les informations utilisateur
   const handleUpdateUser = (updatedUser) => {
-    console.log('🔄 Mise à jour utilisateur:', updatedUser);
-    
     try {
-      // Mettre à jour l'état local
       setCurrentUser(updatedUser);
       
-      // Récupérer les données actuelles du localStorage
       const userStr = localStorage.getItem('user');
       if (userStr) {
         const apiUser = JSON.parse(userStr);
         
-        // Mettre à jour uniquement les champs modifiables
         const updatedApiUser = {
           ...apiUser,
           prenom: updatedUser.prenom || updatedUser.name?.split(' ')[0] || apiUser.prenom,
@@ -115,7 +122,6 @@ const VendeurInterface = () => {
         };
         
         localStorage.setItem('user', JSON.stringify(updatedApiUser));
-        console.log('✅ Données utilisateur mises à jour dans localStorage');
       }
       
     } catch (error) {
@@ -125,7 +131,6 @@ const VendeurInterface = () => {
 
   const chargerProduitsDepuisStock = async () => {
     try {
-      // Simulation d'appel API vers le microservice stock
       const produitsSimules = [
         {
           id: 1,
@@ -220,7 +225,6 @@ const VendeurInterface = () => {
 
   const chargerHistoriqueCommandes = async () => {
     try {
-      // Simulation d'appel API vers le microservice commandes
       const commandesSimulees = [
         {
           id: 1,
@@ -280,24 +284,16 @@ const VendeurInterface = () => {
 
   const gererCommandeValidee = async (nouvelleCommande) => {
     try {
-      // Simulation d'envoi vers le microservice caisse
       console.log('📨 Envoi commande au caissier:', nouvelleCommande);
-
-      // Ajouter à l'historique local
       setHistoriqueCommandes(prev => [nouvelleCommande, ...prev]);
-
-      // Vider le panier
       setPanier([]);
-
       alert(`✅ Commande ${nouvelleCommande.numero_commande} envoyée au caissier avec succès !`);
-
     } catch (error) {
       console.error('Erreur envoi commande:', error);
       alert('❌ Erreur lors de l\'envoi de la commande au caissier');
     }
   };
 
-  // Fonction pour gérer la déconnexion
   const handleLogout = async () => {
     if (window.confirm('Êtes-vous sûr de vouloir vous déconnecter ?')) {
       try {
@@ -310,24 +306,35 @@ const VendeurInterface = () => {
     }
   };
 
-  // Redirection vers /login gérée par ProtectedRoute lorsque le token est absent
+  const toggleSidebar = () => {
+    setSidebarOpen(!sidebarOpen);
+  };
+
+  const closeSidebar = () => {
+    setSidebarOpen(false);
+  };
 
   return (
     <div className="vendeur-interface">
+      {/* Overlay pour mobile quand le sidebar est ouvert */}
+      {sidebarOpen && <div className="sidebar-overlay" onClick={closeSidebar}></div>}
+      
       <Sidebar
         sectionActive={sectionActive}
         setSectionActive={setSectionActive}
         user={currentUser}
+        isOpen={sidebarOpen}
+        onClose={closeSidebar}
       />
 
       <div className="main-content">
         <Header
+          user={currentUser}
+          onLogout={handleLogout}
+          onMenuClick={toggleSidebar}
+          sidebarOpen={sidebarOpen}
           sectionActive={sectionActive}
           setSectionActive={setSectionActive}
-          onLogout={handleLogout}
-          user={currentUser}
-          commandes={historiqueCommandes}
-          onUpdateUser={handleUpdateUser}
         />
 
         <main className="vendeur-contenu-principal">
@@ -358,7 +365,6 @@ const VendeurInterface = () => {
         </main>
       </div>
 
-      {/* Footer en position fixed */}
       <Footer />
     </div>
   );
