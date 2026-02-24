@@ -114,3 +114,6 @@ GET    api/commandes/{commande}/paiements  | obtenir la liste des paiements asso
     ◦ Solde net = Encaissement − Décaissement − Fond d’ouverture 
     
 GET     api/caissier/caisses-journals
+
+# la liste de tous les paiemnent effectuer un caissier | sur la carte caissier en cliquant sur le button detail d'un caissier
+GET     api/commandes-par-caissier/{id}
