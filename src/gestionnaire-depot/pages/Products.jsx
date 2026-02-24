@@ -1,12 +1,13 @@
-// Products.jsx (version finale avec modifications)
-import React, { useState, useMemo, useEffect } from "react";
+// src/gestionnaire-depot/pages/Products.jsx
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useProducts } from "../hooks/useProducts";
 import { useCategories } from "../hooks/useCategories";
-import { useFournisseurs } from "../hooks/useFournisseurs";
+import { useAllFournisseurs } from "../hooks/useAllFournisseurs";
 import { useHistorique } from "../hooks/useHistorique";
+
 import "../styles/depot-fix.css";
 
-// Icônes (gardez les mêmes)
+// Icônes
 import {
   FaSearch, FaPlus, FaBoxOpen, FaBarcode, FaTags, FaBoxes, FaCubes,
   FaMoneyBillWave, FaCoins, FaBalanceScale, FaExclamationTriangle,
@@ -188,6 +189,7 @@ const ProductListTab = ({
               <option value="Tous">Tous les statuts</option>
               <option value="Normal">Normal</option>
               <option value="Faible">Faible</option>
+              <option value="Critique">Critique</option>
               <option value="Rupture">Rupture</option>
             </select>
 
@@ -208,7 +210,7 @@ const ProductListTab = ({
         </div>
       </div>
 
-      {/* Cartes Stats - modifiées : suppression de Critique */}
+      {/* Cartes Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
         <div className="bg-gradient-to-r from-[#472EAD] to-[#6D5BD0] rounded-xl shadow-sm p-4 flex items-center gap-4">
           <div className="p-3 bg-white/20 text-white rounded-lg"><FaCoins size={20}/></div>
@@ -254,12 +256,12 @@ const ProductListTab = ({
                     <td className="p-4 text-center font-mono text-slate-500 text-xs">{p.code || "-"}</td>
                     <td className="p-4 text-center"><span className="inline-block bg-gradient-to-r from-[#F7F5FF] to-[#FFF5F0] text-[#472EAD] px-2 py-1 rounded text-xs font-medium">{p.categorie_nom}</span></td>
                     <td className="p-4 text-center">
-                      {fournisseur ? <span className="inline-flex items-center gap-1 bg-gradient-to-r from-[#F0F9FF] to-[#F0FDF4] text-[#472EAD] px-2 py-1 rounded text-xs"><FaTruck className="text-[10px]" /> {fournisseur.nom}</span> : <span className="text-slate-300 text-xs">-</span>}
+                      {fournisseur ? <span className="inline-flex items-center gap-1 bg-gradient-to-r from-[#F0F9FF] to-[#F0FDF4] text-[#472EAD] px-2 py-1 rounded text-xs"><FaTruck className="text-[10px]" /> {fournisseur.name}</span> : <span className="text-slate-300 text-xs">-</span>}
                     </td>
                     <td className="p-4 text-center font-bold text-slate-700">{p.nombre_carton}</td>
                     <td className="p-4 text-center text-slate-500">{p.unite_carton}</td>
-                    <td className="p-4 text-right font-mono text-slate-600">{Number(p.prix_unite_carton).toLocaleString("fr-FR")}</td>
-                    <td className="p-4 text-right font-mono font-bold text-[#472EAD]">{Number(totalPrice).toLocaleString("fr-FR")}</td>
+                    <td className="p-4 text-right font-mono text-slate-600">{Number(p.prix_unite_carton).toLocaleString("fr-FR")} F</td>
+                    <td className="p-4 text-right font-mono font-bold text-[#472EAD]">{Number(totalPrice).toLocaleString("fr-FR")} F</td>
                     <td className="p-4 text-center text-[#F58020] font-medium">{p.stock_seuil}</td>
                     <td className="p-4 text-center"><StatusBadge status={status} /></td>
                     <td className="p-4 text-center">
@@ -299,12 +301,11 @@ const ProductListTab = ({
   );
 };
 
-// Nouvel onglet Ajustement avec sous-onglets Rupture/Faible
+// Onglet Ajustement
 const AdjustmentTab = ({ products, onAdjust }) => {
-  const [subTab, setSubTab] = useState("rupture"); // 'rupture' ou 'faible'
+  const [subTab, setSubTab] = useState("rupture");
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Filtrer selon le statut
   const filteredByStatus = products.filter(p => {
     const status = getStatus(p.nombre_carton, p.stock_seuil).label;
     if (subTab === "rupture") return status === "Rupture";
@@ -312,14 +313,12 @@ const AdjustmentTab = ({ products, onAdjust }) => {
     return false;
   });
 
-  // Filtrer par recherche
   const displayedProducts = filteredByStatus.filter(p =>
     !searchTerm || p.nom?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
     <div className="space-y-6">
-      {/* Sous-onglets */}
       <div className="flex items-center gap-2 border-b border-slate-200">
         <button
           onClick={() => setSubTab("rupture")}
@@ -343,7 +342,6 @@ const AdjustmentTab = ({ products, onAdjust }) => {
         </button>
       </div>
 
-      {/* Barre de recherche */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 flex items-center gap-3">
         <FaSearch className="text-[#472EAD]" />
         <input
@@ -355,7 +353,6 @@ const AdjustmentTab = ({ products, onAdjust }) => {
         />
       </div>
 
-      {/* Liste des produits */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="p-4 border-b border-slate-100 bg-gradient-to-r from-[#F7F5FF] to-[#FFF5F0]">
           <h3 className="font-bold text-[#472EAD] flex items-center gap-2">
@@ -414,7 +411,7 @@ const AdjustmentTab = ({ products, onAdjust }) => {
   );
 };
 
-// Onglet Historique (sans les cartes)
+// Onglet Historique
 const HistoryTab = ({ history, loading, total, currentPage, totalPages, fetchHistorique, setCurrentPage, pageSize }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [typeFilter, setTypeFilter] = useState("Tous");
@@ -424,7 +421,7 @@ const HistoryTab = ({ history, loading, total, currentPage, totalPages, fetchHis
 
   const filteredHistory = useMemo(() => {
     return history.filter(item => {
-      const matchesSearch = !searchTerm || item.productName?.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = !searchTerm || item.product?.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesType = typeFilter === "Tous" || item.type === typeFilter;
       return matchesSearch && matchesType;
     }).sort((a, b) => {
@@ -441,6 +438,10 @@ const HistoryTab = ({ history, loading, total, currentPage, totalPages, fetchHis
     setDetailModalOpen(true);
   };
 
+  useEffect(() => {
+    fetchHistorique(currentPage, pageSize);
+  }, [currentPage, pageSize, fetchHistorique]);
+
   return (
     <>
       <div className="bg-white rounded-xl shadow-sm border p-3">
@@ -452,7 +453,7 @@ const HistoryTab = ({ history, loading, total, currentPage, totalPages, fetchHis
               placeholder="Rechercher..."
               className="w-full pl-10 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#472EAD] focus:border-[#472EAD] outline-none"
               value={searchTerm}
-              onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+              onChange={(e) => { setSearchTerm(e.target.value); }}
             />
           </div>
           <div>
@@ -462,11 +463,11 @@ const HistoryTab = ({ history, loading, total, currentPage, totalPages, fetchHis
             <select
               className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#472EAD] focus:border-[#472EAD] outline-none"
               value={typeFilter}
-              onChange={(e) => { setTypeFilter(e.target.value); setCurrentPage(1); }}
+              onChange={(e) => { setTypeFilter(e.target.value); }}
             >
               <option value="Tous">Tous</option>
-              <option value="Modification">Modifications</option>
-              <option value="Suppression">Suppressions</option>
+              <option value="Entrée">Entrées</option>
+              <option value="Sortie">Sorties</option>
             </select>
           </div>
           <div>
@@ -476,7 +477,7 @@ const HistoryTab = ({ history, loading, total, currentPage, totalPages, fetchHis
             <select
               className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#472EAD] focus:border-[#472EAD] outline-none"
               value={sortBy}
-              onChange={(e) => { setSortBy(e.target.value); setCurrentPage(1); }}
+              onChange={(e) => { setSortBy(e.target.value); }}
             >
               <option value="date-desc">Date (récent → ancien)</option>
               <option value="date-asc">Date (ancien → récent)</option>
@@ -484,11 +485,9 @@ const HistoryTab = ({ history, loading, total, currentPage, totalPages, fetchHis
           </div>
         </div>
         <div className="mt-3 text-sm text-[#472EAD] font-semibold">
-          {filteredHistory.length} action(s) trouvée(s)
+          {filteredHistory.length} action(s) trouvée(s) sur cette page
         </div>
       </div>
-
-      {/* Suppression des trois cartes */}
 
       <div className="bg-white rounded-xl shadow-sm border mt-4 overflow-x-auto">
         <table className="w-full text-sm">
@@ -506,21 +505,21 @@ const HistoryTab = ({ history, loading, total, currentPage, totalPages, fetchHis
               <tr key={item.id || index} className="border-t hover:bg-[#F7F5FF]/30 transition-colors">
                 <td className="p-3 text-gray-600">
                   <div className="flex items-center gap-2">
-                    <FaClock className="text-[#472EAD]" />{item.date || "N/A"}
+                    <FaClock className="text-[#472EAD]" />{item.date ? new Date(item.date).toLocaleString('fr-FR') : "N/A"}
                   </div>
                 </td>
                 <td className="p-3">
                   <div className="font-medium text-[#472EAD] flex items-center gap-2">
-                    <FaBoxOpen />{item.productName}
+                    <FaBoxOpen />{item.product}
                   </div>
                 </td>
                 <td className="p-3">
                   <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold border ${
-                    item.type === "Modification" ? "bg-gradient-to-r from-blue-100 to-blue-50 text-blue-800 border-blue-200" : 
-                    item.type === "Suppression" ? "bg-gradient-to-r from-red-100 to-red-50 text-red-800 border-red-200" : 
+                    item.type === "Entrée" ? "bg-gradient-to-r from-blue-100 to-blue-50 text-blue-800 border-blue-200" : 
+                    item.type === "Sortie" ? "bg-gradient-to-r from-orange-100 to-orange-50 text-orange-800 border-orange-200" : 
                     "bg-gradient-to-r from-gray-100 to-gray-50 text-gray-800 border-gray-200"
                   }`}>
-                    {item.type === "Modification" ? <FaEdit /> : item.type === "Suppression" ? <FaTrashAlt /> : <FaHistory />}
+                    {item.type === "Entrée" ? <FaArrowUp /> : item.type === "Sortie" ? <FaArrowDown /> : <FaHistory />}
                     {item.type}
                   </span>
                 </td>
@@ -545,7 +544,9 @@ const HistoryTab = ({ history, loading, total, currentPage, totalPages, fetchHis
                 <td colSpan={5} className="p-8 text-center">
                   <div className="text-gray-400">
                     <FaHistory className="text-4xl mx-auto mb-3 opacity-50" />
-                    <p className="text-lg font-medium text-[#472EAD]">Aucun historique</p>
+                    <p className="text-lg font-medium text-[#472EAD]">
+                      {loading ? "Chargement..." : "Aucun historique"}
+                    </p>
                   </div>
                 </td>
               </tr>
@@ -563,7 +564,6 @@ const HistoryTab = ({ history, loading, total, currentPage, totalPages, fetchHis
         />
       )}
 
-      {/* Modal de détail historique (identique) */}
       {detailModalOpen && selectedHistoryItem && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-lg w-full max-w-lg p-6">
@@ -572,55 +572,12 @@ const HistoryTab = ({ history, loading, total, currentPage, totalPages, fetchHis
               Détails de l'action
             </h3>
             <div className="space-y-3">
-              <p><span className="font-bold">Produit :</span> {selectedHistoryItem.productName}</p>
+              <p><span className="font-bold">Produit :</span> {selectedHistoryItem.product}</p>
               <p><span className="font-bold">Type :</span> {selectedHistoryItem.type}</p>
-              <p><span className="font-bold">Date :</span> {selectedHistoryItem.date}</p>
-              
-              {selectedHistoryItem.type === "Suppression" && (
-                <div>
-                  <p className="font-bold">Détails de la suppression :</p>
-                  <div className="bg-red-50 p-3 rounded border border-red-200 mt-1">
-                    <p className="text-sm">
-                      Produit supprimé : <span className="font-semibold">{selectedHistoryItem.productName}</span>
-                    </p>
-                    <p className="text-sm">
-                      Stock avant suppression : <span className="font-semibold">{selectedHistoryItem.changes?.stock_avant || 0}</span> cartons
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {selectedHistoryItem.type === "Modification" && (
-                <div>
-                  <p className="font-bold">Modifications effectuées :</p>
-                  {selectedHistoryItem.changes && Object.keys(selectedHistoryItem.changes).length > 0 ? (
-                    <div className="bg-blue-50 p-3 rounded border border-blue-200 mt-1 space-y-2">
-                      {Object.entries(selectedHistoryItem.changes).map(([field, value]) => {
-                        let fieldName = field;
-                        if (field === 'nom') fieldName = 'Nom';
-                        if (field === 'categorie_id') fieldName = 'Catégorie';
-                        if (field === 'fournisseur_id') fieldName = 'Fournisseur';
-                        if (field === 'unite_carton') fieldName = 'Unités par carton';
-                        if (field === 'prix_unite_carton') fieldName = 'Prix par carton';
-                        if (field === 'stock_seuil') fieldName = 'Stock minimum';
-                        if (field === 'code') fieldName = 'Code-barre';
-
-                        return (
-                          <div key={field} className="text-sm border-b border-blue-100 pb-1 last:border-0">
-                            <span className="font-medium">{fieldName} :</span>
-                            <div className="ml-2 text-gray-700">
-                              <span className="text-red-600 line-through mr-2">{value.from}</span>
-                              <span className="text-green-600">→ {value.to}</span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-500">Aucune modification de champ enregistrée</p>
-                  )}
-                </div>
-              )}
+              <p><span className="font-bold">Date :</span> {selectedHistoryItem.date ? new Date(selectedHistoryItem.date).toLocaleString('fr-FR') : 'N/A'}</p>
+              <p><span className="font-bold">Quantité :</span> {selectedHistoryItem.quantity || 0} cartons</p>
+              <p><span className="font-bold">Motif :</span> {selectedHistoryItem.motif || 'Aucun motif'}</p>
+              <p><span className="font-bold">Statut :</span> {selectedHistoryItem.status}</p>
             </div>
             <div className="flex justify-end mt-6">
               <button
@@ -637,7 +594,7 @@ const HistoryTab = ({ history, loading, total, currentPage, totalPages, fetchHis
   );
 };
 
-// Onglet Catégories (inchangé)
+// Onglet Catégories
 const CategoriesTab = ({ categories, onEditCategory, onDeleteCategory, onAddCategory }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [page, setPage] = useState(1);
@@ -758,13 +715,15 @@ export default function Products() {
   } = useProducts(1, pageSize);
 
   const { categories, loading: categoriesLoading, addCategory, updateCategory, deleteCategory, refetch: refetchCategories } = useCategories();
-  const { fournisseurs, loading: fournisseursLoading } = useFournisseurs();
+  
+  // Nouveau hook pour charger TOUS les fournisseurs
+  const { suppliers: fournisseurs, loading: fournisseursLoading } = useAllFournisseurs();
 
-  // Historique
+  // Hook pour l'historique
   const {
     history,
-    loading: historyLoading,
     total: historyTotal,
+    loading: historyLoading,
     currentPage: historyPage,
     totalPages: historyTotalPages,
     fetchHistorique,
@@ -773,9 +732,9 @@ export default function Products() {
 
   useEffect(() => {
     if (activeTab === "historique") {
-      fetchHistorique(1);
+      fetchHistorique(1, pageSize);
     }
-  }, [activeTab, fetchHistorique]);
+  }, [activeTab, fetchHistorique, pageSize]);
 
   // États pour les modales
   const [modalType, setModalType] = useState(null); // 'add', 'edit'
@@ -987,10 +946,10 @@ export default function Products() {
   );
 
   const filteredFournisseursOptions = fournisseurs.filter(f =>
-    f.nom?.toLowerCase().includes(fournisseurFilterTerm.toLowerCase())
+    f.name?.toLowerCase().includes(fournisseurFilterTerm.toLowerCase())
   );
 
-  const loading = productsLoading || categoriesLoading || fournisseursLoading;
+  const loading = productsLoading || categoriesLoading || fournisseursLoading || (activeTab === "historique" && historyLoading);
 
   return (
     <div className="depot-page space-y-6 font-sans text-slate-800 bg-gray-50 min-h-screen p-6">
@@ -1006,7 +965,6 @@ export default function Products() {
               <span className="bg-gradient-to-r from-[#472EAD] to-[#6D5BD0] text-white px-3 py-1 rounded-full inline-flex items-center gap-1">
                 <FaBoxOpen /> {total} produits
               </span>
-              {/* Suppression du badge catégories */}
               <span className="bg-gradient-to-r from-[#10B981] to-[#34D399] text-white px-3 py-1 rounded-full inline-flex items-center gap-1">
                 <FaTruck /> {fournisseurs.length} fournisseurs
               </span>
@@ -1107,7 +1065,7 @@ export default function Products() {
         </>
       )}
 
-      {/* ========== MODALES (inchangées) ========== */}
+      {/* ========== MODALES ========== */}
 
       {/* MODALE PRODUIT (Ajout/Modification) */}
       {modalType && currentProduct && (
@@ -1181,14 +1139,14 @@ export default function Products() {
                       setCurrentProduct(prev => ({
                         ...prev,
                         fournisseur_id: selectedId,
-                        fournisseur_nom: selectedFour?.nom || ""
+                        fournisseur_nom: selectedFour?.name || ""
                       }));
                     }}
                     className="w-full border rounded px-3 py-2 text-sm focus:ring-2 focus:ring-[#472EAD] focus:border-[#472EAD] outline-none"
                   >
                     <option value="">-- Aucun fournisseur --</option>
                     {filteredFournisseursOptions.map((four) => (
-                      <option key={four.id} value={four.id}>{four.nom}</option>
+                      <option key={four.id} value={four.id}>{four.name}</option>
                     ))}
                   </select>
                   <div className="flex items-center gap-2 text-xs">
@@ -1307,7 +1265,7 @@ export default function Products() {
               {adjustAction === "reappro" ? "Réapprovisionner le stock" : "Diminuer le stock"}
             </h3>
             <p className="text-sm text-gray-700 mb-4">
-              Produit : <span className="font-semibold text-[#472EAD]">{adjustProduct.nom}</span> ({adjustProduct.categorie_nom})<br />
+              Produit : <span className="font-semibold text-[#472EAD]">{adjustProduct.nom}</span><br />
               Stock actuel : <span className="font-semibold text-[#F58020]">{adjustProduct.nombre_carton}</span> cartons
             </p>
             <form onSubmit={handleSubmitAdjust} className="space-y-4">

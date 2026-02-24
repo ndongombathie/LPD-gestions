@@ -17,31 +17,38 @@ export const useMouvements = () => {
   const [loadingStats, setLoadingStats] = useState(false);
   const [errorStats, setErrorStats] = useState(null);
 
-  const mapMovement = useCallback((m) => {
-    const type = m.type === 'entree' ? 'Entrée' : 'Sortie';
+  const mapMovement = useCallback((item) => {
+    let type = item.type === 'entree' ? 'Entrée' : 'Sortie';
     let sousType = '';
-    if (m.type === 'sortie') {
-      sousType = m.motif?.toLowerCase().includes('transfert') ? 'transfert' : 'diminution';
+    if (item.type === 'sortie') {
+      sousType = item.motif?.toLowerCase().includes('transfert') ? 'transfert' : 'diminution';
     }
-    let status = m.statut?.toLowerCase() || 'completed';
-    if (m.type === 'entree') status = 'completed';
+    let status = item.statut?.toLowerCase() || 'completed';
+    if (item.type === 'entree') status = 'completed';
     else if (status === 'en_attente') status = 'pending';
     else if (status === 'validé') status = 'validated';
     else if (status === 'annulé') status = 'cancelled';
 
+    let productName = 'Produit inconnu';
+    if (item.produit?.nom) productName = item.produit.nom;
+    else if (item.nom) productName = item.nom;
+    else if (item.product_nom) productName = item.product_nom;
+
+    let source = item.source || (item.type === 'entree' ? 'Fournisseur' : 'Boutique Colobane');
+
     return {
-      id: m.id,
+      id: item.id,
       type,
       sousType,
-      product: m.produit?.nom || 'Produit inconnu',
-      barcode: m.produit?.code_barre || '',
-      source: m.source || (m.type === 'entree' ? 'Fournisseur' : 'Boutique Colobane'),
-      quantity: m.quantite || 0,
-      date: m.date || m.created_at,
+      product: productName,
+      barcode: item.produit?.code_barre || item.code_barre || '',
+      source,
+      quantity: item.quantite || 0,
+      date: item.date || item.created_at,
       status,
-      motif: m.motif || '',
-      createdAt: m.created_at,
-      validatedAt: m.validated_at,
+      motif: item.motif || '',
+      createdAt: item.created_at,
+      validatedAt: item.validated_at,
     };
   }, []);
 
@@ -109,43 +116,11 @@ export const useMouvements = () => {
     try {
       console.log('📊 Début chargement stats...');
       
-      const entriesPromise = mouvementsAPI.getNbEntreesTotal().then(res => {
-        console.log('📦 getNbEntreesTotal retourne:', res);
-        return res;
-      }).catch(err => {
-        console.warn('⚠️ Erreur getNbEntreesTotal:', err);
-        return 0;
-      });
-
-      const sortiesPromise = mouvementsAPI.getNbSortiesTotal().then(res => {
-        console.log('📦 getNbSortiesTotal retourne:', res);
-        return res;
-      }).catch(err => {
-        console.warn('⚠️ Erreur getNbSortiesTotal:', err);
-        return 0;
-      });
-
-      const pendingListPromise = mouvementsAPI.getTransfertsEnAttente().then(res => {
-        console.log('📦 getTransfertsEnAttente (liste) retourne:', res);
-        return res;
-      }).catch(err => {
-        console.warn('⚠️ Erreur getTransfertsEnAttente:', err);
-        return [];
-      });
-
-      const todayPromise = mouvementsAPI.getNombreAujourdhui().then(res => {
-        console.log('📦 getNombreAujourdhui retourne:', res);
-        return res;
-      }).catch(err => {
-        console.warn('⚠️ Erreur getNombreAujourdhui:', err);
-        return 0;
-      });
-
       const results = await Promise.allSettled([
-        entriesPromise,
-        sortiesPromise,
-        pendingListPromise,
-        todayPromise,
+        mouvementsAPI.getNbEntreesTotal().catch(err => (console.warn(err), 0)),
+        mouvementsAPI.getNbSortiesTotal().catch(err => (console.warn(err), 0)),
+        mouvementsAPI.getTransfertsEnAttente().catch(err => (console.warn(err), [])),
+        mouvementsAPI.getNombreAujourdhui().catch(err => (console.warn(err), 0)),
       ]);
 
       console.log('📦 Résultats bruts des stats:', results);
@@ -155,32 +130,29 @@ export const useMouvements = () => {
           const data = result.value;
           console.log('✅ Données reçues pour stats:', data);
           
-          if (Array.isArray(data)) {
-            return data.length;
-          }
-          
+          if (Array.isArray(data)) return data.length;
           if (data && typeof data === 'object') {
             if (data.count !== undefined) return data.count;
-            if (data.data !== undefined) return data.data;
+            if (data.data !== undefined) {
+              if (Array.isArray(data.data)) return data.data.length;
+              return data.data;
+            }
             if (data.nombre !== undefined) return data.nombre;
             if (data.total !== undefined) return data.total;
             const firstNum = Object.values(data).find(v => typeof v === 'number');
             if (firstNum !== undefined) return firstNum;
           }
-          
           return data ?? defaultValue;
         }
         return defaultValue;
       };
 
-      const newStats = {
+      setStats({
         totalEntries: extractValue(results[0]),
         totalValidated: extractValue(results[1]),
         totalPending: extractValue(results[2]),
         todayCount: extractValue(results[3]),
-      };
-      console.log('📈 Nouvelles stats calculées:', newStats);
-      setStats(newStats);
+      });
     } catch (err) {
       console.error('Erreur inattendue dans fetchStats:', err);
       setErrorStats('Erreur lors du chargement des statistiques');
@@ -195,10 +167,8 @@ export const useMouvements = () => {
       return { success: true, data: response.data };
     } catch (err) {
       console.error('❌ Erreur createTransfer:', err);
-      return { 
-        success: false, 
-        error: err.response?.data?.message || err.message || 'Erreur inconnue' 
-      };
+      const errorMessage = err.response?.data?.message || err.message || 'Erreur inconnue';
+      return { success: false, error: errorMessage };
     }
   }, []);
 
@@ -208,10 +178,8 @@ export const useMouvements = () => {
       return { success: true, data: response.data };
     } catch (err) {
       console.error('❌ Erreur cancelTransfer:', err);
-      return { 
-        success: false, 
-        error: err.response?.data?.message || err.message || 'Erreur inconnue' 
-      };
+      const errorMessage = err.response?.data?.message || err.message || 'Erreur inconnue';
+      return { success: false, error: errorMessage };
     }
   }, []);
 

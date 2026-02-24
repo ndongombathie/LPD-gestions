@@ -174,7 +174,7 @@ export default function Reports() {
 
       let status = "Normal";
       if (cartons === 0) status = "Rupture";
-      else if (cartons <= stockMin) status = "Faible";
+      else if (cartons < stockMin) status = "Faible"; // strictement inférieur
 
       return {
         id: p.id,
@@ -243,9 +243,8 @@ export default function Reports() {
 
   // Total des unités en stock
   const totalUnits = enriched.reduce((sum, p) => sum + p.stockGlobal, 0);
-  const produitsRisque = (counts["Rupture"] || 0) + (counts["Faible"] || 0);
 
-  // --- Export PDF (simplifié, sans mouvements) ---
+  // --- Export PDF (sans "Produits à risque") ---
   const exportPDF = async () => {
     try {
       const pdfContainer = document.createElement("div");
@@ -273,7 +272,6 @@ export default function Reports() {
         </div>
       `;
 
-      // Cartes KPI
       const kpiCards = `
         <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px;">
           <div style="border: 1px solid #E5E7EB; border-radius: 8px; padding: 12px; background: #F9FAFB;">
@@ -287,7 +285,6 @@ export default function Reports() {
         </div>
       `;
 
-      // Répartition des statuts
       const status = `
         <div style="margin-bottom: 20px;">
           <h3 style="font-size: 12px; font-weight: bold; color: #472EAD; margin-bottom: 10px;">État du stock</h3>
@@ -308,23 +305,17 @@ export default function Reports() {
         </div>
       `;
 
-      // Deux colonnes : total unités et produits à risque
       const leftCol = `
         <div style="margin-bottom: 20px;">
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
             <div style="border: 1px solid #E5E7EB; border-radius: 6px; padding: 12px; background: #F9FAFB;">
-              <p style="font-size: 9px; color: #6B7280;">Total unités</p>
+              <p style="font-size: 9px; color: #6B7280;">Total unités en stock</p>
               <p style="font-size: 16px; font-weight: bold; color: #472EAD;">${formatNumber(totalUnits)}</p>
-            </div>
-            <div style="border: 1px solid #E5E7EB; border-radius: 6px; padding: 12px; background: #F9FAFB;">
-              <p style="font-size: 9px; color: #6B7280;">Produits à risque</p>
-              <p style="font-size: 16px; font-weight: bold; color: #F97316;">${produitsRisque}</p>
             </div>
           </div>
         </div>
       `;
 
-      // Top 5 stock global
       const topStockGlobal = `
         <div style="margin-bottom: 20px;">
           <h3 style="font-size: 12px; font-weight: bold; color: #472EAD; margin-bottom: 10px;">Top 5 par stock global (unités)</h3>
@@ -335,7 +326,6 @@ export default function Reports() {
         </div>
       `;
 
-      // Deux tops (valeur et quantité)
       const topValue = `
         <div style="margin-bottom: 20px;">
           <h3 style="font-size: 12px; font-weight: bold; color: #472EAD; margin-bottom: 10px;">Top 5 par valeur</h3>
@@ -440,7 +430,7 @@ export default function Reports() {
 
       {/* Contenu principal */}
       <div ref={reportRef} className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6">
-        {/* Onglet Résumé (fusionné avec l'ancien onglet Analyse) */}
+        {/* Onglet Résumé (fusionné) */}
         {tab === "resume" && (
           <section className="space-y-8">
             {/* Cartes KPI */}
@@ -485,7 +475,7 @@ export default function Reports() {
 
             {/* Deux colonnes */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Colonne gauche */}
+              {/* Colonne gauche : Total unités */}
               <div className="space-y-4">
                 <InfoCard
                   title="Total unités en stock"
@@ -494,16 +484,9 @@ export default function Reports() {
                   color="violet"
                   description="Unités (cartons × unités par carton)"
                 />
-                <InfoCard
-                  title="Produits à risque"
-                  value={produitsRisque}
-                  icon={AlertTriangle}
-                  color="orange"
-                  description="Rupture + Faible"
-                />
               </div>
 
-              {/* Colonne droite */}
+              {/* Colonne droite : Top 5 stock global */}
               <div className="space-y-4">
                 <SimpleList
                   items={topProductsByStockGlobal}

@@ -185,7 +185,7 @@ export default function StockMovements() {
     setFormError("");
     setIsSubmitting(true);
 
-    const { productId, quantity, date } = formData;
+    const { productId, quantity } = formData; // on n'utilise plus la date
     if (!productId) {
       setFormError("Veuillez sélectionner un produit.");
       setIsSubmitting(false);
@@ -198,13 +198,23 @@ export default function StockMovements() {
       return;
     }
 
+    // Vérification du stock disponible (côté front)
+    const selectedProduct = products.find(p => p.id === productId);
+    if (!selectedProduct) {
+      setFormError("Produit introuvable.");
+      setIsSubmitting(false);
+      return;
+    }
+    if (selectedProduct.nombre_carton < qtyNum) {
+      setFormError(`Stock insuffisant. Disponible: ${selectedProduct.nombre_carton} cartons.`);
+      setIsSubmitting(false);
+      return;
+    }
+
+    // Payload simplifié : uniquement produit_id et quantite
     const transferData = {
       produit_id: productId,
       quantite: qtyNum,
-      source: "depot",
-      destination: "Boutique Colobane",
-      motif: "Transfert vers boutique",
-      date: date || new Date().toISOString(),
     };
 
     const result = await createTransfer(transferData);
@@ -828,16 +838,7 @@ export default function StockMovements() {
                   </div>
                 )}
 
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-2">Date (optionnelle)</label>
-                  <input
-                    type="datetime-local"
-                    name="date"
-                    value={formData.date}
-                    onChange={handleFormChange}
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                  />
-                </div>
+                {/* Champ date supprimé car non utilisé dans le payload */}
 
                 <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
                   <button
