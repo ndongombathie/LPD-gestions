@@ -20,6 +20,7 @@ export { decaissementsAPI } from './decaissements';
 export { stockAPI } from './stock';
 export { paiementsAPI } from './paiements';
 export { default as profileAPI } from './profile';
+export { default as gestionnaireBoutiqueAPI } from './gestionnaireBoutique';
 
 /**
  * Objet centralisé pour accès facile
@@ -64,5 +65,9 @@ export default {
   profile: async () => {
     const { default: profileAPI } = await import('./profile');
     return profileAPI;
+  },
+  gestionnaireBoutique: async () => {
+    const { default: gestionnaireBoutiqueAPI } = await import('./gestionnaireBoutique');
+    return gestionnaireBoutiqueAPI;
   },
 };
