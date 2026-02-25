@@ -140,7 +140,7 @@ const Stock = () => {
         {/* Recherche et filtres */}
         <div className="bg-white rounded-lg shadow p-4">
           <div className="flex justify-between items-center gap-4 flex-wrap">
-            <div className="relative flex-1 min-w-[250px]">
+            <div className="relative flex-1 ">
               <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
               <input
                 type="text"
@@ -197,7 +197,7 @@ const Stock = () => {
         {/* Modal Détails */}
         {produitDetail && (
           <div className="fixed inset-0 z-200 bg-black/40 bg-opacity-10 flex justify-center items-center">
-            <div className="relative z-50 bg-white w-[650px] rounded-lg shadow-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="relative z-50 bg-white rounded-lg shadow-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
               <h3 className="text-xl font-bold text-[#111827]">Détails du produit</h3>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div className="border-b pb-3">

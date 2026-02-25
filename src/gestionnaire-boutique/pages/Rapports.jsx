@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { FileText, Package, AlertTriangle } from "lucide-react";
 import DataTable from "../components/DataTable";
 import jsPDF from "jspdf";
@@ -58,13 +58,7 @@ const Rapports = () => {
     return () => (mounted = false);
   }, []);
 
-  // Recompute report whenever data or type changes
-  useEffect(() => {
-    genererRapport();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sousSeuil, pending, valides, typeRapport, periode, nombreProduits, quantiteTotale]);
-
-  const genererRapport = () => {
+  const genererRapport = useCallback(() => {
     if (!nombreProduits && !pending.length && !valides.length) {
       setRapport(null);
       return;
@@ -101,7 +95,12 @@ const Rapports = () => {
       quantiteAttente,
       quantiteValide,
     });
-  };
+  }, [nombreProduits, pending, valides, sousSeuil, quantiteTotale, typeRapport, periode]);
+
+  // Recompute report whenever data or type changes
+  useEffect(() => {
+    genererRapport();
+  }, [genererRapport]);
 
   const exportFullPDF = () => {
     if (!rapport) return;

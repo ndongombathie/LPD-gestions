@@ -132,7 +132,7 @@ const Transferts = () => {
         {/* Modal détails */}
         {detailTransfert && (
           <div className="fixed inset-0 z-200 bg-black/40 bg-opacity-10 flex justify-center items-center">
-            <div className="relative z-50 bg-white w-[600px] rounded-lg shadow-lg p-6 space-y-4">
+            <div className="relative z-50 bg-white  rounded-lg shadow-lg p-6 space-y-4">
               <h3 className="text-xl font-bold text-[#111827]">Détails de la demande</h3>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <p><span className="font-medium">Produit :</span> {detailTransfert.produit}</p>

@@ -72,10 +72,6 @@ const Alertes = () => {
     return () => controller.abort();
   }, [loadProduitsRupture, pageRupture, debouncedRecherche]);
 
-  useEffect(() => {
-    loadProduitsRupture(pageRupture);
-  }, [pageRupture]);
-
   const handlePageChange = (nextPage) => {
     if (nextPage && nextPage !== page) {
       setPage(nextPage);
@@ -125,7 +121,7 @@ const Alertes = () => {
 
         <div className="bg-white rounded-lg shadow p-4">
           <div className="flex items-center gap-4 flex-wrap">
-            <div className="relative flex-1 min-w-[240px]">
+            <div className="relative flex-1 ">
               <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
               <input
                 type="text"
@@ -224,7 +220,7 @@ const Alertes = () => {
         {/* Modal détails produit */}
         {produitDetail && (
           <div className="fixed inset-0 z-200 bg-black/40 bg-opacity-10 flex justify-center items-center">
-            <div className="relative z-50 bg-white w-[600px] rounded-lg shadow-lg p-6 space-y-4">
+            <div className="relative z-50 bg-white rounded-lg shadow-lg p-6 space-y-4">
               <h3 className="text-xl font-bold text-[#111827]">Détails du produit</h3>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <p><span className="font-medium">Produit :</span> {produitDetail.produit?.nom || produitDetail.nom || 'N/A'}</p>

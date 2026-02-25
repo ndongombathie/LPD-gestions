@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Activity, AlertTriangle, TrendingUp, Package, CheckCircle } from "lucide-react";
 import CardStat from "../components/CardStat";
+import LoadingSpinner from "../components/LoadingSpinner";
 import { gestionnaireBoutiqueAPI } from "@/services/api";
 import { toast } from "sonner";
 
@@ -141,7 +142,7 @@ const Dashboard = () => {
               3 derniers transferts en attente
             </h3>
             {loading ? (
-              <p className="text-gray-600 text-sm">Chargement...</p>
+              <LoadingSpinner />
             ) : transfertsPending.length === 0 ? (
               <p className="text-gray-600 text-sm">Aucun transfert en attente</p>
             ) : (
@@ -181,7 +182,7 @@ const Dashboard = () => {
             </div>
 
             {loading ? (
-              <p className="text-gray-600 text-sm">Chargement...</p>
+              <LoadingSpinner />
             ) : alertes.length === 0 ? (
               <p className="text-green-600 text-sm font-medium">✓ Aucune alerte de stock</p>
             ) : (

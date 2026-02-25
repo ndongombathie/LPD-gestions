@@ -105,10 +105,64 @@ const Produits = () => {
     setShowModal(true);
   };
 
+  const sanitizePositiveInteger = (value) => value.replace(/\D/g, '').replace(/^0+/, '');
+
+  const handleNumericFieldChange = (field, value) => {
+    const sanitizedValue = sanitizePositiveInteger(value);
+    setFormData((prev) => ({ ...prev, [field]: sanitizedValue }));
+  };
+
+  const handleNumericKeyDown = (event) => {
+    const allowedKeys = ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', 'Home', 'End'];
+
+    if (allowedKeys.includes(event.key)) {
+      return;
+    }
+
+    if (!/^\d$/.test(event.key)) {
+      event.preventDefault();
+      return;
+    }
+
+    if (event.key === '0' && event.currentTarget.value.length === 0) {
+      event.preventDefault();
+    }
+  };
+
+  const handleNumericPaste = (event, field) => {
+    event.preventDefault();
+    const pastedText = event.clipboardData.getData('text');
+    const sanitizedValue = sanitizePositiveInteger(pastedText);
+    setFormData((prev) => ({ ...prev, [field]: sanitizedValue }));
+  };
+
   const completeTransfert = async () => {
     if (!formData.prix_vente_detail || !formData.prix_vente_gros) {
       toast.error('Champs manquants', {
         description: 'Les prix de vente sont requis'
+      });
+      return;
+    }
+
+    const numericFields = [
+      { key: 'prix_vente_detail', label: 'Prix vente détail', required: true },
+      { key: 'prix_vente_gros', label: 'Prix vente gros', required: true },
+      { key: 'prix_seuil_detail', label: 'Seuil prix détail', required: false },
+      { key: 'prix_seuil_gros', label: 'Seuil prix gros', required: false },
+      { key: 'seuil', label: 'Seuil de stock minimum', required: false },
+    ];
+
+    const invalidField = numericFields.find(({ key, required }) => {
+      const value = formData[key];
+      if (!value) {
+        return required;
+      }
+      return !/^[1-9]\d*$/.test(value);
+    });
+
+    if (invalidField) {
+      toast.error('Format invalide', {
+        description: `${invalidField.label} doit contenir uniquement des chiffres (1-9)`,
       });
       return;
     }
@@ -190,7 +244,7 @@ const Produits = () => {
 
         <div className="bg-white rounded-lg shadow p-4">
           <div className="flex items-center gap-4 flex-wrap">
-            <div className="relative flex-1 min-w-[240px]">
+            <div className="relative flex-1 ">
               <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
               <input
                 type="text"
@@ -256,7 +310,9 @@ const Produits = () => {
             <h3 className="text-xl font-semibold text-[#111827]">5 derniers transferts validés</h3>
           </div>
           <div className="bg-white rounded-lg shadow p-4 overflow-auto">
-            {transfertsValides.length === 0 ? (
+            {loading ? (
+              <LoadingSpinner />
+            ) : transfertsValides.length === 0 ? (
               <EmptyState message="Aucun produit complété" />
             ) : (
               <DataTable
@@ -286,7 +342,7 @@ const Produits = () => {
         {/* Modal de complétion */}
         {showModal && selectedTransfert && (
           <div className="fixed inset-0 z-200 bg-black/40 bg-opacity-10 flex items-center justify-center">
-            <div className="relative z-50 bg-white p-6 rounded-lg w-[600px] shadow-xl space-y-6 max-h-[90vh] overflow-y-auto">
+            <div className="relative z-50 bg-white p-6 rounded-lg  shadow-xl space-y-6 max-h-[90vh] overflow-y-auto">
               <h3 className="text-xl font-bold text-[#111827]">Compléter le produit</h3>
               
               {/* Infos pré-remplies du transfert */}
@@ -301,9 +357,9 @@ const Produits = () => {
               {/* Formulaire de complétion */}
               <div className="space-y-4">
                 {/* Info sur la hiérarchie des prix */}
-                <div className="bg-blue-50 border-l-4 border-blue-500 p-3 rounded">
+                <div className="bg-blue-50 border-l-4 border-blue-500 p-3 m-2 rounded">
                   <p className="text-sm text-blue-800">
-                    <strong>Règle de prix :</strong> Prix seuil détail ≤ Prix vente détail ≤ Prix vente gros
+                    <strong>Règle de prix :</strong> Prix seuil détail inférieur ou égal au prix vente gros et Prix vente détail inférieur ou égal au Prix vente gros
                   </p>
                 </div>
 
@@ -312,11 +368,18 @@ const Produits = () => {
                   <div>
                     <label className="block text-sm font-medium text-[#111827] mb-1">Seuil de Stock Minimum *</label>
                     <input
-                      type="number"
+                      type="text"
                       className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-[#472EAD]"
                       value={formData.seuil}
-                      onChange={(e) => setFormData({ ...formData, seuil: e.target.value })}
+                      inputMode="numeric"
+                      min="1"
+                      step="1"
+                      pattern="[1-9][0-9]*"
+                      onKeyDown={handleNumericKeyDown}
+                      onPaste={(e) => handleNumericPaste(e, 'seuil')}
+                      onChange={(e) => handleNumericFieldChange('seuil', e.target.value)}
                       placeholder={selectedTransfert.seuil || "10"}
+                      autoComplete="off"
                     />
                     <p className="text-xs text-gray-500 mt-1">Seuil actuel: {selectedTransfert.seuil} unités</p>
                   </div>
@@ -327,15 +390,22 @@ const Produits = () => {
                   <div>
                     <label className="block text-sm font-medium text-[#111827] mb-1">Prix Vente Détail (FCFA) *</label>
                     <input
-                      type="number"
+                      type="text"
                       className={`w-full border p-2 rounded focus:outline-none focus:ring-2 ${
                         formData.prix_vente_detail && formData.prix_vente_gros && parseFloat(formData.prix_vente_detail) > parseFloat(formData.prix_vente_gros)
                           ? 'border-red-500 focus:ring-red-500'
                           : 'focus:ring-[#472EAD]'
                       }`}
                       value={formData.prix_vente_detail}
-                      onChange={(e) => setFormData({ ...formData, prix_vente_detail: e.target.value })}
+                      inputMode="numeric"
+                      min="1"
+                      step="1"
+                      pattern="[1-9][0-9]*"
+                      onKeyDown={handleNumericKeyDown}
+                      onPaste={(e) => handleNumericPaste(e, 'prix_vente_detail')}
+                      onChange={(e) => handleNumericFieldChange('prix_vente_detail', e.target.value)}
                       placeholder="1000"
+                      autoComplete="off"
                     />
                     {formData.prix_vente_detail && formData.prix_vente_gros && parseFloat(formData.prix_vente_detail) > parseFloat(formData.prix_vente_gros) && (
                       <p className="text-xs text-red-600 mt-1">❌ Ne doit pas dépasser le prix gros</p>
@@ -344,18 +414,25 @@ const Produits = () => {
                   <div>
                     <label className="block text-sm font-medium text-[#111827] mb-1">Prix Vente Gros (FCFA) *</label>
                     <input
-                      type="number"
+                      type="text"
                       className={`w-full border p-2 rounded focus:outline-none focus:ring-2 ${
                         formData.prix_vente_detail && formData.prix_vente_gros && parseFloat(formData.prix_vente_detail) > parseFloat(formData.prix_vente_gros)
                           ? 'border-red-500 focus:ring-red-500'
                           : 'focus:ring-[#472EAD]'
                       }`}
                       value={formData.prix_vente_gros}
-                      onChange={(e) => setFormData({ ...formData, prix_vente_gros: e.target.value })}
+                      inputMode="numeric"
+                      min="1"
+                      step="1"
+                      pattern="[1-9][0-9]*"
+                      onKeyDown={handleNumericKeyDown}
+                      onPaste={(e) => handleNumericPaste(e, 'prix_vente_gros')}
+                      onChange={(e) => handleNumericFieldChange('prix_vente_gros', e.target.value)}
                       placeholder="900"
+                      autoComplete="off"
                     />
                     {formData.prix_vente_detail && formData.prix_vente_gros && parseFloat(formData.prix_vente_detail) > parseFloat(formData.prix_vente_gros) && (
-                      <p className="text-xs text-red-600 mt-1">❌ Doit être ≥ au prix détail</p>
+                      <p className="text-xs text-red-600 mt-1">❌ Doit être suppérieur au prix détail</p>
                     )}
                   </div>
                 </div>
@@ -365,15 +442,22 @@ const Produits = () => {
                   <div>
                     <label className="block text-sm font-medium text-[#111827] mb-1">Seuil Prix Détail (FCFA)</label>
                     <input
-                      type="number"
+                      type="text"
                       className={`w-full border p-2 rounded focus:outline-none focus:ring-2 ${
                         formData.prix_seuil_detail && formData.prix_vente_detail && parseFloat(formData.prix_seuil_detail) > parseFloat(formData.prix_vente_detail)
                           ? 'border-red-500 focus:ring-red-500'
                           : 'focus:ring-[#472EAD]'
                       }`}
                       value={formData.prix_seuil_detail}
-                      onChange={(e) => setFormData({ ...formData, prix_seuil_detail: e.target.value })}
+                      inputMode="numeric"
+                      min="1"
+                      step="1"
+                      pattern="[1-9][0-9]*"
+                      onKeyDown={handleNumericKeyDown}
+                      onPaste={(e) => handleNumericPaste(e, 'prix_seuil_detail')}
+                      onChange={(e) => handleNumericFieldChange('prix_seuil_detail', e.target.value)}
                       placeholder="Prix minimum détail"
+                      autoComplete="off"
                     />
                     {formData.prix_seuil_detail && formData.prix_vente_detail && parseFloat(formData.prix_seuil_detail) > parseFloat(formData.prix_vente_detail) && (
                       <p className="text-xs text-red-600 mt-1">❌ Ne doit pas dépasser le prix vente détail</p>
@@ -382,15 +466,22 @@ const Produits = () => {
                   <div>
                     <label className="block text-sm font-medium text-[#111827] mb-1">Seuil Prix Gros (FCFA)</label>
                     <input
-                      type="number"
+                      type="text"
                       className={`w-full border p-2 rounded focus:outline-none focus:ring-2 ${
                         formData.prix_seuil_gros && formData.prix_vente_gros && parseFloat(formData.prix_seuil_gros) > parseFloat(formData.prix_vente_gros)
                           ? 'border-red-500 focus:ring-red-500'
                           : 'focus:ring-[#472EAD]'
                       }`}
                       value={formData.prix_seuil_gros}
-                      onChange={(e) => setFormData({ ...formData, prix_seuil_gros: e.target.value })}
+                      inputMode="numeric"
+                      min="1"
+                      step="1"
+                      pattern="[1-9][0-9]*"
+                      onKeyDown={handleNumericKeyDown}
+                      onPaste={(e) => handleNumericPaste(e, 'prix_seuil_gros')}
+                      onChange={(e) => handleNumericFieldChange('prix_seuil_gros', e.target.value)}
                       placeholder="Prix minimum gros"
+                      autoComplete="off"
                     />
                     {formData.prix_seuil_gros && formData.prix_vente_gros && parseFloat(formData.prix_seuil_gros) > parseFloat(formData.prix_vente_gros) && (
                       <p className="text-xs text-red-600 mt-1">❌ Ne doit pas dépasser le prix vente gros</p>
@@ -425,7 +516,7 @@ const Produits = () => {
         {/* Modal détails transfert validé */}
         {detailTransfert && (
           <div className="fixed inset-0 z-200 bg-black/40 flex justify-center items-center">
-            <div className="relative z-50 bg-white w-[600px] rounded-lg shadow-lg p-6 space-y-4">
+            <div className="relative z-50 bg-white  rounded-lg shadow-lg p-6 space-y-4">
               <h3 className="text-xl font-bold text-[#111827]">Détails du transfert validé</h3>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div className="border-b pb-3">
