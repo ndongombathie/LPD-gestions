@@ -1,63 +1,28 @@
-// ==========================================================
-// 🧠 Header.jsx — Version 100% Fonctionnelle (LPD Manager)
-// Connecté Laravel + Sanctum : profil, logout, update, password + Raccourcis
-// ==========================================================
-
 import React, { useState, useRef, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
-  Bell,
   ChevronDown,
-  LayoutGrid,
   LogOut,
-  User,
   Key,
   X,
   CheckCircle2,
   AlertCircle,
   Eye,
   EyeOff,
-  Camera,
-  // Icônes identiques à la Sidebar pour les pages
-  LayoutDashboard,
-  Users,
-  Truck,
-  ShoppingCart,
-  BarChart2,
-  ClipboardList,
-  FileText,
-  Clock,
-  Banknote,
+
 } from "lucide-react";
 // framer-motion removed to avoid optional peer dep on react/jsx-runtime in dev
 import useAuth from "../../hooks/useAuth";
 import profileAPI from "@/services/api/profile";
 
-// ==========================================================
-// 🧩 Utils
-// ==========================================================
-
 const getInitials = (prenom = "", nom = "") =>
   (`${(prenom || "").charAt(0)}${(nom || "").charAt(0)}`.trim() || "AR").toUpperCase();
-
-const loadJSON = (k, def) => {
-  try {
-    const v = localStorage.getItem(k);
-    return v ? JSON.parse(v) : def;
-  } catch {
-    return def;
-  }
-};
-
-const saveJSON = (k, v) => localStorage.setItem(k, JSON.stringify(v));
-
-const RECENTS_KEY = "lpd_recent_paths";
 
 // Normalise la structure utilisateur pour garantir prenom/nom même si l'API renvoie seulement `name`
 const normalizeUser = (u) => {
   try {
     if (!u || typeof u !== "object") {
-      return { prenom: "", nom: "", email: "", role: "Gestionnaire", photo: null };
+      return { prenom: "", nom: "", email: "", role: "", photo: null };
     }
     const name = u.name || "";
     const [first, ...rest] = name.split(" ").filter(Boolean);
@@ -68,30 +33,14 @@ const normalizeUser = (u) => {
       prenom,
       nom,
       email: u.email || "",
-      role: u.role || "Gestionnaire",
+      role: u.role || "",
       photo: u.photo || null,
     };
   } catch {
-    return { prenom: "", nom: "", email: "", role: "Gestionnaire", photo: null };
+    return { prenom: "", nom: "", email: "", role: "", photo: null };
   }
 };
 
-// 🔗 Pages éligibles aux raccourcis (mêmes infos que la Sidebar)
-const SHORTCUT_ITEMS = [
-  { name: "Tableau de bord", path: "/gestionnaire-boutique/dashboard", icon: LayoutDashboard },
-  { name: "Utilisateurs", path: "/gestionnaire-boutique/utilisateurs", icon: Users },
-  { name: "Fournisseurs", path: "/gestionnaire-boutique/fournisseurs", icon: Truck },
-  { name: "Clients spéciaux", path: "/gestionnaire-boutique/clients-speciaux", icon: ClipboardList },
-  { name: "Commandes", path: "/gestionnaire-boutique/commandes", icon: ShoppingCart },
-  { name: "Inventaire", path: "/gestionnaire-boutique/inventaire", icon: BarChart2 },
-  { name: "Rapports", path: "/gestionnaire-boutique/rapports", icon: FileText },
-  { name: "Décaissements", path: "/gestionnaire-boutique/decaissements", icon: Banknote },
-  { name: "Journal d’activités", path: "/gestionnaire-boutique/journal-activites", icon: Clock },
-];
-
-// ==========================================================
-// 🔔 Toast system
-// ==========================================================
 
 function Toasts({ toasts, remove }) {
   return (
@@ -126,10 +75,7 @@ function Toasts({ toasts, remove }) {
   );
 }
 
-// ==========================================================
-// 🔐 Modal — Changer mot de passe (Connectée au backend !)
-// ==========================================================
-
+//  Modal — Changer mot de passe (Connectée au backend !)
 function PasswordModal({ open, onClose, onSuccess, addToast, changePassword }) {
   const [oldPwd, setOldPwd] = useState("");
   const [newPwd, setNewPwd] = useState("");
@@ -160,7 +106,6 @@ function PasswordModal({ open, onClose, onSuccess, addToast, changePassword }) {
     } catch (err) {
       const msg = err?.response?.data?.message || "Impossible de changer le mot de passe.";
       addToast("error", "Erreur", msg);
-      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -268,56 +213,25 @@ function PasswordModal({ open, onClose, onSuccess, addToast, changePassword }) {
 }
 
 
-// ==========================================================
-// 🧠 HEADER PRINCIPAL (connecté au backend !)
-// ==========================================================
+// HEADER PRINCIPAL (connecté au backend !)
 
 export default function Header() {
   const navigate = useNavigate();
-  const location = useLocation();
   const menuRef = useRef();
   const { user: authUser, logout, changePassword } = useAuth();
 
   // UI
   const [showMenu, setShowMenu] = useState(false);
-  const [showNotif, setShowNotif] = useState(false);
-  const [showQuick, setShowQuick] = useState(false);
   const [showPwdModal, setShowPwdModal] = useState(false);
 
-  // Data
-  const defaultUser = loadJSON("user", {
-    prenom: "Admin",
-    nom: "LPD",
-    email: "admin@local",
-    role: "Gestionnaire",
-    photo: null,
-  });
 
-  const [user, setUser] = useState(() => authUser || defaultUser);
+  const [user, setUser] = useState(() => authUser);
   useEffect(() => {
     if (authUser) setUser(authUser);
   }, [authUser]);
   const [toasts, setToasts] = useState([]);
-  const [notifications, setNotifications] = useState(
-    loadJSON("lpd_notifications", [
-      { id: 1, type: "stock", text: "3 produits presque en rupture", read: false },
-      { id: 2, type: "rapport", text: "Nouveau rapport disponible", read: false },
-    ])
-  );
 
-  // 🆕 Dernières pages visitées (raccourcis)
-  const [recentPaths, setRecentPaths] = useState(() => {
-    const saved = loadJSON(RECENTS_KEY, null);
-    if (saved && Array.isArray(saved) && saved.length) return saved;
-    return [
-      "/gestionnaire_boutique/dashboard",
-      "/gestionnaire_boutique/produits",
-      "/gestionnaire_boutique/stock",
-      "/gestionnaire_boutique/rapports",
-    ];
-  });
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
 
   const addToast = (type, title, message) => {
     const id = Date.now();
@@ -328,58 +242,23 @@ export default function Header() {
   const removeToast = (id) =>
     setToasts((prev) => prev.filter((t) => t.id !== id));
 
-  // ➕ Ajout dans l'historique des raccourcis
-  const pushRecentPath = (path) => {
-    const allowed = SHORTCUT_ITEMS.map((i) => i.path);
-    if (!allowed.includes(path)) return;
-
-    setRecentPaths((prev) => {
-      const without = prev.filter((p) => p !== path);
-      const updated = [path, ...without].slice(0, 4); // 4 derniers seulement
-      saveJSON(RECENTS_KEY, updated);
-      return updated;
-    });
-  };
-
-  // Quand l'URL change → mettre à jour les raccourcis
-  useEffect(() => {
-    pushRecentPath(location.pathname);
-  }, [location.pathname]);
-
-  // Navigation via un raccourci
-  const handleGoShortcut = (path) => {
-    navigate(path);
-    pushRecentPath(path);
-    setShowQuick(false);
-  };
-
-  // ==========================================================
-  // 🔥 Charger le VRAI utilisateur
-  // ==========================================================
 
   useEffect(() => {
     const loadUser = async () => {
-      // Si `instance` (axios) est disponible sur globalThis, on l'utilise ; sinon on charge un utilisateur mock depuis localStorage
       try {
         const data = await profileAPI.getProfile();
         const normalized = normalizeUser(data);
         setUser(normalized);
         localStorage.setItem("user", JSON.stringify(normalized));
-      } catch (err) {
+      } catch {
         // Fallback sur localStorage si l'API n'est pas dispo
         const saved = localStorage.getItem("user");
         if (saved) {
           try {
             setUser(normalizeUser(JSON.parse(saved)));
           } catch {
-            const mock = { prenom: "Admin", nom: "LPD", email: "admin@local", role: "Gestionnaire", photo: null };
-            setUser(mock);
-            localStorage.setItem("user", JSON.stringify(mock));
+            // Erreur de parsing, ignorer
           }
-        } else {
-          const mock = { prenom: "Admin", nom: "LPD", email: "admin@local", role: "Gestionnaire", photo: null };
-          setUser(mock);
-          localStorage.setItem("user", JSON.stringify(mock));
         }
       }
     };
@@ -391,46 +270,18 @@ export default function Header() {
     const handler = (e) => {
       if (menuRef.current && !menuRef.current.contains(e.target)) {
         setShowMenu(false);
-        setShowNotif(false);
-        setShowQuick(false);
       }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // ==========================================================
-  // 🚪 Déconnexion réelle
-  // ==========================================================
-
+  // Déconnexion réelle
   const handleLogout = async () => {
     await logout();
     navigate("/login");
   };
 
-  // ==========================================================
-  // 🔔 Notifications
-  // ==========================================================
-
-  const toggleNotif = () => {
-    setShowNotif((v) => !v);
-    setShowMenu(false);
-    setShowQuick(false);
-
-    if (!showNotif) {
-      setTimeout(() => {
-        setNotifications((prev) =>
-          prev.map((n) => ({ ...n, read: true }))
-        );
-      }, 400);
-    }
-  };
-
-  // Toujours afficher le header (utilisateur mock si non connecté)
-
-  // ==========================================================
-  // 🧱 UI du Header
-  // ==========================================================
 
   return (
     <>
@@ -464,55 +315,11 @@ export default function Header() {
             <div className="flex items-center gap-4">
 
 
-              {/* NOTIFS */}
-              <div className="relative">
-                <button
-                  onClick={toggleNotif}
-                  className="p-2 rounded-lg hover:bg-gray-100 relative"
-                >
-                  <Bell className="w-5 h-5 text-[#472EAD]" />
-
-                  {unreadCount > 0 && (
-                    <span className="absolute -top-1 -right-1 text-[10px] font-bold bg-[#F58020] text-white px-1.5 py-0.5 rounded-full shadow">
-                      {unreadCount}
-                    </span>
-                  )}
-                </button>
-
-                {showNotif && (
-                  <div className="absolute right-0 mt-2 w-72 bg-white border rounded-lg shadow-lg p-2">
-                    <p className="text-xs font-semibold px-2 py-1 text-gray-500">Notifications</p>
-
-                    <ul className="max-h-64 overflow-auto divide-y">
-                      {notifications.length ? (
-                        notifications.map((n) => (
-                          <li
-                            key={n.id}
-                            className="px-3 py-2 hover:bg-gray-50 flex gap-2 items-start cursor-pointer"
-                          >
-                            <span>{n.type === "stock" ? "⚠️" : "📄"}</span>
-                            <span className={n.read ? "text-gray-500" : "font-medium"}>
-                              {n.text}
-                            </span>
-                          </li>
-                        ))
-                      ) : (
-                        <li className="px-3 py-6 text-center text-gray-400">
-                          Aucune notification
-                        </li>
-                      )}
-                    </ul>
-                  </div>
-                )}
-              </div>
-
               {/* PROFIL */}
               <div className="relative">
                 <button
                   onClick={() => {
                     setShowMenu((v) => !v);
-                    setShowNotif(false);
-                    setShowQuick(false);
                   }}
                   className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-full border bg-white hover:bg-gray-50"
                 >

@@ -26,3 +26,4 @@ GET       api/quantite-totale-produit
 
 # la liste des produits disponible dans le stock
 GET             api/produits-disponibles-boutique
+GET             api/all-produits-transfer
