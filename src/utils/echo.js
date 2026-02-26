@@ -31,7 +31,7 @@ export const initializeEcho = () => {
     wssPort: import.meta.env.VITE_REVERB_PORT || 8080,
     forceTLS: (import.meta.env.VITE_REVERB_SCHEME || 'http') === 'https',
     enabledTransports: ['ws', 'wss'],
-    authEndpoint: `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/broadcasting/auth`,
+    authEndpoint: `${(import.meta.env.VITE_API_URL || 'http://localhost:8000/api').replace(/\/$/, '')}/broadcasting/auth`,
     auth: {
       headers: {
         Authorization: `Bearer ${token}`,

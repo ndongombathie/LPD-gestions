@@ -124,6 +124,10 @@ const CaissePage = () => {
   const echoRef = useRef(null);
   const subscriptionsRef = useRef([]);
   const fetchingRef = useRef(false);
+  const currentPageRef = useRef(currentPage);
+  const filterTextRef = useRef(filterText);
+  currentPageRef.current = currentPage;
+  filterTextRef.current = filterText;
 
   const fetchTicketsSafe = async (page = 1, search = '') => {
     if (fetchingRef.current) return;
@@ -155,12 +159,31 @@ const CaissePage = () => {
     fetchDashboardStats(); // Charger les statistiques pour initialiser le compteur
 
     // Initialiser WebSocket de manière asynchrone pour ne pas bloquer le rendu
-    // Utiliser setTimeout pour différer l'initialisation
     const timeoutId = setTimeout(() => {
       try {
         const echo = initializeEcho();
         if (echo) {
           echoRef.current = echo;
+
+          // Récupérer l'ID de la boutique de l'utilisateur connecté
+          let boutiqueId = null;
+          try {
+            const userStr = sessionStorage.getItem('user') || localStorage.getItem('user');
+            const user = userStr ? JSON.parse(userStr) : null;
+            boutiqueId = user?.boutique_id;
+          } catch (e) {
+            // Ignorer
+          }
+
+          // Écouter les nouvelles commandes validées pour mettre à jour la liste sans actualisation
+          if (boutiqueId) {
+            const channelName = `boutique.${boutiqueId}`;
+            const boutiqueChannel = echo.private(channelName);
+            boutiqueChannel.listen('.commande.validee', () => {
+              fetchTicketsSafe(currentPageRef.current, filterTextRef.current);
+            });
+            subscriptionsRef.current.push({ channel: channelName });
+          }
         }
       } catch (e) {
         // Ignorer les erreurs WebSocket - ne pas bloquer l'application
@@ -243,21 +266,10 @@ const CaissePage = () => {
       return;
     }
 
-    // Pour les clients spéciaux, le moyen de paiement est déjà défini par le responsable
-    // On utilise celui du ticket (récupéré depuis les paiements existants créés par le responsable)
-    const moyenPaiementFinal = selectedTicket.client_special
-      ? (selectedTicket.moyen_paiement || selectedTicket.paiements?.[0]?.type_paiement || 'especes')
-      : (paymentData.moyenPaiement === 'autre' 
-          ? (paymentData.autreMoyenPaiement || 'Autre')
-          : paymentData.moyenPaiement);
-
-    // Validation : pour les clients spéciaux, le moyen de paiement doit être défini
-    if (selectedTicket.client_special && !moyenPaiementFinal) {
-      toast.error('Erreur', { 
-        description: 'Le moyen de paiement n\'a pas été défini par le responsable. Veuillez contacter le responsable.' 
-      });
-      return;
-    }
+    // Le caissier choisit le moyen de paiement pour toutes les commandes (y compris clients spéciaux)
+    const moyenPaiementFinal = paymentData.moyenPaiement === 'autre'
+      ? (paymentData.autreMoyenPaiement || 'Autre')
+      : paymentData.moyenPaiement;
 
     setIsProcessingPayment(true);
     try {
@@ -325,127 +337,89 @@ const CaissePage = () => {
   };
 
   const handleQRScan = async (qrData) => {
-    const safeDismiss = () => {
-      try {
-        toast.dismiss('qr-loading');
-      } catch (_e) {}
-    };
-    const safeCloseScanner = () => {
-      try {
-        setIsQRScannerOpen(false);
-      } catch (_e) {}
-    };
-
     try {
       const raw = (qrData ?? '').toString().trim();
-      if (!raw) {
-        toast.error('QR code vide', { description: 'Aucune donnée dans le QR code.' });
-        safeCloseScanner();
-        return;
-      }
 
-      // Fonction pour extraire l'ID de commande depuis différents formats de QR code
       const extractCommandeId = (value) => {
         if (!value) return null;
         const s = value.toString().trim();
+
+        // JSON: { commande_id } ou { id }
         try {
           const obj = JSON.parse(s);
           const candidate = obj?.commande_id || obj?.commandeId || obj?.id;
-          if (typeof candidate === 'string' && candidate.length > 0) return candidate;
-        } catch (_e) {}
-        const uuidMatch = s.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
-        if (uuidMatch?.[0]) return uuidMatch[0];
-        const ticketTrouve = tickets.find((t) => {
-          const numero = t?.numero?.toString?.() || '';
-          const id = t?.id?.toString?.() || '';
-          const commandeId = t?.commande_id?.toString?.() || '';
-          return (
-            raw === numero || raw === id || raw === commandeId ||
-            (numero && raw.includes(numero)) || (id && raw.includes(id)) || (commandeId && raw.includes(commandeId))
-          );
-        });
-        if (ticketTrouve?.commande_id) return ticketTrouve.commande_id;
+          if (typeof candidate === 'string') return candidate;
+        } catch (_e) {
+          // ignore
+        }
+
+        // UUID dans une string (URL, texte, etc.)
+        const m = s.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+        if (m?.[0]) return m[0];
+
         return null;
       };
 
-      // 1) Ticket déjà chargé sur la page
-      const ticketLocal = tickets.find((t) => {
+      // 1) Essayer de matcher sur les tickets déjà chargés
+      const ticketTrouve = tickets.find((t) => {
         const numero = t?.numero?.toString?.() || '';
         const id = t?.id?.toString?.() || '';
         const commandeId = t?.commande_id?.toString?.() || '';
         return (
-          raw === numero || raw === id || raw === commandeId ||
-          (numero && raw.toUpperCase() === numero.toUpperCase()) ||
-          (numero && raw.includes((numero || '').replace('CMD-', '')))
+          raw === numero ||
+          raw === id ||
+          raw === commandeId ||
+          (numero && raw.includes(numero)) ||
+          (id && raw.includes(id)) ||
+          (commandeId && raw.includes(commandeId))
         );
       });
 
-      if (ticketLocal) {
-        safeCloseScanner();
-        toast.success('Ticket trouvé', { description: `Ticket ${ticketLocal.numero} chargé.` });
-        handleEncaisse(ticketLocal);
+      if (ticketTrouve) {
+        handleEncaisse(ticketTrouve);
+        setIsQRScannerOpen(false);
         return;
       }
 
-      // 2) QR invalide (pas une commande)
+      // 2) Sinon, récupérer la commande via l'API (le vendeur génère un QR code de commande)
       const commandeId = extractCommandeId(raw);
       if (!commandeId) {
-        safeCloseScanner();
         toast.error('QR code invalide', {
-          description: 'Ce QR code ne correspond à aucune commande. Utilisez le QR code du ticket (UUID ou CMD-XXXXXXXX).'
+          description: 'Ce QR code ne correspond à aucune commande.'
         });
         return;
       }
 
-      // 3) Charger la commande depuis l'API
-      safeCloseScanner();
-      toast.loading('Chargement du ticket...', { id: 'qr-loading' });
+      // Essayer de récupérer la commande en attente (avec détails + paiements inclus)
+      const res = await caissierApi.getCommandesAttente();
+      const commandes = res?.data || [];
+      const commande = (Array.isArray(commandes) ? commandes : []).find((c) => c.id === commandeId);
 
-      try {
-        const commandeDetails = await caissierApi.getCommandeDetails(commandeId);
-        const paiements = await caissierApi.getPaiements(commandeId);
-        const ticketFromDetails = transformCommandeToTicket(
-          commandeDetails,
-          Array.isArray(paiements) ? paiements : []
-        );
-
-        if (ticketFromDetails?.statut === 'encaissé') {
-          safeDismiss();
-          toast.error('Commande déjà encaissée', {
-            description: `Le ticket ${ticketFromDetails.numero} a déjà été encaissé.`
-          });
-          return;
-        }
-
-        if (commandeDetails?.statut !== 'attente') {
-          safeDismiss();
-          toast.warning('Commande non disponible', {
-            description: `Le ticket ${ticketFromDetails.numero} n'est pas en attente (statut: ${commandeDetails?.statut || 'inconnu'}).`
-          });
-          return;
-        }
-
-        safeDismiss();
-        const numeroTicket = ticketFromDetails.numero || `CMD-${(commandeId || '').toString().substring(0, 8).toUpperCase()}`;
-        toast.success('Ticket chargé', { description: `Ticket ${numeroTicket} chargé.` });
-        handleEncaisse(ticketFromDetails);
-      } catch (err) {
-        safeDismiss();
-        if (err?.response?.status === 404) {
-          toast.error('Commande introuvable', {
-            description: 'Cette commande n\'existe pas ou n\'est plus disponible.'
-          });
-        } else {
-          toast.error('QR code non reconnu', {
-            description: 'Impossible de charger ce ticket. Vérifiez que le QR code est bien celui d\'un ticket en attente.'
-          });
-        }
+      if (commande) {
+        const ticketFromApi = transformCommandeToTicket(commande, commande.paiements || []);
+        handleEncaisse(ticketFromApi);
+        setIsQRScannerOpen(false);
+        return;
       }
-    } catch (err) {
-      safeDismiss();
-      safeCloseScanner();
+
+      // Fallback: details + paiements
+      const commandeDetails = await caissierApi.getCommandeDetails(commandeId);
+      const paiements = await caissierApi.getPaiements(commandeId);
+      const ticketFromDetails = transformCommandeToTicket(commandeDetails, Array.isArray(paiements) ? paiements : []);
+
+      if (ticketFromDetails?.statut === 'encaissé') {
+        toast.error('Commande déjà encaissée', {
+          description: 'Cette commande a déjà été encaissée.'
+        });
+        return;
+      }
+
+      handleEncaisse(ticketFromDetails);
+      setIsQRScannerOpen(false);
+    } catch (error) {
+      // Erreur lors du scan QR - silencieux
       toast.error('Erreur', {
-        description: 'Une erreur s\'est produite. Veuillez réessayer.'
+        description: 'Erreur lors du traitement du QR code. Veuillez réessayer.'
       });
     }
   };
@@ -926,51 +900,32 @@ const CaissePage = () => {
               </div>
             )}
 
-            {selectedTicket.client_special ? (
-              // Pour les clients spéciaux, le moyen de paiement est déjà défini par le responsable
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <p className="text-sm font-semibold text-blue-800 mb-2">
-                  Moyen de paiement (défini par le responsable)
-                </p>
-                <p className="text-lg font-bold text-blue-900">
-                  {moyensPaiementLabels[selectedTicket.moyen_paiement] || selectedTicket.moyen_paiement || 'Non défini'}
-                </p>
-                {!selectedTicket.moyen_paiement && (
-                  <div className="mt-2 p-2 bg-yellow-100 border border-yellow-300 rounded">
-                    <p className="text-xs text-yellow-800">
-                      ⚠️ Le moyen de paiement n'a pas été défini par le responsable. Veuillez contacter le responsable avant de procéder à l'encaissement.
-                    </p>
-                  </div>
-                )}
-                <p className="text-xs text-blue-700 mt-2">
-                  Ce moyen de paiement a été défini par le responsable. Vous devez seulement confirmer l'encaissement.
-                </p>
-              </div>
-            ) : (
-              // Pour les clients normaux, le caissier choisit le moyen de paiement
-              <>
-                <Select
-                  label="Moyen de paiement"
-                  options={moyensPaiement}
-                  value={paymentData.moyenPaiement}
-                  onChange={(e) => setPaymentData({ 
-                    ...paymentData, 
-                    moyenPaiement: e.target.value,
-                    autreMoyenPaiement: e.target.value !== 'autre' ? '' : paymentData.autreMoyenPaiement
-                  })}
-                />
+            {/* Moyen de paiement : le caissier choisit pour toutes les commandes (y compris clients spéciaux) */}
+            {selectedTicket.client_special && selectedTicket.moyen_paiement && (
+              <p className="text-xs text-blue-700 mb-1">
+                Suggestion responsable : {moyensPaiementLabels[selectedTicket.moyen_paiement] || selectedTicket.moyen_paiement}
+              </p>
+            )}
+            <Select
+              label="Moyen de paiement"
+              options={moyensPaiement}
+              value={paymentData.moyenPaiement}
+              onChange={(e) => setPaymentData({ 
+                ...paymentData, 
+                moyenPaiement: e.target.value,
+                autreMoyenPaiement: e.target.value !== 'autre' ? '' : paymentData.autreMoyenPaiement
+              })}
+            />
 
-                {paymentData.moyenPaiement === 'autre' && (
-                  <Input
-                    label="Précisez le moyen de paiement"
-                    type="text"
-                    value={paymentData.autreMoyenPaiement}
-                    onChange={(e) => setPaymentData({ ...paymentData, autreMoyenPaiement: e.target.value })}
-                    placeholder="Ex: Virement bancaire, Mobile Money, etc."
-                    required
-                  />
-                )}
-              </>
+            {paymentData.moyenPaiement === 'autre' && (
+              <Input
+                label="Précisez le moyen de paiement"
+                type="text"
+                value={paymentData.autreMoyenPaiement}
+                onChange={(e) => setPaymentData({ ...paymentData, autreMoyenPaiement: e.target.value })}
+                placeholder="Ex: Virement bancaire, Mobile Money, etc."
+                required
+              />
             )}
 
             <div className="space-y-2">
