@@ -35,6 +35,7 @@ const CaissePage = () => {
     moyenPaiement: 'especes',
     autreMoyenPaiement: '',
     montantPaye: '',
+    montantDonneEspeces: '', // Montant donné par le client (espèces) → pour calculer la monnaie à rendre
     tauxTVA: 18,
   });
 
@@ -242,6 +243,7 @@ const CaissePage = () => {
       moyenPaiement: moyenPaiementParDefaut,
       autreMoyenPaiement: moyenPaiementParDefaut === 'autre' ? (ticket.moyen_paiement || '') : '',
       montantPaye: montantParDefaut.toString(),
+      montantDonneEspeces: '',
       tauxTVA: 18,
     });
     setIsPaymentModalOpen(true);
@@ -928,9 +930,53 @@ const CaissePage = () => {
               />
             )}
 
+            {paymentData.moyenPaiement === 'especes' && (
+              <div className="space-y-2">
+                <Input
+                  label="Montant donné par le client (FCFA)"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={paymentData.montantDonneEspeces}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    const resteDu = selectedTicket.reste_du || selectedTicket.total_ttc;
+                    const num = parseFloat(v) || 0;
+                    setPaymentData(prev => ({
+                      ...prev,
+                      montantDonneEspeces: v,
+                      // Si le client donne au moins le reste dû, on enregistre le montant dû comme payé
+                      montantPaye: num >= resteDu ? String(resteDu) : prev.montantPaye,
+                    }));
+                  }}
+                  placeholder="Ex: 15000"
+                  className="w-full"
+                />
+                {(() => {
+                  const resteDu = selectedTicket.reste_du || selectedTicket.total_ttc;
+                  const donne = parseFloat(paymentData.montantDonneEspeces) || 0;
+                  const monnaieARendre = Math.max(0, donne - resteDu);
+                  return (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm text-gray-600">À payer:</span>
+                      <span className="font-semibold">{formatCurrency(resteDu)}</span>
+                      {donne > 0 && (
+                        <>
+                          <span className="text-gray-400">·</span>
+                          <span className="text-sm font-semibold text-green-700">
+                            Monnaie à rendre: {formatCurrency(monnaieARendre)}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
             <div className="space-y-2">
               <Input
-                label="Montant payé (FCFA)"
+                label={paymentData.moyenPaiement === 'especes' ? "Montant enregistré (FCFA)" : "Montant payé (FCFA)"}
                 type="number"
                 value={paymentData.montantPaye}
                 onChange={(e) => setPaymentData({ ...paymentData, montantPaye: e.target.value })}
@@ -952,7 +998,7 @@ const CaissePage = () => {
               </div>
             )}
 
-            {parseFloat(paymentData.montantPaye || 0) > (selectedTicket.reste_du || selectedTicket.total_ttc) && (
+            {paymentData.moyenPaiement !== 'especes' && parseFloat(paymentData.montantPaye || 0) > (selectedTicket.reste_du || selectedTicket.total_ttc) && (
               <div className="bg-green-50 border-2 border-green-300 rounded-lg p-4">
                 <p className="text-sm text-green-800 font-semibold">
                   Monnaie à rendre: {formatCurrency(parseFloat(paymentData.montantPaye || 0) - (selectedTicket.reste_du || selectedTicket.total_ttc))}
