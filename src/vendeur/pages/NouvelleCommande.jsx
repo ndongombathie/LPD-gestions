@@ -305,9 +305,9 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
         const prixGros = produit.prix_vente_gros || produit.prix_unite_carton || Math.round(prixDetail * 0.8);
         
         return {
-          id: produit.id,
-          nom: produit.nom,
-          code_barre: produit.code_barre || '',
+          id: produit.produit.id,
+          nom: produit.produit.nom,
+          code_barre: produit.produit.code_barre || '',
 
           // Prix selon votre modèle
           prix_vente_detail: prixDetail,
@@ -320,10 +320,10 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
           prix_seuil_gros: produit.prix_seuil_gros || Math.round(prixGros * 0.7),
 
           // Stock et gestion
-          stock_global: produit.stock_global || produit.stock || 0,
-          stock_seuil: produit.stock_seuil || 10,
-          stock: produit.stock_global || produit.stock || 0,
-          seuil_alerte: produit.stock_seuil || 10,
+          stock_global: produit.quantite || produit.stock || 0,
+          stock_seuil: produit.seuil || 10,
+          stock: produit.quantite || produit.stock || 0,
+          seuil_alerte: produit.seuil || 10,
 
           // Gestion des cartons
           unite_carton: produit.unite_carton || 1,
@@ -331,8 +331,8 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
           nombre_carton: produit.nombre_carton || Math.floor((produit.stock_global || 0) / (produit.unite_carton || 1)),
 
           // Catégorie
-          categorie_id: produit.categorie_id,
-          categorie: produit.categorie_nom || 'Non catégorisé',
+          categorie_id: produit.produit.categorie.id,
+          categorie: produit.produit.categorie.nom || 'Non catégorisé',
 
           // Dates
           created_at: produit.created_at,
@@ -369,23 +369,15 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
 
     if (typeNormalise === 'gros') {
       return {
-        prix: produit.prix_vente_gros || 
-              produit.prix_unite_carton || 
-              Math.round((produit.prix_vente_detail || produit.prix || 0) * 0.8),
-        
-        prix_seuil: produit.prix_seuil_gros || 
-                    Math.round((produit.prix_seuil || (produit.prix_vente_detail || produit.prix || 0) * 0.7) * 0.8)
+        prix: produit.prix_vente_gros || 0,
+        prix_seuil: produit.prix_seuil_gros || 0
       };
     }
     
     // Type détail
     return {
-      prix: produit.prix_vente_detail || 
-            produit.prix || 
-            0,
-      
-      prix_seuil: produit.prix_seuil_detail || 
-                  Math.round((produit.prix_vente_detail || produit.prix || 0) * 0.7)
+      prix: produit.prix_vente_detail ||  0,
+      prix_seuil: produit.prix_seuil_detail || 0
     };
   };
 
