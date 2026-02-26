@@ -93,7 +93,6 @@ const CaissePage = () => {
     };
   };
 
-  const [totalTickets, setTotalTickets] = useState(0);
   const [totalAmount, setTotalAmount] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const PAGE_SIZE = 10;
@@ -114,7 +113,7 @@ const CaissePage = () => {
       setPendingCount(response?.total ?? ticketsTransformes.length);
       setTotalAmount(response?.total_amount ?? ticketsTransformes.reduce((s, t) => s + (t.total_ttc || 0), 0));
       setTotalPages(Math.max(1, response?.last_page ?? 1));
-    } catch (error) {
+    } catch {
       // Erreur silencieuse - ne pas afficher de message localhost
       toast.error('Erreur', {
         description: 'Impossible de charger les tickets en attente'
@@ -150,7 +149,7 @@ const CaissePage = () => {
     try {
       const stats = await caissierApi.getDashboardStats();
       setProcessedCount(stats.ticketsTraites || 0);
-    } catch (error) {
+    } catch  {
       // Erreur silencieuse - ne pas bloquer l'application
     }
   };
@@ -199,8 +198,7 @@ const CaissePage = () => {
    useEffect(() => {
           if (!boutiqueId) return;
           const channel = echo.private(`boutique.${boutiqueId}`);
-          const listener = (event) => {
-              const newOrder = event?.commande ?? event;
+          const listener = () => {
               fetchTicketsSafe(currentPage, filterText.trim());
           };
           channel.listen(".commande.validee", listener);
@@ -208,7 +206,31 @@ const CaissePage = () => {
               try {
                   channel.stopListening(".commande.validee");
                   echo.leave(`private-boutique.${boutiqueId}`);
-              } catch (err) {}
+              } catch  {
+                toast.error('Erreur', {
+               description: 'Impossible de charger les tickets en attente'
+      });
+              }
+          };
+      }, [boutiqueId]);
+  
+  useEffect(() => {
+          if (!boutiqueId) return;
+          const channel = echo.private(`boutique.${boutiqueId}`);
+          const listener = () => {
+              fetchTicketsSafe(currentPage, filterText.trim());
+          };
+          channel.listen(".paiement.cree", listener);
+          return () => {
+              try {
+                  channel.stopListening(".paiement.cree");
+                  echo.leave(`private-boutique.${boutiqueId}`);
+              } catch {
+                toast.error('Erreur', {
+                description: 'Impossible de charger les tickets en attente'
+      });
+                
+              }
           };
       }, [boutiqueId]);
 
@@ -352,9 +374,9 @@ const CaissePage = () => {
         try {
           const obj = JSON.parse(s);
           const candidate = obj?.commande_id || obj?.commandeId || obj?.id;
-          if (typeof candidate === 'string') return candidate;
-        } catch (_e) {
-          // ignore
+          if (typeof candidate === 'string' && candidate.length > 0) return candidate;
+        } catch {
+          // Pas un JSON valide, continuer
         }
 
         // UUID dans une string (URL, texte, etc.)
@@ -1068,7 +1090,7 @@ const CaissePage = () => {
                   
                   setIsCancelModalOpen(false);
                   setTicketToCancel(null);
-                } catch (error) {
+                } catch {
                   // Erreur lors de l'annulation - silencieux
                   toast.error('Erreur', {
                     description: 'Impossible d\'annuler le ticket'
