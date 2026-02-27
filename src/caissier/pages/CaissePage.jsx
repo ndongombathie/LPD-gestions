@@ -11,11 +11,12 @@ import { printInvoice } from '../components/InvoicePrint';
 import QRScanner from '../components/QRScanner';
 import caissierApi from '../services/caissierApi';
 import { toast } from 'sonner';
-import { initializeEcho } from '../../utils/echo';
+import { echo } from '../../utils/echo';
 
 const CaissePage = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const boutiqueId = localStorage.getItem('boutique_id');
 
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -93,7 +94,7 @@ const CaissePage = () => {
   const [totalTickets, setTotalTickets] = useState(0);
   const [totalAmount, setTotalAmount] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
-  const PAGE_SIZE = 15;
+  const PAGE_SIZE = 10;
 
   // Fonction pour charger les tickets (pagination côté serveur - charge uniquement la page courante)
   const fetchTickets = async (page = 1, search = '') => {
@@ -121,9 +122,6 @@ const CaissePage = () => {
     }
   };
 
-  // Référence pour stocker les abonnements WebSocket
-  const echoRef = useRef(null);
-  const subscriptionsRef = useRef([]);
   const fetchingRef = useRef(false);
   const currentPageRef = useRef(currentPage);
   const filterTextRef = useRef(filterText);
@@ -157,57 +155,44 @@ const CaissePage = () => {
 
   useEffect(() => {
     fetchTicketsSafe(1, '');
-    fetchDashboardStats(); // Charger les statistiques pour initialiser le compteur
+    fetchDashboardStats();
+  }, []);
 
-    // Initialiser WebSocket de manière asynchrone pour ne pas bloquer le rendu
-    const timeoutId = setTimeout(() => {
-      try {
-        const echo = initializeEcho();
-        if (echo) {
-          echoRef.current = echo;
-
-          // Récupérer l'ID de la boutique de l'utilisateur connecté
-          let boutiqueId = null;
-          try {
-            const userStr = sessionStorage.getItem('user') || localStorage.getItem('user');
-            const user = userStr ? JSON.parse(userStr) : null;
-            boutiqueId = user?.boutique_id;
-          } catch (e) {
-            // Ignorer
-          }
-
-          // Écouter les nouvelles commandes validées pour mettre à jour la liste sans actualisation
-          if (boutiqueId) {
-            const channelName = `boutique.${boutiqueId}`;
-            const boutiqueChannel = echo.private(channelName);
-            boutiqueChannel.listen('.commande.validee', () => {
-              fetchTicketsSafe(currentPageRef.current, filterTextRef.current);
-            });
-            subscriptionsRef.current.push({ channel: channelName });
-          }
-        }
-      } catch (e) {
-        // Ignorer les erreurs WebSocket - ne pas bloquer l'application
-      }
-    }, 2000); // Démarrer après 2 secondes pour ne pas ralentir le chargement initial
-
+  // Écouter les nouvelles commandes validées (temps réel)
+  useEffect(() => {
+    if (!boutiqueId || !echo) return;
+    const channel = echo.private(`boutique.${boutiqueId}`);
+    const listener = () => {
+      fetchTicketsSafe(currentPageRef.current, filterTextRef.current);
+    };
+    channel.listen('.commande.validee', listener);
     return () => {
-      clearTimeout(timeoutId);
-      // Nettoyage WebSocket si nécessaire
-      if (echoRef.current) {
-        try {
-          subscriptionsRef.current.forEach(sub => {
-            if (sub.channel && echoRef.current) {
-              echoRef.current.leave(sub.channel);
-            }
-          });
-        } catch (e) {
-          // Ignorer les erreurs de nettoyage
-        }
-        subscriptionsRef.current = [];
+      try {
+        channel.stopListening('.commande.validee');
+        echo.leave(`private-boutique.${boutiqueId}`);
+      } catch {
+        // Nettoyage silencieux
       }
     };
-  }, []); // Seulement au montage
+  }, [boutiqueId]);
+
+  // Écouter les paiements créés (temps réel)
+  useEffect(() => {
+    if (!boutiqueId || !echo) return;
+    const channel = echo.private(`boutique.${boutiqueId}`);
+    const listener = () => {
+      fetchTicketsSafe(currentPageRef.current, filterTextRef.current);
+    };
+    channel.listen('.paiement.cree', listener);
+    return () => {
+      try {
+        channel.stopListening('.paiement.cree');
+        echo.leave(`private-boutique.${boutiqueId}`);
+      } catch {
+        // Nettoyage silencieux
+      }
+    };
+  }, [boutiqueId]);
 
   // Si on arrive depuis une notification (selectedTicketId), ouvrir directement le ticket
   const handledSelectedTicketRef = useRef(false);
@@ -252,20 +237,19 @@ const CaissePage = () => {
   const handlePaymentSubmit = async () => {
     if (!selectedTicket || isProcessingPayment) return;
 
-    const montant = parseFloat(paymentData.montantPaye);
     const resteDu = selectedTicket.reste_du || selectedTicket.total_ttc;
-    
-    // Validation
-    if (montant <= 0) {
-      toast.error('Erreur', { description: 'Le montant payé doit être supérieur à 0' });
-      return;
-    }
+    // Le montant enregistré est toujours le reste dû de la commande (non modifiable)
+    const montant = resteDu;
 
-    if (montant > resteDu) {
-      toast.error('Erreur', { 
-        description: `Le montant payé (${formatCurrency(montant)}) ne peut pas être supérieur au reste dû (${formatCurrency(resteDu)})` 
-      });
-      return;
+    // En espèces : le montant donné doit être au moins égal au montant à payer
+    if (paymentData.moyenPaiement === 'especes') {
+      const donne = parseFloat(paymentData.montantDonneEspeces) || 0;
+      if (donne < resteDu) {
+        toast.error('Erreur', {
+          description: `Le montant donné (${formatCurrency(donne)}) est inférieur au montant à payer (${formatCurrency(resteDu)}). Le client doit donner au moins ${formatCurrency(resteDu)}.`,
+        });
+        return;
+      }
     }
 
     // Le caissier choisit le moyen de paiement pour toutes les commandes (y compris clients spéciaux)
@@ -794,7 +778,11 @@ const CaissePage = () => {
             <Button 
               variant="primary" 
               onClick={handlePaymentSubmit}
-              disabled={isProcessingPayment}
+              disabled={
+                isProcessingPayment ||
+                (paymentData.moyenPaiement === 'especes' &&
+                  (parseFloat(paymentData.montantDonneEspeces) || 0) < (selectedTicket?.reste_du ?? selectedTicket?.total_ttc ?? 0))
+              }
               className="bg-[#472EAD] hover:bg-[#3d2888] text-white font-semibold shadow-md hover:shadow-lg w-full py-3 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isProcessingPayment ? (
@@ -938,17 +926,7 @@ const CaissePage = () => {
                   min="0"
                   step="1"
                   value={paymentData.montantDonneEspeces}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    const resteDu = selectedTicket.reste_du || selectedTicket.total_ttc;
-                    const num = parseFloat(v) || 0;
-                    setPaymentData(prev => ({
-                      ...prev,
-                      montantDonneEspeces: v,
-                      // Si le client donne au moins le reste dû, on enregistre le montant dû comme payé
-                      montantPaye: num >= resteDu ? String(resteDu) : prev.montantPaye,
-                    }));
-                  }}
+                  onChange={(e) => setPaymentData(prev => ({ ...prev, montantDonneEspeces: e.target.value }))}
                   placeholder="Ex: 15000"
                   className="w-full"
                 />
@@ -956,17 +934,25 @@ const CaissePage = () => {
                   const resteDu = selectedTicket.reste_du || selectedTicket.total_ttc;
                   const donne = parseFloat(paymentData.montantDonneEspeces) || 0;
                   const monnaieARendre = Math.max(0, donne - resteDu);
+                  const insuffisant = donne > 0 && donne < resteDu;
                   return (
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm text-gray-600">À payer:</span>
-                      <span className="font-semibold">{formatCurrency(resteDu)}</span>
-                      {donne > 0 && (
-                        <>
-                          <span className="text-gray-400">·</span>
-                          <span className="text-sm font-semibold text-green-700">
-                            Monnaie à rendre: {formatCurrency(monnaieARendre)}
-                          </span>
-                        </>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm text-gray-600">À payer:</span>
+                        <span className="font-semibold">{formatCurrency(resteDu)}</span>
+                        {donne > 0 && (
+                          <>
+                            <span className="text-gray-400">·</span>
+                            <span className="text-sm font-semibold text-green-700">
+                              Monnaie à rendre: {formatCurrency(monnaieARendre)}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                      {insuffisant && (
+                        <p className="text-sm text-red-600 font-medium">
+                          Le montant donné est insuffisant. Il manque {formatCurrency(resteDu - donne)}.
+                        </p>
                       )}
                     </div>
                   );
@@ -974,34 +960,28 @@ const CaissePage = () => {
               </div>
             )}
 
+            {/* Montant à enregistrer = reste dû de la commande (non modifiable) */}
             <div className="space-y-2">
-              <Input
-                label={paymentData.moyenPaiement === 'especes' ? "Montant enregistré (FCFA)" : "Montant payé (FCFA)"}
-                type="number"
-                value={paymentData.montantPaye}
-                onChange={(e) => setPaymentData({ ...paymentData, montantPaye: e.target.value })}
-                helperText={
-                  selectedTicket.reste_du && selectedTicket.reste_du < selectedTicket.total_ttc
-                    ? `Reste dû: ${formatCurrency(selectedTicket.reste_du)} (Total: ${formatCurrency(selectedTicket.total_ttc)}, Déjà payé: ${formatCurrency(selectedTicket.montant_deja_paye || 0)})`
-                    : `Total à payer: ${formatCurrency(selectedTicket.total_ttc)}`
-                }
-                required
-                className="w-full"
-              />
+              <label className="block text-sm font-medium text-gray-700">
+                Montant à enregistrer (FCFA)
+              </label>
+              <div className="flex items-center gap-2 rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-gray-700">
+                <span className="font-semibold tabular-nums">
+                  {formatCurrency(selectedTicket.reste_du ?? selectedTicket.total_ttc)}
+                </span>
+                <span className="text-xs text-gray-500">(montant de la commande, non modifiable)</span>
+              </div>
+              {(selectedTicket.reste_du && selectedTicket.reste_du < selectedTicket.total_ttc) && (
+                <p className="text-xs text-gray-600">
+                  Reste dû: {formatCurrency(selectedTicket.reste_du)} (Total: {formatCurrency(selectedTicket.total_ttc)}, Déjà payé: {formatCurrency(selectedTicket.montant_deja_paye || 0)})
+                </p>
+              )}
             </div>
 
             {selectedTicket.reste_du && selectedTicket.reste_du < selectedTicket.total_ttc && (
               <div className="bg-blue-50 border-2 border-blue-300 rounded-lg p-4">
                 <p className="text-sm text-blue-800 font-semibold">
                   Paiement partiel : {formatCurrency(selectedTicket.montant_deja_paye || 0)} déjà payé sur {formatCurrency(selectedTicket.total_ttc)}
-                </p>
-              </div>
-            )}
-
-            {paymentData.moyenPaiement !== 'especes' && parseFloat(paymentData.montantPaye || 0) > (selectedTicket.reste_du || selectedTicket.total_ttc) && (
-              <div className="bg-green-50 border-2 border-green-300 rounded-lg p-4">
-                <p className="text-sm text-green-800 font-semibold">
-                  Monnaie à rendre: {formatCurrency(parseFloat(paymentData.montantPaye || 0) - (selectedTicket.reste_du || selectedTicket.total_ttc))}
                 </p>
               </div>
             )}
