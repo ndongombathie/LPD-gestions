@@ -3,7 +3,9 @@ import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useProducts } from "../hooks/useProducts";
 import { useCategories } from "../hooks/useCategories";
 import { useAllFournisseurs } from "../hooks/useAllFournisseurs";
-import { useHistorique } from "../hooks/useHistorique";
+import { useHistoriqueProduits } from "../hooks/useHistoriqueProduits";
+import { useProduitsParStatut } from "../hooks/useProduitsParStatut";
+import { produitsAPI } from "../../services/api/produits";
 
 import "../styles/depot-fix.css";
 
@@ -123,7 +125,9 @@ const ProductListTab = ({
   setStatusFilter,
   sortMode,
   setSortMode,
-  pageSize
+  pageSize,
+  nbRupture,
+  nbFaible
 }) => {
   // Calculs des stats (filtrées localement)
   const filteredProducts = useMemo(() => {
@@ -145,8 +149,6 @@ const ProductListTab = ({
   }, [products, searchTerm, categoryFilter, statusFilter, sortMode]);
 
   const totalValue = filteredProducts.reduce((acc, p) => acc + (p.prix_unite_carton * p.nombre_carton), 0);
-  const nbFaible = filteredProducts.filter(p => getStatus(p.nombre_carton, p.stock_seuil).label === "Faible").length;
-  const nbRupture = filteredProducts.filter(p => getStatus(p.nombre_carton, p.stock_seuil).label === "Rupture").length;
 
   return (
     <div className="space-y-6">
@@ -210,8 +212,8 @@ const ProductListTab = ({
         </div>
       </div>
 
-      {/* Cartes Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+      {/* Cartes Stats - SANS CRITIQUE */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-gradient-to-r from-[#472EAD] to-[#6D5BD0] rounded-xl shadow-sm p-4 flex items-center gap-4">
           <div className="p-3 bg-white/20 text-white rounded-lg"><FaCoins size={20}/></div>
           <div><p className="text-xs text-white/90 uppercase font-bold">Valeur Stock</p><p className="text-xl font-bold text-white">{totalValue.toLocaleString("fr-FR")} F</p></div>
@@ -301,24 +303,51 @@ const ProductListTab = ({
   );
 };
 
-// Onglet Ajustement
-const AdjustmentTab = ({ products, onAdjust }) => {
+// =========================================================================
+// Onglet Ajustement - CORRIGÉ
+// =========================================================================
+const AdjustmentTab = ({ onAdjust }) => {
   const [subTab, setSubTab] = useState("rupture");
   const [searchTerm, setSearchTerm] = useState("");
+  
+  const {
+    ruptureProducts,
+    faibleProducts,
+    normalProducts,
+    counts,
+    loading,
+    fetchRupture,
+    fetchFaible,
+    fetchNormal,
+    fetchCounts
+  } = useProduitsParStatut();
 
-  const filteredByStatus = products.filter(p => {
-    const status = getStatus(p.nombre_carton, p.stock_seuil).label;
-    if (subTab === "rupture") return status === "Rupture";
-    if (subTab === "faible") return status === "Faible";
-    return false;
-  });
+  useEffect(() => {
+    fetchCounts();
+    fetchRupture();
+    fetchFaible();
+    fetchNormal();
+  }, []);
 
-  const displayedProducts = filteredByStatus.filter(p =>
-    !searchTerm || p.nom?.toLowerCase().includes(searchTerm.toLowerCase())
+  const getCurrentProducts = () => {
+    switch(subTab) {
+      case "rupture": return ruptureProducts;
+      case "faible": return faibleProducts;
+      case "normal": return normalProducts;
+      default: return [];
+    }
+  };
+
+  const currentProducts = getCurrentProducts();
+  const currentLoading = loading[subTab];
+
+  const displayedProducts = currentProducts.filter(p =>
+    !searchTerm || p.nom?.toLowerCase().includes(searchTerm.toLowerCase()) || p.code?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
     <div className="space-y-6">
+      {/* Sous-onglets avec les vrais compteurs */}
       <div className="flex items-center gap-2 border-b border-slate-200">
         <button
           onClick={() => setSubTab("rupture")}
@@ -328,7 +357,7 @@ const AdjustmentTab = ({ products, onAdjust }) => {
               : "text-slate-500 hover:text-slate-700"
           }`}
         >
-          Produits en rupture
+          Rupture ({counts.rupture})
         </button>
         <button
           onClick={() => setSubTab("faible")}
@@ -338,80 +367,122 @@ const AdjustmentTab = ({ products, onAdjust }) => {
               : "text-slate-500 hover:text-slate-700"
           }`}
         >
-          Produits faibles
+          Faible ({counts.faible})
+        </button>
+        <button
+          onClick={() => setSubTab("normal")}
+          className={`px-4 py-2 text-sm font-medium transition-colors ${
+            subTab === "normal"
+              ? "border-b-2 border-[#472EAD] text-[#472EAD]"
+              : "text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          Normal ({counts.normal})
         </button>
       </div>
 
+      {/* Barre de recherche */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 flex items-center gap-3">
         <FaSearch className="text-[#472EAD]" />
         <input
           type="text"
-          placeholder={`Rechercher dans les produits ${subTab === "rupture" ? "en rupture" : "faibles"}...`}
+          placeholder={`Rechercher dans les produits ${
+            subTab === "rupture" ? "en rupture" : 
+            subTab === "faible" ? "faibles" : "normaux"
+          }...`}
           className="flex-1 text-sm outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-[#472EAD]"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
       </div>
 
+      {/* Tableau des produits */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="p-4 border-b border-slate-100 bg-gradient-to-r from-[#F7F5FF] to-[#FFF5F0]">
           <h3 className="font-bold text-[#472EAD] flex items-center gap-2">
             <FaList className="text-[#472EAD]"/> 
-            {displayedProducts.length} produit(s) {subTab === "rupture" ? "en rupture" : "faibles"}
+            {displayedProducts.length} produit(s) {
+              subTab === "rupture" ? "en rupture" : 
+              subTab === "faible" ? "faibles" : "normaux"
+            }
           </h3>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
-            <thead className="bg-gradient-to-r from-[#F7F5FF] to-[#FFF5F0] text-slate-600 font-semibold uppercase text-xs">
-              <tr>
-                <th className="p-3 pl-4">Produit</th>
-                <th className="p-3 text-center">Stock Actuel</th>
-                <th className="p-3 text-center">Statut</th>
-                <th className="p-3 text-right pr-4">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {displayedProducts.map(p => {
-                const status = getStatus(p.nombre_carton, p.stock_seuil);
-                return (
-                  <tr key={p.id} className="hover:bg-[#F7F5FF]/30 transition">
-                    <td className="p-3 pl-4">
-                      <div className="font-medium text-slate-800">{p.nom}</div>
-                      <div className="text-xs text-slate-400 flex items-center gap-2">
-                        <FaBarcode size={10}/> {p.code || "N/A"}
-                      </div>
-                    </td>
-                    <td className="p-3 text-center font-bold text-slate-700">{p.nombre_carton} <span className="text-xs font-normal text-slate-400">ctn</span></td>
-                    <td className="p-3 text-center"><StatusBadge status={status} /></td>
-                    <td className="p-3 text-right pr-4">
-                      <div className="flex justify-end gap-2">
-                        <button onClick={() => onAdjust(p, 'reappro')} className="p-2 bg-gradient-to-r from-[#472EAD] to-[#6D5BD0] text-white rounded hover:opacity-90" title="Réapprovisionner">
-                          <FaPlus size={12} />
-                        </button>
-                        <button onClick={() => onAdjust(p, 'diminue')} className="p-2 bg-gradient-to-r from-[#F58020] to-[#FFA94D] text-white rounded hover:opacity-90" title="Diminuer">
-                          <FaArrowDown size={12} />
-                        </button>
-                      </div>
+        
+        {currentLoading ? (
+          <div className="p-8 text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#472EAD] mx-auto"></div>
+            <p className="mt-2 text-sm text-[#472EAD]">Chargement...</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-gradient-to-r from-[#F7F5FF] to-[#FFF5F0] text-slate-600 font-semibold uppercase text-xs">
+                <tr>
+                  <th className="p-3 pl-4">Produit</th>
+                  <th className="p-3 text-center">Code-barre</th>
+                  <th className="p-3 text-center">Stock Actuel</th>
+                  <th className="p-3 text-center">Stock Min.</th>
+                  <th className="p-3 text-center">Statut</th>
+                  <th className="p-3 text-right pr-4">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {displayedProducts.map(p => {
+                  const status = getStatus(p.nombre_carton, p.stock_seuil);
+                  return (
+                    <tr key={p.id} className="hover:bg-[#F7F5FF]/30 transition">
+                      <td className="p-3 pl-4">
+                        <div className="font-medium text-slate-800">{p.nom}</div>
+                        <div className="text-xs text-slate-400">{p.categorie_nom}</div>
+                      </td>
+                      <td className="p-3 text-center font-mono text-xs text-slate-500">{p.code || "N/A"}</td>
+                      <td className="p-3 text-center font-bold text-slate-700">{p.nombre_carton} <span className="text-xs font-normal text-slate-400">ctn</span></td>
+                      <td className="p-3 text-center text-[#F58020] font-medium">{p.stock_seuil}</td>
+                      <td className="p-3 text-center"><StatusBadge status={status} /></td>
+                      <td className="p-3 text-right pr-4">
+                        <div className="flex justify-end gap-2">
+                          <button 
+                            onClick={() => onAdjust(p, 'reappro')} 
+                            className="p-2 bg-gradient-to-r from-[#472EAD] to-[#6D5BD0] text-white rounded hover:opacity-90" 
+                            title="Réapprovisionner"
+                          >
+                            <FaPlus size={12} />
+                          </button>
+                          {/* Bouton Diminuer : caché pour les produits en rupture */}
+                          {subTab !== "rupture" && (
+                            <button 
+                              onClick={() => onAdjust(p, 'diminue')} 
+                              className="p-2 bg-gradient-to-r from-[#F58020] to-[#FFA94D] text-white rounded hover:opacity-90" 
+                              title="Diminuer"
+                              disabled={p.nombre_carton === 0}
+                            >
+                              <FaArrowDown size={12} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {displayedProducts.length === 0 && !currentLoading && (
+                  <tr>
+                    <td colSpan={6} className="p-8 text-center text-slate-400 italic">
+                      Aucun produit {subTab === "rupture" ? "en rupture" : subTab === "faible" ? "faible" : "normal"} trouvé.
                     </td>
                   </tr>
-                );
-              })}
-              {displayedProducts.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="p-8 text-center text-slate-400 italic">
-                    Aucun produit {subTab === "rupture" ? "en rupture" : "faible"} trouvé.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
-// Onglet Historique
+// =========================================================================
+// Onglet Historique - MODIFIÉ (sans colonne utilisateur)
+// =========================================================================
 const HistoryTab = ({ history, loading, total, currentPage, totalPages, fetchHistorique, setCurrentPage, pageSize }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [typeFilter, setTypeFilter] = useState("Tous");
@@ -421,7 +492,8 @@ const HistoryTab = ({ history, loading, total, currentPage, totalPages, fetchHis
 
   const filteredHistory = useMemo(() => {
     return history.filter(item => {
-      const matchesSearch = !searchTerm || item.product?.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = !searchTerm || 
+        item.productName?.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesType = typeFilter === "Tous" || item.type === typeFilter;
       return matchesSearch && matchesType;
     }).sort((a, b) => {
@@ -438,6 +510,18 @@ const HistoryTab = ({ history, loading, total, currentPage, totalPages, fetchHis
     setDetailModalOpen(true);
   };
 
+  const formatDate = (dateString) => {
+    if (!dateString) return "N/A";
+    const date = new Date(dateString);
+    return date.toLocaleString('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
   useEffect(() => {
     fetchHistorique(currentPage, pageSize);
   }, [currentPage, pageSize, fetchHistorique]);
@@ -450,7 +534,7 @@ const HistoryTab = ({ history, loading, total, currentPage, totalPages, fetchHis
             <FaSearch className="absolute left-3 top-3 text-[#472EAD]" />
             <input
               type="text"
-              placeholder="Rechercher..."
+              placeholder="Rechercher par produit..."
               className="w-full pl-10 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#472EAD] focus:border-[#472EAD] outline-none"
               value={searchTerm}
               onChange={(e) => { setSearchTerm(e.target.value); }}
@@ -466,8 +550,8 @@ const HistoryTab = ({ history, loading, total, currentPage, totalPages, fetchHis
               onChange={(e) => { setTypeFilter(e.target.value); }}
             >
               <option value="Tous">Tous</option>
-              <option value="Entrée">Entrées</option>
-              <option value="Sortie">Sorties</option>
+              <option value="Modification">Modifications</option>
+              <option value="Suppression">Suppressions</option>
             </select>
           </div>
           <div>
@@ -495,9 +579,8 @@ const HistoryTab = ({ history, loading, total, currentPage, totalPages, fetchHis
             <tr>
               <th className="p-3 text-left">Date & Heure</th>
               <th className="p-3 text-left">Produit</th>
-              <th className="p-3 text-left">Type</th>
+              <th className="p-3 text-left">Action</th>
               <th className="p-3 text-left">Détails</th>
-              <th className="p-3 text-left">Gestionnaire</th>
             </tr>
           </thead>
           <tbody>
@@ -505,22 +588,21 @@ const HistoryTab = ({ history, loading, total, currentPage, totalPages, fetchHis
               <tr key={item.id || index} className="border-t hover:bg-[#F7F5FF]/30 transition-colors">
                 <td className="p-3 text-gray-600">
                   <div className="flex items-center gap-2">
-                    <FaClock className="text-[#472EAD]" />{item.date ? new Date(item.date).toLocaleString('fr-FR') : "N/A"}
+                    <FaClock className="text-[#472EAD]" />{formatDate(item.date)}
                   </div>
                 </td>
                 <td className="p-3">
                   <div className="font-medium text-[#472EAD] flex items-center gap-2">
-                    <FaBoxOpen />{item.product}
+                    <FaBoxOpen />{item.productName}
                   </div>
                 </td>
                 <td className="p-3">
                   <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold border ${
-                    item.type === "Entrée" ? "bg-gradient-to-r from-blue-100 to-blue-50 text-blue-800 border-blue-200" : 
-                    item.type === "Sortie" ? "bg-gradient-to-r from-orange-100 to-orange-50 text-orange-800 border-orange-200" : 
-                    "bg-gradient-to-r from-gray-100 to-gray-50 text-gray-800 border-gray-200"
+                    item.type === "Modification" ? "bg-gradient-to-r from-blue-100 to-blue-50 text-blue-800 border-blue-200" : 
+                    "bg-gradient-to-r from-red-100 to-red-50 text-red-800 border-red-200"
                   }`}>
-                    {item.type === "Entrée" ? <FaArrowUp /> : item.type === "Sortie" ? <FaArrowDown /> : <FaHistory />}
-                    {item.type}
+                    {item.type === "Modification" ? <FaEdit /> : <FaTrashAlt />}
+                    {item.action}
                   </span>
                 </td>
                 <td className="p-3">
@@ -532,16 +614,10 @@ const HistoryTab = ({ history, loading, total, currentPage, totalPages, fetchHis
                     Détails
                   </button>
                 </td>
-                <td className="p-3">
-                  <div className="flex items-center gap-2">
-                    <FaUserTie className="text-[#472EAD]" />
-                    <span className="font-medium text-[#472EAD]">{item.manager || "Gestionnaire Dépôt"}</span>
-                  </div>
-                </td>
               </tr>
             )) : (
               <tr>
-                <td colSpan={5} className="p-8 text-center">
+                <td colSpan={4} className="p-8 text-center">
                   <div className="text-gray-400">
                     <FaHistory className="text-4xl mx-auto mb-3 opacity-50" />
                     <p className="text-lg font-medium text-[#472EAD]">
@@ -564,21 +640,73 @@ const HistoryTab = ({ history, loading, total, currentPage, totalPages, fetchHis
         />
       )}
 
+      {/* Modal de détail */}
       {detailModalOpen && selectedHistoryItem && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-lg p-6">
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-2xl p-6 max-h-[80vh] overflow-y-auto">
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-[#472EAD]">
               <FaHistory className="text-[#472EAD]" />
               Détails de l'action
             </h3>
-            <div className="space-y-3">
-              <p><span className="font-bold">Produit :</span> {selectedHistoryItem.product}</p>
-              <p><span className="font-bold">Type :</span> {selectedHistoryItem.type}</p>
-              <p><span className="font-bold">Date :</span> {selectedHistoryItem.date ? new Date(selectedHistoryItem.date).toLocaleString('fr-FR') : 'N/A'}</p>
-              <p><span className="font-bold">Quantité :</span> {selectedHistoryItem.quantity || 0} cartons</p>
-              <p><span className="font-bold">Motif :</span> {selectedHistoryItem.motif || 'Aucun motif'}</p>
-              <p><span className="font-bold">Statut :</span> {selectedHistoryItem.status}</p>
+            
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs font-semibold text-gray-500">Date</p>
+                  <p className="text-sm">{formatDate(selectedHistoryItem.date)}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-gray-500">Action</p>
+                  <p className="text-sm">{selectedHistoryItem.action}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-gray-500">Produit</p>
+                  <p className="text-sm">{selectedHistoryItem.productName}</p>
+                </div>
+              </div>
+
+              {selectedHistoryItem.type === "Suppression" && (
+                <div className="border-t pt-3 bg-red-50 p-3 rounded">
+                  <p className="text-sm font-semibold text-red-600 mb-2">Produit supprimé</p>
+                  {selectedHistoryItem.details && (
+                    <p className="text-sm">{selectedHistoryItem.details}</p>
+                  )}
+                </div>
+              )}
+
+              {selectedHistoryItem.type === "Modification" && selectedHistoryItem.anciennes_valeurs && selectedHistoryItem.nouvelles_valeurs && (
+                <div className="border-t pt-3">
+                  <p className="text-sm font-semibold text-[#472EAD] mb-2">Modifications effectuées</p>
+                  <div className="space-y-2">
+                    {Object.keys(selectedHistoryItem.nouvelles_valeurs).map(key => {
+                      const oldVal = selectedHistoryItem.anciennes_valeurs[key];
+                      const newVal = selectedHistoryItem.nouvelles_valeurs[key];
+                      if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
+                        let fieldName = key;
+                        if (key === 'nom') fieldName = 'Nom';
+                        if (key === 'prix_unite_carton') fieldName = 'Prix';
+                        if (key === 'nombre_carton') fieldName = 'Stock';
+                        if (key === 'unite_carton') fieldName = 'Unités par carton';
+                        if (key === 'stock_seuil') fieldName = 'Seuil';
+                        if (key === 'code') fieldName = 'Code-barre';
+                        
+                        return (
+                          <div key={key} className="bg-gray-50 p-2 rounded text-sm">
+                            <span className="font-medium">{fieldName}:</span>
+                            <div className="ml-2 text-gray-600">
+                              <span className="text-red-600 line-through mr-2">{oldVal}</span>
+                              <span className="text-green-600">→ {newVal}</span>
+                            </div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
+
             <div className="flex justify-end mt-6">
               <button
                 onClick={() => setDetailModalOpen(false)}
@@ -594,17 +722,47 @@ const HistoryTab = ({ history, loading, total, currentPage, totalPages, fetchHis
   );
 };
 
-// Onglet Catégories
+// =========================================================================
+// Onglet Catégories - CORRIGÉ
+// =========================================================================
 const CategoriesTab = ({ categories, onEditCategory, onDeleteCategory, onAddCategory }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [page, setPage] = useState(1);
   const pageSize = 20;
 
-  const filtered = categories.filter(cat =>
-    !searchTerm || cat.nom?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  useEffect(() => {
+    console.log("📦 Catégories reçues dans CategoriesTab:", categories);
+    console.log("🔍 Nombre de catégories:", categories?.length);
+    if (categories?.length > 0) {
+      console.log("🔍 Première catégorie:", categories[0]);
+    }
+  }, [categories]);
+
+  const filtered = useMemo(() => {
+    if (!categories || categories.length === 0) return [];
+    return categories.filter(cat =>
+      !searchTerm || cat.nom?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [categories, searchTerm]);
+  
   const paginated = filtered.slice((page-1)*pageSize, page*pageSize);
   const totalPages = Math.ceil(filtered.length / pageSize);
+
+  if (!categories || categories.length === 0) {
+    return (
+      <div className="bg-white rounded-xl shadow-sm border p-8 text-center">
+        <FaFolder className="text-6xl text-gray-300 mx-auto mb-4" />
+        <p className="text-lg text-gray-500">Aucune catégorie trouvée</p>
+        <p className="text-sm text-gray-400 mt-2">Vérifiez la console (F12) pour plus d'informations</p>
+        <button 
+          onClick={onAddCategory}
+          className="mt-4 px-4 py-2 bg-[#472EAD] text-white rounded-lg hover:bg-[#3a2590] transition-colors"
+        >
+          Créer une catégorie
+        </button>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -650,7 +808,7 @@ const CategoriesTab = ({ categories, onEditCategory, onDeleteCategory, onAddCate
             </tr>
           </thead>
           <tbody>
-            {paginated.map((cat) => (
+            {paginated.length > 0 ? paginated.map((cat) => (
               <tr key={cat.id} className="border-t hover:bg-[#F7F5FF]/30 transition-colors">
                 <td className="p-3 font-medium text-[#472EAD]">{cat.nom}</td>
                 <td className="p-3 text-center">
@@ -664,14 +822,13 @@ const CategoriesTab = ({ categories, onEditCategory, onDeleteCategory, onAddCate
                   </div>
                 </td>
               </tr>
-            ))}
-            {paginated.length === 0 && (
+            )) : (
               <tr>
                 <td colSpan={2} className="p-8 text-center">
                   <div className="text-gray-400">
                     <FaFolder className="text-4xl mx-auto mb-3 opacity-50" />
                     <p className="text-lg font-medium text-[#472EAD]">
-                      {filtered.length === 0 ? "Aucune catégorie trouvée" : "Aucune catégorie sur cette page."}
+                      Aucune catégorie trouvée avec ce filtre
                     </p>
                   </div>
                 </td>
@@ -698,6 +855,10 @@ export default function Products() {
   const [activeTab, setActiveTab] = useState("liste");
   const pageSize = 20;
 
+  // États pour les compteurs
+  const [nbRupture, setNbRupture] = useState(0);
+  const [nbFaible, setNbFaible] = useState(0);
+
   // Hooks
   const {
     products,
@@ -716,10 +877,10 @@ export default function Products() {
 
   const { categories, loading: categoriesLoading, addCategory, updateCategory, deleteCategory, refetch: refetchCategories } = useCategories();
   
-  // Nouveau hook pour charger TOUS les fournisseurs
+  // Hook pour charger TOUS les fournisseurs
   const { suppliers: fournisseurs, loading: fournisseursLoading } = useAllFournisseurs();
 
-  // Hook pour l'historique
+  // Hook pour l'historique des actions
   const {
     history,
     total: historyTotal,
@@ -728,7 +889,33 @@ export default function Products() {
     totalPages: historyTotalPages,
     fetchHistorique,
     setCurrentPage: setHistoryPage
-  } = useHistorique();
+  } = useHistoriqueProduits();
+
+  // Logs pour déboguer
+  useEffect(() => {
+    console.log("🔍 Catégories depuis le hook:", categories);
+    console.log("🔍 Nombre de catégories:", categories.length);
+    if (categories.length > 0) {
+      console.log("🔍 Première catégorie:", categories[0]);
+    }
+  }, [categories]);
+
+  // Charger les compteurs au montage
+  useEffect(() => {
+    const fetchCounts = async () => {
+      try {
+        const [rupture, faible] = await Promise.all([
+          produitsAPI.getNbProduitsEnRupture(),
+          produitsAPI.getNbProduitsSousSeuil()
+        ]);
+        setNbRupture(rupture || 0);
+        setNbFaible(faible || 0);
+      } catch (error) {
+        console.error('Erreur chargement compteurs:', error);
+      }
+    };
+    fetchCounts();
+  }, []);
 
   useEffect(() => {
     if (activeTab === "historique") {
@@ -1034,11 +1221,12 @@ export default function Products() {
               sortMode={sortMode}
               setSortMode={setSortMode}
               pageSize={pageSize}
+              nbRupture={nbRupture}
+              nbFaible={nbFaible}
             />
           )}
           {activeTab === "ajustement" && (
             <AdjustmentTab
-              products={products}
               onAdjust={handleAdjust}
             />
           )}

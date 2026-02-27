@@ -3,20 +3,19 @@ import React, { useState, useEffect } from "react";
 import { NavLink } from "react-router-dom";
 import "../styles/depot-fix.css";
 import { produitsAPI } from "../../services/api/produits";
-import { mouvementsAPI } from "../../services/api/mouvements";
 import { fournisseursAPI } from "../../services/api/fournisseurs";
 import {
   MdShoppingCart,
-  MdCompareArrows,
   MdLocalShipping,
-  MdCheckCircle,
+  // MdCompareArrows a été supprimé
 } from "react-icons/md";
 
 const Dashboard = () => {
   const [stats, setStats] = useState({
     totalProduits: 0,
-    mouvements: 0,
     fournisseurs: 0,
+    produitsRupture: 0,
+    produitsFaible: 0
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -27,17 +26,38 @@ const Dashboard = () => {
         setLoading(true);
         setError(null);
 
-        const [nbProduits, nbMouvements, nbFournisseurs] = await Promise.all([
-          produitsAPI.getNombre(),
-          mouvementsAPI.getNombreAujourdhui(),
+        // Charger toutes les statistiques en parallèle
+        const [
+          nbProduits,
+          nbFournisseurs,
+          nbRupture,
+          nbFaible
+        ] = await Promise.allSettled([
+          produitsAPI.getNbProduits(),
           fournisseursAPI.getNombre(),
+          produitsAPI.getNbProduitsEnRupture(),
+          produitsAPI.getNbProduitsSousSeuil()
         ]);
 
+        // Fonction pour extraire les valeurs
+        const extractValue = (result, defaultValue = 0) => {
+          if (result.status === 'fulfilled' && result.value !== undefined) {
+            const data = result.value;
+            if (typeof data === 'number') return data;
+            if (data?.count !== undefined) return data.count;
+            if (data?.data !== undefined) return data.data;
+            return data ?? defaultValue;
+          }
+          return defaultValue;
+        };
+
         setStats({
-          totalProduits: nbProduits,
-          mouvements: nbMouvements,
-          fournisseurs: nbFournisseurs,
+          totalProduits: extractValue(nbProduits),
+          fournisseurs: extractValue(nbFournisseurs),
+          produitsRupture: extractValue(nbRupture),
+          produitsFaible: extractValue(nbFaible)
         });
+
       } catch (err) {
         console.error("❌ Erreur chargement dashboard:", err);
         setError("Impossible de charger les données.");
@@ -75,7 +95,7 @@ const Dashboard = () => {
             Tableau de bord Dépôt
           </h1>
           <p className="text-xs text-gray-500">
-            Bienvenue, Modou Ndiaye – Gestionnaire Dépôt
+            Bienvenue, Gestionnaire Dépôt
           </p>
         </div>
         <p className="text-xs text-gray-400">
@@ -83,8 +103,8 @@ const Dashboard = () => {
         </p>
       </div>
 
-      {/* STATISTIQUES */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* STATISTIQUES PRINCIPALES - 2 CARTES */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Produits */}
         <div className="bg-white rounded-xl shadow-sm border p-5">
           <div className="flex justify-between items-center">
@@ -95,18 +115,6 @@ const Dashboard = () => {
             {loading ? "..." : stats.totalProduits}
           </p>
           <p className="text-xs text-gray-400 mt-1">Total référencé</p>
-        </div>
-
-        {/* Mouvements */}
-        <div className="bg-white rounded-xl shadow-sm border p-5">
-          <div className="flex justify-between items-center">
-            <p className="text-xs text-gray-500">Mouvements aujourd'hui</p>
-            <MdCompareArrows className="text-blue-500" size={22} />
-          </div>
-          <p className="text-3xl font-bold text-gray-900 mt-2">
-            {loading ? "..." : stats.mouvements}
-          </p>
-          <p className="text-xs text-gray-500 mt-1">Entrées & sorties</p>
         </div>
 
         {/* Fournisseurs */}
@@ -122,19 +130,35 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* ALERTES (à venir) */}
+      {/* ALERTES STOCK */}
       <div className="bg-white rounded-xl shadow-sm border p-5">
         <h2 className="text-sm font-semibold text-gray-800 mb-3">
-          Alertes & Notifications
+          Alertes Stock
         </h2>
-        <div className="rounded-md bg-green-50 border border-green-200 px-3 py-3">
-          <div className="flex items-center gap-2">
-            <MdCheckCircle className="text-green-700" size={18} />
-            <p className="font-semibold text-green-700">Données en cours d'intégration</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Rupture */}
+          <div className="rounded-lg bg-red-50 border border-red-200 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-2 h-2 rounded-full bg-red-500"></div>
+              <p className="font-semibold text-red-700">Produits en rupture</p>
+            </div>
+            <p className="text-2xl font-bold text-red-600">
+              {loading ? "..." : stats.produitsRupture}
+            </p>
+            <p className="text-xs text-red-600 mt-1">Stock épuisé</p>
           </div>
-          <p className="text-green-600 mt-1">
-            Les alertes seront bientôt disponibles.
-          </p>
+
+          {/* Faible */}
+          <div className="rounded-lg bg-yellow-50 border border-yellow-200 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
+              <p className="font-semibold text-yellow-700">Stock faible</p>
+            </div>
+            <p className="text-2xl font-bold text-yellow-600">
+              {loading ? "..." : stats.produitsFaible}
+            </p>
+            <p className="text-xs text-yellow-600 mt-1">Sous le seuil minimum</p>
+          </div>
         </div>
       </div>
 
@@ -166,7 +190,8 @@ const Dashboard = () => {
               <p className="text-xs text-gray-500">Entrées & sorties</p>
             </div>
             <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
-              <MdCompareArrows className="text-orange-500" size={22} />
+              {/* Remplacé par une alternative sans icône ou avec une autre icône */}
+              <span className="text-orange-500 font-bold">↔️</span>
             </div>
           </NavLink>
         </div>

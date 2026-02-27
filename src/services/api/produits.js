@@ -1,3 +1,4 @@
+// src/services/api/produits.js
 import httpClient from '../http/client';
 
 const BASE = '/produits';
@@ -5,7 +6,7 @@ const STOCKS_BASE = '/stocks';
 
 export const produitsAPI = {
   // ------------------------------------------------------------
-  // CRUD PRODUIT – avec noms de champs exacts (API Laravel)
+  // CRUD PRODUIT
   // ------------------------------------------------------------
   getAll: async (params = {}) => {
     const response = await httpClient.get(BASE, { params });
@@ -18,10 +19,9 @@ export const produitsAPI = {
   },
 
   create: async (data) => {
-    // Payload avec les noms exacts attendus par l'API
     const payload = {
       nom: data.nom,
-      code: data.code || '',              // requis ou optionnel selon backend
+      code: data.code || '',
       categorie_id: data.categorie_id,
       fournisseur_id: data.fournisseur_id || null,
       nombre_carton: parseInt(data.nombre_carton || 0),
@@ -35,24 +35,21 @@ export const produitsAPI = {
   },
 
   update: async (id, data) => {
-    // 1. Récupérer le produit existant
     const existing = await produitsAPI.getById(id);
     
-    // 2. Fusionner : les champs fournis écrasent les existants
     const payload = {
       nom: existing.nom,
       code: existing.code || existing.code_barre || '',
       categorie_id: existing.categorie_id,
       fournisseur_id: existing.fournisseur_id,
       nombre_carton: existing.nombre_carton,
-      unite_carton: String(existing.unite_carton),       // forcé en string
+      unite_carton: String(existing.unite_carton),
       prix_unite_carton: existing.prix_unite_carton,
       stock_seuil: existing.stock_seuil,
       stock_ideal: existing.stock_ideal,
-      ...data,                                           // écrase avec les nouvelles valeurs
+      ...data,
     };
 
-    // 3. Nettoyer les champs undefined
     Object.keys(payload).forEach(key => {
       if (payload[key] === undefined) delete payload[key];
     });
@@ -67,11 +64,10 @@ export const produitsAPI = {
   },
 
   // ------------------------------------------------------------
-  // ACTIONS SUR LE STOCK – 100% fiables (fallback update)
+  // ACTIONS SUR LE STOCK
   // ------------------------------------------------------------
   async reapprovisionner(produitId, quantite) {
     try {
-      // Tentative route dédiée (si elle fonctionne)
       const response = await httpClient.post(`${STOCKS_BASE}/reapprovisionner`, {
         produit_id: produitId,
         quantite: parseInt(quantite),
@@ -79,7 +75,6 @@ export const produitsAPI = {
       return response.data;
     } catch (error) {
       console.warn('⚠️ Route /reapprovisionner échouée, fallback update', error);
-      // Fallback : mise à jour directe du stock
       const produit = await this.getById(produitId);
       const nouveauStock = parseInt(produit.nombre_carton || 0) + parseInt(quantite);
       return await this.update(produitId, { nombre_carton: nouveauStock });
@@ -88,14 +83,12 @@ export const produitsAPI = {
 
   async diminuerStock(produitId, quantite) {
     try {
-      // Tentative route dédiée
       const response = await httpClient.put(`${BASE}/${produitId}/reduire-stock`, {
         quantite: parseInt(quantite),
       });
       return response.data;
     } catch (error) {
       console.warn('⚠️ Route /reduire-stock échouée, fallback update', error);
-      // Fallback
       const produit = await this.getById(produitId);
       const nouveauStock = Math.max(0, parseInt(produit.nombre_carton || 0) - parseInt(quantite));
       return await this.update(produitId, { nombre_carton: nouveauStock });
@@ -103,21 +96,78 @@ export const produitsAPI = {
   },
 
   // ------------------------------------------------------------
-  // AUTRES
+  // ENDPOINTS POUR LES LISTES
   // ------------------------------------------------------------
-  getProduitsEnRupture: async () => {
-    const response = await httpClient.get(`${BASE}/produits-ruptures`);
-    return response.data;
+  getProduitsEnRupture: async (params = {}) => {
+    try {
+      const response = await httpClient.get('/produits_en_rupture', { params });
+      return response.data;
+    } catch (error) {
+      console.error('❌ produitsAPI.getProduitsEnRupture error:', error);
+      throw error;
+    }
   },
-  getNombre: async () => {
-  try {
-    const response = await httpClient.get('/nombre-produits');
-    if (typeof response.data === 'number') return response.data;
-    if (response.data && typeof response.data.count === 'number') return response.data.count;
-    return parseInt(response.data, 10) || 0;
-  } catch (error) {
-    console.error('❌ Erreur getNombre produits:', error);
-    return 0;
-  }
-}
+
+  getProduitsSousSeuil: async (params = {}) => {
+    try {
+      const response = await httpClient.get('/produits-sous-seuil', { params });
+      return response.data;
+    } catch (error) {
+      console.error('❌ produitsAPI.getProduitsSousSeuil error:', error);
+      throw error;
+    }
+  },
+
+  getProduitsNormaux: async (params = {}) => {
+    try {
+      const response = await httpClient.get('/produits-en-normaux', { params });
+      return response.data;
+    } catch (error) {
+      console.error('❌ produitsAPI.getProduitsNormaux error:', error);
+      throw error;
+    }
+  },
+
+  // ------------------------------------------------------------
+  // ENDPOINTS POUR LES COMPTEURS (NOUVEAUX)
+  // ------------------------------------------------------------
+  getNbProduits: async () => {
+    try {
+      const response = await httpClient.get('/nombre-produits');
+      return response.data;
+    } catch (error) {
+      console.error('❌ produitsAPI.getNbProduits error:', error);
+      throw error;
+    }
+  },
+
+  getNbProduitsNormaux: async () => {
+    try {
+      const response = await httpClient.get('/nombre-produits-en-normaux');
+      return response.data;
+    } catch (error) {
+      console.error('❌ produitsAPI.getNbProduitsNormaux error:', error);
+      throw error;
+    }
+  },
+
+  getNbProduitsSousSeuil: async () => {
+    try {
+      const response = await httpClient.get('/nombre-produits-sous-seuil');
+      return response.data;
+    } catch (error) {
+      console.error('❌ produitsAPI.getNbProduitsSousSeuil error:', error);
+      throw error;
+    }
+  },
+
+  getNbProduitsEnRupture: async () => {
+    try {
+      const response = await httpClient.get('/nombre-produits-en-rupture');
+      return response.data;
+    } catch (error) {
+      console.error('❌ produitsAPI.getNbProduitsEnRupture error:', error);
+      throw error;
+    }
+  },
 };

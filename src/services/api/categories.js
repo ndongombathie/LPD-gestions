@@ -1,11 +1,12 @@
+// src/services/api/categories.js
 import httpClient from '../http/client';
 
-const BASE = '/categories';
-
 export const categoriesAPI = {
-  getAll: async () => {
+  getAll: async (params = {}) => {
     try {
-      const response = await httpClient.get(BASE);
+      console.log("📡 Appel API categories avec params:", params);
+      const response = await httpClient.get('/categories', { params });
+      console.log("📦 Réponse API categories:", response.data);
       return response.data;
     } catch (error) {
       console.error('❌ Erreur getAll categories:', error);
@@ -15,52 +16,31 @@ export const categoriesAPI = {
 
   create: async (data) => {
     try {
-      const payload = {
-        nom: data.nom || data.name
-      };
-      
-      const response = await httpClient.post(BASE, payload);
+      const response = await httpClient.post('/categories', data);
       return response.data;
     } catch (error) {
-      console.error('❌ Erreur création catégorie:', error.response?.data || error);
+      console.error('❌ Erreur create category:', error);
       throw error;
     }
   },
 
   update: async (id, data) => {
     try {
-      const payload = {
-        nom: data.nom || data.name
-      };
-      
-      const response = await httpClient.put(`${BASE}/${id}`, payload);
+      const response = await httpClient.put(`/categories/${id}`, data);
       return response.data;
     } catch (error) {
-      console.error('❌ Erreur modification catégorie:', error.response?.data || error);
+      console.error('❌ Erreur update category:', error);
       throw error;
     }
   },
 
-  // SUPPRESSION FORCÉE POUR LES CATÉGORIES AUSSI
   delete: async (id) => {
     try {
-      const response = await httpClient.delete(`${BASE}/${id}`, {
-        params: { force: true }
-      });
+      const response = await httpClient.delete(`/categories/${id}`);
       return response.data;
     } catch (error) {
-      console.error('❌ Erreur suppression catégorie:', error.response?.data || error);
+      console.error('❌ Erreur delete category:', error);
       throw error;
     }
   },
-
-  getById: async (id) => {
-    try {
-      const response = await httpClient.get(`${BASE}/${id}`);
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erreur getById catégorie:', error);
-      throw error;
-    }
-  }
 };

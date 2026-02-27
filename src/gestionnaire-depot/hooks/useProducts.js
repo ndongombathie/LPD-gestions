@@ -55,12 +55,13 @@ export function useProducts(initialPage = 1, perPage = 20) {
     return fetchProducts(currentPage);
   }, [currentPage, fetchProducts]);
 
-  // Aller à une page spécifique
+  // Aller à une page spécifique - CORRIGÉ
   const goToPage = useCallback((page) => {
     if (page >= 1 && page <= totalPages) {
       setCurrentPage(page);
+      fetchProducts(page); // ✅ AJOUTÉ
     }
-  }, [totalPages]);
+  }, [totalPages, fetchProducts]);
 
   // Ajouter un produit
   const addProduct = useCallback(async (productData) => {

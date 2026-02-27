@@ -1,3 +1,4 @@
+// src/gestionnaire-depot/hooks/useCategories.js
 import { useState, useEffect, useCallback } from 'react';
 import { categoriesAPI } from '../../services/api/categories';
 
@@ -13,64 +14,64 @@ export function useCategories() {
       console.log("📦 Récupération des catégories...");
       const response = await categoriesAPI.getAll({ per_page: 1000 });
       console.log("🔍 Réponse brute:", response);
-      console.log("Type:", typeof response);
+      console.log("🔍 Type de réponse:", typeof response);
+      console.log("🔍 Est un tableau?", Array.isArray(response));
 
-      // Si la réponse est une chaîne, essayer de la parser (au cas où ce serait du JSON stringifié)
-      if (typeof response === 'string') {
-        try {
-          const parsed = JSON.parse(response);
-          console.log("✅ Réponse parsée:", parsed);
-          // Maintenant traiter parsed comme un objet
-          let rawData = [];
-          if (Array.isArray(parsed)) {
-            rawData = parsed;
-          } else if (parsed && parsed.data) {
-            rawData = parsed.data;
-          } else {
-            rawData = [];
-          }
-          const normalized = rawData.map(cat => ({
-            id: cat.id || cat.uuid,
-            nom: cat.nom || cat.name || 'Sans nom',
-            name: cat.nom || cat.name || 'Sans nom',
-            ...cat
-          }));
-          setCategories(normalized);
-          setLoading(false);
-          return;
-        } catch (e) {
-          console.error("Impossible de parser la réponse string:", e);
-          setError("La réponse du serveur n'est pas du JSON valide.");
-          setCategories([]);
-          setLoading(false);
-          return;
-        }
-      }
-
-      // Sinon, traitement normal (objet)
-      let rawData = [];
+      // Si la réponse est déjà un tableau
       if (Array.isArray(response)) {
-        rawData = response;
-      } else if (response && response.data) {
-        rawData = response.data;
-      } else if (response && response.categories) {
-        rawData = response.categories;
-      } else {
-        rawData = [];
+        console.log("✅ La réponse est directement un tableau de", response.length, "catégories");
+        const normalized = response.map(cat => ({
+          id: cat.id || cat.uuid,
+          nom: cat.nom || cat.name || 'Sans nom',
+          name: cat.nom || cat.name || 'Sans nom',
+          ...cat
+        }));
+        console.log("✅ Catégories normalisées:", normalized);
+        setCategories(normalized);
+        setLoading(false);
+        return;
       }
 
-      const normalized = rawData.map(cat => ({
-        id: cat.id || cat.uuid,
-        nom: cat.nom || cat.name || 'Sans nom',
-        name: cat.nom || cat.name || 'Sans nom',
-        ...cat
-      }));
+      // Si la réponse a une propriété data
+      if (response && response.data) {
+        console.log("✅ La réponse a une propriété data avec", response.data.length, "catégories");
+        const rawData = response.data;
+        const normalized = rawData.map(cat => ({
+          id: cat.id || cat.uuid,
+          nom: cat.nom || cat.name || 'Sans nom',
+          name: cat.nom || cat.name || 'Sans nom',
+          ...cat
+        }));
+        console.log("✅ Catégories normalisées:", normalized);
+        setCategories(normalized);
+        setLoading(false);
+        return;
+      }
 
-      console.log("✅ Catégories normalisées:", normalized);
-      setCategories(normalized);
+      // Si la réponse a une propriété categories
+      if (response && response.categories) {
+        console.log("✅ La réponse a une propriété categories avec", response.categories.length, "catégories");
+        const rawData = response.categories;
+        const normalized = rawData.map(cat => ({
+          id: cat.id || cat.uuid,
+          nom: cat.nom || cat.name || 'Sans nom',
+          name: cat.nom || cat.name || 'Sans nom',
+          ...cat
+        }));
+        console.log("✅ Catégories normalisées:", normalized);
+        setCategories(normalized);
+        setLoading(false);
+        return;
+      }
+
+      // Si on arrive ici, format inattendu
+      console.warn("⚠️ Format de réponse non reconnu:", response);
+      setCategories([]);
+      
     } catch (err) {
-      setError(err);
       console.error("❌ Erreur fetchCategories", err);
+      setError(err);
+      setCategories([]);
     } finally {
       setLoading(false);
     }
@@ -92,6 +93,7 @@ export function useCategories() {
       setCategories(prev => [...prev, normalized]);
       return newCat;
     } catch (error) {
+      console.error("❌ Erreur addCategory:", error);
       throw error;
     }
   }, []);
@@ -109,6 +111,7 @@ export function useCategories() {
       );
       return updated;
     } catch (error) {
+      console.error("❌ Erreur updateCategory:", error);
       throw error;
     }
   }, []);
@@ -118,6 +121,7 @@ export function useCategories() {
       await categoriesAPI.delete(id);
       setCategories(prev => prev.filter(c => c.id !== id));
     } catch (error) {
+      console.error("❌ Erreur deleteCategory:", error);
       throw error;
     }
   }, []);

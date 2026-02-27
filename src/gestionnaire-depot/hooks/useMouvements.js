@@ -12,7 +12,6 @@ export const useMouvements = () => {
     totalEntries: 0,
     totalValidated: 0,
     totalPending: 0,
-    todayCount: 0,
   });
   const [loadingStats, setLoadingStats] = useState(false);
   const [errorStats, setErrorStats] = useState(null);
@@ -120,7 +119,6 @@ export const useMouvements = () => {
         mouvementsAPI.getNbEntreesTotal().catch(err => (console.warn(err), 0)),
         mouvementsAPI.getNbSortiesTotal().catch(err => (console.warn(err), 0)),
         mouvementsAPI.getTransfertsEnAttente().catch(err => (console.warn(err), [])),
-        mouvementsAPI.getNombreAujourdhui().catch(err => (console.warn(err), 0)),
       ]);
 
       console.log('📦 Résultats bruts des stats:', results);
@@ -151,7 +149,6 @@ export const useMouvements = () => {
         totalEntries: extractValue(results[0]),
         totalValidated: extractValue(results[1]),
         totalPending: extractValue(results[2]),
-        todayCount: extractValue(results[3]),
       });
     } catch (err) {
       console.error('Erreur inattendue dans fetchStats:', err);

@@ -12,15 +12,12 @@ export const useAllFournisseurs = () => {
     setLoading(true);
     setError(null);
     try {
-      // 1. Récupérer le nombre total de fournisseurs
       const totalCount = await fournisseursAPI.getNombre();
       setTotal(totalCount);
       
-      // 2. Déterminer le nombre de pages nécessaires
-      const perPage = 10; // Ce que l'API renvoie par défaut
+      const perPage = 10;
       const totalPages = Math.ceil(totalCount / perPage);
       
-      // 3. Charger toutes les pages en parallèle
       const promises = [];
       for (let page = 1; page <= totalPages; page++) {
         promises.push(fournisseursAPI.getAll({ page, per_page: perPage }));
@@ -28,22 +25,15 @@ export const useAllFournisseurs = () => {
       
       const results = await Promise.all(promises);
       
-      // 4. Concaténer tous les résultats
       let allSuppliers = [];
       results.forEach(result => {
         let pageSuppliers = [];
-        
-        // Adapter selon la structure de réponse
         if (Array.isArray(result)) {
           pageSuppliers = result;
         } else if (result?.data) {
           pageSuppliers = result.data;
-        } else {
-          console.warn('Format de réponse inattendu:', result);
-          return;
         }
         
-        // Formater les données
         const formatted = pageSuppliers.map(item => ({
           id: item.id,
           name: item.name || item.nom || 'Nom inconnu',
@@ -56,10 +46,9 @@ export const useAllFournisseurs = () => {
       });
       
       setSuppliers(allSuppliers);
-      console.log(`✅ ${allSuppliers.length} fournisseurs chargés`);
     } catch (err) {
       console.error('❌ Erreur chargement tous fournisseurs:', err);
-      setError(err.message || 'Erreur lors du chargement des fournisseurs');
+      setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -69,11 +58,5 @@ export const useAllFournisseurs = () => {
     fetchAllSuppliers();
   }, [fetchAllSuppliers]);
 
-  return {
-    suppliers,
-    total,
-    loading,
-    error,
-    refetch: fetchAllSuppliers,
-  };
+  return { suppliers, total, loading, error, refetch: fetchAllSuppliers };
 };

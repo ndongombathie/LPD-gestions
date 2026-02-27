@@ -2,7 +2,7 @@
 import httpClient from '../http/client';
 
 export const mouvementsAPI = {
-  // ✅ Méthodes existantes - NE PAS MODIFIER
+  // Récupération des mouvements (historique)
   getAll: async (params = {}) => {
     try {
       const response = await httpClient.get('/mouvements-stock', { params });
@@ -13,6 +13,7 @@ export const mouvementsAPI = {
     }
   },
 
+  // Création d'un transfert - UNIQUEMENT produit_id et quantite
   createTransfer: async (data) => {
     try {
       const response = await httpClient.post('/stocks/transfer', data);
@@ -23,6 +24,7 @@ export const mouvementsAPI = {
     }
   },
 
+  // Annulation d'un transfert
   cancelTransfer: async (transferId) => {
     try {
       const response = await httpClient.put('/annuler-produits-transfer', {
@@ -35,6 +37,7 @@ export const mouvementsAPI = {
     }
   },
 
+  // Liste des transferts en attente (pour l'onglet)
   getTransfertsEnAttente: async (params = {}) => {
     try {
       const response = await httpClient.get('/produits-transfer', { params });
@@ -45,6 +48,7 @@ export const mouvementsAPI = {
     }
   },
 
+  // Liste des transferts annulés
   getTransfertsAnnules: async (params = {}) => {
     try {
       const response = await httpClient.get('/liste-transfers-annuler', { params });
@@ -55,7 +59,7 @@ export const mouvementsAPI = {
     }
   },
 
-  // Statistiques existantes
+  // Statistiques
   getNbEntreesTotal: async () => {
     try {
       const response = await httpClient.get('/nombre-entree-stock-total');
@@ -82,29 +86,6 @@ export const mouvementsAPI = {
       return response.data;
     } catch (error) {
       console.error('❌ mouvementsAPI.getNbTransfertsEnAttente error:', error);
-      throw error;
-    }
-  },
-
-  getNombreAujourdhui: async () => {
-    try {
-      const response = await httpClient.get('/nombre-mouvements-stock-today');
-      if (typeof response.data === 'number') return response.data;
-      if (response.data && typeof response.data.count === 'number') return response.data.count;
-      return parseInt(response.data, 10) || 0;
-    } catch (error) {
-      console.error('❌ mouvementsAPI.getNombreAujourdhui error:', error);
-      return 0;
-    }
-  },
-
-  // ✅ NOUVELLE MÉTHODE - AJOUTÉE SANS MODIFIER LES EXISTANTES
-  getHistoriqueActions: async (params = {}) => {
-    try {
-      const response = await httpClient.get('/historique-actions', { params });
-      return response.data;
-    } catch (error) {
-      console.error('❌ mouvementsAPI.getHistoriqueActions error:', error);
       throw error;
     }
   },

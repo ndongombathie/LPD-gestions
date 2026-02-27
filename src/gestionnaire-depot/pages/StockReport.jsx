@@ -92,63 +92,120 @@ const Pagination = ({ currentPage, totalPages, totalItems, itemsPerPage, onPageC
 };
 
 // Composant de carte KPI moderne
-const KpiCard = ({ title, value, icon: Icon, color = "violet", subtitle }) => (
-  <div className={`bg-gradient-to-br from-${color}-50 to-white p-5 rounded-xl border border-${color}-100 shadow-sm hover:shadow-md transition-all duration-200`}>
-    <div className="flex items-start justify-between">
-      <div>
-        <p className="text-xs text-gray-500 mb-1">{title}</p>
-        <p className="text-2xl font-bold" style={{ color: PALETTE[color] }}>{value}</p>
-        {subtitle && <p className="text-xs text-gray-400 mt-1">{subtitle}</p>}
+const KpiCard = ({ title, value, icon: Icon, color = "violet", subtitle, loading = false }) => {
+  if (loading) {
+    return (
+      <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
+        <div className="animate-pulse">
+          <div className="h-4 bg-gray-200 rounded w-24 mb-3"></div>
+          <div className="h-8 bg-gray-200 rounded w-32 mb-2"></div>
+          <div className="h-3 bg-gray-200 rounded w-20"></div>
+        </div>
       </div>
-      <div className={`p-2 bg-${color}-100 rounded-lg`}>
-        <Icon size={20} style={{ color: PALETTE[color] }} />
+    );
+  }
+
+  return (
+    <div className={`bg-gradient-to-br from-${color}-50 to-white p-5 rounded-xl border border-${color}-100 shadow-sm hover:shadow-md transition-all duration-200`}>
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-xs text-gray-500 mb-1">{title}</p>
+          <p className="text-2xl font-bold" style={{ color: PALETTE[color] }}>{value}</p>
+          {subtitle && <p className="text-xs text-gray-400 mt-1">{subtitle}</p>}
+        </div>
+        <div className={`p-2 bg-${color}-100 rounded-lg`}>
+          <Icon size={20} style={{ color: PALETTE[color] }} />
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 // Composant de liste simple pour les tops
-const SimpleList = ({ items, title, icon: Icon, color = "violet", valueLabel = "Valeur" }) => (
-  <div className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all p-5">
-    <h3 className="text-sm font-semibold mb-4 flex items-center gap-2" style={{ color: PALETTE[color] }}>
-      <Icon size={18} />
-      {title}
-    </h3>
-    <div className="space-y-3">
-      {items.map((item, idx) => (
-        <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-          <span className="text-sm font-medium text-gray-700">{item.label}</span>
-          <span className="text-xs font-semibold px-2 py-1 rounded-full" style={{ backgroundColor: PALETTE[color] + '20', color: PALETTE[color] }}>
-            {item.value} {valueLabel}
-          </span>
+const SimpleList = ({ items, title, icon: Icon, color = "violet", valueLabel = "Valeur", loading = false }) => {
+  if (loading) {
+    return (
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+        <div className="animate-pulse">
+          <div className="h-5 bg-gray-200 rounded w-40 mb-4"></div>
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="flex justify-between items-center mb-3">
+              <div className="h-4 bg-gray-200 rounded w-32"></div>
+              <div className="h-4 bg-gray-200 rounded w-16"></div>
+            </div>
+          ))}
         </div>
-      ))}
-      {items.length === 0 && (
-        <p className="text-center text-gray-400 py-4">Aucune donnée</p>
-      )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all p-5">
+      <h3 className="text-sm font-semibold mb-4 flex items-center gap-2" style={{ color: PALETTE[color] }}>
+        <Icon size={18} />
+        {title}
+      </h3>
+      <div className="space-y-3">
+        {items.map((item, idx) => (
+          <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+            <span className="text-sm font-medium text-gray-700">{item.label}</span>
+            <span className="text-xs font-semibold px-2 py-1 rounded-full" style={{ backgroundColor: PALETTE[color] + '20', color: PALETTE[color] }}>
+              {item.value} {valueLabel}
+            </span>
+          </div>
+        ))}
+        {items.length === 0 && (
+          <p className="text-center text-gray-400 py-4">Aucune donnée</p>
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 // Composant de carte d'information simple
-const InfoCard = ({ title, value, icon: Icon, color = "violet", description }) => (
-  <div className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all p-5">
-    <div className="flex items-center gap-3">
-      <div className={`p-2 rounded-lg`} style={{ backgroundColor: PALETTE[color] + '20' }}>
-        <Icon size={20} style={{ color: PALETTE[color] }} />
+const InfoCard = ({ title, value, icon: Icon, color = "violet", description, loading = false }) => {
+  if (loading) {
+    return (
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+        <div className="animate-pulse flex items-center gap-3">
+          <div className="w-10 h-10 bg-gray-200 rounded-lg"></div>
+          <div className="flex-1">
+            <div className="h-3 bg-gray-200 rounded w-24 mb-2"></div>
+            <div className="h-5 bg-gray-200 rounded w-32"></div>
+          </div>
+        </div>
       </div>
-      <div>
-        <p className="text-xs text-gray-500">{title}</p>
-        <p className="text-xl font-semibold" style={{ color: PALETTE[color] }}>{value}</p>
-        {description && <p className="text-xs text-gray-400">{description}</p>}
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-all p-5">
+      <div className="flex items-center gap-3">
+        <div className={`p-2 rounded-lg`} style={{ backgroundColor: PALETTE[color] + '20' }}>
+          <Icon size={20} style={{ color: PALETTE[color] }} />
+        </div>
+        <div>
+          <p className="text-xs text-gray-500">{title}</p>
+          <p className="text-xl font-semibold" style={{ color: PALETTE[color] }}>{value}</p>
+          {description && <p className="text-xs text-gray-400">{description}</p>}
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default function Reports() {
-  // Hook personnalisé qui charge TOUS les produits
-  const { products, total, loading } = useAllProducts();
+  // Hook personnalisé qui charge TOUS les produits et les listes filtrées
+  const { 
+    products, 
+    total, 
+    loading, 
+    stats, 
+    loadingStats,
+    normalProducts,
+    faibleProducts,
+    ruptureProducts 
+  } = useAllProducts();
 
   const [tab, setTab] = useState("resume");
   const [alertSubTab, setAlertSubTab] = useState("rupture");
@@ -161,7 +218,7 @@ export default function Reports() {
 
   const reportRef = useRef(null);
 
-  // --- Produits enrichis (adaptation des champs réels) ---
+  // --- Produits enrichis (pour les tops et l'affichage) ---
   const enriched = useMemo(() => {
     if (!products.length) return [];
     return products.map((p) => {
@@ -172,43 +229,35 @@ export default function Reports() {
       const totalPrice = pricePerCarton * cartons;
       const stockMin = p.stock_seuil ?? 5;
 
-      let status = "Normal";
-      if (cartons === 0) status = "Rupture";
-      else if (cartons < stockMin) status = "Faible"; // strictement inférieur
-
       return {
         id: p.id,
         name: p.nom || "Sans nom",
-        barcode: p.code || "",
-        category: "Général",
+        barcode: p.code || p.code_barre || "",
+        category: p.categorie?.nom || "Général",
         cartons,
         unitsPerCarton,
         stockGlobal,
         pricePerCarton,
         totalPrice,
         stockMin,
-        status,
       };
     });
   }, [products]);
 
-  // --- Alertes ---
-  const ruptureProducts = useMemo(() => enriched.filter((p) => p.status === "Rupture"), [enriched]);
-  const faibleProducts = useMemo(() => enriched.filter((p) => p.status === "Faible"), [enriched]);
-
-  // Pagination des alertes
+  // Pagination des alertes - UTILISE LES LISTES DU HOOK
   const paginatedRupture = ruptureProducts.slice((rupturePage - 1) * ruptureItemsPerPage, rupturePage * ruptureItemsPerPage);
   const paginatedFaible = faibleProducts.slice((faiblePage - 1) * faibleItemsPerPage, faiblePage * faibleItemsPerPage);
 
-  // Statistiques globales (basées sur tous les produits)
-  const totalProducts = total || products.length;
-  const totalValue = enriched.reduce((s, p) => s + p.totalPrice, 0);
-  const counts = enriched.reduce((o, p) => {
-    o[p.status] = (o[p.status] || 0) + 1;
-    return o;
-  }, {});
+  // Statistiques globales (utilisant les stats du hook)
+  const totalProducts = stats.totalProducts || total || products.length;
+  const totalValue = stats.totalValue;
+  const counts = {
+    "Normal": stats.normalCount,
+    "Faible": stats.faibleCount,
+    "Rupture": stats.ruptureCount
+  };
 
-  // Top 5 produits par valeur
+  // Top 5 produits par valeur (basé sur tous les produits)
   const topProductsByValue = useMemo(
     () =>
       enriched
@@ -244,7 +293,7 @@ export default function Reports() {
   // Total des unités en stock
   const totalUnits = enriched.reduce((sum, p) => sum + p.stockGlobal, 0);
 
-  // --- Export PDF (sans "Produits à risque") ---
+  // --- Export PDF ---
   const exportPDF = async () => {
     try {
       const pdfContainer = document.createElement("div");
@@ -430,7 +479,7 @@ export default function Reports() {
 
       {/* Contenu principal */}
       <div ref={reportRef} className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6">
-        {/* Onglet Résumé (fusionné) */}
+        {/* Onglet Résumé */}
         {tab === "resume" && (
           <section className="space-y-8">
             {/* Cartes KPI */}
@@ -441,6 +490,7 @@ export default function Reports() {
                 icon={DollarSign}
                 color="violet"
                 subtitle="Basée sur le prix unitaire"
+                loading={loadingStats}
               />
               <KpiCard
                 title="Nombre de produits"
@@ -448,29 +498,38 @@ export default function Reports() {
                 icon={Package}
                 color="orange"
                 subtitle="Références actives"
+                loading={loadingStats}
               />
             </div>
 
-            {/* Répartition des statuts */}
+            {/* Répartition des statuts - VENANT DES API */}
             <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-200 p-6">
               <h3 className="text-sm font-semibold mb-5 flex items-center gap-2 text-[#472EAD]">
                 <Shield size={18} />
                 État du stock
               </h3>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="text-center p-4 bg-white rounded-lg border border-green-200 shadow-sm">
-                  <p className="text-xs text-gray-500 mb-1">Normal</p>
-                  <p className="text-2xl font-bold text-green-600">{counts["Normal"] || 0}</p>
+              {loadingStats ? (
+                <div className="animate-pulse grid grid-cols-3 gap-4">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="h-24 bg-gray-200 rounded-lg"></div>
+                  ))}
                 </div>
-                <div className="text-center p-4 bg-white rounded-lg border border-yellow-200 shadow-sm">
-                  <p className="text-xs text-gray-500 mb-1">Faible</p>
-                  <p className="text-2xl font-bold text-yellow-600">{counts["Faible"] || 0}</p>
+              ) : (
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="text-center p-4 bg-white rounded-lg border border-green-200 shadow-sm">
+                    <p className="text-xs text-gray-500 mb-1">Normal</p>
+                    <p className="text-2xl font-bold text-green-600">{counts.Normal}</p>
+                  </div>
+                  <div className="text-center p-4 bg-white rounded-lg border border-yellow-200 shadow-sm">
+                    <p className="text-xs text-gray-500 mb-1">Faible</p>
+                    <p className="text-2xl font-bold text-yellow-600">{counts.Faible}</p>
+                  </div>
+                  <div className="text-center p-4 bg-white rounded-lg border border-red-200 shadow-sm">
+                    <p className="text-xs text-gray-500 mb-1">Rupture</p>
+                    <p className="text-2xl font-bold text-red-600">{counts.Rupture}</p>
+                  </div>
                 </div>
-                <div className="text-center p-4 bg-white rounded-lg border border-red-200 shadow-sm">
-                  <p className="text-xs text-gray-500 mb-1">Rupture</p>
-                  <p className="text-2xl font-bold text-red-600">{counts["Rupture"] || 0}</p>
-                </div>
-              </div>
+              )}
             </div>
 
             {/* Deux colonnes */}
@@ -483,6 +542,7 @@ export default function Reports() {
                   icon={Package}
                   color="violet"
                   description="Unités (cartons × unités par carton)"
+                  loading={loadingStats}
                 />
               </div>
 
@@ -494,6 +554,7 @@ export default function Reports() {
                   icon={Layers}
                   color="green"
                   valueLabel="unités"
+                  loading={loadingStats}
                 />
               </div>
             </div>
@@ -506,6 +567,7 @@ export default function Reports() {
                 icon={Activity}
                 color="violet"
                 valueLabel="F"
+                loading={loadingStats}
               />
               <SimpleList
                 items={topProductsByCartons}
@@ -513,12 +575,13 @@ export default function Reports() {
                 icon={Layers}
                 color="blue"
                 valueLabel="cartons"
+                loading={loadingStats}
               />
             </div>
           </section>
         )}
 
-        {/* Onglet Alertes (inchangé) */}
+        {/* Onglet Alertes */}
         {tab === "alerts" && (
           <section>
             <div className="mb-6">
@@ -562,11 +625,11 @@ export default function Reports() {
                       <tbody>
                         {paginatedRupture.map((p) => (
                           <tr key={p.id} className="border-t hover:bg-gray-50">
-                            <td className="p-3 font-medium">{p.name}</td>
-                            <td className="p-3 text-center font-mono text-xs">{p.barcode}</td>
-                            <td className="p-3 text-center">{p.category}</td>
-                            <td className="p-3 text-center">{p.stockMin} cartons</td>
-                            <td className="p-3 text-center">{formatNumber(p.pricePerCarton)} F</td>
+                            <td className="p-3 font-medium">{p.nom || "Sans nom"}</td>
+                            <td className="p-3 text-center font-mono text-xs">{p.code_barre || p.code || ""}</td>
+                            <td className="p-3 text-center">{p.categorie?.nom || "Général"}</td>
+                            <td className="p-3 text-center">{p.stock_seuil || 5} cartons</td>
+                            <td className="p-3 text-center">{formatNumber(p.prix_unite_carton || 0)} F</td>
                           </tr>
                         ))}
                         {paginatedRupture.length === 0 && (
@@ -606,15 +669,21 @@ export default function Reports() {
                         </tr>
                       </thead>
                       <tbody>
-                        {paginatedFaible.map((p) => (
-                          <tr key={p.id} className="border-t hover:bg-gray-50">
-                            <td className="p-3 font-medium">{p.name}</td>
-                            <td className="p-3 text-center font-mono text-xs">{p.barcode}</td>
-                            <td className="p-3 text-center">{p.cartons} cartons</td>
-                            <td className="p-3 text-center">{p.stockMin} cartons</td>
-                            <td className="p-3 text-center"><span className="text-yellow-600">{p.cartons - p.stockMin} cartons</span></td>
-                          </tr>
-                        ))}
+                        {paginatedFaible.map((p) => {
+                          const stockActuel = p.nombre_carton || 0;
+                          const stockMin = p.stock_seuil || 5;
+                          return (
+                            <tr key={p.id} className="border-t hover:bg-gray-50">
+                              <td className="p-3 font-medium">{p.nom || "Sans nom"}</td>
+                              <td className="p-3 text-center font-mono text-xs">{p.code_barre || p.code || ""}</td>
+                              <td className="p-3 text-center">{stockActuel} cartons</td>
+                              <td className="p-3 text-center">{stockMin} cartons</td>
+                              <td className="p-3 text-center">
+                                <span className="text-yellow-600">{stockActuel - stockMin} cartons</span>
+                              </td>
+                            </tr>
+                          );
+                        })}
                         {paginatedFaible.length === 0 && (
                           <tr><td colSpan={5} className="p-6 text-center text-gray-500">Aucun produit faible</td></tr>
                         )}
