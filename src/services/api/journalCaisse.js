@@ -1,135 +1,44 @@
-// ==========================================================
-// 💰 journalCaisse.js — VERSION ULTRA STABLE 100 ANS
-// Intégration API Journal Caisse
-// Compatible backend Laravel (date par défaut si absente)
-// ==========================================================
-
 import httpClient from "../http/client";
-
-/* ====================================================== */
-/* UTILS SÉCURITÉ */
-/* ====================================================== */
 
 const safeNumber = (value) => {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
 };
 
-const buildParams = (date) => {
-  return date ? { date } : {};
-};
-
-/* ====================================================== */
-/* API JOURNAL CAISSE */
-/* ====================================================== */
-
 const journalCaisseAPI = {
-
-  /* ======================================================
-     🔵 TOTAL CAISSE
-     GET api/caissier/caisses-journal-total-caisse
-  ====================================================== */
-  async getTotalCaisse(date = null) {
+  async getControleCaisse({ date = null, page = 1 } = {}) {
     try {
-
       const response = await httpClient.get(
-        "/caissier/caisses-journal-total-caisse",
+        "/caissier/caisses-journals",
         {
-          params: buildParams(date),
+          params: {
+            ...(date ? { date } : {}),
+            page,
+          },
         }
       );
 
-      return safeNumber(response?.data);
-
-    } catch (error) {
-
-      console.error("❌ Erreur getTotalCaisse:", error);
-      return 0;
-    }
-  },
-
-  /* ======================================================
-     🔵 TOTAL ENCAISSEMENT
-     GET api/caissier/caisses-journal-total-encaissement
-  ====================================================== */
-  async getTotalEncaissement(date = null) {
-    try {
-
-      const response = await httpClient.get(
-        "/caissier/caisses-journal-total-encaissement",
-        {
-          params: buildParams(date),
-        }
-      );
-
-      return safeNumber(response?.data);
-
-    } catch (error) {
-
-      console.error("❌ Erreur getTotalEncaissement:", error);
-      return 0;
-    }
-  },
-
-  /* ======================================================
-     🔵 TOTAL DÉCAISSEMENT
-     GET api/caissier/caisses-journal-total_decaissement
-  ====================================================== */
-  async getTotalDecaissement(date = null) {
-    try {
-
-      const response = await httpClient.get(
-        "/caissier/caisses-journal-total-decaissement",
-        {
-          params: buildParams(date),
-        }
-      );
-
-      return safeNumber(response?.data);
-
-    } catch (error) {
-
-      console.error("❌ Erreur getTotalDecaissement:", error);
-      return 0;
-    }
-  },
-
-  /* ======================================================
-     🔵 CHARGEMENT GLOBAL OPTIMISÉ
-     (Charge les 3 totaux en parallèle)
-  ====================================================== */
-  async getJournalComplet(date = null) {
-
-    try {
-
-      const [
-        totalCaisse,
-        totalEncaissement,
-        totalDecaissement
-      ] = await Promise.all([
-        this.getTotalCaisse(date),
-        this.getTotalEncaissement(date),
-        this.getTotalDecaissement(date),
-      ]);
+      const payload = response?.data ?? {};
 
       return {
-        totalCaisse,
-        totalEncaissement,
-        totalDecaissement,
+        data: Array.isArray(payload.data) ? payload.data : [],
+        currentPage: safeNumber(payload.current_page) || 1,
+        lastPage: safeNumber(payload.last_page) || 1,
+        total: safeNumber(payload.total),
+        perPage: safeNumber(payload.per_page),
       };
 
     } catch (error) {
-
-      console.error("❌ Erreur getJournalComplet:", error);
-
+      console.error("❌ Erreur getControleCaisse:", error);
       return {
-        totalCaisse: 0,
-        totalEncaissement: 0,
-        totalDecaissement: 0,
+        data: [],
+        currentPage: 1,
+        lastPage: 1,
+        total: 0,
+        perPage: 0,
       };
     }
   },
-
 };
 
 export default journalCaisseAPI;

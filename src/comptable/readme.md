@@ -120,3 +120,5 @@ GET       api/nombre-versement-total
 GET       api/somme-versement-total
 # la somme total des encaissements
 GET       api/somme-paiements-total
+# les clients en dettes
+GET       api/clients-dette

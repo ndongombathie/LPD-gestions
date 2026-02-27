@@ -55,11 +55,26 @@ GET      api/nombre-entree-stock-total
 # le nombre de sortie dans le stock
 GET      api/nombre-sortie-stock-total
 # nombre de transfert en attente
-GET       api/transfers-en-attente
+GET       api/tproduits-transfer
 # nombre de transfert annuler
 GET       api/transfers-annuler
 # liste des transfert annuler 
 GET       api/liste-transfers-annuler
+
+# •	Nombre de produits en rupture
+GET       api/nombre-produits-en-rupture
+
+# nombere de produit en nombre-produits-sous-seuil
+GET       api/nombre-produits-sous-seuil
+
+# nombre de normaux.
+GET       api/nombre-produits-en-normaux
+
+# la liste des produits normales
+GET     api/produits-en-normaux
+
+# la liste des produits sous seuils (faible)
+GET     api/produits-sous-seuil
 
 📝 Note pour l'équipe
 Toutes les modifications sont contenues dans la branche fix/bordures-noires-interface-depot et n'affectent pas les autres rôles (boutique, vendeur, caissier, etc.). Les corrections sont spécifiques à l'interface gestionnaire de dépôt.
