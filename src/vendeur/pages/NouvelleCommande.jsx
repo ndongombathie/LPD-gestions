@@ -32,10 +32,12 @@ import {
   faInfoCircle,
   faCheckCircle,
   faExclamationCircle,
-  faDatabase
+  faDatabase,
+  faChevronLeft,    // ← AJOUT IMPORTANT
+  faChevronRight    // ← AJOUT IMPORTANT
 } from '@fortawesome/free-solid-svg-icons';
 
-//Imports pour ticket 
+// Imports pour ticket 
 import { useReactToPrint } from 'react-to-print';
 import TicketCommande from './TicketCommande';
 
@@ -163,6 +165,10 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
   });
   const [loadingVendeur, setLoadingVendeur] = useState(false);
   const [apiError, setApiError] = useState(null);
+ 
+  // 🔹 Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [lastPage, setLastPage] = useState(1);
 
   // État pour les notifications
   const [notifications, setNotifications] = useState([]);
@@ -199,11 +205,189 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
     return type;
   };
 
+  // Fonction pour charger les produits disponibles depuis l'API
+  const chargerProduits = async (page = currentPage) => {
+    try {
+      setLoadingProduits(true);
+      setErrorMessage('');
+
+      console.log(`🔄 Chargement des produits - Page ${page}...`);
+
+      // Utiliser l'API des produits disponibles en boutique
+      const response = await produitsDisponiblesAPI.getDisponiblesBoutique(page);
+      
+      // 📌 Vérifier la structure de la réponse
+      console.log('📦 Réponse API brute:', response);
+
+      // Extraire les données selon la structure
+      let produitsData = [];
+      let totalPages = 1;
+
+      if (response && response.data) {
+        // Si la réponse est dans response.data
+        if (response.data.produits && Array.isArray(response.data.produits)) {
+          produitsData = response.data.produits;
+          totalPages = response.data.lastPage || response.data.last_page || 1;
+        } else if (Array.isArray(response.data)) {
+          produitsData = response.data;
+          totalPages = response.lastPage || response.last_page || 1;
+        }
+      } else if (response && response.produits && Array.isArray(response.produits)) {
+        // Si la réponse a une propriété produits directement
+        produitsData = response.produits;
+        totalPages = response.lastPage || response.last_page || 1;
+      } else if (Array.isArray(response)) {
+        // Si c'est directement un tableau
+        produitsData = response;
+      }
+
+      console.log('📊 Produits data extraits:', produitsData);
+      console.log('📄 Total pages:', totalPages);
+
+      // Mise à jour de la pagination
+      setLastPage(totalPages);
+      setCurrentPage(page);
+
+      // Formatage des données
+      const produitsFormates = produitsData.map(produit => {
+        // Récupérer l'objet produit selon la structure
+        const produitObj = produit.produit || produit;
+        
+        // Calculer les prix par défaut si nécessaire
+        const prixDetail = parseFloat(produit.prix_vente_detail || produit.prix || produitObj.prix || 0);
+        const prixGros = parseFloat(produit.prix_vente_gros || produit.prix_unite_carton || produitObj.prix_gros || prixDetail * 0.8);
+        
+        // Calculer le stock
+        const stockGlobal = parseInt(produit.quantite || produit.stock || produitObj.stock || produitObj.quantite || 0, 10);
+        
+        return {
+          id: produitObj.id || produit.id,
+          nom: produitObj.nom || produit.nom || 'Produit sans nom',
+          code_barre: produitObj.code_barre || produit.code_barre || '',
+          
+          // Prix selon votre modèle
+          prix_vente_detail: prixDetail,
+          prix_vente_gros: prixGros,
+          prix_achat: parseFloat(produit.prix_achat || 0),
+          prix_total: parseFloat(produit.prix_total || 0),
+          
+          // Seuils
+          prix_seuil_detail: parseFloat(produit.prix_seuil_detail || prixDetail * 0.7),
+          prix_seuil_gros: parseFloat(produit.prix_seuil_gros || prixGros * 0.7),
+          
+          // Stock et gestion
+          stock_global: stockGlobal,
+          stock_seuil: parseInt(produit.seuil || produit.stock_seuil || 10, 10),
+          stock: stockGlobal,
+          seuil_alerte: parseInt(produit.seuil || produit.stock_seuil || 10, 10),
+          
+          // Gestion des cartons
+          unite_carton: parseInt(produit.unite_carton || produit.unite_par_carton || 1, 10),
+          prix_unite_carton: prixGros,
+          nombre_carton: Math.floor(stockGlobal / (produit.unite_carton || produit.unite_par_carton || 1)),
+          
+          // Catégorie
+          categorie_id: produit.categorie_id || produitObj.categorie?.id,
+          categorie: produit.categorie_nom || produitObj.categorie?.nom || 'Non catégorisé',
+          
+          // Dates
+          created_at: produit.created_at || produitObj.created_at,
+          updated_at: produit.updated_at || produitObj.updated_at,
+          
+          // Variables compatibilité
+          prix: prixDetail,
+          prix_detail: prixDetail,
+          prix_gros: prixGros,
+          prix_seuil: parseFloat(produit.prix_seuil_detail || prixDetail * 0.7)
+        };
+      });
+
+      console.log('✅ Produits formatés:', produitsFormates);
+      setProduits(produitsFormates);
+
+    } catch (error) {
+      console.error('❌ Erreur chargement produits:', error);
+      setErrorMessage('Impossible de charger les produits depuis l\'API.');
+      setProduits([]); // Tableau vide en cas d'erreur
+      
+      // Optionnel: Utiliser des données de test en cas d'erreur
+      // await chargerProduitsMock();
+      
+    } finally {
+      setLoadingProduits(false);
+    }
+  };
+
+  // Fonction de test avec des données mockées (optionnel)
+  const chargerProduitsMock = async () => {
+    try {
+      setLoadingProduits(true);
+      
+      // Données de test
+      const produitsMock = [
+        {
+          id: 1,
+          nom: 'Produit Test 1',
+          code_barre: '123456789',
+          prix_vente_detail: 1500,
+          prix_vente_gros: 1200,
+          quantite: 50,
+          unite_carton: 6,
+          categorie_nom: 'Catégorie A',
+          prix_seuil_detail: 1000,
+          prix_seuil_gros: 900
+        },
+        {
+          id: 2,
+          nom: 'Produit Test 2',
+          code_barre: '987654321',
+          prix_vente_detail: 2500,
+          prix_vente_gros: 2000,
+          quantite: 30,
+          unite_carton: 12,
+          categorie_nom: 'Catégorie B',
+          prix_seuil_detail: 1800,
+          prix_seuil_gros: 1500
+        },
+        {
+          id: 3,
+          nom: 'Produit Test 3',
+          code_barre: '555555555',
+          prix_vente_detail: 3500,
+          prix_vente_gros: 2800,
+          quantite: 20,
+          unite_carton: 4,
+          categorie_nom: 'Catégorie C',
+          prix_seuil_detail: 2500,
+          prix_seuil_gros: 2000
+        }
+      ];
+
+      setProduits(produitsMock);
+      setLastPage(1);
+      setErrorMessage('');
+      
+    } catch (error) {
+      console.error('Erreur chargement mock:', error);
+    } finally {
+      setLoadingProduits(false);
+    }
+  };
+
   // Charger les produits depuis l'API au montage
   useEffect(() => {
-    chargerProduits();
+    console.log('🔄 Composant monté, chargement des produits...');
+    chargerProduits(1);
     chargerInfosVendeur();
   }, []);
+
+  // Recharger les produits quand la page change
+  useEffect(() => {
+    if (currentPage > 0) {
+      console.log(`🔄 Changement de page: ${currentPage}`);
+      chargerProduits(currentPage);
+    }
+  }, [currentPage]);
 
   // Mettre à jour le nom du vendeur si sellerName change
   useEffect(() => {
@@ -215,18 +399,29 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
   // Filtrer les produits lorsque la recherche change
   useEffect(() => {
     const filtrerProduits = () => {
-      if (!produits || !Array.isArray(produits)) {
+      if (!produits || !Array.isArray(produits) || produits.length === 0) {
         setProduitsFiltres([]);
         return;
       }
 
+      if (!rechercheProduit.trim()) {
+        setProduitsFiltres(produits);
+        return;
+      }
+
+      const searchLower = rechercheProduit.toLowerCase().trim();
+      
       const filtres = produits.filter(produit => {
         if (!produit) return false;
-        const nomMatch = produit.nom?.toLowerCase().includes(rechercheProduit.toLowerCase()) || false;
-        const codeBarreMatch = produit.code_barre?.includes(rechercheProduit) || false;
-        const categorieMatch = produit.categorie?.toLowerCase().includes(rechercheProduit.toLowerCase()) || false;
+        
+        const nomMatch = produit.nom?.toLowerCase().includes(searchLower) || false;
+        const codeBarreMatch = produit.code_barre?.toLowerCase().includes(searchLower) || false;
+        const categorieMatch = produit.categorie?.toLowerCase().includes(searchLower) || false;
+        
         return nomMatch || codeBarreMatch || categorieMatch;
       });
+      
+      console.log(`🔍 Recherche "${rechercheProduit}": ${filtres.length} résultats`);
       setProduitsFiltres(filtres);
     };
 
@@ -289,77 +484,6 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
     };
   };
 
-  // Charger les produits disponibles depuis l'API
-  const chargerProduits = async () => {
-    try {
-      setLoadingProduits(true);
-      setErrorMessage('');
-
-      // Utiliser l'API des produits disponibles en boutique
-      const produitsApi = await produitsDisponiblesAPI.getDisponiblesBoutique();
-
-      // Formatage des données selon vos variables
-      const produitsFormates = produitsApi.map(produit => {
-        // CALCULER les prix manquants si nécessaire
-        const prixDetail = produit.prix_vente_detail || produit.prix || 0;
-        const prixGros = produit.prix_vente_gros || produit.prix_unite_carton || Math.round(prixDetail * 0.8);
-        
-        return {
-          id: produit.id,
-          nom: produit.nom,
-          code_barre: produit.code_barre || '',
-
-          // Prix selon votre modèle
-          prix_vente_detail: prixDetail,
-          prix_vente_gros: prixGros,
-          prix_achat: produit.prix_achat || 0,
-          prix_total: produit.prix_total || 0,
-
-          // Seuils
-          prix_seuil_detail: produit.prix_seuil_detail || Math.round(prixDetail * 0.7),
-          prix_seuil_gros: produit.prix_seuil_gros || Math.round(prixGros * 0.7),
-
-          // Stock et gestion
-          stock_global: produit.stock_global || produit.stock || 0,
-          stock_seuil: produit.stock_seuil || 10,
-          stock: produit.stock_global || produit.stock || 0,
-          seuil_alerte: produit.stock_seuil || 10,
-
-          // Gestion des cartons
-          unite_carton: produit.unite_carton || 1,
-          prix_unite_carton: prixGros,
-          nombre_carton: produit.nombre_carton || Math.floor((produit.stock_global || 0) / (produit.unite_carton || 1)),
-
-          // Catégorie
-          categorie_id: produit.categorie_id,
-          categorie: produit.categorie_nom || 'Non catégorisé',
-
-          // Dates
-          created_at: produit.created_at,
-          updated_at: produit.updated_at,
-
-          // Variables compatibilité
-          prix: prixDetail,
-          prix_detail: prixDetail,
-          prix_gros: prixGros,
-          prix_seuil: produit.prix_seuil_detail || Math.round(prixDetail * 0.7)
-        };
-      });
-
-      setProduits(produitsFormates);
-
-    } catch (error) {
-      console.error('❌ Erreur chargement produits:', error);
-      setErrorMessage('Impossible de charger les produits depuis l\'API.');
-      
-      // Pas de données de démo - on laisse le tableau vide
-      setProduits([]);
-      
-    } finally {
-      setLoadingProduits(false);
-    }
-  };
-
   const obtenirPrixParType = (produit, typeVente) => {
     if (!produit) {
       return { prix: 0, prix_seuil: 0 };
@@ -369,23 +493,15 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
 
     if (typeNormalise === 'gros') {
       return {
-        prix: produit.prix_vente_gros || 
-              produit.prix_unite_carton || 
-              Math.round((produit.prix_vente_detail || produit.prix || 0) * 0.8),
-        
-        prix_seuil: produit.prix_seuil_gros || 
-                    Math.round((produit.prix_seuil || (produit.prix_vente_detail || produit.prix || 0) * 0.7) * 0.8)
+        prix: produit.prix_vente_gros || 0,
+        prix_seuil: produit.prix_seuil_gros || 0
       };
     }
     
     // Type détail
     return {
-      prix: produit.prix_vente_detail || 
-            produit.prix || 
-            0,
-      
-      prix_seuil: produit.prix_seuil_detail || 
-                  Math.round((produit.prix_vente_detail || produit.prix || 0) * 0.7)
+      prix: produit.prix_vente_detail || 0,
+      prix_seuil: produit.prix_seuil_detail || 0
     };
   };
 
@@ -1341,7 +1457,8 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
   };
 
   const rechargerProduits = async () => {
-    await chargerProduits();
+    await chargerProduits(1);
+    setCurrentPage(1);
     addNotification('success', 'Produits rechargés avec succès');
   };
 
@@ -1396,7 +1513,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
                   <p className="text-xs text-gray-600 flex items-center gap-2">
                     <FontAwesomeIcon icon={faBoxes} className="text-xs text-gray-400" />
                     Catégorie: <span className="font-medium">{produit.categorie || 'Non catégorisé'}</span>
-                    </p>
+                  </p>
                 </div>
 
                 {/* Prix - Section simplifiée sans stock */}
@@ -1451,12 +1568,12 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
                   </button>
                   <button
                     onClick={() => ajouterAuPanier(produit, 'gros')}
-                    className={`flex-1 py-2 px-3 rounded text-xs font-semibold flex items-center gap-2 justify-center hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 ${produit.stock_global === 0 || produit.stock_global < produit.unite_carton
+                    className={`flex-1 py-2 px-3 rounded text-xs font-semibold flex items-center gap-2 justify-center hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 ${produit.stock_global === 0 || (produit.unite_carton > 1 && produit.stock_global < produit.unite_carton)
                         ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                         : 'bg-gradient-to-br from-[#f58020] to-[#ff9c4d] text-white'
                       }`}
                     title="Ajouter en vente gros"
-                    disabled={produit.stock_global === 0 || produit.stock_global < produit.unite_carton}
+                    disabled={produit.stock_global === 0 || (produit.unite_carton > 1 && produit.stock_global < produit.unite_carton)}
                   >
                     <FontAwesomeIcon icon={faPallet} className="text-xs" />
                     {produit.stock_global === 0 ? 'Stock épuisé' : 'Gros'}
@@ -1670,7 +1787,12 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-base text-gray-800 font-semibold flex items-center gap-2">
                 <FontAwesomeIcon icon={faBox} className="text-[#472ead] text-sm" />
-                Produits Disponibles ({produitsFiltres.length})
+                Produits Disponibles 
+                {produitsFiltres.length > 0 && (
+                  <span className="ml-2 text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full">
+                    {produitsFiltres.length} produits
+                  </span>
+                )}
               </h3>
               <div className="flex items-center gap-2">
                 {loadingProduits && (
@@ -1682,25 +1804,58 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
                 <button
                   onClick={rechargerProduits}
                   className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 py-1 px-3 rounded-lg flex items-center gap-1 transition-colors"
+                  disabled={loadingProduits}
                 >
-                  <FontAwesomeIcon icon={faRedo} />
+                  <FontAwesomeIcon icon={faRedo} className={loadingProduits ? 'animate-spin' : ''} />
                   Recharger
                 </button>
               </div>
             </div>
 
             {loadingProduits ? (
-              <div className="flex justify-center items-center py-10">
-                <FontAwesomeIcon icon={faSpinner} className="animate-spin text-3xl text-[#472ead]" />
+              <div className="flex justify-center items-center py-20">
+                <div className="text-center">
+                  <FontAwesomeIcon icon={faSpinner} className="animate-spin text-4xl text-[#472ead] mb-3" />
+                  <p className="text-gray-600">Chargement des produits...</p>
+                </div>
               </div>
             ) : (
-              renderProduitsFiltres()
+              <>
+                {renderProduitsFiltres()}
+
+                {/* 🔹 Pagination - visible seulement si plusieurs pages */}
+                {lastPage > 1 && (
+                  <div className="flex justify-center items-center gap-4 mt-6 pt-4 border-t border-gray-200">
+                    <button
+                      disabled={currentPage === 1 || loadingProduits}
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                    >
+                      <FontAwesomeIcon icon={faChevronLeft} className="text-xs" />
+                      Précédent
+                    </button>
+
+                    <span className="font-semibold text-sm bg-indigo-50 text-indigo-700 px-4 py-2 rounded-lg">
+                      Page {currentPage} / {lastPage}
+                    </span>
+
+                    <button
+                      disabled={currentPage === lastPage || loadingProduits}
+                      onClick={() => setCurrentPage(prev => Math.min(lastPage, prev + 1))}
+                      className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                    >
+                      Suivant
+                      <FontAwesomeIcon icon={faChevronRight} className="text-xs" />
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
 
         {/* Section droite : Panier et Client */}
-        <div className="space-y-5">
+        <div className="space-y-5 overflow-y-auto">
           {/* Informations client - SECTION AMÉLIORÉE */}
           <div className="bg-white rounded-xl p-5 shadow-sm relative">
             <h3 className="text-base text-gray-800 mb-5 font-semibold flex items-center gap-2">

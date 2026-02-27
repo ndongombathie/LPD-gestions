@@ -82,17 +82,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
   const [sortField, setSortField] = useState('date');
   const [sortDirection, setSortDirection] = useState('desc');
   
-  // États pour la pagination
-  const [pagination, setPagination] = useState({
-    currentPage: 1,
-    itemsPerPage: 10,
-    totalItems: 0,
-    totalPages: 1
-  });
-
-  // États pour la pagination des commandes filtrées (affichage)
-  const [commandesPaginees, setCommandesPaginees] = useState([]);
-  
   // État pour le rafraîchissement
   const [lastUpdate, setLastUpdate] = useState(Date.now());
   const [showRefreshNotification, setShowRefreshNotification] = useState(false);
@@ -762,14 +751,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
       setCommandes(commandesTriees);
       setCommandesFiltrees(commandesTriees);
       
-      // Mettre à jour la pagination
-      setPagination(prev => ({
-        ...prev,
-        totalItems: commandesTriees.length,
-        totalPages: Math.ceil(commandesTriees.length / prev.itemsPerPage),
-        currentPage: 1 // Reset à la première page
-      }));
-      
       chargerStatistiques(commandesTriees);
       
       // Sauvegarder en cache
@@ -940,7 +921,7 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     chargerCommandes();
   }, [chargerCommandes]);
 
-  // ---------- Effet pour les filtres et la pagination ----------
+  // ---------- Effet pour les filtres ----------
   useEffect(() => {
     if (commandes.length === 0) return;
     
@@ -1050,25 +1031,7 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     
     setCommandesFiltrees(commandesFiltreesTemp);
     
-    // Mettre à jour la pagination avec les nouvelles données filtrées
-    setPagination(prev => ({
-      ...prev,
-      totalItems: commandesFiltreesTemp.length,
-      totalPages: Math.ceil(commandesFiltreesTemp.length / prev.itemsPerPage),
-      currentPage: 1 // Revenir à la première page quand les filtres changent
-    }));
-    
   }, [commandes, filtreStatut, filtreTypeVente, filtreDate, dateDebut, dateFin, recherche, sortField, sortDirection]);
-
-  // ---------- Effet pour la pagination ----------
-  useEffect(() => {
-    // Calculer les commandes à afficher pour la page courante
-    const startIndex = (pagination.currentPage - 1) * pagination.itemsPerPage;
-    const endIndex = startIndex + pagination.itemsPerPage;
-    const commandesPage = commandesFiltrees.slice(startIndex, endIndex);
-    
-    setCommandesPaginees(commandesPage);
-  }, [commandesFiltrees, pagination.currentPage, pagination.itemsPerPage]);
 
   // ---------- Effet pour mettre à jour les statistiques ----------
   useEffect(() => {
@@ -1076,39 +1039,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
       chargerStatistiques(commandes);
     }
   }, [commandes, chargerStatistiques]);
-
-  // ---------- Fonctions de pagination ----------
-  const goToPage = (page) => {
-    setPagination(prev => ({
-      ...prev,
-      currentPage: Math.max(1, Math.min(page, prev.totalPages))
-    }));
-  };
-
-  const nextPage = () => {
-    goToPage(pagination.currentPage + 1);
-  };
-
-  const prevPage = () => {
-    goToPage(pagination.currentPage - 1);
-  };
-
-  const firstPage = () => {
-    goToPage(1);
-  };
-
-  const lastPage = () => {
-    goToPage(pagination.totalPages);
-  };
-
-  const changeItemsPerPage = (newItemsPerPage) => {
-    setPagination(prev => ({
-      ...prev,
-      itemsPerPage: newItemsPerPage,
-      currentPage: 1,
-      totalPages: Math.ceil(prev.totalItems / newItemsPerPage)
-    }));
-  };
 
   // ---------- Helpers ----------
   const getStatutIcone = (statut) => {
@@ -1244,38 +1174,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
   };
 
   const donneesModal = commandeDetails || commandeSelectionnee;
-
-  // Calcul des indices pour l'affichage
-  const startIndex = (pagination.currentPage - 1) * pagination.itemsPerPage + 1;
-  const endIndex = Math.min(pagination.currentPage * pagination.itemsPerPage, pagination.totalItems);
-
-  // Génération des numéros de page pour la navigation
-  const getPageNumbers = () => {
-    const delta = 2; // Nombre de pages à afficher de chaque côté de la page courante
-    const range = [];
-    const rangeWithDots = [];
-    let l;
-
-    for (let i = 1; i <= pagination.totalPages; i++) {
-      if (i === 1 || i === pagination.totalPages || (i >= pagination.currentPage - delta && i <= pagination.currentPage + delta)) {
-        range.push(i);
-      }
-    }
-
-    range.forEach((i) => {
-      if (l) {
-        if (i - l === 2) {
-          rangeWithDots.push(l + 1);
-        } else if (i - l !== 1) {
-          rangeWithDots.push('...');
-        }
-      }
-      rangeWithDots.push(i);
-      l = i;
-    });
-
-    return rangeWithDots;
-  };
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
@@ -1495,27 +1393,7 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
         )}
       </div>
 
-      {/* Sélecteur de nombre d'éléments par page */}
-      <div className="flex justify-end mb-3">
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-600">Afficher:</span>
-          <select
-            value={pagination.itemsPerPage}
-            onChange={(e) => changeItemsPerPage(Number(e.target.value))}
-            className="px-2 py-1 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
-          >
-            <option value={10}>10</option>
-            <option value={20}>20</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-          </select>
-          <span className="text-xs text-gray-600">
-            {pagination.totalItems > 0 ? `${startIndex}-${endIndex} sur ${pagination.totalItems}` : '0 élément'}
-          </span>
-        </div>
-      </div>
-
-      {/* Liste des commandes */}
+      {/* Liste des commandes (sans pagination) */}
       <div className="bg-white rounded-lg shadow border border-gray-200">
         {loading && progress.total === 0 ? (
           <div className="p-8 text-center">
@@ -1537,11 +1415,11 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
           </div>
         ) : (
           <div className="divide-y divide-gray-200">
-            {commandesPaginees.map(commande => (
+            {commandesFiltrees.map(commande => (
               <div key={commande.id} className="p-3 hover:bg-gray-50">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <FontAwesomeIcon icon={faFileInvoiceDollar} className="text-blue-600 text-xs" />
                       <span className="text-sm font-semibold text-gray-900">{commande.numero_commande}</span>
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${getStatutCouleur(commande.statut)}`}>
@@ -1558,7 +1436,7 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
                       </span>
                     </div>
                     
-                    <div className="flex items-center gap-3 text-xs text-gray-600 mb-1">
+                    <div className="flex items-center gap-3 text-xs text-gray-600 mb-1 flex-wrap">
                       <span className="flex items-center gap-1">
                         <FontAwesomeIcon icon={faUser} className="text-gray-400" />
                         {commande.client?.nom || 'Client'}
@@ -1575,11 +1453,11 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-2 text-xs">
+                    <div className="flex items-center gap-2 text-xs flex-wrap">
                       <span className="text-gray-600">
                         {commande.produits?.length || 0} produit(s)
                       </span>
-                      {commande.tva_appliquee || commande.tva > 0 || commande.tva_taux > 0 ? (
+                      {(commande.tva_appliquee || commande.tva > 0 || commande.tva_taux > 0) ? (
                         <span className="text-green-600 text-xs flex items-center gap-1">
                           <FontAwesomeIcon icon={faCheckCircle} className="text-xs" />
                           TVA 18%
@@ -1608,73 +1486,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
                 </div>
               </div>
             ))}
-          </div>
-        )}
-
-        {/* Pagination */}
-        {commandesFiltrees.length > 0 && (
-          <div className="px-3 py-3 border-t border-gray-200 bg-gray-50">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="text-xs text-gray-600">
-                Affichage de {startIndex} à {endIndex} sur {pagination.totalItems} commandes
-              </div>
-              
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={firstPage}
-                  disabled={pagination.currentPage === 1}
-                  className="p-1.5 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Première page"
-                >
-                  <FontAwesomeIcon icon={faAngleDoubleLeft} />
-                </button>
-                <button
-                  onClick={prevPage}
-                  disabled={pagination.currentPage === 1}
-                  className="p-1.5 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Page précédente"
-                >
-                  <FontAwesomeIcon icon={faAngleLeft} />
-                </button>
-
-                <div className="flex items-center gap-1 mx-2">
-                  {getPageNumbers().map((page, index) => (
-                    page === '...' ? (
-                      <span key={`dots-${index}`} className="px-2 py-1 text-xs text-gray-500">...</span>
-                    ) : (
-                      <button
-                        key={page}
-                        onClick={() => goToPage(page)}
-                        className={`min-w-[28px] h-7 px-2 text-xs rounded-md transition-colors ${
-                          pagination.currentPage === page
-                            ? 'bg-blue-600 text-white font-medium'
-                            : 'text-gray-700 hover:bg-gray-200'
-                        }`}
-                      >
-                        {page}
-                      </button>
-                    )
-                  ))}
-                </div>
-
-                <button
-                  onClick={nextPage}
-                  disabled={pagination.currentPage === pagination.totalPages}
-                  className="p-1.5 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Page suivante"
-                >
-                  <FontAwesomeIcon icon={faAngleRight} />
-                </button>
-                <button
-                  onClick={lastPage}
-                  disabled={pagination.currentPage === pagination.totalPages}
-                  className="p-1.5 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Dernière page"
-                >
-                  <FontAwesomeIcon icon={faAngleDoubleRight} />
-                </button>
-              </div>
-            </div>
           </div>
         )}
       </div>
