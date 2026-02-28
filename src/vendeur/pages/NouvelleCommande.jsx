@@ -295,15 +295,8 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
       setLoadingProduits(true);
       setErrorMessage('');
 
-<<<<<<< HEAD
-      // Utiliser l'API des produits disponibles en boutique
-      const produitsApi = await produitsDisponiblesAPI.getDisponiblesBoutique();
-      console.log(produitsApi);
-      
-=======
       const resp = await gestionnaireBoutiqueAPI.getProduitsDisponiblesBoutique(currentPage, debouncedRechercheProduit || '');
       const itemsRaw = Array.isArray(resp) ? resp : (resp?.data || []);
->>>>>>> b4ffaa8bcbf5b8161147056b74510dc85676f3b5
 
       const produitsFormates = itemsRaw.map(produit => {
         // CALCULER les prix manquants si nécessaire
