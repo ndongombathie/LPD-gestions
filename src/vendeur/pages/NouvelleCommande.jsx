@@ -297,6 +297,8 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
 
       // Utiliser l'API des produits disponibles en boutique
       const produitsApi = await produitsDisponiblesAPI.getDisponiblesBoutique();
+      console.log(produitsApi);
+      
 
       // Formatage des données selon vos variables
       const produitsFormates = produitsApi.map(produit => {
@@ -781,9 +783,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
           else if (createResponse.data.data && createResponse.data.data.id) {
             clientId = createResponse.data.data.id;
           }
-          else if (createResponse.data && typeof createResponse.data === 'object' && createResponse.data.id) {
-            clientId = createResponse.data.id;
-          }
+          
         }
         else if (createResponse && createResponse.id) {
           clientId = createResponse.id;
@@ -809,7 +809,6 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
         typeVenteGlobalCommande = 'detail';
       }
 
-      const typeVenteNormalise = normaliserTypeVente(typeVenteGlobal);
       
       console.log('🔍 Analyse du panier:', {
         typesDansPanier,
