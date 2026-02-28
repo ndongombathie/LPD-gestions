@@ -33,8 +33,8 @@ import {
   faCheckCircle,
   faExclamationCircle,
   faDatabase,
-  faChevronLeft,    // ← AJOUT IMPORTANT
-  faChevronRight    // ← AJOUT IMPORTANT
+  faChevronLeft,
+  faChevronRight
 } from '@fortawesome/free-solid-svg-icons';
 
 // Imports pour ticket 
@@ -140,7 +140,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
   const [editionPrix, setEditionPrix] = useState(null);
   const [editionQuantite, setEditionQuantite] = useState(null);
   const [envoiEnCours, setEnvoiEnCours] = useState(false);
-  const [tvaActive, setTvaActive] = useState(false);
+  const [tvaActive, setTvaActive] = useState(false); // TVA décochée par défaut
   const [produits, setProduits] = useState([]);
   const [loadingProduits, setLoadingProduits] = useState(true);
   const [produitsFiltres, setProduitsFiltres] = useState([]);
@@ -1495,56 +1495,66 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
     }
 
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
         {produitsFiltres.map(produit => {
           if (!produit) return null;
 
           return (
-            <div key={produit.id || Date.now()} className="bg-gray-50 rounded-lg p-4 border-2 border-gray-200 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-[#472ead] flex flex-col justify-between">
-              <div>
-                <h4 className="text-sm font-semibold text-gray-800 mb-2">{produit.nom || 'Produit sans nom'}</h4>
-                <div className="space-y-2 mb-3">
+            <div 
+              key={produit.id || Date.now()} 
+              className="bg-gray-50 rounded-lg p-3 border-2 border-gray-200 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-[#472ead] flex flex-col min-w-0 w-full"
+            >
+              <div className="overflow-hidden">
+                {/* Titre du produit avec gestion du débordement */}
+                <h4 className="text-sm font-semibold text-gray-800 mb-2 truncate" title={produit.nom || 'Produit sans nom'}>
+                  {produit.nom || 'Produit sans nom'}
+                </h4>
+                
+                <div className="space-y-1.5 mb-2">
                   {produit.code_barre && (
-                    <p className="text-xs text-gray-600 flex items-center gap-2">
-                      <FontAwesomeIcon icon={faBarcode} className="text-xs text-gray-400" />
-                      Code-barre: <span className="font-medium">{produit.code_barre}</span>
+                    <p className="text-xs text-gray-600 flex items-center gap-1.5 truncate">
+                      <FontAwesomeIcon icon={faBarcode} className="text-xs text-gray-400 flex-shrink-0" />
+                      <span className="truncate">Code: {produit.code_barre}</span>
                     </p>
                   )}
-                  <p className="text-xs text-gray-600 flex items-center gap-2">
-                    <FontAwesomeIcon icon={faBoxes} className="text-xs text-gray-400" />
-                    Catégorie: <span className="font-medium">{produit.categorie || 'Non catégorisé'}</span>
+                  <p className="text-xs text-gray-600 flex items-center gap-1.5 truncate">
+                    <FontAwesomeIcon icon={faBoxes} className="text-xs text-gray-400 flex-shrink-0" />
+                    <span className="truncate">Cat: {produit.categorie || 'Non catégorisé'}</span>
                   </p>
                 </div>
 
-                {/* Prix - Section simplifiée sans stock */}
-                <div className="space-y-2 my-3">
-                  <div className="bg-white p-2 rounded border border-gray-200 text-xs">
-                    <div className="font-semibold text-gray-800 flex items-center gap-2 mb-1 text-xs">
-                      <FontAwesomeIcon icon={faShoppingBag} className="text-xs text-[#472ead]" />
-                      Détail (unité):
+                {/* Prix - Section compacte */}
+                <div className="space-y-1.5 mb-2">
+                  {/* Prix détail */}
+                  <div className="bg-white p-1.5 rounded border border-gray-200">
+                    <div className="font-semibold text-gray-800 flex items-center gap-1 text-xs">
+                      <FontAwesomeIcon icon={faShoppingBag} className="text-[#472ead] flex-shrink-0" />
+                      <span className="truncate">Détail:</span>
                     </div>
-                    <div className="font-bold text-green-600 text-sm">
+                    <div className="font-bold text-green-600 text-xs truncate">
                       {(produit.prix_vente_detail || produit.prix || 0).toLocaleString()} FCFA
                     </div>
-                    <div className="text-xs text-gray-500 mt-1 flex items-center gap-1">
-                      <FontAwesomeIcon icon={faMoneyBillWave} className="text-red-500" />
-                      Seuil: {(produit.prix_seuil_detail || produit.prix_seuil || 0).toLocaleString()} FCFA
+                    <div className="text-[10px] text-gray-500 flex items-center gap-1">
+                      <FontAwesomeIcon icon={faMoneyBillWave} className="text-red-500 flex-shrink-0" />
+                      <span className="truncate">Seuil: {(produit.prix_seuil_detail || produit.prix_seuil || 0).toLocaleString()}</span>
                     </div>
                   </div>
-                  <div className="bg-white p-2 rounded border border-gray-200 text-xs">
-                    <div className="font-semibold text-gray-800 flex items-center gap-2 mb-1 text-xs">
-                      <FontAwesomeIcon icon={faPallet} className="text-xs text-[#f58020]" />
-                      Gros (carton):
+
+                  {/* Prix gros */}
+                  <div className="bg-white p-1.5 rounded border border-gray-200">
+                    <div className="font-semibold text-gray-800 flex items-center gap-1 text-xs">
+                      <FontAwesomeIcon icon={faPallet} className="text-[#f58020] flex-shrink-0" />
+                      <span className="truncate">Gros:</span>
                     </div>
-                    <div className="font-bold text-green-600 text-sm">
+                    <div className="font-bold text-green-600 text-xs truncate">
                       {(produit.prix_vente_gros || produit.prix_unite_carton || 0).toLocaleString()} FCFA
                     </div>
-                    <div className="text-xs text-gray-500 mt-1 flex items-center gap-1">
-                      <FontAwesomeIcon icon={faMoneyBillWave} className="text-red-500" />
-                      Seuil: {(produit.prix_seuil_gros || 0).toLocaleString()} FCFA
+                    <div className="text-[10px] text-gray-500 flex items-center gap-1">
+                      <FontAwesomeIcon icon={faMoneyBillWave} className="text-red-500 flex-shrink-0" />
+                      <span className="truncate">Seuil: {(produit.prix_seuil_gros || 0).toLocaleString()}</span>
                     </div>
                     {produit.unite_carton > 1 && (
-                      <div className="text-xs text-gray-500 mt-1">
+                      <div className="text-[10px] text-gray-500 mt-0.5 truncate">
                         {produit.unite_carton} unités/carton
                       </div>
                     )}
@@ -1552,33 +1562,36 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
                 </div>
               </div>
 
-              <div className="mt-4">
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => ajouterAuPanier(produit, 'détail')}
-                    className={`flex-1 py-2 px-3 rounded text-xs font-semibold flex items-center gap-2 justify-center hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 ${produit.stock_global === 0
-                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                        : 'bg-gradient-to-br from-[#472ead] to-[#5a3bc0] text-white'
-                      }`}
-                    title="Ajouter en vente détail"
-                    disabled={produit.stock_global === 0}
-                  >
-                    <FontAwesomeIcon icon={faShoppingBag} className="text-xs" />
-                    {produit.stock_global === 0 ? 'Stock épuisé' : 'Détail'}
-                  </button>
-                  <button
-                    onClick={() => ajouterAuPanier(produit, 'gros')}
-                    className={`flex-1 py-2 px-3 rounded text-xs font-semibold flex items-center gap-2 justify-center hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 ${produit.stock_global === 0 || (produit.unite_carton > 1 && produit.stock_global < produit.unite_carton)
-                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                        : 'bg-gradient-to-br from-[#f58020] to-[#ff9c4d] text-white'
-                      }`}
-                    title="Ajouter en vente gros"
-                    disabled={produit.stock_global === 0 || (produit.unite_carton > 1 && produit.stock_global < produit.unite_carton)}
-                  >
-                    <FontAwesomeIcon icon={faPallet} className="text-xs" />
-                    {produit.stock_global === 0 ? 'Stock épuisé' : 'Gros'}
-                  </button>
-                </div>
+              {/* Boutons d'action */}
+              <div className="mt-2 flex gap-1.5">
+                <button
+                  onClick={() => ajouterAuPanier(produit, 'détail')}
+                  className={`flex-1 py-1.5 px-2 rounded text-[11px] font-semibold flex items-center gap-1 justify-center transition-all duration-300 ${
+                    produit.stock_global === 0
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-gradient-to-br from-[#472ead] to-[#5a3bc0] text-white hover:shadow-md'
+                  }`}
+                  title="Ajouter en vente détail"
+                  disabled={produit.stock_global === 0}
+                >
+                  <FontAwesomeIcon icon={faShoppingBag} className="text-xs flex-shrink-0" />
+                  <span className="truncate">{produit.stock_global === 0 ? 'Épuisé' : 'Détail'}</span>
+                </button>
+                <button
+                  onClick={() => ajouterAuPanier(produit, 'gros')}
+                  className={`flex-1 py-1.5 px-2 rounded text-[11px] font-semibold flex items-center gap-1 justify-center transition-all duration-300 ${
+                    produit.stock_global === 0 || (produit.unite_carton > 1 && produit.stock_global < produit.unite_carton)
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-gradient-to-br from-[#f58020] to-[#ff9c4d] text-white hover:shadow-md'
+                  }`}
+                  title="Ajouter en vente gros"
+                  disabled={produit.stock_global === 0 || (produit.unite_carton > 1 && produit.stock_global < produit.unite_carton)}
+                >
+                  <FontAwesomeIcon icon={faPallet} className="text-xs flex-shrink-0" />
+                  <span className="truncate">
+                    {produit.stock_global === 0 ? 'Épuisé' : 'Gros'}
+                  </span>
+                </button>
               </div>
             </div>
           );
@@ -1783,7 +1796,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
           </div>
 
           {/* Liste des produits disponibles */}
-          <div>
+          <div className="overflow-hidden">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-base text-gray-800 font-semibold flex items-center gap-2">
                 <FontAwesomeIcon icon={faBox} className="text-[#472ead] text-sm" />
