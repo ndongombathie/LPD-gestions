@@ -44,6 +44,8 @@ import { produitsDisponiblesAPI } from '../../services/api/produits-disponibles'
 import { commandesAPI } from '../../services/api/commandes';
 import { clientsAPI } from '../../services/api/clients';
 import profileAPI from '../../services/api/profile';
+import gestionnaireBoutiqueAPI from '../../services/api/gestionnaireBoutique';
+import useDebouncedValue from '../../gestionnaire-boutique/hooks/useDebouncedValue';
 
 // Composant de notification
 const Notification = ({ type, message, onClose }) => {
@@ -51,14 +53,17 @@ const Notification = ({ type, message, onClose }) => {
   const [progress, setProgress] = useState(100);
 
   useEffect(() => {
+    const dismissMs = 1500;
+    const tickMs = 50;
     const timer = setTimeout(() => {
       setIsVisible(false);
       setTimeout(() => onClose(), 150);
-    }, 1500);
+    }, dismissMs);
 
+    const step = 100 / (dismissMs / tickMs);
     const progressInterval = setInterval(() => {
-      setProgress(prev => Math.max(0, prev - (100 / 2000) * 50));
-    }, 50);
+      setProgress(prev => Math.max(0, prev - step));
+    }, tickMs);
 
     return () => {
       clearTimeout(timer);
@@ -143,6 +148,9 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
   const [loadingProduits, setLoadingProduits] = useState(true);
   const [produitsFiltres, setProduitsFiltres] = useState([]);
   const [errorMessage, setErrorMessage] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageInfo, setPageInfo] = useState({ current: 1, last: 1, total: 0, perPage: 10, links: [] });
+  const debouncedRechercheProduit = useDebouncedValue(rechercheProduit, 350);
 
   const [commandeImprimee, setCommandeImprimee] = useState(null);
   const ticketRef = useRef();
@@ -212,26 +220,18 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
     }
   }, [sellerName]);
 
-  // Filtrer les produits lorsque la recherche change
+  // Synchroniser la liste affichée avec les produits (filtrage côté serveur)
   useEffect(() => {
-    const filtrerProduits = () => {
-      if (!produits || !Array.isArray(produits)) {
-        setProduitsFiltres([]);
-        return;
-      }
+    if (!produits || !Array.isArray(produits)) {
+      setProduitsFiltres([]);
+      return;
+    }
+    setProduitsFiltres(produits);
+  }, [produits]);
 
-      const filtres = produits.filter(produit => {
-        if (!produit) return false;
-        const nomMatch = produit.nom?.toLowerCase().includes(rechercheProduit.toLowerCase()) || false;
-        const codeBarreMatch = produit.code_barre?.includes(rechercheProduit) || false;
-        const categorieMatch = produit.categorie?.toLowerCase().includes(rechercheProduit.toLowerCase()) || false;
-        return nomMatch || codeBarreMatch || categorieMatch;
-      });
-      setProduitsFiltres(filtres);
-    };
-
-    filtrerProduits();
-  }, [rechercheProduit, produits]);
+  useEffect(() => {
+    chargerProduits();
+  }, [currentPage, debouncedRechercheProduit]);
 
   // Focus sur le champ code barre au chargement
   useEffect(() => {
@@ -295,13 +295,17 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
       setLoadingProduits(true);
       setErrorMessage('');
 
+<<<<<<< HEAD
       // Utiliser l'API des produits disponibles en boutique
       const produitsApi = await produitsDisponiblesAPI.getDisponiblesBoutique();
       console.log(produitsApi);
       
+=======
+      const resp = await gestionnaireBoutiqueAPI.getProduitsDisponiblesBoutique(currentPage, debouncedRechercheProduit || '');
+      const itemsRaw = Array.isArray(resp) ? resp : (resp?.data || []);
+>>>>>>> b4ffaa8bcbf5b8161147056b74510dc85676f3b5
 
-      // Formatage des données selon vos variables
-      const produitsFormates = produitsApi.map(produit => {
+      const produitsFormates = itemsRaw.map(produit => {
         // CALCULER les prix manquants si nécessaire
         const prixDetail = produit.prix_vente_detail || produit.prix || 0;
         const prixGros = produit.prix_vente_gros || produit.prix_unite_carton || Math.round(prixDetail * 0.8);
@@ -349,6 +353,26 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
       });
 
       setProduits(produitsFormates);
+      setProduitsFiltres(produitsFormates);
+      if (!Array.isArray(resp)) {
+        const links = Array.isArray(resp.links) ? resp.links.map(l => {
+          let p = l.page;
+          if (!p && l.url) {
+            const m = l.url.match(/[?&]page=(\d+)/);
+            if (m && m[1]) p = parseInt(m[1], 10);
+          }
+          return { ...l, page: p };
+        }) : [];
+        setPageInfo({
+          current: resp.current_page || 1,
+          last: resp.last_page || 1,
+          total: resp.total || produitsFormates.length,
+          perPage: resp.per_page || produitsFormates.length,
+          links
+        });
+      } else {
+        setPageInfo({ current: 1, last: 1, total: produitsFormates.length, perPage: produitsFormates.length, links: [] });
+      }
 
     } catch (error) {
       console.error('❌ Erreur chargement produits:', error);
@@ -360,6 +384,11 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
     } finally {
       setLoadingProduits(false);
     }
+  };
+
+  const goToPage = (p) => {
+    if (!p || p < 1 || p > pageInfo.last) return;
+    setCurrentPage(p);
   };
 
   const obtenirPrixParType = (produit, typeVente) => {
@@ -1651,7 +1680,10 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
               type="text"
               placeholder="Nom, code barre ou catégorie..."
               value={rechercheProduit}
-              onChange={(e) => setRechercheProduit(e.target.value)}
+              onChange={(e) => {
+                setRechercheProduit(e.target.value);
+                if (currentPage !== 1) setCurrentPage(1);
+              }}
               className="w-full py-2 px-3 text-sm border-2 border-gray-200 rounded-lg transition-colors focus:border-[#472ead] focus:outline-none"
             />
           </div>
@@ -1687,6 +1719,34 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
             ) : (
               renderProduitsFiltres()
             )}
+            <div className="mt-4 flex flex-col items-center gap-3">
+              <div className="text-xs text-gray-600">
+                Page {pageInfo.current} / {pageInfo.last} • {pageInfo.total} produits
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {pageInfo.links.map((l, idx) => {
+                  const isDisabled = !l.url || l.label === '...' || l.page === null;
+                  const isActive = !!l.active;
+                  const labelText = l.label.replace('&laquo; Previous', 'Précédent').replace('Next &raquo;', 'Suivant');
+                  return (
+                    <button
+                      key={`${labelText}-${idx}`}
+                      onClick={() => !isDisabled && goToPage(l.page)}
+                      disabled={isDisabled}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                        isActive
+                          ? 'bg-[#472ead] border-[#472ead] text-white'
+                          : isDisabled
+                            ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
+                            : 'bg-white border-gray-200 text-gray-700 hover:border-[#472ead] hover:bg-[#472ead]/5'
+                      }`}
+                    >
+                      {labelText}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
 
