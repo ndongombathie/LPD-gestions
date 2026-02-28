@@ -44,20 +44,25 @@ import { produitsDisponiblesAPI } from '../../services/api/produits-disponibles'
 import { commandesAPI } from '../../services/api/commandes';
 import { clientsAPI } from '../../services/api/clients';
 import profileAPI from '../../services/api/profile';
+import gestionnaireBoutiqueAPI from '../../services/api/gestionnaireBoutique';
+import useDebouncedValue from '../../gestionnaire-boutique/hooks/useDebouncedValue';
 
 const Notification = ({ type, message, onClose }) => {
   const [isVisible, setIsVisible] = useState(true);
   const [progress, setProgress] = useState(100);
 
   useEffect(() => {
+    const dismissMs = 1500;
+    const tickMs = 50;
     const timer = setTimeout(() => {
       setIsVisible(false);
       setTimeout(() => onClose(), 150);
-    }, 1500);
+    }, dismissMs);
 
+    const step = 100 / (dismissMs / tickMs);
     const progressInterval = setInterval(() => {
-      setProgress(prev => Math.max(0, prev - (100 / 2000) * 50));
-    }, 50);
+      setProgress(prev => Math.max(0, prev - step));
+    }, tickMs);
 
     return () => {
       clearTimeout(timer);
@@ -1810,6 +1815,34 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
                 )}
               </>
             )}
+            <div className="mt-4 flex flex-col items-center gap-3">
+              <div className="text-xs text-gray-600">
+                Page {pageInfo.current} / {pageInfo.last} • {pageInfo.total} produits
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {pageInfo.links.map((l, idx) => {
+                  const isDisabled = !l.url || l.label === '...' || l.page === null;
+                  const isActive = !!l.active;
+                  const labelText = l.label.replace('&laquo; Previous', 'Précédent').replace('Next &raquo;', 'Suivant');
+                  return (
+                    <button
+                      key={`${labelText}-${idx}`}
+                      onClick={() => !isDisabled && goToPage(l.page)}
+                      disabled={isDisabled}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                        isActive
+                          ? 'bg-[#472ead] border-[#472ead] text-white'
+                          : isDisabled
+                            ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
+                            : 'bg-white border-gray-200 text-gray-700 hover:border-[#472ead] hover:bg-[#472ead]/5'
+                      }`}
+                    >
+                      {labelText}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
 
