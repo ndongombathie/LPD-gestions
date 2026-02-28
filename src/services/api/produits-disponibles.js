@@ -154,61 +154,27 @@ export const produitsDisponiblesAPI = {
   /**
    * 📦 Récupérer tous les produits disponibles (VALIDÉS)
    */
-  getDisponiblesBoutique: async () => {
-    try {
-      console.log('🔄 [API] Chargement des produits disponibles...');
-      const response = await httpClient.get(ENDPOINTS.LIST);
+  getDisponiblesBoutique: async (page = 1) => {
+  try {
+    console.log(`🔄 [API] Chargement page ${page}...`);
 
-      console.log('📡 [API] Réponse API complète:', response);
-      console.log('📡 [API] Structure data:', {
-        hasData: !!response.data,
-        hasDataData: !!response.data?.data,
-        isArray: Array.isArray(response.data?.data),
-        length: response.data?.data?.length
-      });
+    const response = await httpClient.get(ENDPOINTS.LIST, {
+      params: { page }
+    });
 
-      const transferts = normalizeResponse(response);
-      console.log(`📡 [API] ${transferts.length} transferts normalisés`);
+    return {
+      produits: response.data.data,
+      currentPage: response.data.current_page,
+      lastPage: response.data.last_page,
+      total: response.data.total
+    };
 
-      if (transferts.length > 0) {
-        console.log('📡 [API] Premier transfert brut:', transferts[0]);
-        console.log('📡 [API] Produit dans transfert:', transferts[0]?.produit);
-      }
+  } catch (error) {
+    console.error('❌ [API] Erreur getDisponiblesBoutique:', error);
+    throw error;
+  }
+},
 
-      // 🔥 FILTRAGE : seulement les transferts VALIDÉS
-      const transfertsValides = transferts.filter(hasValidTransfer);
-      console.log(`📡 [API] ${transfertsValides.length} transferts valides après filtrage`);
-
-      // 🔄 Formatage
-      const produitsFormates = transfertsValides
-        .map(transfert => formatProduit(transfert))
-        .filter(produit => produit !== null); // Filtrer les null
-
-      console.log(`📦 [API] ${produitsFormates.length} produits formatés retournés`);
-
-      if (produitsFormates.length > 0) {
-        console.log('📦 [API] Exemple produit formaté:', {
-          nom: produitsFormates[0].nom,
-          code: produitsFormates[0].code,
-          stock: produitsFormates[0].stock,
-          prix_detail: produitsFormates[0].prix_vente_detail,
-          prix_gros: produitsFormates[0].prix_vente_gros,
-          prix_seuil_detail: produitsFormates[0].prix_seuil_detail,
-          prix_seuil_gros: produitsFormates[0].prix_seuil_gros
-        });
-      }
-
-      return produitsFormates;
-    } catch (error) {
-      console.error('❌ [API] Erreur getDisponiblesBoutique:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-        config: error.config
-      });
-      throw error;
-    }
-  },
 
   /**
    * 🏷️ Récupérer un produit par code-barre

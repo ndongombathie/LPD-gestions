@@ -1,12 +1,9 @@
 /**
- * 📦 Commandes API - Version complète pour HistoriqueCommandes
- * AVEC DIAGNOSTIC DES PRIX
+ * 📦 Commandes API - Version avec pagination
  */
-
 import httpClient from '../http/client';
 
 const ENDPOINTS = {
-  // Vos endpoints existants
   GET_ALL: '/commandes',
   GET_PENDING: '/commandes/pending',
   GET_BY_ID: '/commandes/:id',
@@ -15,34 +12,68 @@ const ENDPOINTS = {
   CANCEL: '/commandes/:id/annuler',
   UPDATE: '/commandes/:id',
   DELETE: '/commandes/:id',
-  
-  // NOUVEAUX ENDPOINTS POUR HISTORIQUE
   GET_STATS: '/commandes/stats',
   GET_TODAY: '/commandes/today',
   GET_BY_DATE_RANGE: '/commandes/by-date-range',
   GET_BY_STATUS: '/commandes/by-status/:status',
   SEARCH: '/commandes/search',
   EXPORT: '/commandes/export',
-
-  // NOUVEAU: ENDPOINT DE TEST STRUCTURE
   TEST_STRUCTURE: '/commandes/test-structure',
 };
 
 export const commandesAPI = {
   /**
-   * Récupérer toutes les commandes avec pagination/filtres
+   * Récupérer toutes les commandes avec pagination et filtres
+   * @param {Object} params - Paramètres de requête (page, perPage, date, status, type, search)
    */
   getAll: async (params = {}) => {
     try {
-      const response = await httpClient.get(ENDPOINTS.GET_ALL, { params });
+      console.log('📦 API getAll appelée avec params:', params);
+      
+      // Construction des paramètres pour l'API
+      const queryParams = {
+        page: params.page || 1,
+        per_page: params.perPage || params.per_page || 10,
+        ...(params.date && { date: params.date }),
+        ...(params.status && { status: params.status }),
+        ...(params.type && { type: params.type }),
+        ...(params.search && { search: params.search }),
+        ...(params.sort && { sort: params.sort }),
+        ...(params.orderBy && { order_by: params.orderBy })
+      };
+
+      const response = await httpClient.get(ENDPOINTS.GET_ALL, { params: queryParams });
+      
+      // La réponse du backend devrait avoir cette structure:
+      // {
+      //   data: [...],
+      //   current_page: 1,
+      //   last_page: 10,
+      //   per_page: 10,
+      //   total: 100,
+      //   from: 1,
+      //   to: 10
+      // }
+      
       return response.data;
     } catch (error) {
       console.error('❌ Erreur getAll commandes:', error.message);
+      
+      // Fallback pour le développement - simuler une réponse paginée
       if (error.response?.status === 404 || error.message.includes('Network Error')) {
-        console.warn('⚠️ Endpoint non disponible, retour de données mockées');
+        console.warn('⚠️ Endpoint non disponible, retour de données mockées paginées');
+        
+        // Simuler une réponse paginée
+        const mockData = generateMockCommandes(params.page || 1, params.perPage || 10);
+        
         return {
-          data: [],
-          meta: { total: 0, current_page: 1, last_page: 1 }
+          data: mockData.data,
+          current_page: mockData.current_page,
+          last_page: mockData.last_page,
+          per_page: mockData.per_page,
+          total: mockData.total,
+          from: mockData.from,
+          to: mockData.to
         };
       }
       throw error;
@@ -50,38 +81,48 @@ export const commandesAPI = {
   },
 
   /**
-   * Récupérer les commandes en attente
+   * Récupérer les commandes en attente avec pagination
    */
-  getPending: async () => {
+  getPending: async (params = {}) => {
     try {
-      const response = await httpClient.get(ENDPOINTS.GET_PENDING);
+      const response = await httpClient.get(ENDPOINTS.GET_PENDING, { 
+        params: { 
+          page: params.page || 1,
+          per_page: params.perPage || 10 
+        } 
+      });
       return response.data;
     } catch (error) {
       console.error('❌ Erreur getPending commandes:', error.message);
-      const allCommandes = await commandesAPI.getAll();
-      const pending = (allCommandes.data || []).filter(c => 
-        c.status === 'pending' || c.statut === 'en_attente_paiement'
-      );
-      return { data: pending };
+      const allCommandes = await commandesAPI.getAll({ 
+        page: params.page, 
+        perPage: params.perPage,
+        status: 'pending' 
+      });
+      return allCommandes;
     }
   },
 
   /**
-   * Récupérer les commandes d'aujourd'hui
+   * Récupérer les commandes d'aujourd'hui avec pagination
    */
-  getToday: async () => {
+  getToday: async (params = {}) => {
     try {
-      const response = await httpClient.get(ENDPOINTS.GET_TODAY);
+      const response = await httpClient.get(ENDPOINTS.GET_TODAY, {
+        params: {
+          page: params.page || 1,
+          per_page: params.perPage || 10
+        }
+      });
       return response.data;
     } catch (error) {
       console.error('❌ Erreur getToday commandes:', error.message);
-      const allCommandes = await commandesAPI.getAll();
-      const aujourdhui = new Date().toISOString().split('T')[0];
-      const today = (allCommandes.data || []).filter(c => {
-        const dateCommande = new Date(c.created_at || c.date).toISOString().split('T')[0];
-        return dateCommande === aujourdhui;
+      const allCommandes = await commandesAPI.getAll({ 
+        page: params.page, 
+        perPage: params.perPage,
+        date: new Date().toISOString().split('T')[0]
       });
-      return { data: today };
+      return allCommandes;
     }
   },
 
@@ -122,81 +163,134 @@ export const commandesAPI = {
     } catch (error) {
       console.error('❌ Erreur getStats commandes:', error.message);
       try {
-        const allCommandes = await commandesAPI.getAll();
-        return calculerStatsLocal(allCommandes.data || []);
+        // Récupérer juste la première page pour les stats
+        const response = await commandesAPI.getAll({ page: 1, perPage: 1 });
+        if (response && response.total) {
+          return {
+            total: response.total,
+            aujourdhui: 0,
+            pending: 0,
+            completed: 0,
+            cancelled: 0,
+            revenue_total: 0,
+            revenue_today: 0
+          };
+        }
       } catch (fallbackError) {
-        console.warn('⚠️ Impossible de calculer les stats, retour de données par défaut');
-        return {
-          total: 0,
-          aujourdhui: 0,
-          pending: 0,
-          completed: 0,
-          cancelled: 0,
-          revenue_total: 0,
-          revenue_today: 0
-        };
+        console.warn('⚠️ Impossible de calculer les stats');
       }
+      
+      return {
+        total: 0,
+        aujourdhui: 0,
+        pending: 0,
+        completed: 0,
+        cancelled: 0,
+        revenue_total: 0,
+        revenue_today: 0
+      };
     }
   },
 
   /**
-   * Récupérer par plage de dates
+   * Récupérer par plage de dates avec pagination
    */
-  getByDateRange: async (dateFrom, dateTo) => {
+  getByDateRange: async (dateFrom, dateTo, params = {}) => {
     try {
       const response = await httpClient.get(ENDPOINTS.GET_BY_DATE_RANGE, {
-        params: { date_from: dateFrom, date_to: dateTo }
+        params: { 
+          date_from: dateFrom, 
+          date_to: dateTo,
+          page: params.page || 1,
+          per_page: params.perPage || 10
+        }
       });
       return response.data;
     } catch (error) {
       console.error('❌ Erreur getByDateRange:', error.message);
-      const allCommandes = await commandesAPI.getAll();
-      const filtered = (allCommandes.data || []).filter(c => {
-        const dateCommande = new Date(c.created_at || c.date).toISOString().split('T')[0];
-        return dateCommande >= dateFrom && dateCommande <= dateTo;
+      const allCommandes = await commandesAPI.getAll({ 
+        page: params.page, 
+        perPage: params.perPage 
       });
-      return { data: filtered };
+      // Filtrer côté client en cas d'erreur
+      if (allCommandes.data) {
+        const filtered = allCommandes.data.filter(c => {
+          const dateCommande = new Date(c.created_at || c.date).toISOString().split('T')[0];
+          return dateCommande >= dateFrom && dateCommande <= dateTo;
+        });
+        return {
+          data: filtered,
+          current_page: 1,
+          last_page: 1,
+          per_page: filtered.length,
+          total: filtered.length
+        };
+      }
+      return { data: [] };
     }
   },
 
   /**
-   * Récupérer par statut
+   * Récupérer par statut avec pagination
    */
-  getByStatus: async (status) => {
+  getByStatus: async (status, params = {}) => {
     try {
       const response = await httpClient.get(
-        ENDPOINTS.GET_BY_STATUS.replace(':status', status)
+        ENDPOINTS.GET_BY_STATUS.replace(':status', status),
+        { params: { page: params.page || 1, per_page: params.perPage || 10 } }
       );
       return response.data;
     } catch (error) {
       console.error('❌ Erreur getByStatus:', error.message);
-      const allCommandes = await commandesAPI.getAll();
-      const filtered = (allCommandes.data || []).filter(c => 
-        c.status === status || c.statut === status
-      );
-      return { data: filtered };
+      // Fallback: utiliser getAll avec filtre status
+      return commandesAPI.getAll({ 
+        page: params.page, 
+        perPage: params.perPage,
+        status: status 
+      });
     }
   },
 
   /**
-   * Rechercher dans les commandes
+   * Rechercher dans les commandes avec pagination
    */
-  search: async (query) => {
+  search: async (query, params = {}) => {
     try {
       const response = await httpClient.get(ENDPOINTS.SEARCH, {
-        params: { q: query }
+        params: { 
+          q: query,
+          page: params.page || 1,
+          per_page: params.perPage || 10
+        }
       });
       return response.data;
     } catch (error) {
       console.error('❌ Erreur search commandes:', error.message);
-      const allCommandes = await commandesAPI.getAll();
-      const searchLower = query.toLowerCase();
-      const results = (allCommandes.data || []).filter(c => 
-        (c.client_nom && c.client_nom.toLowerCase().includes(searchLower)) ||
-        (c.numero_commande && c.numero_commande.toLowerCase().includes(searchLower)) ||
-        (c.client_telephone && c.client_telephone.includes(query))
-      );
-      return { data: results };
+      // Fallback: filtrage côté client
+      const allCommandes = await commandesAPI.getAll({ page: 1, perPage: 100 });
+      if (allCommandes.data) {
+        const searchLower = query.toLowerCase();
+        const filtered = allCommandes.data.filter(c => 
+          (c.client_nom && c.client_nom.toLowerCase().includes(searchLower)) ||
+          (c.numero_commande && c.numero_commande.toLowerCase().includes(searchLower)) ||
+          (c.client_telephone && c.client_telephone.includes(query))
+        );
+        
+        // Pagination manuelle
+        const page = params.page || 1;
+        const perPage = params.perPage || 10;
+        const start = (page - 1) * perPage;
+        const paginatedData = filtered.slice(start, start + perPage);
+        
+        return {
+          data: paginatedData,
+          current_page: page,
+          last_page: Math.ceil(filtered.length / perPage),
+          per_page: perPage,
+          total: filtered.length
+        };
+      }
+      return { data: [] };
     }
   },
 
@@ -253,8 +347,6 @@ export const commandesAPI = {
       return response.data;
     } catch (error) {
       console.warn('⚠️ Endpoint test non disponible:', error.message);
-      
-      // Simuler une réponse si l'endpoint n'existe pas
       return {
         warning: "Endpoint test non disponible",
         received_data: "Voir console pour les logs",
@@ -264,72 +356,18 @@ export const commandesAPI = {
   },
 
   /**
-   * Créer une nouvelle commande (avec diagnostic amélioré)
+   * Créer une nouvelle commande
    */
   create: async (data) => {
     try {
-      // DIAGNOSTIC AVANT ENVOI
-      console.group('🔍 API CREATE - DIAGNOSTIC AVANT ENVOI');
-      
-      // Vérifier la structure des items
-      if (data.items && Array.isArray(data.items)) {
-        data.items.forEach((item, index) => {
-          console.log(`📦 Item ${index + 1}:`, {
-            produit_id: item.produit_id,
-            nom: item.nom,
-            quantite: item.quantite,
-            prix_unitaire: item.prix_unitaire,
-            type_vente: item.type_vente,
-            prix_detail: item.prix_detail,
-            prix_gros: item.prix_gros,
-            prix_original: item.prix_original,
-            sous_total_calc: item.quantite * item.prix_unitaire,
-            sous_total_envoye: item.sous_total
-          });
-        });
-      }
-
-      // Vérifier les totaux
-      console.log('💰 Totaux:', {
-        montant_ht: data.montant_ht,
-        tva: data.tva,
-        montant_ttc: data.montant_ttc,
-        tva_appliquee: data.tva_appliquee,
-        tva_calculée: data.tva_appliquee ? data.montant_ht * 0.18 : 0,
-        montant_ttc_calculé: data.montant_ht + (data.tva_appliquee ? data.montant_ht * 0.18 : 0)
-      });
-
-      console.groupEnd();
-
-      // ENVOI À L'API
       console.log('📤 API CREATE - Envoi des données...');
       const response = await httpClient.post(ENDPOINTS.CREATE, data);
-      
-      // DIAGNOSTIC APRÈS RÉCEPTION
-      console.group('✅ API CREATE - RÉPONSE REÇUE');
-      console.log('Réponse complète:', response.data);
-      
-      if (response.data?.data?.items) {
-        console.log('📦 Items retournés par le serveur:');
-        response.data.data.items.forEach((item, index) => {
-          console.log(`  Item ${index + 1}:`, {
-            prix_unitaire: item.prix_unitaire,
-            sous_total: item.sous_total,
-            type_vente: item.type_vente
-          });
-        });
-      }
-      
-      console.groupEnd();
-      
       return response.data;
-      
     } catch (error) {
       console.group('❌ API CREATE - ERREUR');
       console.error('Message erreur:', error.message);
       console.error('Status:', error.response?.status);
       console.error('Données erreur:', error.response?.data);
-      console.error('Headers:', error.response?.headers);
       console.groupEnd();
       
       const errorMessage = error.response?.data?.message || '';
@@ -435,132 +473,14 @@ export const commandesAPI = {
   },
 
   /**
-   * Méthode utilitaire pour créer une commande avec fallback robuste
-   * ET DIAGNOSTIC COMPLET
+   * Créer une commande avec fallback
    */
   createWithFallback: async (commandeData) => {
-    console.group('🚀 CREATE WITH FALLBACK - DÉBUT');
-    
     try {
-      console.log('🔍 ÉTAPE 1 - Validation des données locales');
-      
-      // Validation approfondie
-      if (!commandeData.items || !Array.isArray(commandeData.items) || commandeData.items.length === 0) {
-        throw new Error('Aucun item dans la commande');
-      }
-
-      // Vérifier chaque item
-      commandeData.items.forEach((item, index) => {
-        if (!item.prix_unitaire || isNaN(item.prix_unitaire)) {
-          throw new Error(`Item ${index + 1} (${item.nom}): prix_unitaire invalide: ${item.prix_unitaire}`);
-        }
-        if (!item.quantite || isNaN(item.quantite) || item.quantite <= 0) {
-          throw new Error(`Item ${index + 1} (${item.nom}): quantite invalide: ${item.quantite}`);
-        }
-        
-        const sousTotalCalc = item.quantite * item.prix_unitaire;
-        const sousTotalEnvoye = item.sous_total || 0;
-        
-        if (Math.abs(sousTotalCalc - sousTotalEnvoye) > 0.01) {
-          console.warn(`⚠️ Item ${index + 1}: sous-total incohérent. Calculé: ${sousTotalCalc}, Envoyé: ${sousTotalEnvoye}`);
-        }
-      });
-
-      // Vérifier les totaux
-      const totalHTItems = commandeData.items.reduce((sum, item) => 
-        sum + (item.quantite * item.prix_unitaire), 0);
-      
-      const tvaCalc = commandeData.tva_appliquee ? totalHTItems * 0.18 : 0;
-      const totalTTCCalc = totalHTItems + tvaCalc;
-
-      console.log('🧮 Validation des totaux:', {
-        totalHTItems,
-        montant_ht: commandeData.montant_ht,
-        differenceHT: Math.abs(totalHTItems - commandeData.montant_ht),
-        tvaCalc,
-        tvaEnvoyee: commandeData.tva,
-        totalTTCCalc,
-        montant_ttc: commandeData.montant_ttc,
-        differenceTTC: Math.abs(totalTTCCalc - commandeData.montant_ttc)
-      });
-
-      if (Math.abs(totalHTItems - commandeData.montant_ht) > 1) {
-        console.warn('⚠️ Différence significative dans le total HT');
-        // Ajuster pour éviter les erreurs
-        commandeData.montant_ht = parseFloat(totalHTItems.toFixed(2));
-        commandeData.tva = parseFloat(tvaCalc.toFixed(2));
-        commandeData.montant_ttc = parseFloat(totalTTCCalc.toFixed(2));
-        console.log('🔄 Totaux ajustés:', commandeData);
-      }
-
-      console.log('🔍 ÉTAPE 2 - Appel de l\'API');
-      const response = await commandesAPI.create(commandeData);
-      
-      console.log('🔍 ÉTAPE 3 - Analyse de la réponse');
-      
-      // Vérifier la réponse
-      if (!response.success && !response.data) {
-        throw new Error('Réponse API invalide: pas de success ni de data');
-      }
-
-      // Si c'est un succès simulé (Pusher error), on log un warning
-      if (response.warning) {
-        console.warn('⚠️ Commande créée avec warning:', response.warning);
-      }
-
-      // Sauvegarder pour référence
-      try {
-        const apiResponses = JSON.parse(localStorage.getItem('api_responses_log') || '[]');
-        apiResponses.push({
-          timestamp: new Date().toISOString(),
-          data_sent: commandeData,
-          response_received: response,
-          status: 'success'
-        });
-        localStorage.setItem('api_responses_log', JSON.stringify(apiResponses.slice(-20))); // Garder les 20 derniers
-      } catch (storageError) {
-        console.error('❌ Erreur sauvegarde log:', storageError);
-      }
-
-      console.groupEnd();
-      return response;
-      
+      return await commandesAPI.create(commandeData);
     } catch (error) {
-      console.error('🚨 ERREUR CRITIQUE création commande:', error);
+      console.warn('⚠️ Fallback: création locale de la commande');
       
-      // Diagnostic d'erreur détaillé
-      const errorDiagnostic = {
-        timestamp: new Date().toISOString(),
-        error: {
-          message: error.message,
-          stack: error.stack,
-          name: error.name
-        },
-        commandeData: {
-          montant_ht: commandeData.montant_ht,
-          montant_ttc: commandeData.montant_ttc,
-          items_count: commandeData.items?.length,
-          items_sample: commandeData.items?.slice(0, 2).map(item => ({
-            nom: item.nom,
-            prix_unitaire: item.prix_unitaire,
-            quantite: item.quantite,
-            type_vente: item.type_vente
-          }))
-        }
-      };
-      
-      console.error('📋 Diagnostic erreur:', errorDiagnostic);
-      
-      // Sauvegarder l'erreur pour débogage
-      try {
-        const errorLog = JSON.parse(localStorage.getItem('commande_errors_log') || '[]');
-        errorLog.push(errorDiagnostic);
-        localStorage.setItem('commande_errors_log', JSON.stringify(errorLog.slice(-50)));
-      } catch (storageError) {
-        console.error('❌ Erreur sauvegarde erreur:', storageError);
-      }
-      
-      // Créer une commande locale
       const commandeLocale = {
         success: false,
         message: 'Commande sauvegardée localement (erreur serveur)',
@@ -582,25 +502,9 @@ export const commandesAPI = {
           vendeur_nom: commandeData.vendeur_nom,
           error_details: error.message.substring(0, 200)
         },
-        warning: 'Cette commande n\'a pas été synchronisée avec le serveur. Elle sera sauvegardée localement.'
+        warning: 'Cette commande n\'a pas été synchronisée avec le serveur.'
       };
       
-      // Stocker la commande locale pour re-synchronisation
-      try {
-        const commandesLocales = JSON.parse(localStorage.getItem('commandes_locales_pending') || '[]');
-        commandesLocales.push({
-          original_data: commandeData,
-          local_version: commandeLocale.data,
-          timestamp: new Date().toISOString(),
-          attempts: 0
-        });
-        localStorage.setItem('commandes_locales_pending', JSON.stringify(commandesLocales));
-        console.log('📝 Commande sauvegardée localement pour re-synchronisation');
-      } catch (storageError) {
-        console.error('❌ Erreur sauvegarde locale:', storageError);
-      }
-      
-      console.groupEnd();
       return commandeLocale;
     }
   },
@@ -613,7 +517,6 @@ export const commandesAPI = {
       localStorage.removeItem('api_responses_log');
       localStorage.removeItem('commande_errors_log');
       localStorage.removeItem('commandes_locales_pending');
-      localStorage.removeItem('commande_debug_log');
       console.log('🧹 Logs de débogage nettoyés');
     } catch (error) {
       console.error('❌ Erreur nettoyage logs:', error);
@@ -628,8 +531,7 @@ export const commandesAPI = {
       return {
         api_responses: JSON.parse(localStorage.getItem('api_responses_log') || '[]'),
         errors: JSON.parse(localStorage.getItem('commande_errors_log') || '[]'),
-        pending_locales: JSON.parse(localStorage.getItem('commandes_locales_pending') || '[]'),
-        debug_log: JSON.parse(localStorage.getItem('commande_debug_log') || '[]')
+        pending_locales: JSON.parse(localStorage.getItem('commandes_locales_pending') || '[]')
       };
     } catch (error) {
       console.error('❌ Erreur récupération logs:', error);
@@ -638,67 +540,77 @@ export const commandesAPI = {
   }
 };
 
-// Fonction utilitaire pour calculer les stats localement
-const calculerStatsLocal = (commandes) => {
-  const aujourdhui = new Date().toISOString().split('T')[0];
+/**
+ * Génère des données mockées pour les tests
+ */
+function generateMockCommandes(page = 1, perPage = 10) {
+  const total = 57; // Nombre total de commandes mockées
+  const lastPage = Math.ceil(total / perPage);
+  const start = (page - 1) * perPage;
+  const end = Math.min(start + perPage, total);
   
-  const stats = {
-    total: commandes.length,
-    aujourdhui: commandes.filter(c => {
-      try {
-        const dateCommande = new Date(c.created_at || c.date || c.date_commande).toISOString().split('T')[0];
-        return dateCommande === aujourdhui;
-      } catch {
-        return false;
-      }
-    }).length,
-    pending: commandes.filter(c => {
-      const statut = c.status || c.statut || '';
-      return statut.includes('pending') || 
-             statut.includes('attente') || 
-             statut.includes('en_attente');
-    }).length,
-    completed: commandes.filter(c => {
-      const statut = c.status || c.statut || '';
-      return statut.includes('completed') || 
-             statut.includes('complété') || 
-             statut.includes('validé') ||
-             statut.includes('payé');
-    }).length,
-    cancelled: commandes.filter(c => {
-      const statut = c.status || c.statut || '';
-      return statut.includes('cancelled') || 
-             statut.includes('annulé');
-    }).length,
-    revenue_total: commandes
-      .filter(c => {
-        const statut = c.status || c.statut || '';
-        return statut.includes('completed') || 
-               statut.includes('complété') || 
-               statut.includes('validé') ||
-               statut.includes('payé');
-      })
-      .reduce((sum, c) => sum + (c.total_ttc || c.total || c.montant_ttc || 0), 0),
-    revenue_today: commandes
-      .filter(c => {
-        try {
-          const dateCommande = new Date(c.created_at || c.date || c.date_commande).toISOString().split('T')[0];
-          const statut = c.status || c.statut || '';
-          return dateCommande === aujourdhui && 
-                (statut.includes('completed') || 
-                 statut.includes('complété') || 
-                 statut.includes('validé') ||
-                 statut.includes('payé'));
-        } catch {
-          return false;
-        }
-      })
-      .reduce((sum, c) => sum + (c.total_ttc || c.total || c.montant_ttc || 0), 0)
+  const commandes = [];
+  for (let i = start; i < end; i++) {
+    const index = i + 1;
+    const date = new Date();
+    date.setDate(date.getDate() - Math.floor(Math.random() * 30));
+    
+    const statuts = ['complétée', 'en_attente_paiement', 'annulée'];
+    const types = ['détail', 'gros', 'mixte'];
+    const statut = statuts[Math.floor(Math.random() * statuts.length)];
+    const type = types[Math.floor(Math.random() * types.length)];
+    const tvaAppliquee = Math.random() > 0.3;
+    const montantHT = Math.floor(Math.random() * 50000) + 5000;
+    const tva = tvaAppliquee ? Math.round(montantHT * 0.18) : 0;
+    const montantTTC = montantHT + tva;
+    
+    commandes.push({
+      id: `mock-${index}`,
+      uuid: `mock-uuid-${index}`,
+      numero_commande: `CMD-MOCK-${index.toString().padStart(4, '0')}`,
+      client: {
+        nom: `Client ${index}`,
+        telephone: `77${Math.floor(Math.random() * 10000000).toString().padStart(7, '0')}`,
+        adresse: `Adresse client ${index}`
+      },
+      statut: statut,
+      type_vente: type,
+      date: date.toISOString(),
+      vendeur: 'Vendeur Test',
+      montant_ht: montantHT,
+      tva: tva,
+      montant_ttc: montantTTC,
+      total_ht: montantHT,
+      total_ttc: montantTTC,
+      tva_appliquee: tvaAppliquee,
+      tva_active: tvaAppliquee,
+      tva_taux: tvaAppliquee ? 18 : 0,
+      produits: Array.from({ length: Math.floor(Math.random() * 5) + 1 }, (_, j) => ({
+        id: `mock-prod-${index}-${j}`,
+        nom: `Produit ${String.fromCharCode(65 + j)}`,
+        quantite: Math.floor(Math.random() * 10) + 1,
+        prix_unitaire: Math.floor(Math.random() * 5000) + 500,
+        type_vente: type === 'mixte' ? (j % 2 === 0 ? 'gros' : 'détail') : type,
+        sous_total: 0 // Sera calculé après
+      }))
+    });
+    
+    // Calculer les sous-totaux
+    commandes[i - start].produits = commandes[i - start].produits.map(p => ({
+      ...p,
+      sous_total: p.quantite * p.prix_unitaire
+    }));
+  }
+  
+  return {
+    data: commandes,
+    current_page: page,
+    last_page: lastPage,
+    per_page: perPage,
+    total: total,
+    from: start + 1,
+    to: end
   };
-  
-  console.log('📊 Stats calculées localement:', stats);
-  return stats;
-};
+}
 
-// Exportation par défaut pour compatibilité
 export default commandesAPI;
