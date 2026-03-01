@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { paiementsAPI } from "@/services/api";
+import { commandesAPI } from "@/services/api";
 import { logger } from "@/utils/logger";
 
 export function usePaiementsClients(toast) {
@@ -24,17 +24,14 @@ export function usePaiementsClients(toast) {
 
   // ======================================================
   // ➕ Créer une tranche (en attente caisse)
+  // ✅ CORRECTION : Utilise commandesAPI.envoyerTranche()
+  // ✅ CORRECTION : N'envoie que le montant
   // ======================================================
   const trancheMutation = useMutation({
-    mutationFn: ({ commandeId, tranche }) =>
-    paiementsAPI.create(commandeId, {
-      montant: tranche.montant,
-      mode_paiement: tranche.mode,
-      date_paiement: tranche.date,
-      type_paiement: "tranche",
-      commentaire: tranche.commentaire || "",
-    }),
-
+    mutationFn: ({ commandeId, montant }) =>
+      commandesAPI.envoyerTranche(commandeId, {
+        montant,
+      }),
 
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -56,62 +53,41 @@ export function usePaiementsClients(toast) {
 
   // ======================================================
   // ✏️ Modifier une tranche (reste en attente)
+  // ❌ DÉSACTIVÉ - Retourne une fonction qui affiche une erreur
   // ======================================================
-  const editTrancheMutation = useMutation({
-    mutationFn: (p) =>
-      paiementsAPI.update(p.id, {
-        montant: p.montant,
-        mode_paiement: p.mode_paiement,
-        date_paiement: p.date_paiement || p.date,        commentaire: p.commentaire || "",
-      }),
-
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["clients-speciaux"],
-      });
-
-      toast("success", "Tranche modifiée", "Mise à jour réussie.");
-    },
-
-    onError: (error) => {
-      logger.error("usePaiementsClients.update", { error });
-      toast("error", "Erreur", "Impossible de modifier la tranche.");
-    },
-  });
+  const handleVoirDetailEditTranche = (commande, paiement, newMontant, onSuccessCallback) => {
+    toast("error", "Modification impossible", "Cette opération n'est pas disponible.");
+    if (onSuccessCallback) onSuccessCallback();
+  };
 
   // ======================================================
   // 🗑 Supprimer une tranche
+  // ❌ DÉSACTIVÉ - Retourne une fonction qui affiche une erreur
   // ======================================================
-  const deleteTrancheMutation = useMutation({
-    mutationFn: (id) => paiementsAPI.delete(id),
-
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["clients-speciaux"],
-      });
-
-      toast("success", "Tranche supprimée", "Suppression réussie.");
-    },
-
-    onError: (error) => {
-      logger.error("usePaiementsClients.delete", { error });
-      toast("error", "Erreur", "Impossible de supprimer la tranche.");
-    },
-  });
+  const handleVoirDetailDeleteTranche = (commande, paiement, onSuccessCallback) => {
+    toast("error", "Suppression impossible", "Cette opération n'est pas disponible.");
+    if (onSuccessCallback) onSuccessCallback();
+  };
 
   return {
     loadPaiementsForClient,
 
-    handleTrancheSubmit: (commande, tranche) =>
-      trancheMutation.mutate({
-        commandeId: commande.id,
-        tranche,
-      }),
+    // ✅ handleTrancheSubmit : n'envoie que le montant
+    handleTrancheSubmit: (commande, montant, onSuccessCallback) =>
+      trancheMutation.mutate(
+        {
+          commandeId: commande.id,
+          montant,
+        },
+        {
+          onSuccess: () => {
+            if (onSuccessCallback) onSuccessCallback();
+          },
+        }
+      ),
 
-    handleVoirDetailEditTranche: (commande, paiement) =>
-      editTrancheMutation.mutate(paiement),
-
-    handleVoirDetailDeleteTranche: (commande, paiement) =>
-      deleteTrancheMutation.mutate(paiement.id),
+    // ✅ Fonctions désactivées (backend 405)
+    handleVoirDetailEditTranche,
+    handleVoirDetailDeleteTranche,
   };
 }

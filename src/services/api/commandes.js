@@ -11,13 +11,15 @@ import httpClient from '../http/client';
 // ======================================================
 const ENDPOINTS = {
   GET_ALL: '/commandes',
-  GET_PENDING: '/commandes/pending',
+  GET_PENDING: '/commandes-attente',
   GET_BY_ID: '/commandes/:id',
   CREATE: '/commandes',
   VALIDATE: '/commandes/:id/valider',
   CANCEL: '/commandes/:id/annuler',
   UPDATE: '/commandes/:id',
   DELETE: '/commandes/:id',
+  SEND_TRANCHE: '/commandes/:id/envoyer-tranche',
+  GET_STATS_SPECIAL: '/stats-commandes-speciales',
 };
 
 export const commandesAPI = {
@@ -31,16 +33,13 @@ export const commandesAPI = {
     }
   },
 
-  getPending: async () => {
-    try {
-      const response = await httpClient.get(ENDPOINTS.GET_PENDING);
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erreur getPending commandes:', error.message);
-      throw error;
-    }
-  },
-
+getPending: async (params = {}) => {
+  const response = await httpClient.get(
+    ENDPOINTS.GET_PENDING,
+    { params }
+  );
+  return response.data;
+},
   getById: async (id) => {
     try {
       const response = await httpClient.get(
@@ -108,6 +107,30 @@ export const commandesAPI = {
       return response.data;
     } catch (error) {
       console.error('❌ Erreur delete commande:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+  sendTranche: async (id, data) => {
+    try {
+      const response = await httpClient.post(
+        ENDPOINTS.SEND_TRANCHE.replace(':id', id),
+        data
+      );
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erreur envoyer tranche:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+  getStatsSpecial: async (params = {}) => {
+    try {
+      const response = await httpClient.get(
+        ENDPOINTS.GET_STATS_SPECIAL,
+        { params }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erreur getStatsSpecial:', error.message);
       throw error;
     }
   },

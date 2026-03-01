@@ -43,7 +43,11 @@ export function normalizeCommande(cmd) {
     cmd.ligne_commandes ||
     [];
 
-  const lignes = (lignesSource || []).map((l) => ({
+const lignes = (lignesSource || []).map((l) => {
+  const qte = Number(l.quantite || l.qte || 0);
+  const pu = Number(l.prix_unitaire || l.prix || 0);
+
+  return {
     id: l.id,
     produitId: l.produit_id || l.produitId || null,
     libelle:
@@ -53,30 +57,47 @@ export function normalizeCommande(cmd) {
       l.produit?.nom ||
       "",
     ref: l.ref || l.code_produit || l.reference || null,
-    qte: Number(l.quantite || l.qte || 0),
-    prixUnitaire: Number(l.prix_unitaire || l.prix || 0),
-    totalHT: Number(l.total_ht ?? l.totalHT ?? 0),
-    totalTTC: Number(l.total_ttc ?? l.totalTTC ?? l.total ?? 0),
+    qte,
+    prixUnitaire: pu,
+
+    totalHT: Number(
+      l.total_ht ??
+      l.totalHT ??
+      qte * pu
+    ),
+    totalTTC: Number(
+      l.total_ttc ??
+      l.totalTTC ??
+      l.total ??
+      qte * pu
+    ),
+
     modeVente: l.mode_vente || l.modeVente || "detail",
     quantiteUnites:
-      Number(l.quantite_unites) ||
-      Number(l.quantite || l.qte || 0),
-  }));
+      Number(l.quantite_unites) || qte,
+  };
+});
 
   // ===============================
   // 💰 TOTAUX (BACKEND UNIQUEMENT)
   // ===============================
-  const totalHT = Number(
-    cmd.total_ht ?? cmd.totalHT ?? cmd.montant_ht ?? 0
-  );
+const totalHT =
+  cmd.total_ht !== undefined
+    ? Number(cmd.total_ht)
+    : cmd.totalHT !== undefined
+    ? Number(cmd.totalHT)
+    : lignes.reduce((sum, l) => sum + Number(l.totalHT || 0), 0);
 
   const totalTTC = Number(
     cmd.total_ttc ?? cmd.totalTTC ?? cmd.montant_total ?? cmd.total ?? 0
   );
 
-  const totalTVA = Number(
-    cmd.total_tva ?? cmd.totalTVA ?? 0
-  );
+const totalTVA =
+  cmd.total_tva !== undefined
+    ? Number(cmd.total_tva)
+    : cmd.totalTVA !== undefined
+    ? Number(cmd.totalTVA)
+    : totalTTC - totalHT;
 
   // ===============================
   // 💳 PAIEMENTS
@@ -93,13 +114,23 @@ export function normalizeCommande(cmd) {
   // ===============================
   // 💰 FINANCIER (BACKEND)
   // ===============================
-  const montantPaye = Number(
-    cmd.montant_paye ?? cmd.montantPaye ?? 0
-  );
 
-  const resteAPayer = Number(
-    cmd.reste_a_payer ?? cmd.resteAPayer ?? 0
-  );
+
+const montantPaye =
+  cmd.montant_paye !== undefined && Number(cmd.montant_paye) > 0
+    ? Number(cmd.montant_paye)
+    : cmd.montant_a_encaisser !== undefined
+    ? Number(cmd.montant_a_encaisser)
+    : Array.isArray(cmd.paiements)
+    ? cmd.paiements.reduce((sum, p) => sum + Number(p.montant || 0), 0)
+    : 0;
+
+  const resteAPayer =
+    cmd.reste_a_payer !== undefined
+      ? Number(cmd.reste_a_payer)
+      : cmd.resteAPayer !== undefined
+      ? Number(cmd.resteAPayer)
+      : totalTTC - montantPaye;
 
   // ===============================
   // 🧠 STATUT

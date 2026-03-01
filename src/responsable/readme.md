@@ -67,6 +67,7 @@ GET     api/total-ventes-par-vendeur
 # la liste des commndes effectuer un vendeur en cliquer sur le bouton detail voir la liste des commandes
 GET api/commandes-par-vendeur/{id}
 
+
 # Nombre total de vendeurs
 GET         api/vendeurs-count
 # Nombre totaò de caissier
@@ -74,6 +75,19 @@ GET         api/caissiers-count
 
 # Nombre total de gestionnaire de boutique
 GET         api/gestionnaires-count
+
+
+# •	Nombre de produits en rupture
+GET         api/nombre-produits-en-rupture
+
+# nombere de produit en nombre-produits-sous-seuil
+GET         api/nombre-produits-sous-seuil
+
+# nombre de normaux.
+GET         api/nombre-produits-en-normaux
+
+
+
 
 # total-vente-par-jour
 GET       api/total-vente-par-jour
@@ -86,14 +100,6 @@ GET         api/somme-paiements-total
 # Reste total à encaisser.
 GET         api/reste-total-encaisser
 
-# •	Nombre de produits en rupture
-GET         api/nombre-produits-en-rupture
-
-# nombere de produit en nombre-produits-sous-seuil
-GET         api/nombre-produits-sous-seuil
-
-# nombre de normaux.
-GET         api/nombre-produits-en-normaux
 
 # o	Total commandes
 GET         api/total-commandes-payees
@@ -101,8 +107,6 @@ GET         api/total-commandes-payees
 # o	Commandes en attente caisse
 GET         api/commandes-en-attente-caisse
 
-# paiement par tranche
-POST    api/commandes/{commande}/paiements-tranches  | effectuer un paiement par tranche pour une commande
 
 # la liste des paiement associer a une commande
 GET    api/commandes/{commande}/paiements  | obtenir la liste des paiements associer a une commande
@@ -120,3 +124,5 @@ GET     api/commandes-par-caissier/{id}
 
 # attribuer une fond de caisse a un caissier
 POST    api/fond-caisse/{id} | attribuer une fond de caisse a un caissier en donnant sur la route id du cassier (http://127.0.0.1:8000/api/fond-caisse/019c8cb0-734c-7075-aaff-53f064488ab9) et en payload le montant ex: { "montant":20000 }
+
+

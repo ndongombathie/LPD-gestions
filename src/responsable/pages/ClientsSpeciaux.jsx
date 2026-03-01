@@ -19,12 +19,17 @@ import {
   BadgeDollarSign,
   Phone,
 } from "lucide-react";
+import { useRef } from "react";
+import QRCode from "react-qr-code";
+import { jsPDF } from "jspdf";
 import FormModal from "../components/FormModal.jsx";
 import DataTable from "../components/DataTable.jsx";
 import VoirDetailClient from "../components/VoirDetailClient.jsx";
+import { logger } from "@/utils/logger";
 import Pagination from "../components/Pagination.jsx";
 import { useClientsSpeciaux } from "@/hooks/useClientsSpeciaux";
 import { usePaiementsClients } from "@/hooks/usePaiementsClients";
+import NouvelleTrancheModal from "../components/NouvelleTrancheModal.jsx";
 
 const cls = (...a) => a.filter(Boolean).join(" ");
 const formatFCFA = (n) =>
@@ -35,7 +40,6 @@ const formatFCFA = (n) =>
 const getPaiementEffectiveStatus = (paiement) =>
   String(paiement?.statut_paiement || "inconnu").toLowerCase();
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
 
 // ==========================================================
 // ✅ Toasts Premium
@@ -83,318 +87,7 @@ function Toasts({ toasts, remove }) {
   );
 }
 
-// ==========================================================
-// 💸 Modal Nouvelle Tranche (côté Responsable) - CORRIGÉ AVEC STATUTS LARAVEL
-// ==========================================================
-function NouvelleTrancheModal({
-  open,
-  onClose,
-  client,
-  commandes,
-  onSubmit,
-  toast,
-}) {
-  // ✅ CORRECTION : Commandes éligibles - SEULEMENT les commandes avec resteAPayer > 0
-  const commandesEligibles = useMemo(
-    () =>
-      (commandes || []).filter((c) => {
-        // Exclure les commandes annulées
-        if (c.statut === "annulee") return false;
-        
-        // ✅ CORRECTION : Utiliser resteAPayer (source de vérité Laravel)
-        const reste = Number(c.resteAPayer || 0);
-        return reste > 0;
-      }),
-    [commandes]
-  );
-  const [submitting, setSubmitting] = useState(false);
 
-  const [commandeId, setCommandeId] = useState("");
-  const [montant, setMontant] = useState("");
-  const [mode, setMode] = useState("especes");
-  const [date, setDate] = useState(todayISO());
-  const [commentaire, setCommentaire] = useState("");
-
-  // 🔄 Réinitialisation à chaque ouverture
-  useEffect(() => {
-    if (!open) return;
-    if (commandesEligibles.length > 0) {
-      setCommandeId(String(commandesEligibles[0].id));
-    } else {
-      setCommandeId("");
-    }
-    setMontant("");
-    setMode("especes");
-    setDate(todayISO());
-    setCommentaire("");
-  }, [open, commandesEligibles]);
-
-  const commandeSelectionnee =
-    commandesEligibles.find((c) => String(c.id) === String(commandeId)) ||
-    null;
-
-  const handleClose = () => {
-    onClose();
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-
-    if (!commandeSelectionnee) {
-      toast(
-        "error",
-        "Aucune commande",
-        "Ce client n'a aucune commande éligible pour une nouvelle tranche."
-      );
-      return;
-    }
-
-    const m = Number(montant);
-    if (!m || m <= 0) {
-      toast(
-        "error",
-        "Montant invalide",
-        "Veuillez saisir un montant de tranche valide."
-      );
-      return;
-    }
-
-    const resteDisponible = Number(commandeSelectionnee.resteAPayer || 0);
-
-    if (resteDisponible <= 0) {
-      toast(
-        "error",
-        "Aucun reste pour nouvelle tranche",
-        "Le montant total de la commande est déjà couvert."
-      );
-      return;
-    }
-
-    if (m > resteDisponible) {
-      toast(
-        "error",
-        "Montant trop élevé",
-        `La tranche ne peut pas dépasser (${formatFCFA(resteDisponible)}).`
-      );
-      return;
-    }
-
-    // ✅ ACTIVER LE LOADING
-    setSubmitting(true);
-
-    onSubmit(
-      commandeSelectionnee,
-      {
-        montant: m,
-        mode,
-        date,
-        commentaire: commentaire?.trim() || "",
-      },
-      () => setSubmitting(false) // ✅ FIN LOADING
-    );
-  };
-
-  if (!open || !client) return null;
-
-  const baseInput =
-    "w-full rounded-xl border px-3 py-2.5 text-sm bg-white shadow-sm border-gray-300 focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD]";
-
-  return (
-    <div className="fixed inset-0 z-[110] bg-black/40 flex items-center justify-center px-2">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 10 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        className="bg-white w-full max-w-lg rounded-2xl shadow-2xl p-6"
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between border-b pb-3 mb-4">
-          <div>
-            <h2 className="text-lg font-semibold text-[#472EAD] flex items-center gap-2">
-              <BadgeDollarSign className="w-5 h-5" />
-              Nouvelle tranche — {client.nom}
-            </h2>
-            <p className="text-xs text-gray-500">
-              Préparation d&apos;un paiement partiel{" "}
-              <span className="font-semibold">(validation en caisse)</span>.
-            </p>
-          </div>
-          <button
-            onClick={handleClose}
-            className="rounded-full p-1.5 hover:bg-gray-100 text-gray-500"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* Infos client */}
-        <div className="mb-4 text-xs text-gray-600">
-          <div className="font-semibold text-gray-700">{client.nom}</div>
-          <div>{client.entreprise}</div>
-          <div className="text-gray-500">
-            {client.adresse} — {client.contact}
-          </div>
-        </div>
-
-        {commandesEligibles.length === 0 ? (
-          <div className="text-sm text-gray-500 mb-4">
-            Ce client n&apos;a actuellement{" "}
-            <span className="font-semibold">
-              aucune commande éligible à une tranche
-            </span>{" "}
-            (toutes les commandes sont soldées ou annulées).
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-4 text-sm">
-            {/* Commande + reste */}
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">
-                Commande concernée
-              </label>
-              <select
-                value={commandeId}
-                onChange={(e) => setCommandeId(e.target.value)}
-                className={baseInput}
-              >
-                {commandesEligibles.map((c) => {
-                  const reste = Number(c.resteAPayer || 0);
-                  return (
-                    <option key={c.id} value={c.id}>
-                      {c.numero} — Date : {c.dateCommande} — Reste : {formatFCFA(reste)}
-                    </option>
-                  );
-                })}
-              </select>
-              {commandeSelectionnee && (
-                <div className="mt-1 text-[11px] text-gray-500 space-y-1">
-                  <div>
-                    Total TTC :{" "}
-                    <span className="font-semibold">
-                      {formatFCFA(commandeSelectionnee.totalTTC)}
-                    </span>
-                  </div>
-                  <div>
-                    Payé (encaissé) :{" "}
-                    <span className="font-semibold text-emerald-700">
-                      {formatFCFA(commandeSelectionnee.montantPaye || 0)}
-                    </span>
-                  </div>
-                  <div>
-                    Tranches en attente :{" "}
-                    <span className="font-semibold text-amber-700">
-                      {(() => {
-                        const paiements = commandeSelectionnee.paiements || [];
-                        // ✅ CORRECTION CRITIQUE : Utiliser les champs Laravel bruts
-                        const tranchesEnAttente = paiements
-                          .filter(p => p.type_paiement === "tranche" && getPaiementEffectiveStatus(p) === "en_attente_caisse")
-                          .reduce((s, p) => s + Number(p.montant || 0), 0);
-                        return formatFCFA(tranchesEnAttente);
-                      })()}
-                    </span>
-                  </div>
-                  <div>
-                    Reste disponible :{" "}
-                    <span className="font-semibold text-rose-700">
-                      {formatFCFA(commandeSelectionnee.resteAPayer || 0)}
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Montant + date */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="sm:col-span-2">
-                <label className="block text-xs text-gray-500 mb-1">
-                  Montant de la tranche
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  value={montant}
-                  onChange={(e) => setMontant(e.target.value)}
-                  className={baseInput}
-                  placeholder="Ex : 30000"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">
-                  Date du paiement
-                </label>
-                <input
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className={baseInput}
-                />
-              </div>
-            </div>
-
-            {/* Mode + commentaire */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">
-                  Mode de paiement
-                </label>
-                <select
-                  value={mode}
-                  onChange={(e) => setMode(e.target.value)}
-                  className={baseInput}
-                >
-                  <option value="especes">Espèces</option>
-                  <option value="wave">Wave</option>
-                  <option value="orange_money">Orange Money</option>
-                  <option value="cheque">Chèque</option>
-                  <option value="virement">Virement</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">
-                  Commentaire (optionnel)
-                </label>
-                <input
-                  value={commentaire}
-                  onChange={(e) => setCommentaire(e.target.value)}
-                  placeholder="Ex : 2ème tranche, client présent"
-                  className={baseInput}
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={handleClose}
-                disabled={submitting}
-                className={cls(
-                  "px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm shadow-sm",
-                  submitting
-                    ? "opacity-60 cursor-not-allowed"
-                    : "hover:bg-gray-50"
-                )}
-              >
-                Annuler
-              </button>
-
-              <button
-                type="submit"
-                disabled={!commandeSelectionnee || submitting}
-                className={cls(
-                  "px-4 py-2 rounded-lg text-sm text-white bg-[#472EAD] shadow-sm flex items-center gap-2",
-                  submitting
-                    ? "opacity-70 cursor-not-allowed"
-                    : "hover:opacity-95"
-                )}
-              >
-                {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                {submitting ? "Envoi..." : "Envoyer à la caisse"}
-              </button>
-            </div>
-          </form>
-        )}
-      </motion.div>
-    </div>
-  );
-}
 
 // ==========================================================
 // 🧾 Formulaire client spécial
@@ -565,6 +258,255 @@ function ClientForm({ initial, onSubmit, onCancel, submitting }) {
 }
 
 // ==========================================================
+// 🧾 Modal QR Code Commande (ticket)
+// ==========================================================
+
+function QrCommandeModal({ open, onClose, commande, qrPayload }) {
+  const qrWrapperRef = useRef(null);
+
+  if (!open || !commande || !qrPayload) return null;
+
+  const handlePrint = () => {
+    try {
+      const canvas = qrWrapperRef.current?.querySelector("canvas");
+      if (!canvas) {
+        window.print();
+        return;
+      }
+
+      const dataUrl = canvas.toDataURL("image/png");
+
+      // 📏 VRAI FORMAT TICKET (80 mm de large)
+      const doc = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: [80, 130], // largeur ticket, hauteur ~13 cm
+      });
+
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const centerX = pageWidth / 2;
+
+      // ================= HEADER VIOLET =================
+      const headerHeight = 36;
+      doc.setFillColor(71, 46, 173);
+      doc.setDrawColor(71, 46, 173);
+      doc.rect(0, 0, pageWidth, headerHeight, "F");
+
+      // --- Logo "ellipse" + LPD ---
+      const logoEllipseY = 10; // un peu en haut du header
+      doc.setFillColor(71, 46, 173);
+      doc.setDrawColor(255, 255, 255);
+      doc.ellipse(centerX, logoEllipseY, 16, 10, "F");
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.setTextColor(245, 128, 32);
+      const logoText = "LPD";
+      const logoTextWidth = doc.getTextWidth(logoText);
+      doc.text(logoText, centerX - logoTextWidth / 2, logoEllipseY + 4);
+
+      // --- Texte sous le logo ---
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(255, 255, 255);
+      const title1 = "LIBRAIRIE PAPETERIE DARADJI";
+      doc.text(title1, centerX, 22, { align: "center" });
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(229, 231, 235);
+      const title2 = `#${commande.numero}`;
+      doc.text(title2, centerX, 28.5, { align: "center" });
+
+      // ================= QR CODE =================
+      const qrSize = 40; // mm
+      const qrX = (pageWidth - qrSize) / 2;
+      const qrY = headerHeight + 6;
+      doc.addImage(dataUrl, "PNG", qrX, qrY, qrSize, qrSize);
+
+      // ================= INFOS COMMANDE =================
+      const infoStartY = qrY + qrSize + 8;
+      const leftX = 8;
+
+      // Badge "Client spécial" à droite
+      const badgeText = "Client spécial";
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      const badgeTextWidth = doc.getTextWidth(badgeText);
+      const badgeWidth = badgeTextWidth + 10;
+      const badgeHeight = 8;
+      const badgeX = pageWidth - badgeWidth - 8;
+      const badgeY = infoStartY - 5;
+
+      doc.setFillColor(254, 249, 195);
+      doc.setDrawColor(234, 179, 8);
+      doc.roundedRect(badgeX, badgeY, badgeWidth, badgeHeight, 4, 4, "FD");
+
+      doc.setTextColor(202, 138, 4);
+      doc.text(badgeText, badgeX + 5, badgeY + 5);
+
+      // Texte à gauche
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(17, 24, 39);
+      doc.text(
+        `Client : ${commande.clientNom || "Client spécial"}`,
+        leftX,
+        infoStartY
+      );
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.text(`Date : ${commande.dateCommande}`, leftX, infoStartY + 5);
+
+      // ================= TEXTE D'AIDE BAS DE TICKET =================
+      const aideY = pageHeight - 12;
+      doc.setFontSize(8);
+      doc.setTextColor(107, 114, 128);
+      const aideText =
+        "Présentez ce QR code à la caisse pour retrouver la commande.";
+      doc.text(aideText, centerX, aideY, { align: "center" });
+
+      const noteY = aideY + 5;
+      doc.setFontSize(7);
+      doc.setTextColor(202, 138, 4);
+      const noteText = "Ticket spécial LPD — Client privilégié";
+      doc.text(noteText, centerX, noteY, { align: "center" });
+
+      // ================= SAUVEGARDE =================
+      doc.save(`Ticket_commande_${commande.numero}.pdf`);
+    } catch (e) {
+      logger.error("commande.qr.print", e);
+      window.print();
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[115] bg-black/40 backdrop-blur-sm flex items-center justify-center px-3">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 20 }}
+        className="bg-white w-full max-w-sm sm:max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+      >
+        {/* Header compact avec logo LPD */}
+        <div className="h-16 flex flex-col justify-center border-b border-gray-200 bg-gradient-to-r from-[#472EAD] to-[#4e33c9] text-white shadow-md">
+          <div className="flex items-center justify-between w-full px-4">
+            <div className="flex items-center gap-2">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="40"
+                height="26"
+                viewBox="0 0 200 120"
+                fill="none"
+              >
+                <ellipse cx="100" cy="60" rx="90" ry="45" fill="#472EAD" />
+                <text
+                  x="50%"
+                  y="66%"
+                  textAnchor="middle"
+                  fill="#F58020"
+                  fontFamily="Arial Black, sans-serif"
+                  fontSize="48"
+                  fontWeight="900"
+                  dy=".1em"
+                >
+                  LPD
+                </text>
+              </svg>
+              <div className="flex flex-col">
+                <span className="text-[11px] font-semibold tracking-wider uppercase leading-none">
+                  Librairie Papeterie Daradji
+                </span>
+                <span className="text-[10px] text-white/80">
+                  #{commande.numero}
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="text-white/80 hover:text-white rounded-full p-1 hover:bg-white/10"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+
+        {/* Contenu */}
+        <div className="p-4 flex-1 flex flex-col gap-3">
+          <div className="text-center">
+            <h2 className="text-sm font-semibold text-[#472EAD]">
+              QR de la commande
+            </h2>
+            <p className="text-[11px] text-gray-500 mt-1">
+              À présenter à la caisse pour charger automatiquement la commande.
+            </p>
+          </div>
+
+          {/* QR + infos commande */}
+          <div
+            ref={qrWrapperRef}
+            className="flex flex-col items-center justify-center gap-2 mt-1"
+          >
+            <div className="p-2 rounded-2xl border border-gray-200 bg-white shadow-sm">
+              <QRCode value={qrPayload} size={160} includeMargin />
+            </div>
+
+            <div className="text-xs text-gray-600 text-center space-y-0.5">
+              <div className="font-semibold text-gray-800">
+                Commande #{commande.numero}
+              </div>
+              <div className="truncate max-w-[220px]">
+                {commande.clientNom || "Client spécial"}
+              </div>
+              <div className="text-[11px] text-gray-500">
+                Montant TTC :{" "}
+                <span className="font-semibold text-emerald-600">
+                  {formatFCFA(commande.totalTTC)}
+                </span>
+              </div>
+              {commande.montantTranche && (
+                <div className="text-[11px] text-[#472EAD] font-semibold">
+                  Montant à encaisser : {formatFCFA(commande.montantTranche)}
+                </div>
+              )}
+              <div className="text-[11px] text-gray-400">
+                Date : {commande.dateCommande}
+              </div>
+            </div>
+          </div>
+
+          {/* Texte d'aide */}
+          <div className="bg-[#F9FAFF] border border-[#E4E0FF] rounded-xl px-3 py-2 text-[11px] text-gray-600">
+            Le QR contient le numéro de commande. 
+            La caisse recharge automatiquement les informations depuis le système.
+          </div>
+
+          {/* Boutons */}
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-3 py-2 rounded-lg border border-gray-300 bg-white text-xs sm:text-sm text-gray-700 hover:bg-gray-50"
+            >
+              Fermer
+            </button>
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="px-4 py-2 rounded-lg bg-gradient-to-r from-[#472EAD] to-[#6A4DF5] text-white text-xs sm:text-sm font-semibold shadow-sm hover:opacity-95"
+            >
+              Imprimer le QR
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+// ==========================================================
 // 📋 Page principale Clients Spéciaux - CORRIGÉE AVEC STATUTS LARAVEL
 // Version avec le même cadre visuel que Utilisateurs.jsx
 // ==========================================================
@@ -585,6 +527,8 @@ export default function ClientsSpeciaux() {
   const [openHistorique, setOpenHistorique] = useState(false);
   const [trancheClient, setTrancheClient] = useState(null);
   const [openTranche, setOpenTranche] = useState(false);
+  const [lastCreatedCommande, setLastCreatedCommande] = useState(null);
+  const [showQrModal, setShowQrModal] = useState(false);
 
   useEffect(() => {
     setPage(1);
@@ -1129,8 +1073,46 @@ export default function ClientsSpeciaux() {
           commandes={commandes.filter(
             (cmd) => cmd.clientId === trancheClient?.id
           )}
-          onSubmit={handleTrancheSubmit}
+          onSubmit={async (commande, paiement, done) => {
+            try {
+              await handleTrancheSubmit(commande, paiement, done);
+              const nouveauMontantPaye =
+                Number(commande.montantPaye || 0) + Number(paiement);
+
+              const nouveauReste =
+                Math.max(
+                  Number(commande.resteAPayer ?? commande.totalTTC ?? 0) - Number(paiement),
+                  0
+                );
+
+              setLastCreatedCommande({
+                ...commande,
+                montantPaye: nouveauMontantPaye,
+                montantTranche: paiement,
+                resteAPayer: nouveauReste,
+              });
+              setOpenTranche(false);
+              setShowQrModal(true);
+
+            } catch (e) {
+              done();
+              toast("error", "Erreur", "Impossible d'enregistrer la tranche.");
+            }
+          }}
           toast={toast}
+        />
+        <QrCommandeModal
+          open={showQrModal}
+          onClose={() => {
+            setShowQrModal(false);
+            setLastCreatedCommande(null);
+          }}
+          commande={lastCreatedCommande}
+          qrPayload={
+            lastCreatedCommande
+              ? String(lastCreatedCommande.numero || lastCreatedCommande.id)
+              : ""
+          }
         />
 
         {/* TOASTS */}

@@ -5,6 +5,14 @@
 // ✅ Correction stats : mêmes filtres que la table
 // ✅ CORRECTION CRITIQUE : Normalisation API unique avec unwrapApi()
 // ✅ RECHERCHE PRODUITS DYNAMIQUE : recherche backend comme pour les clients
+// ✅ CORRECTIONS APPLIQUÉES :
+//   - Suppression reset période dans handleChangeStatut
+//   - Suppression debounce recherche
+//   - Recherche instantanée
+//   - Validation période
+//   - Optimisation loader pagination
+//   - Loader tableau pour : pagination, statut, période
+//   - Pas de loader pour la recherche
 // ==========================================================
 
 import React, { useEffect, useMemo, useState, useRef } from "react";
@@ -25,6 +33,7 @@ import {
   Pencil,
   Check,
   XCircle,
+  Info,
 } from "lucide-react";
 import jsPDF from "jspdf";
 import { QRCodeCanvas as QRCode } from "qrcode.react";
@@ -34,6 +43,7 @@ import { commandesAPI, produitsAPI, clientsAPI } from '@/services/api';
 import { logger } from "@/utils/logger";
 import Pagination from "@/responsable/components/Pagination";
 import { normalizeCommande } from "@/utils/normalizeCommande";
+import NouvelleTrancheModal from "@/responsable/components/NouvelleTrancheModal";
 
 
 // === Utils ===
@@ -90,7 +100,7 @@ function unwrapApi(res) {
 }
 
 // ==========================================================
-// ✅ Toasts Premium
+// ✅ Toasts Premium (avec support INFO)
 // ==========================================================
 function Toasts({ toasts, remove }) {
   return (
@@ -106,12 +116,16 @@ function Toasts({ toasts, remove }) {
               "min-w-[280px] max-w-[360px] rounded-xl border shadow-lg px-4 py-3 flex items-start gap-3 backdrop-blur-sm",
               t.type === "success"
                 ? "bg-emerald-50/95 border-emerald-200 text-emerald-800"
+                : t.type === "info"
+                ? "bg-blue-50/95 border-blue-200 text-blue-800"
                 : "bg-rose-50/95 border-rose-200 text-rose-800"
             )}
           >
             <div className="pt-0.5">
               {t.type === "success" ? (
                 <CheckCircle2 className="w-5 h-5" />
+              ) : t.type === "info" ? (
+                <Info className="w-5 h-5" />
               ) : (
                 <AlertCircle className="w-5 h-5" />
               )}
@@ -172,7 +186,7 @@ function QrCommandeModal({ open, onClose, commande, qrPayload }) {
       doc.rect(0, 0, pageWidth, headerHeight, "F");
 
       // --- Logo "ellipse" + LPD ---
-      const logoEllipseY = 10; // un peu en haut du header
+      const logoEllipseY = 10;
       doc.setFillColor(71, 46, 173);
       doc.setDrawColor(255, 255, 255);
       doc.ellipse(centerX, logoEllipseY, 16, 10, "F");
@@ -344,6 +358,11 @@ function QrCommandeModal({ open, onClose, commande, qrPayload }) {
                   {formatFCFA(commande.totalTTC)}
                 </span>
               </div>
+              {commande.montantTranche && (
+                <div className="text-[11px] text-[#472EAD] font-semibold">
+                  Montant à encaisser : {formatFCFA(commande.montantTranche)}
+                </div>
+              )}
               <div className="text-[11px] text-gray-400">
                 Date : {commande.dateCommande}
               </div>
@@ -530,7 +549,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
   const [isClientOpen, setIsClientOpen] = useState(false);
   const [searchClient, setSearchClient] = useState("");
   const [hasLoadedClients, setHasLoadedClients] = useState(false);
-  
+ 
   // ✅ CLIENT - State dédié pour le client sélectionné
   const [selectedClient, setSelectedClient] = useState(null);
   
@@ -554,10 +573,10 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
 
   // Champ de saisie "ligne en cours"
   const [ligneProduitId, setLigneProduitId] = useState("");
-  const [ligneLibelle, setLigneLibelle] = useState(""); // gardé pour compatibilité
+  const [ligneLibelle, setLigneLibelle] = useState("");
   const [ligneQte, setLigneQte] = useState("");
   const [lignePrix, setLignePrix] = useState("");
-  const [ligneMode, setLigneMode] = useState("gros"); // "detail" | "gros" (défaut : gros)
+  const [ligneMode, setLigneMode] = useState("gros");
 
   const qteInputRef = useRef(null);
 
@@ -577,14 +596,17 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
       setClientsLoading(true);
       const res = await clientsAPI.getAllSpeciaux();
       const payload = unwrapApi(res);
+      const produits = Array.isArray(payload)
+        ? payload
+        : payload.data || [];
 
-      const normalized = (payload.data || []).map((c) => ({
-        id: c.id,
-        nom: c.nom || c.entreprise || "",
+      const normalized = produits.map((p) => ({
+        id: p.id,
+        nom: p.nom || p.entreprise || "",
         code:
-          c.code_client ||
-          c.code ||
-          (c.id ? `CL-${String(c.id).padStart(3, "0")}` : ""),
+          p.code_client ||
+          p.code ||
+          (p.id ? `CL-${String(p.id).padStart(3, "0")}` : ""),
       }));
 
       setAllClients(normalized);
@@ -609,53 +631,49 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
       try {
         setProduitsLoading(true);
 
-        // ✅ Utiliser l'endpoint qui retourne TOUS les produits
-        const res = await produitsAPI.getAllProduits();
+          const res = await produitsAPI.getAllProduits();
+          const payload = unwrapApi(res);
 
-        const normalized = (Array.isArray(res) ? res : []).map((p) => {
-          const prixDetail = Number(
-            p.prix_basique_detail ??
-              p.prix_vente ??
-              p.prix_unitaire ??
-              p.prix ??
-              0
-          );
-          const prixGros = Number(
-            p.prix_basique_gros ??
-              p.prix_gros ??
-              p.prix_unitaire ??
-              p.prix ??
-              0
-          );
+          const data = Array.isArray(payload)
+            ? payload
+            : payload?.data || [];
 
-          return {
-            id: p.id,
-            ref:
-              p.code_barre ||
-              p.code_produit ||
-              p.reference ||
-              p.ref ||
-              null,
-            codeBarre:
-              p.code_barre || p.code_produit || p.code || p.barcode || null,
-            libelle:
-              p.nom ||
-              p.nom_produit ||
-              p.libelle ||
-              p.designation ||
-              "",
-            prixDetail,
-            prixGros,
-            prix: prixDetail || prixGros || 0,
-            prixSeuilDetail:
-              p.prix_seuil_detail != null ? Number(p.prix_seuil_detail) : null,
-            prixSeuilGros:
-              p.prix_seuil_gros != null ? Number(p.prix_seuil_gros) : null,
-            unitesParCarton: Number(p.unite_carton ?? p.unites_par_carton ?? 1),
-            stockGlobal: Number(p.stock_global ?? 0),
-            nombreCartons: Number(p.nombre_carton ?? p.nombre_cartons ?? 0),
-          };
-        });
+const normalized = data.map((p) => {
+  const produit = p.produit ?? p; // 👈 IMPORTANT
+
+  const prixDetail = Number(produit.prix_vente_detail ?? 0);
+  const prixGros = Number(
+    produit.prix_unite_carton ??
+    produit.prix_vente_gros ??
+    0
+  );
+
+  return {
+    id: produit.id,
+    ref:
+      produit.code_barre ||
+      produit.code_produit ||
+      produit.reference ||
+      produit.ref ||
+      null,
+    libelle:
+      produit.nom ||
+      produit.nom_produit ||
+      produit.libelle ||
+      produit.designation ||
+      "",
+    prixDetail,
+    prixGros,
+    prix: prixDetail || prixGros || 0,
+    prixSeuilDetail:
+      produit.prix_seuil_detail != null ? Number(produit.prix_seuil_detail) : null,
+    prixSeuilGros:
+      produit.prix_seuil_gros != null ? Number(produit.prix_seuil_gros) : null,
+    unitesParCarton: Number(produit.unite_carton ?? produit.unites_par_carton ?? 1),
+    stockGlobal: Number(produit.stock_global ?? 0),
+    nombreCartons: Number(produit.nombre_carton ?? produit.nombre_cartons ?? 0),
+  };
+});
 
         setCatalogue(normalized);
         setHasLoadedProduits(true);
@@ -681,7 +699,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
     await loadAllClients();
   };
 
-  // ✅ Filtrage instantané frontend clients (sécurisé contre les null)
+  // ✅ Filtrage instantané frontend clients
   const filteredClients = allClients.filter((c) =>
     (c.nom || "").toLowerCase().includes(searchClient.toLowerCase())
   );
@@ -709,8 +727,6 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
       fetchInitialClient();
     }
   }, [clientInitial, selectedClient]);
-
-
 
   const totalHT = useMemo(
     () => lignes.reduce((sum, l) => sum + Number(l.totalHT || 0), 0),
@@ -776,7 +792,6 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
         p.nombreCartons ??
         (stockGlobal != null ? Math.floor(stockGlobal / unitsPerCarton) : null);
 
-      // Détail : stock en unités
       if (ligneMode === "detail" && stockGlobal != null) {
         if (qteNum > stockGlobal) {
           toast(
@@ -788,7 +803,6 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
         }
       }
 
-      // Gros : stock en cartons
       if (ligneMode === "gros" && nbCartons != null) {
         if (qteNum > nbCartons) {
           toast(
@@ -825,7 +839,6 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
     setLignes((prev) => [...prev, nouvelle]);
     resetLigne();
     
-    // ✅ Focus sur l'input produit après ajout
     if (produitInputRef.current) {
       produitInputRef.current.focus();
     }
@@ -834,7 +847,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
   const handleRemoveLigne = (id) =>
     setLignes((prev) => prev.filter((l) => l.id !== id));
 
-  // 🔧 Édition d'une ligne (qte + prix uniquement)
+  // 🔧 Édition d'une ligne
   const [editingId, setEditingId] = useState(null);
   const [editingQte, setEditingQte] = useState("");
   const [editingPrix, setEditingPrix] = useState("");
@@ -869,7 +882,6 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
       return;
     }
 
-    // 🔍 Retrouver le produit pour refaire les vérifications de stock
     const produit = catalogue.find((p) => String(p.id) === String(ligne.produitId));
 
     if (produit) {
@@ -968,10 +980,8 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
 
       await onCreate(commandeDraft);
 
-      // ✅ Optionnel : rafraîchir les listes
       refreshClients();
 
-      // Reset du formulaire
       setLignes([]);
       setLigneProduitId("");
       setLigneLibelle("");
@@ -987,7 +997,6 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
     }
   };
 
-  // Gestionnaire de clic en dehors du dropdown client
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (!e.target.closest(".client-combobox")) {
@@ -999,7 +1008,6 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
     return () => document.removeEventListener("click", handleClickOutside);
   }, []);
 
-  // Gestionnaire de clic en dehors du dropdown produit
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (!e.target.closest(".produit-combobox")) {
@@ -1031,7 +1039,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
 
         {/* Ligne client + date */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {/* BLOC CLIENT - SIMPLE ET STABLE */}
+          {/* BLOC CLIENT */}
           <div className="sm:col-span-2 relative client-combobox">
             <label className="block text-xs text-gray-500 mb-1">
               Client spécial
@@ -1189,7 +1197,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-start mt-3">
-            {/* ✅ BLOC PRODUIT - SIMPLE COMME LE CLIENT */}
+            {/* BLOC PRODUIT */}
             <div className="sm:col-span-2 relative produit-combobox">
               <label className="block text-xs text-gray-500 mb-1">
                 Produit
@@ -1254,7 +1262,6 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
                           setLignePrix(String(prix || 0));
                           setIsProduitOpen(false);
                           
-                          // Focus sur la quantité pour enchaîner
                           if (qteInputRef.current) {
                             qteInputRef.current.focus();
                           }
@@ -1370,7 +1377,6 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
                           : "Détail (unités)"}
                       </td>
 
-                      {/* Qté éditable */}
                       <td className="px-3 py-2 text-right">
                         {isEditing ? (
                           <input
@@ -1385,7 +1391,6 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
                         )}
                       </td>
 
-                      {/* PU (libre) éditable */}
                       <td className="px-3 py-2 text-right">
                         {isEditing ? (
                           <input
@@ -1403,7 +1408,6 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
                       <td className="px-3 py-2 text-right">{formatFCFA(l.totalHT)}</td>
                       <td className="px-3 py-2 text-right">{formatFCFA(l.totalTTC)}</td>
 
-                      {/* Actions */}
                       <td className="px-3 py-2 text-center">
                         {isEditing ? (
                           <div className="flex items-center justify-center gap-1.5">
@@ -1504,7 +1508,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
               )}
             >
               {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
-              {submitting ? "Envoi en cours..." : "Envoyer à la caisse"}
+              {submitting ? "Création en cours..." : "Créer commande "}
             </button>
           </div>
         </div>
@@ -1535,36 +1539,41 @@ function buildQrPayloadFromCommande(commande) {
 export default function Commandes() {
   const { state } = useLocation();
 
-  // Quand on vient depuis ClientsSpeciaux :
-  // navigate("/responsable/commandes", { state: { clientId, clientNom } })
   const clientIdFromState = state?.clientId || null;
   const clientNameFromState = state?.clientNom || state?.client || "";
 
   const [loading, setLoading] = useState(true);
   const [loadingPage, setLoadingPage] = useState(false);
+  const [isFirstLoad, setIsFirstLoad] = useState(true);
   const [commandes, setCommandes] = useState([]);
   const [toasts, setToasts] = useState([]);
   const [selectedCommande, setSelectedCommande] = useState(null);
   const [openFacture, setOpenFacture] = useState(false);
   const [searchInput, setSearchInput] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [showTrancheModal, setShowTrancheModal] = useState(false);
 
-  // ✅ AJOUT (avisage) : filtres + période + pagination (Option A)
   const [filterStatut, setFilterStatut] = useState("tous");
   const [filterStartDate, setFilterStartDate] = useState("");
-  const [filterEndDate, setFilterEndDate] = useState("");
+  const [filterEndDate, setFilterEndDate] = useState(todayISO());
   const [page, setPage] = useState(1);
   const [lastPage, setLastPage] = useState(1);
   const [total, setTotal] = useState(0);
 
-  // map id client -> nom client pour compléter ce que le backend n'envoie pas
   const [clientsMap, setClientsMap] = useState({});
-  // Pour le QR code de la dernière commande créée
   const [lastCreatedCommande, setLastCreatedCommande] = useState(null);
   const [showQrModal, setShowQrModal] = useState(false);
+  
+  const handleTrancheSuccess = () => {
+    setShowTrancheModal(false);
+    setShowQrModal(true);
+  };
 
-  // ✅ 1️⃣ Suppression de commandesGlobales et ajout de statsFromBackend
   const [statsFromBackend, setStatsFromBackend] = useState(null);
+  
+  // ✅ Refs pour détecter les changements
+  const previousPageRef = useRef(1);
+  const previousSearchRef = useRef("");
 
   const qrPayload = useMemo(
     () =>
@@ -1577,51 +1586,57 @@ export default function Commandes() {
     setToasts((t) => [...t, { id, type, title, message }]);
     setTimeout(() => removeToast(id), 4000);
   };
+  
   const removeToast = (id) => setToasts((t) => t.filter((x) => x.id !== id));
 
   // 🔗 Chargement des commandes depuis le backend
   const fetchCommandes = async () => {
+    if (filterStartDate && filterEndDate && filterStartDate > filterEndDate) {
+      toast(
+        "error",
+        "Période invalide",
+        "La date de début doit être avant la date de fin."
+      );
+      return;
+    }
+
     try {
-      setLoadingPage(true);
-      setLoading(true);
+      // ✅ Détection si c'est un changement de recherche
+      const isSearchChange = previousSearchRef.current !== searchTerm;
 
-      // ✅ Mapping statuts UI → backend
-      const statutMapToBackend = {
-        en_attente_caisse: "en_attente_caisse",
-        partiellement_payee: "partiellement_payee",
-        soldee: "soldee",
-        annulee: "annulee",
-      };
+      // ✅ Loader UNIQUEMENT pour :
+      // - Premier chargement : full screen
+      // - Pagination, statut, période : loader tableau
+      // - Recherche : PAS de loader
+      if (isFirstLoad) {
+        setLoading(true);
+      } else if (!isSearchChange) {
+        setLoadingPage(true);
+      }
 
-      // ✅ Paramètres envoyés à Laravel
+      // ✅ Paramètres envoyés à Laravel - Utilisation directe de filterStatut
       const params = {
         type_client: "special",
         page,
-        ...(filterStatut !== "tous" && {
-          statut: statutMapToBackend[filterStatut] || filterStatut,
-        }),
+        ...(filterStatut !== "tous" && { statut: filterStatut }),
         ...(filterStartDate && { start_date: filterStartDate }),
         ...(filterEndDate && { end_date: filterEndDate }),
         ...(searchTerm && { search: searchTerm }),
         ...(clientIdFromState && { client_id: clientIdFromState }),
       };
 
-      // ===============================
-      // ✅ APPEL API
-      // ===============================
       const res = await commandesAPI.getAll(params);
+      
+      // ✅ Appel séparé pour les statistiques avec les mêmes filtres de date
+      const statsRes = await commandesAPI.getStatsSpecial({
+        ...(filterStatut !== "tous" && { statut: filterStatut }),
+        ...(filterStartDate && { start_date: filterStartDate }),
+        ...(filterEndDate && { end_date: filterEndDate }),
+        ...(searchTerm && { search: searchTerm }),
+        ...(clientIdFromState && { client_id: clientIdFromState }),
+      });
 
-      // ⚠️ IMPORTANT :
-      // On récupère les stats AVANT unwrapApi()
-      const backendStatsRaw =
-        res?.stats ||
-        res?.data?.stats ||
-        res?.data?.data?.stats ||
-        null;
-
-      // Normalisation pagination/table
       const payload = unwrapApi(res);
-
       const commandesData = payload.data || [];
 
       const paginationData = {
@@ -1630,9 +1645,6 @@ export default function Commandes() {
         total: Number(payload.total || commandesData.length || 0),
       };
 
-      // ===============================
-      // ✅ NORMALISATION COMMANDES
-      // ===============================
       const normalized = commandesData.map(normalizeCommande);
       setCommandes(normalized);
 
@@ -1640,18 +1652,8 @@ export default function Commandes() {
       setLastPage(paginationData.last_page);
       setTotal(paginationData.total);
 
-      // ===============================
-      // ✅ STATS BACKEND (CORRIGÉ)
-      // ===============================
-      const backendStats = backendStatsRaw || {
-        nb: 0,
-        annulees: 0,
-        totalTTC: 0,
-        totalPaye: 0,
-        dette: 0,
-      };
-
-      setStatsFromBackend(backendStats);
+      // ✅ Utilisation des stats de l'appel séparé
+      setStatsFromBackend(statsRes);
 
     } catch (error) {
       logger.error("commandes.fetch", error);
@@ -1663,6 +1665,11 @@ export default function Commandes() {
     } finally {
       setLoading(false);
       setLoadingPage(false);
+      setIsFirstLoad(false);
+      
+      // ✅ Mise à jour des refs
+      previousPageRef.current = page;
+      previousSearchRef.current = searchTerm;
     }
   };
 
@@ -1696,13 +1703,12 @@ export default function Commandes() {
     fetchClients();
   }, []);
 
-  // Compléter les commandes sans nom dès qu'on a la map des clients
+  // Compléter les commandes sans nom
   useEffect(() => {
     if (!clientsMap || !Object.keys(clientsMap).length) return;
 
     setCommandes((prev) =>
       prev.map((c) => {
-        // ✅ Seulement compléter si le nom est vraiment vide
         if (c.clientNom && c.clientNom.trim() !== "") return c;
         if (!c.clientId) return c;
 
@@ -1714,18 +1720,16 @@ export default function Commandes() {
     );
   }, [clientsMap]);
 
-  // ✅ 3️⃣ Remplacement de statsGlobales par statsFromBackend
-const statsGlobales = {
-  nbCommandes: Number(statsFromBackend?.nb ?? 0),
-  nbAnnulees: Number(statsFromBackend?.annulees ?? 0),
-  totalTTC: Number(statsFromBackend?.totalTTC ?? 0),
-  totalPaye: Number(statsFromBackend?.totalPaye ?? 0),
-  detteTotale: Number(statsFromBackend?.dette ?? 0),
-};
+  // ✅ Agrégation des stats globales
+  const statsGlobales = {
+    nbCommandes: Number(statsFromBackend?.nb ?? 0),
+    nbAnnulees: Number(statsFromBackend?.annulees ?? 0),
+    totalTTC: Number(statsFromBackend?.totalTTC ?? 0),
+    totalPaye: Number(statsFromBackend?.totalPaye ?? 0),
+    detteTotale: Number(statsFromBackend?.dette ?? 0),
+  };
 
-  // ✅ CORRECTION 1 : handleAnnuler aligné avec le backend (annulable tant que non soldée)
   const handleAnnuler = async (commande) => {
-    // ✅ CORRECTION : Vérifier si la commande est déjà soldée OU déjà annulée
     if (commande.statut === "soldee" || commande.statut === "annulee") {
       toast(
         "error",
@@ -1762,10 +1766,8 @@ const statsGlobales = {
     }
   };
 
-  // ✅ CORRECTION : handleCreateCommande (format Laravel compatible)
   const handleCreateCommande = async (commandeDraft) => {
     try {
-      // ✅ FORMAT LARAVEL-COMPATIBLE (corrigé)
       const payload = {
         client_id: commandeDraft.clientId,
         type_vente: "gros",
@@ -1779,19 +1781,16 @@ const statsGlobales = {
 
       const raw = await commandesAPI.create(payload);
 
-      // ✅ store() retourne directement la commande
       const response =
-      raw?.data?.data ??
-      raw?.data ??
-      raw;
-
+        raw?.data?.data ??
+        raw?.data ??
+        raw;
 
       let normalized;
 
       if (response && typeof response === "object") {
         normalized = normalizeCommande(response);
 
-        // Complétion des infos client si manquantes
         if (!normalized.clientNom && commandeDraft.clientNom) {
           normalized = {
             ...normalized,
@@ -1808,24 +1807,29 @@ const statsGlobales = {
         };
       }
 
-      // ✅ MISE À JOUR DE L'ÉTAT
       setLastCreatedCommande({
         ...normalized,
-        totalTTC: Number(normalized.totalTTC || commandeDraft.totalTTC || 0)
+        totalTTC:
+          normalized.totalTTC !== undefined && normalized.totalTTC !== null
+            ? Number(normalized.totalTTC)
+            : Number(commandeDraft.totalTTC || 0),
+
+        resteAPayer:
+          normalized.totalTTC !== undefined && normalized.totalTTC !== null
+            ? Number(normalized.totalTTC)
+            : Number(commandeDraft.totalTTC || 0),
+        montantPaye: 0,
       });
-      setShowQrModal(true);
+      setShowTrancheModal(true);
 
       toast(
         "success",
-        "Commande envoyée à la caisse",
+        "Commande créée",
         `${normalized.clientNom || "Client"} — ${formatFCFA(normalized.totalTTC)}`
       );
       
-      // ✅ OPTIMISATION : reset à la page 1 SANS refetch immédiat
-      // Le useEffect sur page va automatiquement recharger
       setPage(1);
       await fetchCommandes();
-      // ✅ SUPPRESSION du double fetch : await fetchCommandes();
 
     } catch (error) {
       logger.error("commandes.create", error);
@@ -1847,11 +1851,11 @@ const statsGlobales = {
 
   const badgeStatut = (statut) => {
     switch (statut) {
-      case "en_attente_caisse":
+      case "attente":
         return "bg-gray-100 text-gray-700 border border-gray-300";
       case "partiellement_payee":
         return "bg-amber-100 text-amber-700 border border-amber-300";
-      case "soldee":
+      case "payee":
         return "bg-emerald-100 text-emerald-700 border border-emerald-300";
       case "annulee":
         return "bg-rose-100 text-rose-700 border-rose-300 border";
@@ -1860,10 +1864,9 @@ const statsGlobales = {
     }
   };
 
+  // ✅ CORRECTION : plus de reset de période ici
   const handleChangeStatut = (s) => {
     setFilterStatut(s);
-    setFilterStartDate("");
-    setFilterEndDate("");
     setPage(1);
   };
 
@@ -1889,7 +1892,7 @@ const statsGlobales = {
     toast("success", "Export PDF", "Fichier téléchargé avec succès.");
   };
 
-  // reset page quand filtres/recherche/changement contexte changent
+  // reset page quand filtres changent
   useEffect(() => {
     setPage(1);
   }, [
@@ -1901,7 +1904,6 @@ const statsGlobales = {
     clientNameFromState,
   ]);
 
-  // ✅ Toast informatif quand on affiche les commandes annulées
   useEffect(() => {
     if (filterStatut === "annulee") {
       toast(
@@ -1912,7 +1914,6 @@ const statsGlobales = {
     }
   }, [filterStatut]);
 
-  // ✅ CHARGEMENT DES COMMANDES (OBLIGATOIRE)
   useEffect(() => {
     fetchCommandes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1924,15 +1925,6 @@ const statsGlobales = {
     searchTerm,
     clientIdFromState,
   ]);
-  
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setSearchTerm(searchInput.trim());      
-      setPage(1);
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, [searchInput]);
 
   if (loading)
     return (
@@ -1989,7 +1981,6 @@ const statsGlobales = {
             animate={{ opacity: 1, y: 0 }}
             className="w-full max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-6 mb-8"
           >
-            {/* Nombre de commandes */}
             <div className="rounded-xl border border-yellow-400 bg-gradient-to-br from-yellow-50 via-amber-50 to-yellow-100 px-3 py-2.5 shadow-sm">
               <div className="text-[15px] font-semibold text-yellow-800 mb-0.5">
                 Nombre de commandes
@@ -2002,7 +1993,6 @@ const statsGlobales = {
               </div>
             </div>
 
-            {/* Total TTC global */}
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
               <div className="text-[15px] text-gray-500 mb-0.5">
                 Total TTC global
@@ -2014,7 +2004,6 @@ const statsGlobales = {
               </div>
             </div>
 
-            {/* Montant payé (caisse) */}
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
               <div className="text-[15px] text-gray-500 mb-0.5">
                 Montant payé (caisse)
@@ -2027,7 +2016,6 @@ const statsGlobales = {
               </div>
             </div>
 
-            {/* Dette globale (commandes non soldées) */}
             <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5">
               <div className="text-[15px] text-gray-500 mb-0.5">
                 Dette globale (reste)
@@ -2048,10 +2036,10 @@ const statsGlobales = {
             toast={toast}
           />
 
-          {/* TABLE DES COMMANDES + FILTRES/RECHERCHE/LIMITE/PAGINATION */}
+          {/* TABLE DES COMMANDES + FILTRES/RECHERCHE/PAGINATION */}
           <section className="bg-white/95 border border-[#E4E0FF] rounded-2xl shadow-[0_12px_30px_rgba(15,23,42,0.06)] px-3 sm:px-4 py-4 sm:py-5 space-y-4 mt-8">
             
-            {/* FILTRES + RECHERCHE + LIMITE (avisage) */}
+            {/* FILTRES + RECHERCHE */}
             <div className="flex flex-col gap-3">
               <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
                 {/* Filtre statut (pills) */}
@@ -2060,9 +2048,9 @@ const statsGlobales = {
                   <div className="inline-flex rounded-full bg-[#F7F5FF] border border-[#E4E0FF] p-0.5">
                     {[
                       { id: "tous", label: "Tous" },
-                      { id: "en_attente_caisse", label: "En attente" },
-                      { id: "partiellement_payee", label: "Partiel" },
-                      { id: "soldee", label: "Soldées" },
+                      { id: "attente", label: "En attentes" },
+                      { id: "partiellement_payee", label: "Partiellement payées" },
+                      { id: "payee", label: "Totalement payées" },
                       { id: "annulee", label: "Annulées" },
                     ].map((opt) => (
                       <button
@@ -2082,7 +2070,7 @@ const statsGlobales = {
                   </div>
                 </div>
 
-                {/* Période + limite */}
+                {/* Période */}
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3 text-xs">
                   <div className="flex items-center gap-1">
                     <span className="text-gray-500 font-medium">Période :</span>
@@ -2103,14 +2091,19 @@ const statsGlobales = {
                 </div>
               </div>
 
-              {/* RECHERCHE */}
+              {/* ✅ RECHERCHE INSTANTANÉE (plus de debounce) */}
               <div className="relative mb-4">
                 <Search className="absolute left-3 top-2.5 text-gray-400 w-4 h-4" />
                 <input
                   type="text"
                   placeholder="Rechercher une commande (numéro commande ou nom client)"
                   value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setSearchInput(value);
+                    setSearchTerm(value.trim());
+                    setPage(1);
+                  }}
                   className="w-full pl-9 pr-10 py-2.5 border border-gray-300 rounded-xl text-sm bg-white shadow-sm focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD] placeholder:text-gray-400"
                 />
                 {searchTerm ? (
@@ -2119,6 +2112,7 @@ const statsGlobales = {
                     onClick={() => {
                       setSearchInput("");
                       setSearchTerm("");
+                      setPage(1);
                     }}
                     className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
                     title="Effacer"
@@ -2128,7 +2122,7 @@ const statsGlobales = {
                 ) : null}
               </div>
 
-              {/* Résumé affichage (pagination backend Laravel) */}
+              {/* Résumé affichage */}
               <div className="flex items-center justify-between text-[11px] text-gray-500">
                 <span>
                   Affichage :{" "}
@@ -2142,8 +2136,16 @@ const statsGlobales = {
               </div>
             </div>
 
-            {/* TABLEAU */}
-            <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white mt-2">
+            {/* TABLEAU AVEC LOADER DE SURCOUCHE */}
+            <div className="relative overflow-x-auto rounded-xl border border-gray-200 bg-white mt-2">
+              {loadingPage && (
+                <div className="absolute inset-0 bg-white/70 backdrop-blur-sm flex items-center justify-center z-10">
+                  <div className="flex items-center gap-2 text-[#472EAD] text-sm font-medium">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Chargement...
+                  </div>
+                </div>
+              )}
               <table className="min-w-full text-sm">
                 <thead className="bg-[#F7F5FF] text-[#472EAD] uppercase text-xs font-semibold">
                   <tr>
@@ -2205,7 +2207,6 @@ const statsGlobales = {
                   ) : (
                     <tr>
                       <td colSpan={8} className="text-center text-gray-400 py-6 text-sm">
-                        {/* ✅ CORRECTION 3 : Message correct selon qu'il y a des filtres ou pas */}
                         {total > 0
                           ? "Aucune commande ne correspond aux filtres."
                           : "Aucune commande enregistrée."}
@@ -2216,7 +2217,7 @@ const statsGlobales = {
               </table>
             </div>
 
-            {/* ✅ PAGINATION AVEC COMPOSANT DÉDIÉ */}
+            {/* PAGINATION */}
             <div className="mt-6">
               <Pagination
                 page={page}
@@ -2227,14 +2228,6 @@ const statsGlobales = {
                   }
                 }}
               />
-              
-              {/* Indicateur de chargement pendant le changement de page */}
-              {loadingPage && (
-                <div className="flex justify-center py-2 text-xs text-gray-400 mt-2">
-                  <Loader2 className="w-3 h-3 mr-1 animate-spin text-[#472EAD]" />
-                  Chargement de la page...
-                </div>
-              )}
             </div>
           </section>
 
@@ -2245,12 +2238,46 @@ const statsGlobales = {
             commande={selectedCommande}
           />
 
-          {/* MODAL QR CODE COMMANDE (après création) */}
+          {/* MODAL QR CODE COMMANDE */}
           <QrCommandeModal
             open={showQrModal}
             onClose={() => setShowQrModal(false)}
             commande={lastCreatedCommande}
             qrPayload={qrPayload}
+          />
+          
+          <NouvelleTrancheModal
+            open={showTrancheModal}
+            onClose={() => setShowTrancheModal(false)}
+            lockedCommande={lastCreatedCommande}
+            toast={toast}
+            onSubmit={async (commande, paiement, done) => {
+              try {
+                  await commandesAPI.sendTranche(commande.id, {
+                    montant: paiement,
+                  });
+
+                const fresh = await commandesAPI.getById(commande.id);
+                const normalized = normalizeCommande(
+                  fresh?.data?.data ?? fresh?.data ?? fresh
+                );
+
+                setLastCreatedCommande({
+                  ...normalized,
+                  montantTranche: paiement,
+                });
+
+                setShowTrancheModal(false);
+                setShowQrModal(true);
+                
+                await fetchCommandes();
+
+                done();
+              } catch (e) {
+                done();
+                toast("error", "Erreur paiement", "Impossible d'enregistrer la tranche.");
+              }
+            }}
           />
 
           {/* TOASTS */}

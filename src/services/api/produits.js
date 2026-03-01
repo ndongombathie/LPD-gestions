@@ -9,7 +9,7 @@ const ENDPOINTS = {
   CREATE: '/produits',
   UPDATE: '/produits/:id',
   DELETE: '/produits/:id',
-   GET_ALL_FULL: '/produits/catalogue',
+  GET_ALL_FULL: '/produits-disponibles-boutique',
 };
 
 export const produitsAPI = {
