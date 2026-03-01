@@ -86,9 +86,10 @@ const CaissePage = () => {
       client_special: isClientSpecial,
       client_nom: commande.client ? `${commande.client.prenom || ''} ${commande.client.nom || ''}`.trim() : null,
       lignes: lignes,
-      montant_deja_paye: totalPaye,
-      reste_du: resteDu,
+      montant_deja_paye: paiements[0]?.somme_payees,
+      reste_du: paiements[0]?.reste_du,
       paiements: paiements,
+      premiere_tranche:commande.premiere_tranche || null,
     };
   };
 
@@ -102,11 +103,13 @@ const CaissePage = () => {
       setLoading(true);
       const response = await caissierApi.getCommandesAttente({ page, per_page: PAGE_SIZE, search: search || undefined });
       const commandes = response?.data || [];
+      console.log('Commandes reçues du backend:', commandes);
       
       const ticketsTransformes = commandes.map(commande => {
         const paiements = commande.paiements || [];
         return transformCommandeToTicket(commande, paiements);
       });
+      console.log('Tickets transformés:', ticketsTransformes);
       
       setTickets(ticketsTransformes);
       setPendingCount(response?.total ?? ticketsTransformes.length);
@@ -279,7 +282,6 @@ const CaissePage = () => {
 
       // Appel API pour créer le paiement
       await caissierApi.creerPaiement(selectedTicket.commande_id, {
-        montant: montant,
         type_paiement: moyenPaiementFinal || 'especes'
       });
 
@@ -1018,7 +1020,8 @@ const CaissePage = () => {
               <Input
                 label="Montant payé (FCFA)"
                 type="number"
-                value={paymentData.montantPaye}
+                disabled={true}
+                value={selectedTicket.premiere_tranche}
                 onChange={(e) => setPaymentData({ ...paymentData, montantPaye: e.target.value })}
                 helperText={
                   selectedTicket.reste_du && selectedTicket.reste_du < selectedTicket.total_ttc
