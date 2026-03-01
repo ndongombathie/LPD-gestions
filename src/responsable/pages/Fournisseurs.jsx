@@ -22,7 +22,9 @@ import {
 } from "lucide-react";
 import FormModal from "../components/FormModal.jsx";
 import DataTable from "../components/DataTable.jsx";
+import Pagination from "../components/Pagination.jsx";
 import { fournisseursAPI } from '@/services/api';
+
 
 const cls = (...a) => a.filter(Boolean).join(" ");
 
@@ -97,9 +99,9 @@ function FournisseurForm({ initial, onSubmit, onCancel, submitting }) {
   const validate = () => {
     const e = {};
     if (!form.nom.trim()) e.nom = "Le nom du fournisseur est requis.";
-    if (!/^[0-9]{9}$/.test(form.contact))
-      e.contact = "Le contact doit contenir exactement 9 chiffres.";
-    if (!form.adresse.trim()) e.adresse = "L’adresse est requise.";
+    if (!/^\d+$/.test(form.contact))
+      e.contact = "Le contact doit contenir uniquement des chiffres.";
+    if (!form.adresse.trim()) e.adresse = "L'adresse est requise.";
     if (!form.typeProduit.trim())
       e.typeProduit = "Le type de produits est requis.";
     if (form.derniereLivraison) {
@@ -109,7 +111,7 @@ function FournisseurForm({ initial, onSubmit, onCancel, submitting }) {
       today.setHours(0, 0, 0, 0);
       if (d > today)
         e.derniereLivraison =
-          "La date doit être antérieure ou égale à aujourd’hui.";
+          "La date doit être antérieure ou égale à aujourd'hui.";
     }
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -155,10 +157,9 @@ function FournisseurForm({ initial, onSubmit, onCancel, submitting }) {
           <input
             value={form.contact}
             onChange={(e) =>
-              update("contact", e.target.value.replace(/\D/g, "").slice(0, 9))
+              update("contact", e.target.value.replace(/\D/g, ""))
             }
             placeholder="Ex: 771234567"
-            maxLength={9}
             className={base(errors.contact)}
             required
           />
@@ -256,13 +257,18 @@ function FournisseurForm({ initial, onSubmit, onCancel, submitting }) {
 export default function Fournisseurs() {
   const [fournisseurs, setFournisseurs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [loadingPage, setLoadingPage] = useState(false);
+  const [searchInput, setSearchInput] = useState("");
   const [openAdd, setOpenAdd] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [selectedFournisseur, setSelectedFournisseur] = useState(null);
+  // Pagination backend
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
 
   const removeToast = (id) =>
     setToasts((t) => t.filter((x) => x.id !== id));
@@ -273,13 +279,27 @@ export default function Fournisseurs() {
     setTimeout(() => removeToast(id), 4000);
   };
 
-  // 🔗 Chargement depuis l'API Laravel
+  // 🔗 Chargement depuis l'API Laravel - recherche instantanée
   useEffect(() => {
     const fetchFournisseurs = async () => {
-      try {
+      // Si c'est le chargement initial
+      if (page === 1 && fournisseurs.length === 0) {
         setLoading(true);
-        const data = await fournisseursAPI.getAll();
+      } else {
+        setLoadingPage(true);
+      }
+      
+      try {
+        const data = await fournisseursAPI.getAll({
+          page,
+          search: searchInput || undefined,
+        });
+        
         const raw = Array.isArray(data) ? data : data.data || [];
+
+        // Gestion de la pagination Laravel
+        setTotalItems(data.total || 0);
+        setTotalPages(data.last_page || 1);
 
         const normalized = raw.map((f) => ({
           id: f.id,
@@ -293,7 +313,6 @@ export default function Fournisseurs() {
 
         setFournisseurs(normalized);
       } catch (err) {
-        console.error("Erreur chargement fournisseurs :", err);
         toast(
           "error",
           "Erreur",
@@ -301,161 +320,24 @@ export default function Fournisseurs() {
         );
       } finally {
         setLoading(false);
+        setLoadingPage(false);
       }
     };
 
     fetchFournisseurs();
-  }, []);
+  }, [page, searchInput]);
 
   // Stats rapides
   const stats = useMemo(() => {
-    const total = fournisseurs.length;
+    const total = totalItems;
     const avecLivraison = fournisseurs.filter(
       (f) => !!f.derniereLivraison
     ).length;
     return { total, avecLivraison };
-  }, [fournisseurs]);
+  }, [totalItems, fournisseurs]);
 
-  // Filtre recherche
-  const filtered = useMemo(() => {
-    const q = searchTerm.toLowerCase();
-    return fournisseurs.filter((f) => {
-      const nom = (f.nom || "").toLowerCase();
-      const contact = String(f.contact || "").toLowerCase();
-      const adresse = (f.adresse || "").toLowerCase();
-      const typeProd = (f.typeProduit || "").toLowerCase();
-      return (
-        nom.includes(q) ||
-        contact.includes(q) ||
-        adresse.includes(q) ||
-        typeProd.includes(q)
-      );
-    });
-  }, [fournisseurs, searchTerm]);
-
-  // ➕ Ajout (POST /api/fournisseurs)
-  const handleAdd = async (form) => {
-    try {
-      setSubmitting(true);
-
-      const payload = {
-        nom: form.nom,
-        contact: form.contact,
-        adresse: form.adresse,
-        type_produit: form.typeProduit,
-        derniere_livraison: form.derniereLivraison || null,
-      };
-
-      const data = await fournisseursAPI.create(payload);
-
-      const newF = {
-        id: data.id,
-        nom: data.nom || "",
-        contact: data.contact || "",
-        adresse: data.adresse || "",
-        typeProduit: data.type_produit || "",
-        derniereLivraison: data.derniere_livraison || "",
-        totalAchats: data.total_achats ?? 0,
-      };
-
-      setFournisseurs((prev) => [newF, ...prev]);
-      toast(
-        "success",
-        "Fournisseur ajouté",
-        `${newF.nom} a été ajouté avec succès.`
-      );
-      setOpenAdd(false);
-    } catch (err) {
-      console.error("Erreur ajout fournisseur :", err);
-      toast(
-        "error",
-        "Erreur",
-        "Impossible d’ajouter le fournisseur."
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  // ✏️ Modification (PUT /api/fournisseurs/{id})
-  const handleEdit = async (form) => {
-    if (!editTarget) return;
-    try {
-      setSubmitting(true);
-
-      const payload = {
-        nom: form.nom,
-        contact: form.contact,
-        adresse: form.adresse,
-        type_produit: form.typeProduit,
-        derniere_livraison: form.derniereLivraison || null,
-      };
-
-      const data = await fournisseursAPI.update(editTarget.id, payload);
-
-      const updated = {
-        id: data.id,
-        nom: data.nom || "",
-        contact: data.contact || "",
-        adresse: data.adresse || "",
-        typeProduit: data.type_produit || "",
-        derniereLivraison: data.derniere_livraison || "",
-        totalAchats: data.total_achats ?? editTarget.totalAchats ?? 0,
-      };
-
-      setFournisseurs((prev) =>
-        prev.map((f) => (f.id === editTarget.id ? updated : f))
-      );
-
-      toast(
-        "success",
-        "Fournisseur modifié",
-        `${updated.nom} a été mis à jour.`
-      );
-      setEditTarget(null);
-    } catch (err) {
-      console.error("Erreur modification fournisseur :", err);
-      toast(
-        "error",
-        "Erreur",
-        "Impossible de modifier le fournisseur."
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  // 🗑️ Suppression (DELETE /api/fournisseurs/{id})
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
-    try {
-      setSubmitting(true);
-      await fournisseursAPI.delete(deleteTarget.id);
-
-      setFournisseurs((prev) =>
-        prev.filter((f) => f.id !== deleteTarget.id)
-      );
-
-      toast(
-        "success",
-        "Fournisseur supprimé",
-        `${deleteTarget.nom} a été supprimé.`
-      );
-      setDeleteTarget(null);
-    } catch (err) {
-      console.error("Erreur suppression fournisseur :", err);
-      toast(
-        "error",
-        "Erreur",
-        "Impossible de supprimer le fournisseur."
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  // Loader harmonisé
-  if (loading)
+  // Loader d'affichage initial
+  if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[70vh] bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white">
         <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-white/80 border border-[#E4E0FF] shadow-sm">
@@ -466,65 +348,240 @@ export default function Fournisseurs() {
         </div>
       </div>
     );
+  }
+
+  // ➕ Ajout (POST /api/fournisseurs)
+  const handleAdd = async (form) => {
+    const tempId = `tmp-${Date.now()}`;
+
+    const optimisticFournisseur = {
+      id: tempId,
+      nom: form.nom,
+      contact: form.contact,
+      adresse: form.adresse,
+      typeProduit: form.typeProduit,
+      derniereLivraison: form.derniereLivraison || "",
+      totalAchats: 0,
+    };
+
+    // 1️⃣ Optimistic update UI
+    setFournisseurs((prev) => [optimisticFournisseur, ...prev]);
+    setSubmitting(true);
+
+    try {
+      const payload = {
+        nom: form.nom,
+        contact: form.contact,
+        adresse: form.adresse,
+        type_produit: form.typeProduit,
+        derniere_livraison: form.derniereLivraison || null,
+      };
+
+      const data = await fournisseursAPI.create(payload);
+
+      // 2️⃣ Remplacer le faux fournisseur par le vrai
+      setFournisseurs((prev) =>
+        prev.map((f) =>
+          f.id === tempId
+            ? {
+                id: data.id,
+                nom: data.nom || "",
+                contact: data.contact || "",
+                adresse: data.adresse || "",
+                typeProduit: data.type_produit || "",
+                derniereLivraison: data.derniere_livraison || "",
+                totalAchats: data.total_achats ?? 0,
+              }
+            : f
+        )
+      );
+
+      toast(
+        "success",
+        "Fournisseur ajouté",
+        `${data.nom} a été ajouté avec succès.`
+      );
+      setOpenAdd(false);
+    } catch (err) {
+      // 3️⃣ Rollback si erreur + message backend
+      setFournisseurs((prev) =>
+        prev.filter((f) => f.id !== tempId)
+      );
+
+      const message =
+        err.response?.data?.message ||
+        "Impossible d'ajouter le fournisseur.";
+
+      toast("error", "Erreur", message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // ✏️ Modification (PUT /api/fournisseurs/{id})
+  const handleEdit = async (form) => {
+    if (!editTarget) return;
+
+    const previous = [...fournisseurs];
+
+    const optimisticUpdated = {
+      ...editTarget,
+      nom: form.nom,
+      contact: form.contact,
+      adresse: form.adresse,
+      typeProduit: form.typeProduit,
+      derniereLivraison: form.derniereLivraison || "",
+    };
+
+    // 1️⃣ Optimistic update
+    setFournisseurs((prev) =>
+      prev.map((f) => (f.id === editTarget.id ? optimisticUpdated : f))
+    );
+
+    setSubmitting(true);
+
+    try {
+      const payload = {
+        nom: form.nom,
+        contact: form.contact,
+        adresse: form.adresse,
+        type_produit: form.typeProduit,
+        derniere_livraison: form.derniereLivraison || null,
+      };
+
+      await fournisseursAPI.update(editTarget.id, payload);
+
+      toast(
+        "success",
+        "Fournisseur modifié",
+        `${form.nom} a été mis à jour.`
+      );
+      setEditTarget(null);
+    } catch (err) {
+      // 2️⃣ Rollback + message backend
+      setFournisseurs(previous);
+
+      const message =
+        err.response?.data?.message ||
+        "Impossible de modifier le fournisseur.";
+
+      toast("error", "Erreur", message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // 🗑️ Suppression (DELETE /api/fournisseurs/{id})
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+
+    const previous = [...fournisseurs];
+
+    // 1️⃣ Optimistic removal
+    setFournisseurs((prev) =>
+      prev.filter((f) => f.id !== deleteTarget.id)
+    );
+
+    setSubmitting(true);
+
+    try {
+      await fournisseursAPI.delete(deleteTarget.id);
+
+      toast(
+        "success",
+        "Fournisseur supprimé",
+        `${deleteTarget.nom} a été supprimé.`
+      );
+      setDeleteTarget(null);
+    } catch (err) {
+      // 2️⃣ Rollback
+      setFournisseurs(previous);
+
+      toast(
+        "error",
+        "Erreur",
+        "Impossible de supprimer le fournisseur."
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <>
       <div className="min-h-screen w-full bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white px-4 sm:px-6 lg:px-10 py-6 sm:py-8 overflow-y-auto">
-        <div className="max-w-6xl mx-auto space-y-7">
-          {/* HEADER */}
+        <div className="max-w-6xl mx-auto space-y-8">
+          
           <motion.header
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.45 }}
-            className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+            className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mt-6 mb-8"
           >
-            <div className="space-y-2">
+            {/* GAUCHE : TITRE */}
+            <div className="space-y-2 flex-1">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/70 border border-[#E4E0FF] shadow-xs">
                 <span className="h-1.5 w-1.5 rounded-full bg-[#F58020]" />
                 <span className="text-[11px] font-semibold tracking-wide text-[#472EAD] uppercase">
                   Module Fournisseurs — Responsable
                 </span>
               </div>
+
               <div>
                 <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#2F1F7A]">
                   Gestion des fournisseurs
                 </h1>
                 <p className="mt-1 text-sm text-gray-500">
-                  Suivi des partenaires d’approvisionnement : ajout,
+                  Suivi des partenaires d'approvisionnement : ajout,
                   modification et suppression des fournisseurs.
                 </p>
               </div>
-              <p className="text-[11px] text-gray-400">
-                {stats.total} fournisseur
-                {stats.total > 1 && "s"} • {stats.avecLivraison} avec
-                livraison renseignée
-              </p>
             </div>
 
-            <button
-              onClick={() => setOpenAdd(true)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-[#472EAD] text-white rounded-lg shadow-md hover:bg-[#5A3CF5] hover:shadow-lg text-xs sm:text-sm transition"
-            >
-              <UserPlus size={18} />
-              Nouveau fournisseur
-            </button>
+            {/* DROITE : BADGE + BOUTON */}
+            <div className="flex items-center gap-3 justify-end">
+              
+              {/* ✅ BADGE TOTAL */}
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/90 border border-[#E4E0FF] shadow-sm hover:shadow transition-shadow duration-200">
+                <span className="h-2 w-2 rounded-full bg-[#472EAD] animate-pulse" />
+                <span className="text-xs text-gray-600">
+                  Total :{" "}
+                  <span className="font-semibold text-[#472EAD]">
+                    {stats.total}
+                  </span>
+                </span>
+              </div>
+
+              {/* BOUTON */}
+              <button
+                onClick={() => setOpenAdd(true)}
+                className="flex items-center gap-2 px-4 py-2.5 bg-[#472EAD] text-white rounded-lg shadow-md hover:bg-[#5A3CF5] hover:shadow-lg text-xs sm:text-sm transition"
+              >
+                <UserPlus size={18} />
+                Nouveau fournisseur
+              </button>
+
+            </div>
           </motion.header>
 
           {/* RECHERCHE & TABLEAU */}
-          <section className="bg-white/90 border border-[#E4E0FF] rounded-2xl shadow-[0_18px_45px_rgba(15,23,42,0.06)] px-4 sm:px-5 py-4 space-y-4">
+          <section className="bg-white/90 border border-[#E4E0FF] rounded-2xl shadow-[0_18px_45px_rgba(15,23,42,0.06)] px-4 sm:px-5 py-4 sm:py-5 space-y-4">
+            
             {/* Recherche */}
-            <div className="relative mb-1">
+            <div className="relative mb-4">
               <Search className="absolute left-3 top-2.5 text-gray-400 w-4 h-4" />
               <input
                 type="text"
                 placeholder="Rechercher par nom, contact, adresse ou type de produit..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                value={searchInput}
+                onChange={(e) => {
+                  setSearchInput(e.target.value);
+                  setPage(1); // Reset à la première page quand on cherche
+                }}
                 className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-xl text-sm bg-white/80 shadow-sm focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD] placeholder:text-gray-400"
               />
             </div>
 
-            {/* Tableau */}
             <DataTable
               columns={[
                 { label: "Nom", key: "nom" },
@@ -545,10 +602,7 @@ export default function Fournisseurs() {
                   render: (val) =>
                     val ? (
                       <span className="flex items-center gap-1 text-sm">
-                        <CalendarDays
-                          size={14}
-                          className="text-[#472EAD]"
-                        />
+                        <CalendarDays size={14} className="text-[#472EAD]" />
                         {new Date(val).toLocaleDateString("fr-FR", {
                           day: "2-digit",
                           month: "short",
@@ -562,7 +616,7 @@ export default function Fournisseurs() {
                     ),
                 },
               ]}
-              data={filtered}
+              data={fournisseurs}
               actions={[
                 {
                   title: "Voir la fiche",
@@ -587,6 +641,28 @@ export default function Fournisseurs() {
                 },
               ]}
             />
+
+            {/* ✅ PAGINATION */}
+            <div className="mt-6">
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                onPageChange={(p) => {
+                  if (p < 1 || p > totalPages) return;
+                  if (p === page) return;
+                  setPage(p);
+                }}
+              />
+              
+              {/* Indicateur de chargement pendant le changement de page */}
+              {loadingPage && (
+                <div className="flex justify-center py-2 text-xs text-gray-400 mt-2">
+                  <Loader2 className="w-3 h-3 mr-1 animate-spin text-[#472EAD]" />
+                  Chargement de la page...
+                </div>
+              )}
+            </div>
+
           </section>
 
           {/* MODALES CRUD */}

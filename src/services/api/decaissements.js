@@ -10,9 +10,12 @@ const ENDPOINTS = {
   UPDATE: '/decaissements/:id',
   DELETE: '/decaissements/:id',
   VALIDATE: '/decaissements/:id/valider',
+  EXPORT_ALL: '/decaissements/export',
+  GET_ALL_CAISSIERS: '/caissiers/all',
 };
 
 export const decaissementsAPI = {
+  list: (params = {}) => decaissementsAPI.getAll(params),
   getAll: async (params = {}) => {
     try {
       const response = await httpClient.get(ENDPOINTS.GET_ALL, { params });
@@ -72,4 +75,23 @@ export const decaissementsAPI = {
       throw error;
     }
   },
+  exportAll: async (params = {}) => {
+    try {
+      const response = await httpClient.get(ENDPOINTS.EXPORT_ALL, { params });
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erreur exportAll décaissements:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+  getAllCaissiers: async () => {
+    try {
+      const response = await httpClient.get(ENDPOINTS.GET_ALL_CAISSIERS);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Erreur getAllCaissiers:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+
 };

@@ -18,17 +18,10 @@ const ENDPOINTS = {
 
 export const clientsAPI = {
   /**
-   * Récupérer tous les clients
+   * 👥 Clients API
+   * 
+   * Endpoints: /api/clients
    */
-  getAll: async (params = {}) => {
-    try {
-      const response = await httpClient.get(ENDPOINTS.GET_ALL, { params });
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erreur getAll clients:', error.message);
-      throw error;
-    }
-  },
 
   /**
    * Rechercher des clients par nom
@@ -84,18 +77,18 @@ export const clientsAPI = {
     }
   },
 
-  /**
-   * Obtenir un client par ID
-   */
-  getById: async (id) => {
-    try {
-      const response = await httpClient.get(ENDPOINTS.GET_BY_ID.replace(':id', id));
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erreur getById client:', error.message);
-      throw error;
-    }
-  },
+    /**
+     * Récupérer tous les clients
+     */
+    getAll: async (params = {}) => {
+      try {
+        const response = await httpClient.get(ENDPOINTS.GET_ALL, { params });
+        return response.data;
+      } catch (error) {
+        console.error('❌ Erreur getAll clients:', error.message);
+        throw error;
+      }
+    },
 
   /**
    * Créer un client
@@ -112,18 +105,18 @@ export const clientsAPI = {
     }
   },
 
-  /**
-   * Mettre à jour un client
-   */
-  update: async (id, data) => {
-    try {
-      const response = await httpClient.put(ENDPOINTS.UPDATE.replace(':id', id), data);
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erreur update client:', error.response?.data || error.message);
-      throw error;
-    }
-  },
+    /**
+     * Obtenir un client par ID
+     */
+    getById: async (id) => {
+      try {
+        const response = await httpClient.get(ENDPOINTS.GET_BY_ID.replace(':id', id));
+        return response.data;
+      } catch (error) {
+        console.error('❌ Erreur getById client:', error.message);
+        throw error;
+      }
+    },
 
   /**
    * Supprimer un client

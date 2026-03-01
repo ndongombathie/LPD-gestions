@@ -5,10 +5,13 @@
 
 import httpClient from '../http/client';
 
+// ======================================================
+// 🔹 Commandes (entête)
+// ======================================================
 const ENDPOINTS = {
   // Vos endpoints existants
   GET_ALL: '/commandes',
-  GET_PENDING: '/commandes/pending',
+  GET_PENDING: '/commandes-attente',
   GET_BY_ID: '/commandes/:id',
   CREATE: '/commandes',
   VALIDATE: '/commandes/:id/valider',
@@ -90,7 +93,9 @@ export const commandesAPI = {
    */
   getById: async (id) => {
     try {
-      const response = await httpClient.get(ENDPOINTS.GET_BY_ID.replace(':id', id));
+      const response = await httpClient.get(
+        ENDPOINTS.GET_BY_ID.replace(':id', id)
+      );
       return response.data;
     } catch (error) {
       console.error('❌ Erreur getById commande:', error.message);
@@ -387,7 +392,10 @@ export const commandesAPI = {
    */
   update: async (id, data) => {
     try {
-      const response = await httpClient.put(ENDPOINTS.UPDATE.replace(':id', id), data);
+      const response = await httpClient.put(
+        ENDPOINTS.UPDATE.replace(':id', id),
+        data
+      );
       return response.data;
     } catch (error) {
       console.error('❌ Erreur update commande:', error.response?.data || error.message);
@@ -400,7 +408,9 @@ export const commandesAPI = {
    */
   validate: async (id) => {
     try {
-      const response = await httpClient.post(ENDPOINTS.VALIDATE.replace(':id', id));
+      const response = await httpClient.post(
+        ENDPOINTS.VALIDATE.replace(':id', id)
+      );
       return response.data;
     } catch (error) {
       console.error('❌ Erreur validate commande:', error.response?.data || error.message);
@@ -413,7 +423,9 @@ export const commandesAPI = {
    */
   cancel: async (id) => {
     try {
-      const response = await httpClient.post(ENDPOINTS.CANCEL.replace(':id', id));
+      const response = await httpClient.post(
+        ENDPOINTS.CANCEL.replace(':id', id)
+      );
       return response.data;
     } catch (error) {
       console.error('❌ Erreur cancel commande:', error.response?.data || error.message);
@@ -426,7 +438,9 @@ export const commandesAPI = {
    */
   delete: async (id) => {
     try {
-      const response = await httpClient.delete(ENDPOINTS.DELETE.replace(':id', id));
+      const response = await httpClient.delete(
+        ENDPOINTS.DELETE.replace(':id', id)
+      );
       return response.data;
     } catch (error) {
       console.error('❌ Erreur delete commande:', error.response?.data || error.message);
