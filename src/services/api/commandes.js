@@ -18,7 +18,7 @@ const ENDPOINTS = {
   CANCEL: '/commandes/:id/annuler',
   UPDATE: '/commandes/:id',
   DELETE: '/commandes/:id',
-  SEND_TRANCHE: '/commandes/:id/envoyer-tranche',
+  SEND_TRANCHE: '/premiere-tranche/:id',
   GET_STATS_SPECIAL: '/stats-commandes-speciales',
 };
 

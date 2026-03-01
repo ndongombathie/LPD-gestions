@@ -10,6 +10,8 @@ export function normalizeCommande(cmd) {
   // ===============================
   // 🧾 CLIENT
   // ===============================
+  console.log(cmd);
+  
   const client =
     cmd.client ||
     cmd.client_special ||
@@ -114,7 +116,7 @@ const totalTVA =
   // ===============================
   // 💰 FINANCIER (BACKEND)
   // ===============================
-
+const montant_caisse = Number(cmd.premiere_tranche || 0);
 
 const montantPaye =
   cmd.montant_paye !== undefined && Number(cmd.montant_paye) > 0
@@ -167,7 +169,7 @@ const dateCommande =
     cmd.reference ||
     cmd.code ||
     null,
-     clientId,
+    clientId,
     clientNom,
     dateCommande,
     lignes,
@@ -176,6 +178,7 @@ const dateCommande =
     totalTTC,
     paiements,
     montantPaye,
+    montant_caisse,
     resteAPayer,
     statut,
     statutLabel,

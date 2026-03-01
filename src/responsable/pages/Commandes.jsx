@@ -90,7 +90,20 @@ function unwrapApi(res) {
     return res.data;
   }
 
-  // Already unwrapped
+  // Already unwrapped (Laravel paginated object)
+  if (res.data !== undefined && Array.isArray(res.data)) {
+    return res;
+  }
+  // Already unwrapped raw array
+  if (Array.isArray(res)) {
+    return {
+      data: res,
+      total: res.length,
+      current_page: 1,
+      last_page: 1,
+    };
+  }
+  // Fallback safe
   return {
     data: [],
     total: 0,
@@ -1626,34 +1639,40 @@ export default function Commandes() {
       };
 
       const res = await commandesAPI.getAll(params);
+      console.log(res.data);
+      
       
       // ✅ Appel séparé pour les statistiques avec les mêmes filtres de date
-      const statsRes = await commandesAPI.getStatsSpecial({
+      /* const statsRes = await commandesAPI.getStatsSpecial({
         ...(filterStatut !== "tous" && { statut: filterStatut }),
         ...(filterStartDate && { start_date: filterStartDate }),
         ...(filterEndDate && { end_date: filterEndDate }),
         ...(searchTerm && { search: searchTerm }),
         ...(clientIdFromState && { client_id: clientIdFromState }),
-      });
+      }); */
 
       const payload = unwrapApi(res);
-      const commandesData = payload.data || [];
+      const commandesData = Array.isArray(payload) ? payload : (payload.data || []);
 
       const paginationData = {
-        current_page: Number(payload.current_page || 1),
-        last_page: Number(payload.last_page || 1),
-        total: Number(payload.total || commandesData.length || 0),
+        current_page: Number((payload && payload.current_page) || 1),
+        last_page: Number((payload && payload.last_page) || 1),
+        total: Number((payload && payload.total) || commandesData.length || 0),
       };
 
       const normalized = commandesData.map(normalizeCommande);
+      console.log(normalized);
+      
       setCommandes(normalized);
 
-      setPage(paginationData.current_page);
+      if (paginationData.current_page !== page) {
+        setPage(paginationData.current_page);
+      }
       setLastPage(paginationData.last_page);
       setTotal(paginationData.total);
 
       // ✅ Utilisation des stats de l'appel séparé
-      setStatsFromBackend(statsRes);
+      //setStatsFromBackend(statsRes);
 
     } catch (error) {
       logger.error("commandes.fetch", error);
@@ -2173,7 +2192,7 @@ export default function Commandes() {
                           {formatFCFA(c.totalTTC)}
                         </td>
                         <td className="px-4 py-3 text-right text-emerald-600">
-                          {formatFCFA(c.montantPaye)}
+                          {formatFCFA(c.montant_caisse)}
                         </td>
                         <td className="px-4 py-3 text-right text-rose-600">
                           {formatFCFA(Math.max(c.resteAPayer, 0))}
