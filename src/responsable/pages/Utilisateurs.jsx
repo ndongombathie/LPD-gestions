@@ -5,11 +5,7 @@
 // ==========================================================
 
 import React, { useEffect, useMemo, useState } from "react";
-<<<<<<< HEAD
 import {  AnimatePresence } from "framer-motion";
-=======
-import { motion } from "framer-motion";
->>>>>>> responsable_correction
 import {
   Search,
   Loader2,
@@ -18,12 +14,8 @@ import {
   X,
 } from "lucide-react";
 import DataTable from "../components/DataTable.jsx";
-<<<<<<< HEAD
-import { utilisateursAPI } from "../../services/api";
-=======
 import { utilisateursAPI } from '@/services/api';
 import Pagination from "../components/Pagination.jsx";
->>>>>>> responsable_correction
 
 const ROLES = [
   "Vendeur",
@@ -121,78 +113,12 @@ export default function Utilisateurs() {
     const id = Date.now();
     setToasts((t) => [...t, { id, type, title, message }]);
     setTimeout(() => removeToast(id), 4000);
-<<<<<<< HEAD
-  };
-
-  // ————————————————————————————————————————————————
-  // 🔗 Chargement des vrais utilisateurs depuis l'API
-  // GET /api/users (protégé Sanctum + role:responsable)
-  // ————————————————————————————————————————————————
-  useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        setLoading(true);
-
-        const response = await utilisateursAPI.getAll();
-
-        // response peut être un tableau brut OU response.data (Resource Laravel)
-        const rawUsers = Array.isArray(response) ? response : response.data || [];
-
-        const normalized = rawUsers.map((u) => {
-          // Présence : priorité à un booléen is_online si dispo,
-          // sinon estimation via last_login_at (ex: connecté il y a < 30 min).
-          let isOnline = false;
-
-          if (typeof u.is_online !== "undefined") {
-            isOnline = Boolean(u.is_online);
-          } else if (u.last_login_at) {
-            const last = new Date(u.last_login_at);
-            const diffMin = (Date.now() - last.getTime()) / 60000;
-            isOnline = diffMin <= 30; // 30 minutes = considéré comme "en ligne"
-          }
-
-          return {
-            id: u.id,
-            prenom: u.prenom || "",
-            nom: u.nom || "",
-            email: u.email || "",
-            tel: u.telephone || u.tel || "",
-            adresse: u.adresse || "",
-            cni: u.numero_cni || u.cni || "",
-            role: ROLE_LABELS[u.role] || u.role || "",
-            isOnline,
-          };
-        });
-
-        setUsers(normalized);
-      } catch (err) {
-        console.error("Erreur chargement utilisateurs :", err);
-        toast(
-          "error",
-          "Erreur",
-          "Impossible de charger la liste des utilisateurs."
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchUsers();
-  }, []);
-
-  // Stats rapides (pour les petits badges)
-  const stats = useMemo(() => {
-    const total = users.length;
-    const enLigne = users.filter((u) => u.isOnline).length;
-    const horsLigne = total - enLigne;
-=======
   }, []);
 
   // Réinitialiser la page quand le filtre change
 useEffect(() => {
   setPage(1);
 }, [filterRole, searchInput]);
->>>>>>> responsable_correction
 
   // Debounce pour la recherche : attendre que l'utilisateur arrête de taper
   // ET réinitialiser la page en même temps
@@ -375,71 +301,6 @@ if (initialLoad && loading && users.length === 0) {
           </div>
 
           {/* TABLE (lecture seule, aucune action) */}
-<<<<<<< HEAD
-          <div className="mt-1">
-            <DataTable
-              columns={[
-                {
-                  label: "Nom complet",
-                  key: "prenom",
-                  render: (_, r) => `${r.prenom} ${r.nom}`,
-                },
-                { label: "Email", key: "email" },
-                {
-                  label: "Rôle",
-                  key: "role",
-                  render: (val) => (
-                    <span
-                      className={cls(
-                        "px-2.5 py-1 rounded-full text-[11px] font-semibold",
-                        val === "Vendeur"
-                          ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
-                          : val === "Caissier"
-                          ? "bg-[#FFF4E5] text-[#F58020] border border-[#FFE0B8]"
-                          : val.includes("Gestionnaire")
-                          ? "bg-[#F7F5FF] text-[#472EAD] border border-[#E4E0FF]"
-                          : val === "Responsable"
-                          ? "bg-sky-50 text-sky-700 border border-sky-200"
-                          : "bg-gray-100 text-gray-700 border border-gray-200"
-                      )}
-                    >
-                      {val}
-                    </span>
-                  ),
-                },
-                { label: "Téléphone", key: "tel" },
-                { label: "Adresse", key: "adresse" },
-                { label: "CNI", key: "cni" },
-                {
-                  label: "Présence",
-                  key: "isOnline",
-                  render: (_, r) => (
-                    <span
-                      className={cls(
-                        "inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold rounded-full border",
-                        r.isOnline
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                          : "bg-gray-50 text-gray-600 border-gray-200"
-                      )}
-                    >
-                      <Circle
-                        className={cls(
-                          "w-3 h-3",
-                          r.isOnline
-                            ? "text-emerald-500"
-                            : "text-gray-400"
-                        )}
-                        fill="currentColor"
-                      />
-                      {r.isOnline ? "En ligne" : "Hors ligne"}
-                    </span>
-                  ),
-                },
-              ]}
-              data={filtered}
-              actions={[]} // 👈 AUCUNE ACTION (lecture seule)
-            />
-=======
           <div className="mt-2">
             {users.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-14 text-center text-gray-400">
@@ -491,7 +352,6 @@ if (initialLoad && loading && users.length === 0) {
                 </div>
               </>
             )}
->>>>>>> responsable_correction
           </div>
         </section>
 
