@@ -13,7 +13,7 @@ PUT       api/valider-produits-transfer
 GET             api/montant-total-stock
 
 # les produits en sous seuils
-GET        api/produits-sous-seuil
+GET        api/produits-sous-seuils
 
 # les produits en ruptures
 GET         api/produits-rupture
@@ -26,3 +26,6 @@ GET       api/quantite-totale-produit
 
 # la liste des produits disponible dans le stock
 GET             api/produits-disponibles-boutique
+
+# historique des actons
+GET             api/all-produits-transfer
