@@ -25,7 +25,7 @@ export default function Sidebar() {
     { name: "Fournisseurs", icon: Truck, path: "/responsable/fournisseurs" },
     { name: "Clients spéciaux", icon: ClipboardList, path: "/responsable/clients-speciaux" },
     { name: "Commandes", icon: ShoppingCart, path: "/responsable/commandes" },
-    { name: "Inventaire", icon: BarChart2, path: "/responsable/inventaire" },
+ //   { name: "Inventaire", icon: BarChart2, path: "/responsable/inventaire" },
     { name: "Rapports", icon: FileText, path: "/responsable/rapports" },
     { name: "Décaissements", icon: Banknote, path: "/responsable/decaissements" },
     { name: "Journal d’activités", icon: Clock, path: "/responsable/journal-activites" },

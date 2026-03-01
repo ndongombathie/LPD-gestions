@@ -14,7 +14,7 @@ const AUTH_ENDPOINTS = {
   LOGIN: '/auth/login',
   REGISTER: '/auth/register',
   LOGOUT: '/auth/logout',
-  CHANGE_PASSWORD: '/auth/change-password',
+  CHANGE_PASSWORD: '/change-password',
   REFRESH_TOKEN: '/auth/refresh',
 };
 
@@ -23,6 +23,7 @@ const AUTH_ENDPOINTS = {
  */
 const tokenManager = {
   getToken: () => sessionStorage.getItem('token'),
+
   setToken: (token) => {
     if (token) {
       sessionStorage.setItem('token', token);
@@ -30,6 +31,7 @@ const tokenManager = {
       sessionStorage.removeItem('token');
     }
   },
+
   clear: () => {
     sessionStorage.removeItem('token');
     sessionStorage.removeItem('user');
@@ -49,6 +51,7 @@ const userManager = {
       return null;
     }
   },
+
   setUser: (user) => {
     if (user) {
       sessionStorage.setItem('user', JSON.stringify(user));
@@ -56,6 +59,7 @@ const userManager = {
       sessionStorage.removeItem('user');
     }
   },
+
   clear: () => sessionStorage.removeItem('user'),
 };
 
@@ -63,11 +67,9 @@ const userManager = {
  * Auth API Methods
  */
 export const authAPI = {
+
   /**
-   * Connexion utilisateur
-   * @param {string} email - Email utilisateur
-   * @param {string} password - Mot de passe
-   * @returns {Promise<{token, user}>}
+   * 🔑 Login
    */
   login: async (email, password) => {
     try {
@@ -76,12 +78,12 @@ export const authAPI = {
         password,
       });
 
-      // Sauvegarder token et user
       if (response.data?.token) {
         tokenManager.setToken(response.data.token);
         localStorage.setItem('token', response.data.token);
         localStorage.setItem('boutique_id', response.data.user.boutique_id);
       }
+
       if (response.data?.user) {
         userManager.setUser(response.data.user);
       }
@@ -94,9 +96,7 @@ export const authAPI = {
   },
 
   /**
-   * Inscription utilisateur
-   * @param {object} data - {email, password, prenom, nom, role}
-   * @returns {Promise<{token, user}>}
+   * 🧾 Register
    */
   register: async (data) => {
     try {
@@ -105,6 +105,7 @@ export const authAPI = {
       if (response.data?.token) {
         tokenManager.setToken(response.data.token);
       }
+
       if (response.data?.user) {
         userManager.setUser(response.data.user);
       }
@@ -117,69 +118,70 @@ export const authAPI = {
   },
 
   /**
-   * Déconnexion utilisateur
-   * @returns {Promise<void>}
+   * 🚪 Logout
    */
   logout: async () => {
     try {
-      // Appel API (best practice)
       await httpClient.post(AUTH_ENDPOINTS.LOGOUT);
     } catch (error) {
-      // Continue même si l'API fail
       console.warn('⚠️ Erreur logout API:', error.message);
     } finally {
-      // Toujours nettoyer le local storage
       tokenManager.clear();
       userManager.clear();
     }
   },
 
   /**
-   * Obtenir l'utilisateur actuel
-   * @returns {object|null}
+   * 👤 Current User
    */
   getCurrentUser: () => {
     return userManager.getUser();
   },
 
   /**
-   * Vérifier si l'utilisateur est authentifié
-   * @returns {boolean}
+   * ✅ Auth check
    */
   isAuthenticated: () => {
     return !!tokenManager.getToken();
   },
 
   /**
-   * Changer le mot de passe
-   * @param {string} currentPassword - Mot de passe actuel
-   * @param {string} newPassword - Nouveau mot de passe
-   * @param {string} newPasswordConfirmation - Confirmation nouveau mot de passe
-   * @returns {Promise<object>}
+   * 🔐 Change Password (CORRIGÉ)
    */
-  changePassword: async (currentPassword, newPassword, newPasswordConfirmation) => {
+  changePassword: async (
+    currentPassword,
+    newPassword,
+    newPasswordConfirmation
+  ) => {
     try {
-      const response = await httpClient.post(AUTH_ENDPOINTS.CHANGE_PASSWORD, {
-        current_password: currentPassword,
-        new_password: newPassword,
-        new_password_confirmation: newPasswordConfirmation,
-      });
+      const response = await httpClient.put(
+        AUTH_ENDPOINTS.CHANGE_PASSWORD,
+        {
+          current_password: currentPassword,
+          new_password: newPassword,
+          new_password_confirmation: newPasswordConfirmation,
+        }
+      );
 
       return response.data;
     } catch (error) {
-      console.error('❌ Erreur changePassword:', error.response?.data || error.message);
+      console.error(
+        '❌ Erreur changePassword:',
+        error.response?.data || error.message
+      );
       throw error;
     }
   },
 
   /**
-   * Rafraîchir le token (si API supporte)
-   * @returns {Promise<{token}>}
+   * 🔄 Refresh token
    */
   refreshToken: async () => {
     try {
-      const response = await httpClient.post(AUTH_ENDPOINTS.REFRESH_TOKEN);
-      
+      const response = await httpClient.post(
+        AUTH_ENDPOINTS.REFRESH_TOKEN
+      );
+
       if (response.data?.token) {
         tokenManager.setToken(response.data.token);
       }
@@ -187,7 +189,6 @@ export const authAPI = {
       return response.data;
     } catch (error) {
       console.error('❌ Erreur refreshToken:', error.message);
-      // Si le refresh échoue, déconnecter
       tokenManager.clear();
       userManager.clear();
       throw error;
