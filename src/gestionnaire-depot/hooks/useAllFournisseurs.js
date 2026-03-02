@@ -1,10 +1,10 @@
 // src/gestionnaire-depot/hooks/useAllFournisseurs.js
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { fournisseursAPI } from '../../services/api/fournisseurs';
 
 export const useAllFournisseurs = () => {
   const [suppliers, setSuppliers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [total, setTotal] = useState(0);
 
@@ -28,6 +28,7 @@ export const useAllFournisseurs = () => {
       let allSuppliers = [];
       results.forEach(result => {
         let pageSuppliers = [];
+        
         if (Array.isArray(result)) {
           pageSuppliers = result;
         } else if (result?.data) {
@@ -46,9 +47,10 @@ export const useAllFournisseurs = () => {
       });
       
       setSuppliers(allSuppliers);
+      console.log(`✅ ${allSuppliers.length} fournisseurs chargés`);
     } catch (err) {
       console.error('❌ Erreur chargement tous fournisseurs:', err);
-      setError(err.message);
+      setError(err.message || 'Erreur lors du chargement des fournisseurs');
     } finally {
       setLoading(false);
     }
@@ -58,5 +60,11 @@ export const useAllFournisseurs = () => {
     fetchAllSuppliers();
   }, [fetchAllSuppliers]);
 
-  return { suppliers, total, loading, error, refetch: fetchAllSuppliers };
+  return {
+    suppliers,
+    total,
+    loading,
+    error,
+    refetch: fetchAllSuppliers,
+  };
 };

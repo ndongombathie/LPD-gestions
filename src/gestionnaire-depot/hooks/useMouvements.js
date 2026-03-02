@@ -116,9 +116,9 @@ export const useMouvements = () => {
       console.log('📊 Début chargement stats...');
       
       const results = await Promise.allSettled([
-        mouvementsAPI.getNbEntreesTotal().catch(err => (console.warn(err), 0)),
-        mouvementsAPI.getNbSortiesTotal().catch(err => (console.warn(err), 0)),
-        mouvementsAPI.getTransfertsEnAttente().catch(err => (console.warn(err), [])),
+        mouvementsAPI.getNbEntreesTotal(),
+        mouvementsAPI.getNbSortiesTotal(),
+        mouvementsAPI.getNbTransfertsEnAttente(), // ← UTILISE LE COMPTEUR DÉDIÉ
       ]);
 
       console.log('📦 Résultats bruts des stats:', results);
@@ -128,17 +128,12 @@ export const useMouvements = () => {
           const data = result.value;
           console.log('✅ Données reçues pour stats:', data);
           
-          if (Array.isArray(data)) return data.length;
+          if (typeof data === 'number') return data;
           if (data && typeof data === 'object') {
             if (data.count !== undefined) return data.count;
-            if (data.data !== undefined) {
-              if (Array.isArray(data.data)) return data.data.length;
-              return data.data;
-            }
+            if (data.data !== undefined) return data.data;
             if (data.nombre !== undefined) return data.nombre;
             if (data.total !== undefined) return data.total;
-            const firstNum = Object.values(data).find(v => typeof v === 'number');
-            if (firstNum !== undefined) return firstNum;
           }
           return data ?? defaultValue;
         }
@@ -148,8 +143,9 @@ export const useMouvements = () => {
       setStats({
         totalEntries: extractValue(results[0]),
         totalValidated: extractValue(results[1]),
-        totalPending: extractValue(results[2]),
+        totalPending: extractValue(results[2]), // ← MAINTENANT LE VRAI NOMBRE
       });
+      console.log('📈 Nouvelles stats:', stats);
     } catch (err) {
       console.error('Erreur inattendue dans fetchStats:', err);
       setErrorStats('Erreur lors du chargement des statistiques');

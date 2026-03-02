@@ -10,16 +10,24 @@ export const useHistoriqueProduits = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
-  const fetchHistorique = useCallback(async (page = 1, perPage = 20) => {
+  const fetchHistorique = useCallback(async (page = 1, perPage = 20, searchTerm = '') => {
     setLoading(true);
     setError(null);
     try {
-      const response = await historiqueActionsAPI.getAll({ 
+      const params = { 
         page, 
         per_page: perPage,
         order_by: 'created_at',
         order_direction: 'desc'
-      });
+      };
+      
+      if (searchTerm && searchTerm.trim() !== '') {
+        params.search = searchTerm.trim();
+      }
+      
+      console.log("📦 Fetching historique avec params:", params);
+      const response = await historiqueActionsAPI.getAll(params);
+      console.log("✅ Réponse historique:", response);
       
       let data = [];
       let totalCount = 0;
@@ -32,7 +40,7 @@ export const useHistoriqueProduits = () => {
       } else if (response?.data) {
         data = response.data;
         totalCount = response.total || 0;
-        lastPage = response.last_page || Math.ceil(totalCount / perPage);
+        lastPage = response.last_page || 1;
       }
 
       // Filtrer pour ne garder que les modifications et suppressions
@@ -41,23 +49,31 @@ export const useHistoriqueProduits = () => {
         item.action === 'Suppression de produit'
       );
 
-      const formatted = filteredData.map(item => ({
-        id: item.id,
-        produit_id: item.produit_id,
-        action: item.action,
-        details: item.details || '',
-        anciennes_valeurs: item.anciennes_valeurs ? 
-          (typeof item.anciennes_valeurs === 'string' ? JSON.parse(item.anciennes_valeurs) : item.anciennes_valeurs) : null,
-        nouvelles_valeurs: item.nouvelles_valeurs ? 
-          (typeof item.nouvelles_valeurs === 'string' ? JSON.parse(item.nouvelles_valeurs) : item.nouvelles_valeurs) : null,
-        date: item.created_at,
-        type: item.action === 'Modification de produit' ? 'Modification' : 'Suppression',
-        productName: item.produit_nom || 'Produit inconnu',
-      }));
+      // Formater les données avec les informations imbriquées
+      const formatted = filteredData.map(item => {
+        // Déterminer le type d'action
+        const type = item.action === 'Modification de produit' ? 'Modification' : 'Suppression';
+        
+        // Récupérer les infos du produit imbriqué
+        const produit = item.produit || {};
+        
+        return {
+          id: item.id,
+          produit_id: item.produit_id,
+          action: item.action,
+          details: item.details || '',
+          date: item.created_at,
+          type: type,
+          // Informations produit (imbriquées)
+          productName: produit.nom || 'Produit inconnu',
+          productCode: produit.code || '',
+        };
+      });
 
       setHistory(formatted);
-      setTotal(filteredData.length);
-      setTotalPages(Math.ceil(filteredData.length / perPage));
+      // Utiliser les vraies valeurs de pagination de l'API, PAS filteredData.length
+      setTotal(totalCount);
+      setTotalPages(lastPage);
       setCurrentPage(page);
     } catch (err) {
       console.error('❌ Erreur fetchHistorique:', err);

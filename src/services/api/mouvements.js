@@ -80,13 +80,14 @@ export const mouvementsAPI = {
     }
   },
 
+  // ✅ NOUVEAU : Nombre de transferts en attente (pour la carte)
   getNbTransfertsEnAttente: async () => {
     try {
       const response = await httpClient.get('/transfers-en-attente');
       return response.data;
     } catch (error) {
       console.error('❌ mouvementsAPI.getNbTransfertsEnAttente error:', error);
-      throw error;
+      return 0; // Retourner 0 en cas d'erreur pour ne pas bloquer l'UI
     }
   },
 };

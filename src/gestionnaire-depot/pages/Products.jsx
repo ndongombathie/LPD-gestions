@@ -5,7 +5,9 @@ import { useCategories } from "../hooks/useCategories";
 import { useAllFournisseurs } from "../hooks/useAllFournisseurs";
 import { useHistoriqueProduits } from "../hooks/useHistoriqueProduits";
 import { useProduitsParStatut } from "../hooks/useProduitsParStatut";
+import { useProduitsParStatutAvecPagination } from "../hooks/useProduitsParStatutAvecPagination";
 import { produitsAPI } from "../../services/api/produits";
+import toast from 'react-hot-toast';
 
 import "../styles/depot-fix.css";
 
@@ -21,7 +23,9 @@ import {
   FaPhone, FaEnvelope, FaMapMarkerAlt, FaSave, FaTimes, FaEye, FaUndoAlt
 } from "react-icons/fa";
 
-// Fonction utilitaire getStatus
+// =========================================================================
+// FONCTIONS UTILITAIRES
+// =========================================================================
 const getStatus = (stockActuel, stockMinimum) => {
   const cartons = Number(stockActuel) || 0;
   const stockMin = Number(stockMinimum) || 0;
@@ -31,7 +35,6 @@ const getStatus = (stockActuel, stockMinimum) => {
   return { label: "Normal", className: "bg-green-100 text-green-700" };
 };
 
-// Composant StatusBadge
 const StatusBadge = ({ status }) => {
   const { label, className } = status;
   return (
@@ -45,186 +48,111 @@ const StatusBadge = ({ status }) => {
   );
 };
 
-// Composant Pagination
-const Pagination = ({ currentPage, totalPages, onPageChange, totalItems, pageSize }) => {
-  if (totalItems === 0) return null;
-
-  const getPageNumbers = () => {
-    const pages = [];
-    if (totalPages <= 5) {
-      for (let i = 1; i <= totalPages; i++) pages.push(i);
-    } else {
-      if (currentPage <= 3) {
-        pages.push(1, 2, 3, 4, '...', totalPages);
-      } else if (currentPage >= totalPages - 2) {
-        pages.push(1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
-      } else {
-        pages.push(1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages);
-      }
-    }
-    return pages;
-  };
-
-  const startItem = (currentPage - 1) * pageSize + 1;
-  const endItem = Math.min(currentPage * pageSize, totalItems);
+// =========================================================================
+// COMPOSANT PAGINATION SIMPLE
+// =========================================================================
+const SimplePagination = ({ currentPage, totalPages, onPageChange }) => {
+  if (totalPages <= 1) return null;
 
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 p-3 bg-gray-50 rounded-lg border border-slate-200">
-      <div className="text-sm text-slate-600">
-        Affichage <span className="font-bold text-slate-800">{startItem}</span> à <span className="font-bold text-slate-800">{endItem}</span> sur <span className="font-bold text-blue-600">{totalItems}</span>
-      </div>
-      
-      <div className="flex items-center gap-1">
-        <button onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1}
-          className="w-8 h-8 flex items-center justify-center rounded border bg-white hover:bg-slate-100 disabled:opacity-50">
-          <FaAngleLeft />
-        </button>
-        
-        <div className="flex items-center gap-1 mx-2">
-          {getPageNumbers().map((page, idx) => (
-            page === '...' ? <span key={idx} className="px-1 text-slate-400">...</span> :
-            <button key={idx} onClick={() => onPageChange(page)}
-              className={`w-8 h-8 rounded border flex items-center justify-center text-sm font-medium transition-colors ${
-                currentPage === page ? 'bg-[#472EAD] text-white border-[#472EAD]' : 'bg-white hover:bg-slate-50'
-              }`}>
-              {page}
-            </button>
-          ))}
-        </div>
-        
-        <button onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages}
-          className="w-8 h-8 flex items-center justify-center rounded border bg-white hover:bg-slate-100 disabled:opacity-50">
-          <FaAngleRight />
-        </button>
-      </div>
+    <div className="flex justify-center items-center gap-4 mt-4">
+      <button
+        onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+        disabled={currentPage === 1}
+        className="px-4 py-2 border rounded-lg text-sm disabled:opacity-50 bg-white hover:bg-slate-50"
+      >
+        Précédent
+      </button>
+      <span className="text-sm">
+        Page {currentPage} / {totalPages}
+      </span>
+      <button
+        onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+        disabled={currentPage === totalPages}
+        className="px-4 py-2 border rounded-lg text-sm disabled:opacity-50 bg-white hover:bg-slate-50"
+      >
+        Suivant
+      </button>
     </div>
   );
 };
 
 // =========================================================================
-// SOUS-COMPOSANTS
+// ONGLET LISTE DES PRODUITS
 // =========================================================================
-
-// ProductListTab (onglet Liste)
 const ProductListTab = ({
   products,
-  categories,
   fournisseurs,
+  categories,
   total,
   currentPage,
   totalPages,
-  goToPage,
+  onPageChange,
   onEdit,
   onDelete,
   loading,
   searchTerm,
-  setSearchTerm,
-  categoryFilter,
-  setCategoryFilter,
-  statusFilter,
-  setStatusFilter,
-  sortMode,
-  setSortMode,
-  pageSize,
+  onSearchChange,
+  onSearchSubmit,
   nbRupture,
   nbFaible
 }) => {
-  // Calculs des stats (filtrées localement)
-  const filteredProducts = useMemo(() => {
-    return products.filter(p => {
-      const matchesSearch = !searchTerm || 
-        p.nom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.code?.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesCategory = categoryFilter === "Toutes" || p.categorie_nom === categoryFilter;
-      const status = getStatus(p.nombre_carton, p.stock_seuil);
-      const matchesStatus = statusFilter === "Tous" || status.label === statusFilter;
-      return matchesSearch && matchesCategory && matchesStatus;
-    }).sort((a, b) => {
-      if (sortMode === "name-asc") return a.nom?.localeCompare(b.nom);
-      if (sortMode === "name-desc") return b.nom?.localeCompare(a.nom);
-      if (sortMode === "stock-asc") return (a.nombre_carton || 0) - (b.nombre_carton || 0);
-      if (sortMode === "stock-desc") return (b.nombre_carton || 0) - (a.nombre_carton || 0);
-      return 0;
-    });
-  }, [products, searchTerm, categoryFilter, statusFilter, sortMode]);
-
-  const totalValue = filteredProducts.reduce((acc, p) => acc + (p.prix_unite_carton * p.nombre_carton), 0);
+  const totalValue = products.reduce((acc, p) => acc + (p.prix_unite_carton * p.nombre_carton), 0);
 
   return (
     <div className="space-y-6">
-      {/* Barre d'outils */}
+      {/* Barre de recherche avec bouton */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
         <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
           <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
             <div className="text-sm text-slate-700 bg-slate-50 px-3 py-1 rounded-lg">
               <span className="font-bold text-[#472EAD]">{total}</span> produits au total
             </div>
-            <div className="relative w-full md:w-96">
-              <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Rechercher..."
-                className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#472EAD] focus:border-[#472EAD] outline-none"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-3 items-center">
-            <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className="px-3 py-2 border border-slate-300 rounded-lg bg-white text-sm focus:ring-2 focus:ring-[#472EAD] focus:border-[#472EAD] outline-none"
-            >
-              <option value="Toutes">Toutes catégories</option>
-              {Array.from(new Set(products.map(p => p.categorie_nom).filter(Boolean))).map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
-
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2 border border-slate-300 rounded-lg bg-white text-sm focus:ring-2 focus:ring-[#472EAD] focus:border-[#472EAD] outline-none"
-            >
-              <option value="Tous">Tous les statuts</option>
-              <option value="Normal">Normal</option>
-              <option value="Faible">Faible</option>
-              <option value="Critique">Critique</option>
-              <option value="Rupture">Rupture</option>
-            </select>
-
-            <div className="flex items-center border border-slate-300 rounded-lg bg-white px-3 py-2 gap-2">
-              <FaSortAlphaDown className="text-slate-400" />
-              <select
-                value={sortMode}
-                onChange={(e) => setSortMode(e.target.value)}
-                className="bg-transparent outline-none text-sm cursor-pointer focus:ring-2 focus:ring-[#472EAD]"
+            <div className="flex gap-2">
+              <div className="relative w-full md:w-96">
+                <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Rechercher par nom, code-barre..."
+                  className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#472EAD] focus:border-[#472EAD] outline-none"
+                  value={searchTerm}
+                  onChange={(e) => onSearchChange(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && onSearchSubmit()}
+                />
+              </div>
+              <button
+                onClick={onSearchSubmit}
+                className="px-4 py-2 bg-[#472EAD] text-white rounded-lg hover:bg-[#3a2590] transition-colors"
               >
-                <option value="name-asc">Nom (A-Z)</option>
-                <option value="name-desc">Nom (Z-A)</option>
-                <option value="stock-asc">Stock (Croissant)</option>
-                <option value="stock-desc">Stock (Décroissant)</option>
-              </select>
+                Rechercher
+              </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Cartes Stats - SANS CRITIQUE */}
+      {/* Cartes Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-gradient-to-r from-[#472EAD] to-[#6D5BD0] rounded-xl shadow-sm p-4 flex items-center gap-4">
           <div className="p-3 bg-white/20 text-white rounded-lg"><FaCoins size={20}/></div>
-          <div><p className="text-xs text-white/90 uppercase font-bold">Valeur Stock</p><p className="text-xl font-bold text-white">{totalValue.toLocaleString("fr-FR")} F</p></div>
+          <div>
+            <p className="text-xs text-white/90 uppercase font-bold">Valeur Stock</p>
+            <p className="text-xl font-bold text-white">{totalValue.toLocaleString("fr-FR")} F</p>
+          </div>
         </div>
         <div className="bg-gradient-to-r from-[#F58020] to-[#FFA94D] rounded-xl shadow-sm p-4 flex items-center gap-4">
-           <div className="p-3 bg-white/20 text-white rounded-lg"><FaExclamationTriangle size={20}/></div>
-           <div><p className="text-xs text-white/90 uppercase font-bold">Faible</p><p className="text-xl font-bold text-white">{nbFaible}</p></div>
+          <div className="p-3 bg-white/20 text-white rounded-lg"><FaExclamationTriangle size={20}/></div>
+          <div>
+            <p className="text-xs text-white/90 uppercase font-bold">Faible</p>
+            <p className="text-xl font-bold text-white">{nbFaible}</p>
+          </div>
         </div>
         <div className="bg-gradient-to-r from-[#6B7280] to-[#9CA3AF] rounded-xl shadow-sm p-4 flex items-center gap-4">
-           <div className="p-3 bg-white/20 text-white rounded-lg"><FaTimesCircle size={20}/></div>
-           <div><p className="text-xs text-white/90 uppercase font-bold">Rupture</p><p className="text-xl font-bold text-white">{nbRupture}</p></div>
+          <div className="p-3 bg-white/20 text-white rounded-lg"><FaTimesCircle size={20}/></div>
+          <div>
+            <p className="text-xs text-white/90 uppercase font-bold">Rupture</p>
+            <p className="text-xl font-bold text-white">{nbRupture}</p>
+          </div>
         </div>
       </div>
 
@@ -248,17 +176,28 @@ const ProductListTab = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredProducts.map((p) => {
+              {products.map((p) => {
                 const status = getStatus(p.nombre_carton, p.stock_seuil);
                 const totalPrice = p.nombre_carton * p.prix_unite_carton;
                 const fournisseur = fournisseurs.find(f => f.id === p.fournisseur_id);
+                const categorie = categories.find(c => c.id === p.categorie_id);
+                const categorieNom = categorie?.nom || 'Non catégorisé';
+                
                 return (
                   <tr key={p.id} className="hover:bg-[#F7F5FF]/30 transition-colors">
                     <td className="p-4 font-semibold text-slate-800">{p.nom}</td>
                     <td className="p-4 text-center font-mono text-slate-500 text-xs">{p.code || "-"}</td>
-                    <td className="p-4 text-center"><span className="inline-block bg-gradient-to-r from-[#F7F5FF] to-[#FFF5F0] text-[#472EAD] px-2 py-1 rounded text-xs font-medium">{p.categorie_nom}</span></td>
                     <td className="p-4 text-center">
-                      {fournisseur ? <span className="inline-flex items-center gap-1 bg-gradient-to-r from-[#F0F9FF] to-[#F0FDF4] text-[#472EAD] px-2 py-1 rounded text-xs"><FaTruck className="text-[10px]" /> {fournisseur.name}</span> : <span className="text-slate-300 text-xs">-</span>}
+                      <span className="inline-block bg-gradient-to-r from-[#F7F5FF] to-[#FFF5F0] text-[#472EAD] px-2 py-1 rounded text-xs font-medium">
+                        {categorieNom}
+                      </span>
+                    </td>
+                    <td className="p-4 text-center">
+                      {fournisseur ? (
+                        <span className="inline-flex items-center gap-1 bg-gradient-to-r from-[#F0F9FF] to-[#F0FDF4] text-[#472EAD] px-2 py-1 rounded text-xs">
+                          <FaTruck className="text-[10px]" /> {fournisseur.name}
+                        </span>
+                      ) : <span className="text-slate-300 text-xs">-</span>}
                     </td>
                     <td className="p-4 text-center font-bold text-slate-700">{p.nombre_carton}</td>
                     <td className="p-4 text-center text-slate-500">{p.unite_carton}</td>
@@ -268,10 +207,18 @@ const ProductListTab = ({
                     <td className="p-4 text-center"><StatusBadge status={status} /></td>
                     <td className="p-4 text-center">
                       <div className="flex items-center justify-center gap-2">
-                        <button onClick={() => onEdit(p)} className="p-1.5 text-[#472EAD] hover:bg-[#F7F5FF] rounded transition-colors" title="Modifier">
+                        <button 
+                          onClick={() => onEdit(p)} 
+                          className="p-1.5 text-[#472EAD] hover:bg-[#F7F5FF] rounded transition-colors" 
+                          title="Modifier"
+                        >
                           <FaEdit />
                         </button>
-                        <button onClick={() => onDelete(p.id)} className="p-1.5 text-[#DC2626] hover:bg-red-50 rounded transition-colors" title="Supprimer">
+                        <button 
+                          onClick={() => onDelete(p.id)} 
+                          className="p-1.5 text-[#DC2626] hover:bg-red-50 rounded transition-colors" 
+                          title="Supprimer"
+                        >
                           <FaTrashAlt />
                         </button>
                       </div>
@@ -279,24 +226,24 @@ const ProductListTab = ({
                   </tr>
                 );
               })}
-              {filteredProducts.length === 0 && (
-                <tr><td colSpan={11} className="p-8 text-center text-slate-400 italic">
-                  {loading ? "Chargement en cours..." : "Aucun produit trouvé."}
-                </td></tr>
+              {products.length === 0 && (
+                <tr>
+                  <td colSpan={11} className="p-8 text-center text-slate-400 italic">
+                    {loading ? "Chargement en cours..." : "Aucun produit trouvé."}
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
         </div>
+        
+        {/* Pagination */}
         {total > 0 && (
-          <div className="p-4 border-t border-slate-200">
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={goToPage}
-              totalItems={total}
-              pageSize={pageSize}
-            />
-          </div>
+          <SimplePagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={onPageChange}
+          />
         )}
       </div>
     </div>
@@ -304,53 +251,65 @@ const ProductListTab = ({
 };
 
 // =========================================================================
-// Onglet Ajustement - CORRIGÉ
+// ONGLET AJUSTEMENT
 // =========================================================================
 const AdjustmentTab = ({ onAdjust }) => {
   const [subTab, setSubTab] = useState("rupture");
   const [searchTerm, setSearchTerm] = useState("");
+  const [tempSearchTerm, setTempSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
   
   const {
-    ruptureProducts,
-    faibleProducts,
-    normalProducts,
-    counts,
+    produits,
     loading,
-    fetchRupture,
-    fetchFaible,
-    fetchNormal,
+    pagination,
+    fetchProduitsParStatut
+  } = useProduitsParStatutAvecPagination();
+  
+  const {
+    counts,
     fetchCounts
   } = useProduitsParStatut();
 
   useEffect(() => {
     fetchCounts();
-    fetchRupture();
-    fetchFaible();
-    fetchNormal();
   }, []);
 
-  const getCurrentProducts = () => {
-    switch(subTab) {
-      case "rupture": return ruptureProducts;
-      case "faible": return faibleProducts;
-      case "normal": return normalProducts;
-      default: return [];
+  useEffect(() => {
+    fetchProduitsParStatut(subTab, currentPage, searchTerm);
+  }, [subTab, currentPage, searchTerm, fetchProduitsParStatut]);
+
+  const handleSearch = () => {
+    setSearchTerm(tempSearchTerm);
+    setCurrentPage(1);
+  };
+
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= pagination.lastPage) {
+      setCurrentPage(newPage);
     }
   };
 
-  const currentProducts = getCurrentProducts();
-  const currentLoading = loading[subTab];
-
-  const displayedProducts = currentProducts.filter(p =>
-    !searchTerm || p.nom?.toLowerCase().includes(searchTerm.toLowerCase()) || p.code?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const getTitle = () => {
+    switch(subTab) {
+      case 'rupture': return 'en rupture';
+      case 'faible': return 'faibles';
+      case 'normal': return 'normaux';
+      default: return '';
+    }
+  };
 
   return (
     <div className="space-y-6">
-      {/* Sous-onglets avec les vrais compteurs */}
+      {/* Sous-onglets */}
       <div className="flex items-center gap-2 border-b border-slate-200">
         <button
-          onClick={() => setSubTab("rupture")}
+          onClick={() => {
+            setSubTab("rupture");
+            setTempSearchTerm("");
+            setSearchTerm("");
+            setCurrentPage(1);
+          }}
           className={`px-4 py-2 text-sm font-medium transition-colors ${
             subTab === "rupture"
               ? "border-b-2 border-[#472EAD] text-[#472EAD]"
@@ -360,7 +319,12 @@ const AdjustmentTab = ({ onAdjust }) => {
           Rupture ({counts.rupture})
         </button>
         <button
-          onClick={() => setSubTab("faible")}
+          onClick={() => {
+            setSubTab("faible");
+            setTempSearchTerm("");
+            setSearchTerm("");
+            setCurrentPage(1);
+          }}
           className={`px-4 py-2 text-sm font-medium transition-colors ${
             subTab === "faible"
               ? "border-b-2 border-[#472EAD] text-[#472EAD]"
@@ -370,7 +334,12 @@ const AdjustmentTab = ({ onAdjust }) => {
           Faible ({counts.faible})
         </button>
         <button
-          onClick={() => setSubTab("normal")}
+          onClick={() => {
+            setSubTab("normal");
+            setTempSearchTerm("");
+            setSearchTerm("");
+            setCurrentPage(1);
+          }}
           className={`px-4 py-2 text-sm font-medium transition-colors ${
             subTab === "normal"
               ? "border-b-2 border-[#472EAD] text-[#472EAD]"
@@ -382,33 +351,42 @@ const AdjustmentTab = ({ onAdjust }) => {
       </div>
 
       {/* Barre de recherche */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 flex items-center gap-3">
-        <FaSearch className="text-[#472EAD]" />
-        <input
-          type="text"
-          placeholder={`Rechercher dans les produits ${
-            subTab === "rupture" ? "en rupture" : 
-            subTab === "faible" ? "faibles" : "normaux"
-          }...`}
-          className="flex-1 text-sm outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-[#472EAD]"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 flex gap-2">
+        <div className="flex-1 relative">
+          <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-[#472EAD]" />
+          <input
+            type="text"
+            placeholder={`Rechercher dans les produits ${getTitle()}...`}
+            className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#472EAD] focus:border-[#472EAD] outline-none"
+            value={tempSearchTerm}
+            onChange={(e) => setTempSearchTerm(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+          />
+        </div>
+        <button
+          onClick={handleSearch}
+          className="px-4 py-2 bg-[#472EAD] text-white rounded-lg hover:bg-[#3a2590] transition-colors"
+        >
+          Rechercher
+        </button>
       </div>
 
-      {/* Tableau des produits */}
+      {/* Tableau */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="p-4 border-b border-slate-100 bg-gradient-to-r from-[#F7F5FF] to-[#FFF5F0]">
           <h3 className="font-bold text-[#472EAD] flex items-center gap-2">
             <FaList className="text-[#472EAD]"/> 
-            {displayedProducts.length} produit(s) {
-              subTab === "rupture" ? "en rupture" : 
-              subTab === "faible" ? "faibles" : "normaux"
-            }
+            {pagination.total} produit(s) {getTitle()}
+            {pagination.lastPage > 1 && ` (page ${pagination.currentPage}/${pagination.lastPage})`}
           </h3>
+          {pagination.total > 0 && (
+            <p className="text-xs text-[#472EAD] mt-1">
+              Affichage {pagination.from} à {pagination.to} sur {pagination.total}
+            </p>
+          )}
         </div>
         
-        {currentLoading ? (
+        {loading ? (
           <div className="p-8 text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#472EAD] mx-auto"></div>
             <p className="mt-2 text-sm text-[#472EAD]">Chargement...</p>
@@ -427,16 +405,20 @@ const AdjustmentTab = ({ onAdjust }) => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {displayedProducts.map(p => {
+                {produits.length > 0 ? produits.map(p => {
                   const status = getStatus(p.nombre_carton, p.stock_seuil);
                   return (
                     <tr key={p.id} className="hover:bg-[#F7F5FF]/30 transition">
                       <td className="p-3 pl-4">
                         <div className="font-medium text-slate-800">{p.nom}</div>
-                        <div className="text-xs text-slate-400">{p.categorie_nom}</div>
+                        <div className="text-xs text-slate-400">
+                          {p.categorie_nom || 'Non catégorisé'}
+                        </div>
                       </td>
                       <td className="p-3 text-center font-mono text-xs text-slate-500">{p.code || "N/A"}</td>
-                      <td className="p-3 text-center font-bold text-slate-700">{p.nombre_carton} <span className="text-xs font-normal text-slate-400">ctn</span></td>
+                      <td className="p-3 text-center font-bold text-slate-700">
+                        {p.nombre_carton} <span className="text-xs font-normal text-slate-400">ctn</span>
+                      </td>
                       <td className="p-3 text-center text-[#F58020] font-medium">{p.stock_seuil}</td>
                       <td className="p-3 text-center"><StatusBadge status={status} /></td>
                       <td className="p-3 text-right pr-4">
@@ -448,7 +430,6 @@ const AdjustmentTab = ({ onAdjust }) => {
                           >
                             <FaPlus size={12} />
                           </button>
-                          {/* Bouton Diminuer : caché pour les produits en rupture */}
                           {subTab !== "rupture" && (
                             <button 
                               onClick={() => onAdjust(p, 'diminue')} 
@@ -463,11 +444,10 @@ const AdjustmentTab = ({ onAdjust }) => {
                       </td>
                     </tr>
                   );
-                })}
-                {displayedProducts.length === 0 && !currentLoading && (
+                }) : (
                   <tr>
                     <td colSpan={6} className="p-8 text-center text-slate-400 italic">
-                      Aucun produit {subTab === "rupture" ? "en rupture" : subTab === "faible" ? "faible" : "normal"} trouvé.
+                      Aucun produit {getTitle()} trouvé.
                     </td>
                   </tr>
                 )}
@@ -476,34 +456,49 @@ const AdjustmentTab = ({ onAdjust }) => {
           </div>
         )}
       </div>
+
+      {/* Pagination */}
+      {pagination.lastPage > 1 && (
+        <div className="flex justify-center items-center gap-4 mt-4">
+          <button
+            onClick={() => handlePageChange(pagination.currentPage - 1)}
+            disabled={pagination.currentPage === 1}
+            className="px-4 py-2 border rounded-lg text-sm disabled:opacity-50 bg-white hover:bg-slate-50"
+          >
+            Précédent
+          </button>
+          <span className="text-sm">
+            Page {pagination.currentPage} / {pagination.lastPage}
+          </span>
+          <button
+            onClick={() => handlePageChange(pagination.currentPage + 1)}
+            disabled={pagination.currentPage === pagination.lastPage}
+            className="px-4 py-2 border rounded-lg text-sm disabled:opacity-50 bg-white hover:bg-slate-50"
+          >
+            Suivant
+          </button>
+        </div>
+      )}
     </div>
   );
 };
 
 // =========================================================================
-// Onglet Historique - MODIFIÉ (sans colonne utilisateur)
+// ONGLET HISTORIQUE
 // =========================================================================
-const HistoryTab = ({ history, loading, total, currentPage, totalPages, fetchHistorique, setCurrentPage, pageSize }) => {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [typeFilter, setTypeFilter] = useState("Tous");
-  const [sortBy, setSortBy] = useState("date-desc");
+const HistoryTab = ({ 
+  history, 
+  loading, 
+  total, 
+  currentPage, 
+  totalPages, 
+  onPageChange,
+  searchTerm,
+  onSearchChange,
+  onSearchSubmit
+}) => {
   const [selectedHistoryItem, setSelectedHistoryItem] = useState(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
-
-  const filteredHistory = useMemo(() => {
-    return history.filter(item => {
-      const matchesSearch = !searchTerm || 
-        item.productName?.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesType = typeFilter === "Tous" || item.type === typeFilter;
-      return matchesSearch && matchesType;
-    }).sort((a, b) => {
-      const dateA = new Date(a.date || 0);
-      const dateB = new Date(b.date || 0);
-      if (sortBy === "date-desc") return dateB - dateA;
-      if (sortBy === "date-asc") return dateA - dateB;
-      return 0;
-    });
-  }, [history, searchTerm, typeFilter, sortBy]);
 
   const openDetail = (item) => {
     setSelectedHistoryItem(item);
@@ -522,54 +517,36 @@ const HistoryTab = ({ history, loading, total, currentPage, totalPages, fetchHis
     });
   };
 
-  useEffect(() => {
-    fetchHistorique(currentPage, pageSize);
-  }, [currentPage, pageSize, fetchHistorique]);
+  const handleSearch = () => {
+    onSearchSubmit();
+  };
 
   return (
     <>
       <div className="bg-white rounded-xl shadow-sm border p-3">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="relative">
+          <div className="relative md:col-span-2">
             <FaSearch className="absolute left-3 top-3 text-[#472EAD]" />
             <input
               type="text"
               placeholder="Rechercher par produit..."
               className="w-full pl-10 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-[#472EAD] focus:border-[#472EAD] outline-none"
               value={searchTerm}
-              onChange={(e) => { setSearchTerm(e.target.value); }}
+              onChange={(e) => onSearchChange(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
             />
           </div>
-          <div>
-            <label className="block text-xs font-semibold text-[#472EAD] mb-1">
-              <FaFilter className="inline mr-1" />Type d'action
-            </label>
-            <select
-              className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#472EAD] focus:border-[#472EAD] outline-none"
-              value={typeFilter}
-              onChange={(e) => { setTypeFilter(e.target.value); }}
+          <div className="flex items-end">
+            <button
+              onClick={handleSearch}
+              className="w-full px-4 py-2 bg-[#472EAD] text-white rounded-lg hover:bg-[#3a2590] transition-colors"
             >
-              <option value="Tous">Tous</option>
-              <option value="Modification">Modifications</option>
-              <option value="Suppression">Suppressions</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-[#472EAD] mb-1">
-              <FaSortAmountDown className="inline mr-1" />Trier par
-            </label>
-            <select
-              className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#472EAD] focus:border-[#472EAD] outline-none"
-              value={sortBy}
-              onChange={(e) => { setSortBy(e.target.value); }}
-            >
-              <option value="date-desc">Date (récent → ancien)</option>
-              <option value="date-asc">Date (ancien → récent)</option>
-            </select>
+              Rechercher
+            </button>
           </div>
         </div>
         <div className="mt-3 text-sm text-[#472EAD] font-semibold">
-          {filteredHistory.length} action(s) trouvée(s) sur cette page
+          {total} action(s) trouvée(s)
         </div>
       </div>
 
@@ -584,7 +561,7 @@ const HistoryTab = ({ history, loading, total, currentPage, totalPages, fetchHis
             </tr>
           </thead>
           <tbody>
-            {filteredHistory.length > 0 ? filteredHistory.map((item, index) => (
+            {history.length > 0 ? history.map((item, index) => (
               <tr key={item.id || index} className="border-t hover:bg-[#F7F5FF]/30 transition-colors">
                 <td className="p-3 text-gray-600">
                   <div className="flex items-center gap-2">
@@ -595,11 +572,15 @@ const HistoryTab = ({ history, loading, total, currentPage, totalPages, fetchHis
                   <div className="font-medium text-[#472EAD] flex items-center gap-2">
                     <FaBoxOpen />{item.productName}
                   </div>
+                  {item.productCode && (
+                    <div className="text-xs text-gray-500">{item.productCode}</div>
+                  )}
                 </td>
                 <td className="p-3">
                   <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold border ${
-                    item.type === "Modification" ? "bg-gradient-to-r from-blue-100 to-blue-50 text-blue-800 border-blue-200" : 
-                    "bg-gradient-to-r from-red-100 to-red-50 text-red-800 border-red-200"
+                    item.type === "Modification" 
+                      ? "bg-gradient-to-r from-blue-100 to-blue-50 text-blue-800 border-blue-200" 
+                      : "bg-gradient-to-r from-red-100 to-red-50 text-red-800 border-red-200"
                   }`}>
                     {item.type === "Modification" ? <FaEdit /> : <FaTrashAlt />}
                     {item.action}
@@ -630,27 +611,27 @@ const HistoryTab = ({ history, loading, total, currentPage, totalPages, fetchHis
           </tbody>
         </table>
       </div>
+      
+      {/* Pagination */}
       {total > 0 && (
-        <Pagination
+        <SimplePagination
           currentPage={currentPage}
           totalPages={totalPages}
-          onPageChange={setCurrentPage}
-          totalItems={total}
-          pageSize={pageSize}
+          onPageChange={onPageChange}
         />
       )}
 
       {/* Modal de détail */}
       {detailModalOpen && selectedHistoryItem && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-2xl p-6 max-h-[80vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-[#472EAD]">
               <FaHistory className="text-[#472EAD]" />
               Détails de l'action
             </h3>
             
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <p className="text-xs font-semibold text-gray-500">Date</p>
                   <p className="text-sm">{formatDate(selectedHistoryItem.date)}</p>
@@ -659,52 +640,31 @@ const HistoryTab = ({ history, loading, total, currentPage, totalPages, fetchHis
                   <p className="text-xs font-semibold text-gray-500">Action</p>
                   <p className="text-sm">{selectedHistoryItem.action}</p>
                 </div>
-                <div>
-                  <p className="text-xs font-semibold text-gray-500">Produit</p>
-                  <p className="text-sm">{selectedHistoryItem.productName}</p>
-                </div>
               </div>
-
-              {selectedHistoryItem.type === "Suppression" && (
-                <div className="border-t pt-3 bg-red-50 p-3 rounded">
-                  <p className="text-sm font-semibold text-red-600 mb-2">Produit supprimé</p>
-                  {selectedHistoryItem.details && (
-                    <p className="text-sm">{selectedHistoryItem.details}</p>
-                  )}
+              
+              <div>
+                <p className="text-xs font-semibold text-gray-500">Produit</p>
+                <p className="text-base font-medium text-[#472EAD]">{selectedHistoryItem.productName}</p>
+              </div>
+              
+              {selectedHistoryItem.productCode && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-500">Code</p>
+                  <p className="text-sm font-mono">{selectedHistoryItem.productCode}</p>
                 </div>
               )}
 
-              {selectedHistoryItem.type === "Modification" && selectedHistoryItem.anciennes_valeurs && selectedHistoryItem.nouvelles_valeurs && (
-                <div className="border-t pt-3">
-                  <p className="text-sm font-semibold text-[#472EAD] mb-2">Modifications effectuées</p>
-                  <div className="space-y-2">
-                    {Object.keys(selectedHistoryItem.nouvelles_valeurs).map(key => {
-                      const oldVal = selectedHistoryItem.anciennes_valeurs[key];
-                      const newVal = selectedHistoryItem.nouvelles_valeurs[key];
-                      if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
-                        let fieldName = key;
-                        if (key === 'nom') fieldName = 'Nom';
-                        if (key === 'prix_unite_carton') fieldName = 'Prix';
-                        if (key === 'nombre_carton') fieldName = 'Stock';
-                        if (key === 'unite_carton') fieldName = 'Unités par carton';
-                        if (key === 'stock_seuil') fieldName = 'Seuil';
-                        if (key === 'code') fieldName = 'Code-barre';
-                        
-                        return (
-                          <div key={key} className="bg-gray-50 p-2 rounded text-sm">
-                            <span className="font-medium">{fieldName}:</span>
-                            <div className="ml-2 text-gray-600">
-                              <span className="text-red-600 line-through mr-2">{oldVal}</span>
-                              <span className="text-green-600">→ {newVal}</span>
-                            </div>
-                          </div>
-                        );
-                      }
-                      return null;
-                    })}
-                  </div>
-                </div>
-              )}
+              <div className="mt-4 pt-3 border-t border-gray-200">
+                {selectedHistoryItem.type === "Suppression" ? (
+                  <p className="text-sm text-red-600 font-medium">
+                    ⚠️ Ce produit a été supprimé
+                  </p>
+                ) : (
+                  <p className="text-sm text-blue-600">
+                    ℹ️ Action enregistrée dans le système
+                  </p>
+                )}
+              </div>
             </div>
 
             <div className="flex justify-end mt-6">
@@ -723,37 +683,48 @@ const HistoryTab = ({ history, loading, total, currentPage, totalPages, fetchHis
 };
 
 // =========================================================================
-// Onglet Catégories - CORRIGÉ
+// ONGLET CATÉGORIES
 // =========================================================================
-const CategoriesTab = ({ categories, onEditCategory, onDeleteCategory, onAddCategory }) => {
+const CategoriesTab = ({ 
+  categories, 
+  total,
+  onEditCategory, 
+  onDeleteCategory, 
+  onAddCategory
+}) => {
   const [searchTerm, setSearchTerm] = useState("");
-  const [page, setPage] = useState(1);
-  const pageSize = 20;
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(20);
 
-  useEffect(() => {
-    console.log("📦 Catégories reçues dans CategoriesTab:", categories);
-    console.log("🔍 Nombre de catégories:", categories?.length);
-    if (categories?.length > 0) {
-      console.log("🔍 Première catégorie:", categories[0]);
-    }
-  }, [categories]);
-
-  const filtered = useMemo(() => {
+  // Filtrer les catégories par recherche
+  const filteredCategories = useMemo(() => {
     if (!categories || categories.length === 0) return [];
+    if (searchTerm.trim() === '') return categories;
+    
+    const term = searchTerm.toLowerCase();
     return categories.filter(cat =>
-      !searchTerm || cat.nom?.toLowerCase().includes(searchTerm.toLowerCase())
+      cat.nom?.toLowerCase().includes(term)
     );
   }, [categories, searchTerm]);
-  
-  const paginated = filtered.slice((page-1)*pageSize, page*pageSize);
-  const totalPages = Math.ceil(filtered.length / pageSize);
+
+  // Pagination locale
+  const paginatedCategories = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredCategories.slice(start, start + pageSize);
+  }, [filteredCategories, currentPage, pageSize]);
+
+  const totalPages = Math.ceil(filteredCategories.length / pageSize);
+
+  // Réinitialiser la page quand la recherche change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
   if (!categories || categories.length === 0) {
     return (
       <div className="bg-white rounded-xl shadow-sm border p-8 text-center">
         <FaFolder className="text-6xl text-gray-300 mx-auto mb-4" />
         <p className="text-lg text-gray-500">Aucune catégorie trouvée</p>
-        <p className="text-sm text-gray-400 mt-2">Vérifiez la console (F12) pour plus d'informations</p>
         <button 
           onClick={onAddCategory}
           className="mt-4 px-4 py-2 bg-[#472EAD] text-white rounded-lg hover:bg-[#3a2590] transition-colors"
@@ -770,7 +741,7 @@ const CategoriesTab = ({ categories, onEditCategory, onDeleteCategory, onAddCate
         <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
           <div className="flex items-center gap-4">
             <div className="text-sm bg-slate-50 px-3 py-1 rounded-lg">
-              <span className="font-bold text-[#472EAD]">{filtered.length}</span> catégories
+              <span className="font-bold text-[#472EAD]">{filteredCategories.length}</span> / {total} catégories
             </div>
             <div className="relative">
               <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-[#472EAD]" />
@@ -779,11 +750,14 @@ const CategoriesTab = ({ categories, onEditCategory, onDeleteCategory, onAddCate
                 placeholder="Rechercher..."
                 className="pl-10 pr-4 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-[#472EAD] focus:border-[#472EAD] w-full md:w-64"
                 value={searchTerm}
-                onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
+                onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
           </div>
-          <button onClick={onAddCategory} className="flex items-center gap-2 bg-gradient-to-r from-[#472EAD] to-[#F58020] hover:from-[#3a2590] hover:to-[#e06b00] text-white px-5 py-2.5 rounded-lg shadow-md transition-all">
+          <button 
+            onClick={onAddCategory} 
+            className="flex items-center gap-2 bg-gradient-to-r from-[#472EAD] to-[#F58020] hover:from-[#3a2590] hover:to-[#e06b00] text-white px-5 py-2.5 rounded-lg shadow-md transition-all"
+          >
             <FaFolderPlus className="text-white"/> Nouvelle Catégorie
           </button>
         </div>
@@ -808,15 +782,21 @@ const CategoriesTab = ({ categories, onEditCategory, onDeleteCategory, onAddCate
             </tr>
           </thead>
           <tbody>
-            {paginated.length > 0 ? paginated.map((cat) => (
+            {paginatedCategories.length > 0 ? paginatedCategories.map((cat) => (
               <tr key={cat.id} className="border-t hover:bg-[#F7F5FF]/30 transition-colors">
                 <td className="p-3 font-medium text-[#472EAD]">{cat.nom}</td>
                 <td className="p-3 text-center">
                   <div className="flex items-center justify-center gap-3">
-                    <button onClick={() => onEditCategory(cat)} className="inline-flex items-center gap-1 text-[#472EAD] hover:text-[#3a2590] hover:underline text-xs">
+                    <button 
+                      onClick={() => onEditCategory(cat)} 
+                      className="inline-flex items-center gap-1 text-[#472EAD] hover:text-[#3a2590] hover:underline text-xs"
+                    >
                       <FaEdit /><span>Modifier</span>
                     </button>
-                    <button onClick={() => onDeleteCategory(cat.id)} className="inline-flex items-center gap-1 text-xs text-[#F58020] hover:text-red-600 hover:underline">
+                    <button 
+                      onClick={() => onDeleteCategory(cat.id)} 
+                      className="inline-flex items-center gap-1 text-xs text-[#F58020] hover:text-red-600 hover:underline"
+                    >
                       <FaTrashAlt /><span>Supprimer</span>
                     </button>
                   </div>
@@ -828,7 +808,7 @@ const CategoriesTab = ({ categories, onEditCategory, onDeleteCategory, onAddCate
                   <div className="text-gray-400">
                     <FaFolder className="text-4xl mx-auto mb-3 opacity-50" />
                     <p className="text-lg font-medium text-[#472EAD]">
-                      Aucune catégorie trouvée avec ce filtre
+                      Aucune catégorie trouvée
                     </p>
                   </div>
                 </td>
@@ -837,12 +817,14 @@ const CategoriesTab = ({ categories, onEditCategory, onDeleteCategory, onAddCate
           </tbody>
         </table>
       </div>
+      
+      {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex justify-center gap-2 mt-4">
-          <button disabled={page === 1} onClick={() => setPage(p => p-1)} className="px-3 py-1 border rounded text-xs disabled:opacity-50 bg-gradient-to-r from-[#F7F5FF] to-[#FFF5F0] text-[#472EAD] hover:opacity-90">Précédent</button>
-          <span className="text-xs flex items-center text-[#472EAD] font-bold">Page {page} / {totalPages}</span>
-          <button disabled={page === totalPages} onClick={() => setPage(p => p+1)} className="px-3 py-1 border rounded text-xs disabled:opacity-50 bg-gradient-to-r from-[#F7F5FF] to-[#FFF5F0] text-[#472EAD] hover:opacity-90">Suivant</button>
-        </div>
+        <SimplePagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+        />
       )}
     </>
   );
@@ -855,6 +837,13 @@ export default function Products() {
   const [activeTab, setActiveTab] = useState("liste");
   const pageSize = 20;
 
+  // États pour la recherche
+  const [productSearchTerm, setProductSearchTerm] = useState("");
+  const [historySearchTerm, setHistorySearchTerm] = useState("");
+  
+  // États pour forcer le rechargement
+  const [productFilterKey, setProductFilterKey] = useState(0);
+
   // États pour les compteurs
   const [nbRupture, setNbRupture] = useState(0);
   const [nbFaible, setNbFaible] = useState(0);
@@ -863,19 +852,25 @@ export default function Products() {
   const {
     products,
     total,
-    currentPage,
-    totalPages,
+    currentPage: productPage,
+    totalPages: productTotalPages,
     loading: productsLoading,
-    goToPage,
+    goToPage: goToProductPage,
     addProduct,
     updateProduct,
     deleteProduct,
     reapprovisionner,
     diminuerStock,
-    refetch: refetchProducts
-  } = useProducts(1, pageSize);
+  } = useProducts(1, pageSize, productSearchTerm, productFilterKey);
 
-  const { categories, loading: categoriesLoading, addCategory, updateCategory, deleteCategory, refetch: refetchCategories } = useCategories();
+  const { 
+    categories, 
+    total: categoriesTotal, 
+    loading: categoriesLoading,
+    addCategory, 
+    updateCategory, 
+    deleteCategory 
+  } = useCategories();
   
   // Hook pour charger TOUS les fournisseurs
   const { suppliers: fournisseurs, loading: fournisseursLoading } = useAllFournisseurs();
@@ -891,14 +886,12 @@ export default function Products() {
     setCurrentPage: setHistoryPage
   } = useHistoriqueProduits();
 
-  // Logs pour déboguer
+  // Charger l'historique au changement d'onglet ou de recherche
   useEffect(() => {
-    console.log("🔍 Catégories depuis le hook:", categories);
-    console.log("🔍 Nombre de catégories:", categories.length);
-    if (categories.length > 0) {
-      console.log("🔍 Première catégorie:", categories[0]);
+    if (activeTab === "historique") {
+      fetchHistorique(1, pageSize, historySearchTerm);
     }
-  }, [categories]);
+  }, [activeTab, historySearchTerm]);
 
   // Charger les compteurs au montage
   useEffect(() => {
@@ -917,14 +910,25 @@ export default function Products() {
     fetchCounts();
   }, []);
 
-  useEffect(() => {
+  // Handlers pour la recherche
+  const handleProductSearch = () => {
+    setProductFilterKey(prev => prev + 1);
+  };
+
+  const handleHistorySearch = () => {
     if (activeTab === "historique") {
-      fetchHistorique(1, pageSize);
+      fetchHistorique(1, pageSize, historySearchTerm);
     }
-  }, [activeTab, fetchHistorique, pageSize]);
+  };
+
+  // Handler pour le changement de page dans l'historique
+  const handleHistoryPageChange = (page) => {
+    setHistoryPage(page);
+    fetchHistorique(page, pageSize, historySearchTerm);
+  };
 
   // États pour les modales
-  const [modalType, setModalType] = useState(null); // 'add', 'edit'
+  const [modalType, setModalType] = useState(null);
   const [currentProduct, setCurrentProduct] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
 
@@ -935,15 +939,9 @@ export default function Products() {
   const [adjustQuantity, setAdjustQuantity] = useState("");
 
   // États pour catégories
-  const [categoryModal, setCategoryModal] = useState(null); // 'add', 'edit'
+  const [categoryModal, setCategoryModal] = useState(null);
   const [currentCategory, setCurrentCategory] = useState(null);
   const [deleteCategoryId, setDeleteCategoryId] = useState(null);
-
-  // États pour filtres de l'onglet liste
-  const [searchTerm, setSearchTerm] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("Toutes");
-  const [statusFilter, setStatusFilter] = useState("Tous");
-  const [sortMode, setSortMode] = useState("name-asc");
 
   // États pour recherche dans les sélecteurs de la modale produit
   const [categoryFilterTerm, setCategoryFilterTerm] = useState("");
@@ -963,10 +961,11 @@ export default function Products() {
     if (!deleteId) return;
     try {
       await deleteProduct(deleteId);
+      toast.success("Produit supprimé avec succès !");
       setDeleteId(null);
     } catch (error) {
       console.error("Erreur suppression", error);
-      alert("Erreur lors de la suppression");
+      toast.error("Erreur lors de la suppression du produit.");
     }
   };
 
@@ -975,12 +974,12 @@ export default function Products() {
     if (!currentProduct) return;
 
     if (!currentProduct.nom?.trim()) {
-      alert("Le nom du produit est obligatoire.");
+      toast.error("Le nom du produit est obligatoire.");
       return;
     }
 
     if (!currentProduct.categorie_id) {
-      alert("La catégorie est obligatoire.");
+      toast.error("La catégorie est obligatoire.");
       return;
     }
 
@@ -998,26 +997,15 @@ export default function Products() {
     try {
       if (modalType === "add") {
         await addProduct(apiPayload);
-        alert("✅ Produit ajouté avec succès !");
+        toast.success("Produit ajouté avec succès !");
       } else {
         await updateProduct(currentProduct.id, apiPayload);
-        alert("✅ Produit modifié avec succès !");
+        toast.success("Produit modifié avec succès !");
       }
       closeProductModal();
     } catch (error) {
       console.error("❌ Erreur:", error);
-      if (error.response?.data?.errors) {
-        const errors = error.response.data.errors;
-        let errorMsg = "Erreurs de validation:\n";
-        Object.entries(errors).forEach(([field, messages]) => {
-          errorMsg += `• ${field}: ${messages.join(', ')}\n`;
-        });
-        alert(errorMsg);
-      } else if (error.response?.data?.message) {
-        alert(`❌ ${error.response.data.message}`);
-      } else {
-        alert("❌ Une erreur est survenue.");
-      }
+      toast.error("Erreur lors de l'enregistrement du produit.");
     }
   };
 
@@ -1045,20 +1033,23 @@ export default function Products() {
     e.preventDefault();
     if (!adjustProduct || !adjustAction) return;
     const qty = parseInt(adjustQuantity);
-    if (!qty || qty <= 0) return alert("Quantité invalide");
+    if (!qty || qty <= 0) {
+      toast.error("Quantité invalide");
+      return;
+    }
 
     try {
       if (adjustAction === "reappro") {
         await reapprovisionner(adjustProduct.id, qty);
-        alert("✅ Stock réapprovisionné !");
+        toast.success("Stock réapprovisionné avec succès !");
       } else {
         await diminuerStock(adjustProduct.id, qty);
-        alert("✅ Stock diminué !");
+        toast.success("Stock diminué avec succès !");
       }
       closeAdjustModal();
     } catch (error) {
       console.error("❌ Erreur ajustement:", error);
-      alert("❌ Erreur lors de l'ajustement.");
+      toast.error("Erreur lors de l'ajustement du stock.");
     }
   };
 
@@ -1087,22 +1078,22 @@ export default function Products() {
   const handleSubmitCategory = async (e) => {
     e.preventDefault();
     if (!currentCategory?.nom?.trim()) {
-      alert("Le nom de la catégorie est obligatoire.");
+      toast.error("Le nom de la catégorie est obligatoire.");
       return;
     }
 
     try {
       if (categoryModal === "add") {
         await addCategory(currentCategory.nom);
-        alert("✅ Catégorie créée !");
+        toast.success("Catégorie créée avec succès !");
       } else {
         await updateCategory(currentCategory.id, currentCategory.nom);
-        alert("✅ Catégorie modifiée !");
+        toast.success("Catégorie modifiée avec succès !");
       }
       closeCategoryModal();
     } catch (error) {
       console.error("❌ Erreur catégorie:", error);
-      alert("❌ Erreur lors de l'enregistrement.");
+      toast.error("Erreur lors de l'enregistrement de la catégorie.");
     }
   };
 
@@ -1116,9 +1107,10 @@ export default function Products() {
     try {
       await deleteCategory(deleteCategoryId);
       setDeleteCategoryId(null);
+      toast.success("Catégorie supprimée avec succès !");
     } catch (error) {
       console.error("❌ Erreur suppression catégorie:", error);
-      alert("❌ Erreur lors de la suppression.");
+      toast.error("Erreur lors de la suppression de la catégorie.");
     }
   };
 
@@ -1160,7 +1152,10 @@ export default function Products() {
         </div>
 
         {activeTab === "liste" && (
-          <button onClick={() => { setModalType("add"); setCurrentProduct({}); }} className="flex items-center gap-2 bg-gradient-to-r from-[#472EAD] to-[#F58020] hover:from-[#3a2590] hover:to-[#e06b00] text-white px-5 py-2.5 rounded-lg shadow-md transition-transform active:scale-95">
+          <button 
+            onClick={() => { setModalType("add"); setCurrentProduct({}); }} 
+            className="flex items-center gap-2 bg-gradient-to-r from-[#472EAD] to-[#F58020] hover:from-[#3a2590] hover:to-[#e06b00] text-white px-5 py-2.5 rounded-lg shadow-md transition-transform active:scale-95"
+          >
             <FaPlus /> Nouveau Produit
           </button>
         )}
@@ -1203,24 +1198,18 @@ export default function Products() {
           {activeTab === "liste" && (
             <ProductListTab
               products={products}
-              categories={categories}
               fournisseurs={fournisseurs}
+              categories={categories}
               total={total}
-              currentPage={currentPage}
-              totalPages={totalPages}
-              goToPage={goToPage}
+              currentPage={productPage}
+              totalPages={productTotalPages}
+              onPageChange={goToProductPage}
               onEdit={handleEdit}
               onDelete={handleDelete}
               loading={productsLoading}
-              searchTerm={searchTerm}
-              setSearchTerm={setSearchTerm}
-              categoryFilter={categoryFilter}
-              setCategoryFilter={setCategoryFilter}
-              statusFilter={statusFilter}
-              setStatusFilter={setStatusFilter}
-              sortMode={sortMode}
-              setSortMode={setSortMode}
-              pageSize={pageSize}
+              searchTerm={productSearchTerm}
+              onSearchChange={setProductSearchTerm}
+              onSearchSubmit={handleProductSearch}
               nbRupture={nbRupture}
               nbFaible={nbFaible}
             />
@@ -1237,14 +1226,16 @@ export default function Products() {
               total={historyTotal}
               currentPage={historyPage}
               totalPages={historyTotalPages}
-              fetchHistorique={fetchHistorique}
-              setCurrentPage={setHistoryPage}
-              pageSize={pageSize}
+              onPageChange={handleHistoryPageChange}
+              searchTerm={historySearchTerm}
+              onSearchChange={setHistorySearchTerm}
+              onSearchSubmit={handleHistorySearch}
             />
           )}
           {activeTab === "categories" && (
             <CategoriesTab
               categories={categories}
+              total={categoriesTotal}
               onEditCategory={handleEditCategory}
               onDeleteCategory={handleDeleteCategory}
               onAddCategory={handleAddCategory}
@@ -1255,7 +1246,7 @@ export default function Products() {
 
       {/* ========== MODALES ========== */}
 
-      {/* MODALE PRODUIT (Ajout/Modification) */}
+      {/* MODALE PRODUIT */}
       {modalType && currentProduct && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-lg w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
@@ -1467,7 +1458,7 @@ export default function Products() {
                   onChange={(e) => {
                     const val = parseInt(e.target.value) || 0;
                     if (adjustAction === "diminue" && val > adjustProduct.nombre_carton) {
-                      alert(`Vous ne pouvez pas diminuer plus de ${adjustProduct.nombre_carton} cartons.`);
+                      toast.error(`Vous ne pouvez pas diminuer plus de ${adjustProduct.nombre_carton} cartons.`);
                       return;
                     }
                     setAdjustQuantity(e.target.value);
@@ -1515,7 +1506,7 @@ export default function Products() {
         </div>
       )}
 
-      {/* MODALE CATÉGORIE (Ajout/Modification) */}
+      {/* MODALE CATÉGORIE */}
       {categoryModal && currentCategory && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6">

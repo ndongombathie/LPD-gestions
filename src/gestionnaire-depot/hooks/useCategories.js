@@ -1,77 +1,67 @@
 // src/gestionnaire-depot/hooks/useCategories.js
 import { useState, useEffect, useCallback } from 'react';
 import { categoriesAPI } from '../../services/api/categories';
+import toast from 'react-hot-toast';
 
 export function useCategories() {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [total, setTotal] = useState(0);
 
   const fetchCategories = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      console.log("📦 Récupération des catégories...");
-      const response = await categoriesAPI.getAll({ per_page: 1000 });
-      console.log("🔍 Réponse brute:", response);
-      console.log("🔍 Type de réponse:", typeof response);
-      console.log("🔍 Est un tableau?", Array.isArray(response));
-
-      // Si la réponse est déjà un tableau
-      if (Array.isArray(response)) {
-        console.log("✅ La réponse est directement un tableau de", response.length, "catégories");
-        const normalized = response.map(cat => ({
-          id: cat.id || cat.uuid,
-          nom: cat.nom || cat.name || 'Sans nom',
-          name: cat.nom || cat.name || 'Sans nom',
-          ...cat
-        }));
-        console.log("✅ Catégories normalisées:", normalized);
-        setCategories(normalized);
-        setLoading(false);
-        return;
+      console.log("📦 Récupération de toutes les catégories...");
+      
+      const firstPage = await categoriesAPI.getAll({ page: 1, per_page: 10 });
+      
+      let allCategories = [];
+      let totalCount = 0;
+      const perPage = 10;
+      
+      if (Array.isArray(firstPage)) {
+        allCategories = firstPage;
+        totalCount = firstPage.length;
+      } else if (firstPage?.data) {
+        allCategories = firstPage.data;
+        totalCount = firstPage.total || firstPage.data.length;
       }
-
-      // Si la réponse a une propriété data
-      if (response && response.data) {
-        console.log("✅ La réponse a une propriété data avec", response.data.length, "catégories");
-        const rawData = response.data;
-        const normalized = rawData.map(cat => ({
-          id: cat.id || cat.uuid,
-          nom: cat.nom || cat.name || 'Sans nom',
-          name: cat.nom || cat.name || 'Sans nom',
-          ...cat
-        }));
-        console.log("✅ Catégories normalisées:", normalized);
-        setCategories(normalized);
-        setLoading(false);
-        return;
+      
+      const totalPages = Math.ceil(totalCount / perPage);
+      
+      if (totalPages > 1) {
+        const promises = [];
+        for (let page = 2; page <= totalPages; page++) {
+          promises.push(categoriesAPI.getAll({ page, per_page: perPage }));
+        }
+        
+        const otherPages = await Promise.all(promises);
+        
+        otherPages.forEach(pageData => {
+          if (Array.isArray(pageData)) {
+            allCategories = allCategories.concat(pageData);
+          } else if (pageData?.data) {
+            allCategories = allCategories.concat(pageData.data);
+          }
+        });
       }
-
-      // Si la réponse a une propriété categories
-      if (response && response.categories) {
-        console.log("✅ La réponse a une propriété categories avec", response.categories.length, "catégories");
-        const rawData = response.categories;
-        const normalized = rawData.map(cat => ({
-          id: cat.id || cat.uuid,
-          nom: cat.nom || cat.name || 'Sans nom',
-          name: cat.nom || cat.name || 'Sans nom',
-          ...cat
-        }));
-        console.log("✅ Catégories normalisées:", normalized);
-        setCategories(normalized);
-        setLoading(false);
-        return;
-      }
-
-      // Si on arrive ici, format inattendu
-      console.warn("⚠️ Format de réponse non reconnu:", response);
-      setCategories([]);
+      
+      const normalized = allCategories.map(cat => ({
+        id: cat.id || cat.uuid,
+        nom: cat.nom || cat.name || 'Sans nom',
+        name: cat.nom || cat.name || 'Sans nom',
+        ...cat
+      }));
+      
+      console.log(`✅ ${normalized.length} catégories chargées`);
+      setCategories(normalized);
+      setTotal(normalized.length);
       
     } catch (err) {
       console.error("❌ Erreur fetchCategories", err);
       setError(err);
-      setCategories([]);
     } finally {
       setLoading(false);
     }
@@ -91,9 +81,12 @@ export function useCategories() {
         ...newCat
       };
       setCategories(prev => [...prev, normalized]);
+      setTotal(prev => prev + 1);
+      toast.success("✅ Catégorie créée avec succès !");
       return newCat;
     } catch (error) {
       console.error("❌ Erreur addCategory:", error);
+      toast.error("❌ Erreur lors de la création de la catégorie");
       throw error;
     }
   }, []);
@@ -109,9 +102,11 @@ export function useCategories() {
           ...updated
         } : c)
       );
+      toast.success("✅ Catégorie modifiée avec succès !");
       return updated;
     } catch (error) {
       console.error("❌ Erreur updateCategory:", error);
+      toast.error("❌ Erreur lors de la modification de la catégorie");
       throw error;
     }
   }, []);
@@ -120,8 +115,11 @@ export function useCategories() {
     try {
       await categoriesAPI.delete(id);
       setCategories(prev => prev.filter(c => c.id !== id));
+      setTotal(prev => prev - 1);
+      toast.success("✅ Catégorie supprimée avec succès !");
     } catch (error) {
       console.error("❌ Erreur deleteCategory:", error);
+      toast.error("❌ Erreur lors de la suppression de la catégorie");
       throw error;
     }
   }, []);
@@ -130,6 +128,7 @@ export function useCategories() {
 
   return {
     categories,
+    total,
     loading,
     error,
     addCategory,

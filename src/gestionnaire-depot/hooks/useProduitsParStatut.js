@@ -48,17 +48,21 @@ export const useProduitsParStatut = () => {
     setLoading(prev => ({ ...prev, rupture: true }));
     setError(prev => ({ ...prev, rupture: null }));
     try {
-      console.log("📦 Chargement des produits en rupture...");
+      console.log("📦 Chargement des produits en rupture avec params:", params);
       const response = await produitsAPI.getProduitsEnRupture(params);
-      console.log("✅ Réponse rupture:", response);
       
       let data = [];
+      let totalCount = 0;
+      
       if (Array.isArray(response)) {
         data = response;
+        totalCount = response.length;
       } else if (response?.data) {
         data = response.data;
+        totalCount = response.total || 0;
       } else if (response?.produits) {
         data = response.produits;
+        totalCount = response.produits.length;
       }
       
       const formatted = data.map(item => ({
@@ -73,15 +77,16 @@ export const useProduitsParStatut = () => {
         fournisseur_nom: item.fournisseur_nom || item.fournisseur?.nom || ''
       }));
       
-      // FILTRAGE : Ne garder que les produits avec stock = 0
+      // Filtrer côté client pour être sûr (stock = 0)
       const vraimentRupture = formatted.filter(p => p.nombre_carton === 0);
-      console.log(`✅ ${vraimentRupture.length} produits vraiment en rupture (stock=0) sur ${formatted.length} reçus`);
       
       setRuptureProducts(vraimentRupture);
+      return { data: vraimentRupture, total: totalCount };
     } catch (err) {
       console.error('❌ Erreur fetchRupture:', err);
       setError(prev => ({ ...prev, rupture: err.message }));
       setRuptureProducts([]);
+      return { data: [], total: 0 };
     } finally {
       setLoading(prev => ({ ...prev, rupture: false }));
     }
@@ -91,17 +96,21 @@ export const useProduitsParStatut = () => {
     setLoading(prev => ({ ...prev, faible: true }));
     setError(prev => ({ ...prev, faible: null }));
     try {
-      console.log("📦 Chargement des produits faibles...");
+      console.log("📦 Chargement des produits faibles avec params:", params);
       const response = await produitsAPI.getProduitsSousSeuil(params);
-      console.log("✅ Réponse faible:", response);
       
       let data = [];
+      let totalCount = 0;
+      
       if (Array.isArray(response)) {
         data = response;
+        totalCount = response.length;
       } else if (response?.data) {
         data = response.data;
+        totalCount = response.total || 0;
       } else if (response?.produits) {
         data = response.produits;
+        totalCount = response.produits.length;
       }
       
       const formatted = data.map(item => ({
@@ -116,17 +125,18 @@ export const useProduitsParStatut = () => {
         fournisseur_nom: item.fournisseur_nom || item.fournisseur?.nom || ''
       }));
       
-      // FILTRAGE : Ne garder que les produits avec stock > 0 ET stock <= seuil
+      // Filtrer côté client pour être sûr (0 < stock <= seuil)
       const vraimentFaibles = formatted.filter(p => 
         p.nombre_carton > 0 && p.nombre_carton <= p.stock_seuil
       );
-      console.log(`✅ ${vraimentFaibles.length} produits vraiment faibles sur ${formatted.length} reçus`);
       
       setFaibleProducts(vraimentFaibles);
+      return { data: vraimentFaibles, total: totalCount };
     } catch (err) {
       console.error('❌ Erreur fetchFaible:', err);
       setError(prev => ({ ...prev, faible: err.message }));
       setFaibleProducts([]);
+      return { data: [], total: 0 };
     } finally {
       setLoading(prev => ({ ...prev, faible: false }));
     }
@@ -136,17 +146,21 @@ export const useProduitsParStatut = () => {
     setLoading(prev => ({ ...prev, normal: true }));
     setError(prev => ({ ...prev, normal: null }));
     try {
-      console.log("📦 Chargement des produits normaux...");
+      console.log("📦 Chargement des produits normaux avec params:", params);
       const response = await produitsAPI.getProduitsNormaux(params);
-      console.log("✅ Réponse normale:", response);
       
       let data = [];
+      let totalCount = 0;
+      
       if (Array.isArray(response)) {
         data = response;
+        totalCount = response.length;
       } else if (response?.data) {
         data = response.data;
+        totalCount = response.total || 0;
       } else if (response?.produits) {
         data = response.produits;
+        totalCount = response.produits.length;
       }
       
       const formatted = data.map(item => ({
@@ -161,15 +175,16 @@ export const useProduitsParStatut = () => {
         fournisseur_nom: item.fournisseur_nom || item.fournisseur?.nom || ''
       }));
       
-      // FILTRAGE : Ne garder que les produits avec stock > seuil
+      // Filtrer côté client pour être sûr (stock > seuil)
       const vraimentNormaux = formatted.filter(p => p.nombre_carton > p.stock_seuil);
-      console.log(`✅ ${vraimentNormaux.length} produits vraiment normaux sur ${formatted.length} reçus`);
       
       setNormalProducts(vraimentNormaux);
+      return { data: vraimentNormaux, total: totalCount };
     } catch (err) {
       console.error('❌ Erreur fetchNormal:', err);
       setError(prev => ({ ...prev, normal: err.message }));
       setNormalProducts([]);
+      return { data: [], total: 0 };
     } finally {
       setLoading(prev => ({ ...prev, normal: false }));
     }
