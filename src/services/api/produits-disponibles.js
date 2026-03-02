@@ -154,12 +154,18 @@ export const produitsDisponiblesAPI = {
   /**
    * 📦 Récupérer tous les produits disponibles (VALIDÉS)
    */
-  getDisponiblesBoutique: async (page = 1) => {
+  /**
+ * 📦 Récupérer tous les produits disponibles (VALIDÉS)
+ */
+getDisponiblesBoutique: async (page = 1, perPage = 12) => { // ← Ajout du paramètre perPage
   try {
-    console.log(`🔄 [API] Chargement page ${page}...`);
+    console.log(`🔄 [API] Chargement page ${page} avec ${perPage} produits par page...`);
 
     const response = await httpClient.get(ENDPOINTS.LIST, {
-      params: { page }
+      params: { 
+        page,
+        per_page: perPage // ← Ajout du paramètre per_page
+      }
     });
 
     return {

@@ -1838,31 +1838,32 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
                 {renderProduitsFiltres()}
 
                 {/* 🔹 Pagination - visible seulement si plusieurs pages */}
-                {lastPage > 1 && (
-                  <div className="flex justify-center items-center gap-4 mt-6 pt-4 border-t border-gray-200">
-                    <button
-                      disabled={currentPage === 1 || loadingProduits}
-                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                      className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-                    >
-                      <FontAwesomeIcon icon={faChevronLeft} className="text-xs" />
-                      Précédent
-                    </button>
+               {lastPage > 1 && (
+  <div className="flex justify-center items-center gap-4 mt-6 pt-4 border-t border-gray-200">
+    <button
+      disabled={currentPage === 1 || loadingProduits}
+      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+      className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+    >
+      <FontAwesomeIcon icon={faChevronLeft} className="text-xs" />
+      Précédent
+    </button>
 
-                    <span className="font-semibold text-sm bg-indigo-50 text-indigo-700 px-4 py-2 rounded-lg">
-                      Page {currentPage} / {lastPage}
-                    </span>
+    <span className="font-semibold text-sm bg-indigo-50 text-indigo-700 px-4 py-2 rounded-lg">
+      Page {currentPage} / {lastPage} 
+      <span className="ml-2 text-xs text-gray-500"></span> {/* ← Ajout */}
+    </span>
 
-                    <button
-                      disabled={currentPage === lastPage || loadingProduits}
-                      onClick={() => setCurrentPage(prev => Math.min(lastPage, prev + 1))}
-                      className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-                    >
-                      Suivant
-                      <FontAwesomeIcon icon={faChevronRight} className="text-xs" />
-                    </button>
-                  </div>
-                )}
+    <button
+      disabled={currentPage === lastPage || loadingProduits}
+      onClick={() => setCurrentPage(prev => Math.min(lastPage, prev + 1))}
+      className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+    >
+      Suivant
+      <FontAwesomeIcon icon={faChevronRight} className="text-xs" />
+    </button>
+  </div>
+)}
               </>
             )}
           </div>
