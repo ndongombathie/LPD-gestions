@@ -167,8 +167,9 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
   const [apiError, setApiError] = useState(null);
  
   // 🔹 Pagination
-  const [currentPage, setCurrentPage] = useState(1);
-  const [lastPage, setLastPage] = useState(1);
+const [currentPage, setCurrentPage] = useState(1);
+const [lastPage, setLastPage] = useState(1);
+const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12 items par page
 
   // État pour les notifications
   const [notifications, setNotifications] = useState([]);
@@ -206,7 +207,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
   };
 
   // Fonction pour charger les produits disponibles depuis l'API
-  const chargerProduits = async (page = currentPage) => {
+  const chargerProduits = async (page = currentPage, perPage = 12) => {
     try {
       setLoadingProduits(true);
       setErrorMessage('');
@@ -214,8 +215,8 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
       console.log(`🔄 Chargement des produits - Page ${page}...`);
 
       // Utiliser l'API des produits disponibles en boutique
-      const response = await produitsDisponiblesAPI.getDisponiblesBoutique(page);
-      
+      const response = await produitsDisponiblesAPI.getDisponiblesBoutique(page, perPage);
+    
       // 📌 Vérifier la structure de la réponse
       console.log('📦 Réponse API brute:', response);
 
