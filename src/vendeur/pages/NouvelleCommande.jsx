@@ -46,6 +46,7 @@ import { clientsAPI } from '../../services/api/clients';
 import profileAPI from '../../services/api/profile';
 import gestionnaireBoutiqueAPI from '../../services/api/gestionnaireBoutique';
 import useDebouncedValue from '../../gestionnaire-boutique/hooks/useDebouncedValue';
+import { boutiqueId, echo } from '../../utils/echo';
 
 // Composant de notification
 const Notification = ({ type, message, onClose }) => {
@@ -240,6 +241,38 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
     }
   }, []);
 
+  useEffect(() => {
+    if (!boutiqueId) return;
+
+    const channel = echo.private(`boutique.${boutiqueId}`);
+
+    const listener = (e) => {
+        console.log('📡 Event reçu:', e);
+        chargerProduits();
+    };
+
+    channel.listen('transfert.validee', listener);
+
+    return () => {
+        try {
+            channel.stopListening('transfert.validee');
+            echo.leave(`boutique.${boutiqueId}`);
+
+            addNotification(
+                'info',
+                'Désinscription du canal temps réel réussie.'
+            );
+        } catch (error) {
+            console.error(error);
+
+            addNotification(
+                'error',
+                'Erreur lors de la désinscription. Rafraîchis la page.'
+            );
+        }
+    };
+}, [boutiqueId]);
+
   // Fonction pour charger les informations du vendeur
   const chargerInfosVendeur = async () => {
     try {
@@ -347,6 +380,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
 
       setProduits(produitsFormates);
       setProduitsFiltres(produitsFormates);
+      
       if (!Array.isArray(resp)) {
         const links = Array.isArray(resp.links) ? resp.links.map(l => {
           let p = l.page;
@@ -1396,7 +1430,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
           if (!produit) return null;
 
           return (
-            <div key={produit.id || Date.now()} className="bg-gray-50 rounded-lg p-4 border-2 border-gray-200 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-[#472ead] flex flex-col justify-between">
+            <div key={produit.index || Date.now()} className="bg-gray-50 rounded-lg p-4 border-2 border-gray-200 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-[#472ead] flex flex-col justify-between">
               <div>
                 <h4 className="text-sm font-semibold text-gray-800 mb-2">{produit.nom || 'Produit sans nom'}</h4>
                 <div className="space-y-2 mb-3">
