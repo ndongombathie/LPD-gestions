@@ -37,17 +37,14 @@ import {
   faChevronRight
 } from '@fortawesome/free-solid-svg-icons';
 
-// Imports pour ticket 
 import { useReactToPrint } from 'react-to-print';
 import TicketCommande from './TicketCommande';
 
-// Import des APIs
 import { produitsDisponiblesAPI } from '../../services/api/produits-disponibles';
 import { commandesAPI } from '../../services/api/commandes';
 import { clientsAPI } from '../../services/api/clients';
 import profileAPI from '../../services/api/profile';
 
-// Composant de notification
 const Notification = ({ type, message, onClose }) => {
   const [isVisible, setIsVisible] = useState(true);
   const [progress, setProgress] = useState(100);
@@ -140,12 +137,18 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
   const [editionPrix, setEditionPrix] = useState(null);
   const [editionQuantite, setEditionQuantite] = useState(null);
   const [envoiEnCours, setEnvoiEnCours] = useState(false);
-  const [tvaActive, setTvaActive] = useState(false); // TVA décochée par défaut
+  const [tvaActive, setTvaActive] = useState(false);
   const [produits, setProduits] = useState([]);
   const [loadingProduits, setLoadingProduits] = useState(true);
   const [produitsFiltres, setProduitsFiltres] = useState([]);
   const [errorMessage, setErrorMessage] = useState('');
-
+  const [tousLesProduits, setTousLesProduits] = useState([]);
+  const [loadingRecherche, setLoadingRecherche] = useState(false);
+  const [rechercheEnCours, setRechercheEnCours] = useState(false);
+  const [totalProduitsFiltres, setTotalProduitsFiltres] = useState(0);
+  const [rechercheCurrentPage, setRechercheCurrentPage] = useState(1);
+  const [rechercheLastPage, setRechercheLastPage] = useState(1);
+  const rechercheTimeout = useRef(null);
   const [commandeImprimee, setCommandeImprimee] = useState(null);
   const ticketRef = useRef();
 
@@ -153,7 +156,6 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
     contentRef: ticketRef,
   });
 
-  // État pour stocker les infos du vendeur
   const [vendeurInfo, setVendeurInfo] = useState({
     nom: sellerName || 'Vendeur',
     prenom: '',
@@ -166,30 +168,25 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
   const [loadingVendeur, setLoadingVendeur] = useState(false);
   const [apiError, setApiError] = useState(null);
  
-  // 🔹 Pagination
-const [currentPage, setCurrentPage] = useState(1);
-const [lastPage, setLastPage] = useState(1);
-const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12 items par page
+  const [currentPage, setCurrentPage] = useState(1);
+  const [lastPage, setLastPage] = useState(1);
+  const [itemsPerPage] = useState(12);
 
-  // État pour les notifications
   const [notifications, setNotifications] = useState([]);
 
   const inputCodeBarreRef = useRef(null);
   const inputNomClientRef = useRef(null);
 
-  // Fonction pour ajouter une notification
   const addNotification = (type, message) => {
     const id = Date.now();
     setNotifications(prev => [...prev, { id, type, message }]);
     return id;
   };
 
-  // Fonction pour supprimer une notification
   const removeNotification = (id) => {
     setNotifications(prev => prev.filter(notif => notif.id !== id));
   };
 
-  // Fonction pour normaliser le type de vente (enlever les accents)
   const normaliserTypeVente = (type) => {
     if (!type) return 'detail';
     if (type === 'détail') return 'detail';
@@ -197,7 +194,6 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
     return type;
   };
 
-  // Fonction pour obtenir l'affichage du type de vente
   const getTypeVenteAffichage = (type) => {
     if (!type) return 'détail';
     if (type === 'detail') return 'détail';
@@ -206,59 +202,42 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
     return type;
   };
 
-  // Fonction pour charger les produits disponibles depuis l'API
-  const chargerProduits = async (page = currentPage, perPage = 12) => {
+  const chargerProduits = async (page = currentPage) => {
     try {
       setLoadingProduits(true);
       setErrorMessage('');
 
-      console.log(`🔄 Chargement des produits - Page ${page}...`);
-
-      // Utiliser l'API des produits disponibles en boutique
-      const response = await produitsDisponiblesAPI.getDisponiblesBoutique(page, perPage);
+      const response = await produitsDisponiblesAPI.getDisponiblesBoutique(page, itemsPerPage);
     
-      // 📌 Vérifier la structure de la réponse
-      console.log('📦 Réponse API brute:', response);
-
-      // Extraire les données selon la structure
       let produitsData = [];
       let totalPages = 1;
 
-      if (response && response.data) {
-        // Si la réponse est dans response.data
-        if (response.data.produits && Array.isArray(response.data.produits)) {
-          produitsData = response.data.produits;
-          totalPages = response.data.lastPage || response.data.last_page || 1;
-        } else if (Array.isArray(response.data)) {
-          produitsData = response.data;
-          totalPages = response.lastPage || response.last_page || 1;
-        }
-      } else if (response && response.produits && Array.isArray(response.produits)) {
-        // Si la réponse a une propriété produits directement
+      if (response && response.produits && Array.isArray(response.produits)) {
         produitsData = response.produits;
         totalPages = response.lastPage || response.last_page || 1;
+      } else if (response && response.data && response.data.produits && Array.isArray(response.data.produits)) {
+        produitsData = response.data.produits;
+        totalPages = response.data.lastPage || response.data.last_page || 1;
+      } else if (response && response.data && Array.isArray(response.data)) {
+        produitsData = response.data;
+        totalPages = response.lastPage || response.last_page || 1;
       } else if (Array.isArray(response)) {
-        // Si c'est directement un tableau
         produitsData = response;
       }
 
-      console.log('📊 Produits data extraits:', produitsData);
-      console.log('📄 Total pages:', totalPages);
+      if (produitsData.length > itemsPerPage) {
+        produitsData = produitsData.slice(0, itemsPerPage);
+      }
 
-      // Mise à jour de la pagination
       setLastPage(totalPages);
       setCurrentPage(page);
 
-      // Formatage des données
       const produitsFormates = produitsData.map(produit => {
-        // Récupérer l'objet produit selon la structure
         const produitObj = produit.produit || produit;
         
-        // Calculer les prix par défaut si nécessaire
         const prixDetail = parseFloat(produit.prix_vente_detail || produit.prix || produitObj.prix || 0);
         const prixGros = parseFloat(produit.prix_vente_gros || produit.prix_unite_carton || produitObj.prix_gros || prixDetail * 0.8);
         
-        // Calculer le stock
         const stockGlobal = parseInt(produit.quantite || produit.stock || produitObj.stock || produitObj.quantite || 0, 10);
         
         return {
@@ -266,36 +245,29 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
           nom: produitObj.nom || produit.nom || 'Produit sans nom',
           code_barre: produitObj.code_barre || produit.code_barre || '',
           
-          // Prix selon votre modèle
           prix_vente_detail: prixDetail,
           prix_vente_gros: prixGros,
           prix_achat: parseFloat(produit.prix_achat || 0),
           prix_total: parseFloat(produit.prix_total || 0),
           
-          // Seuils
           prix_seuil_detail: parseFloat(produit.prix_seuil_detail || prixDetail * 0.7),
           prix_seuil_gros: parseFloat(produit.prix_seuil_gros || prixGros * 0.7),
           
-          // Stock et gestion
           stock_global: stockGlobal,
           stock_seuil: parseInt(produit.seuil || produit.stock_seuil || 10, 10),
           stock: stockGlobal,
           seuil_alerte: parseInt(produit.seuil || produit.stock_seuil || 10, 10),
           
-          // Gestion des cartons
           unite_carton: parseInt(produit.unite_carton || produit.unite_par_carton || 1, 10),
           prix_unite_carton: prixGros,
           nombre_carton: Math.floor(stockGlobal / (produit.unite_carton || produit.unite_par_carton || 1)),
           
-          // Catégorie
           categorie_id: produit.categorie_id || produitObj.categorie?.id,
           categorie: produit.categorie_nom || produitObj.categorie?.nom || 'Non catégorisé',
           
-          // Dates
           created_at: produit.created_at || produitObj.created_at,
           updated_at: produit.updated_at || produitObj.updated_at,
           
-          // Variables compatibilité
           prix: prixDetail,
           prix_detail: prixDetail,
           prix_gros: prixGros,
@@ -303,145 +275,204 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
         };
       });
 
-      console.log('✅ Produits formatés:', produitsFormates);
       setProduits(produitsFormates);
+      
+      if (!rechercheEnCours) {
+        setProduitsFiltres(produitsFormates);
+      }
 
     } catch (error) {
-      console.error('❌ Erreur chargement produits:', error);
       setErrorMessage('Impossible de charger les produits depuis l\'API.');
-      setProduits([]); // Tableau vide en cas d'erreur
-      
-      // Optionnel: Utiliser des données de test en cas d'erreur
-      // await chargerProduitsMock();
-      
+      setProduits([]);
+      setProduitsFiltres([]);
     } finally {
       setLoadingProduits(false);
     }
   };
 
-  // Fonction de test avec des données mockées (optionnel)
-  const chargerProduitsMock = async () => {
-    try {
-      setLoadingProduits(true);
-      
-      // Données de test
-      const produitsMock = [
-        {
-          id: 1,
-          nom: 'Produit Test 1',
-          code_barre: '123456789',
-          prix_vente_detail: 1500,
-          prix_vente_gros: 1200,
-          quantite: 50,
-          unite_carton: 6,
-          categorie_nom: 'Catégorie A',
-          prix_seuil_detail: 1000,
-          prix_seuil_gros: 900
-        },
-        {
-          id: 2,
-          nom: 'Produit Test 2',
-          code_barre: '987654321',
-          prix_vente_detail: 2500,
-          prix_vente_gros: 2000,
-          quantite: 30,
-          unite_carton: 12,
-          categorie_nom: 'Catégorie B',
-          prix_seuil_detail: 1800,
-          prix_seuil_gros: 1500
-        },
-        {
-          id: 3,
-          nom: 'Produit Test 3',
-          code_barre: '555555555',
-          prix_vente_detail: 3500,
-          prix_vente_gros: 2800,
-          quantite: 20,
-          unite_carton: 4,
-          categorie_nom: 'Catégorie C',
-          prix_seuil_detail: 2500,
-          prix_seuil_gros: 2000
-        }
-      ];
+  const chargerTousLesProduits = async () => {
+    if (!rechercheProduit.trim()) {
+      setTousLesProduits([]);
+      setRechercheEnCours(false);
+      setProduitsFiltres(produits);
+      setTotalProduitsFiltres(0);
+      return;
+    }
 
-      setProduits(produitsMock);
-      setLastPage(1);
-      setErrorMessage('');
+    setLoadingRecherche(true);
+    setRechercheEnCours(true);
+    
+    try {
+      let page = 1;
+      let allProducts = [];
+      let hasMorePages = true;
+      let maxPages = 10;
+      
+      while (hasMorePages && page <= maxPages) {
+        const response = await produitsDisponiblesAPI.getDisponiblesBoutique(page, 100);
+        
+        let produitsData = [];
+        let lastPage = 1;
+        
+        if (response && response.produits && Array.isArray(response.produits)) {
+          produitsData = response.produits;
+          lastPage = response.lastPage || response.last_page || 1;
+          hasMorePages = page < lastPage;
+        } else if (response && response.data && response.data.produits && Array.isArray(response.data.produits)) {
+          produitsData = response.data.produits;
+          lastPage = response.data.lastPage || response.data.last_page || 1;
+          hasMorePages = page < lastPage;
+        } else if (response && response.data && Array.isArray(response.data)) {
+          produitsData = response.data;
+          lastPage = response.lastPage || response.last_page || 1;
+          hasMorePages = page < lastPage;
+        } else if (Array.isArray(response)) {
+          produitsData = response;
+          hasMorePages = false;
+        }
+        
+        const produitsFormatesPage = produitsData.map(produit => {
+          const produitObj = produit.produit || produit;
+          
+          const prixDetail = parseFloat(produit.prix_vente_detail || produit.prix || produitObj.prix || 0);
+          const prixGros = parseFloat(produit.prix_vente_gros || produit.prix_unite_carton || produitObj.prix_gros || prixDetail * 0.8);
+          const stockGlobal = parseInt(produit.quantite || produit.stock || produitObj.stock || produitObj.quantite || 0, 10);
+          
+          return {
+            id: produitObj.id || produit.id,
+            nom: produitObj.nom || produit.nom || 'Produit sans nom',
+            code_barre: produitObj.code_barre || produit.code_barre || '',
+            prix_vente_detail: prixDetail,
+            prix_vente_gros: prixGros,
+            prix_achat: parseFloat(produit.prix_achat || 0),
+            prix_total: parseFloat(produit.prix_total || 0),
+            prix_seuil_detail: parseFloat(produit.prix_seuil_detail || prixDetail * 0.7),
+            prix_seuil_gros: parseFloat(produit.prix_seuil_gros || prixGros * 0.7),
+            stock_global: stockGlobal,
+            stock_seuil: parseInt(produit.seuil || produit.stock_seuil || 10, 10),
+            stock: stockGlobal,
+            seuil_alerte: parseInt(produit.seuil || produit.stock_seuil || 10, 10),
+            unite_carton: parseInt(produit.unite_carton || produit.unite_par_carton || 1, 10),
+            prix_unite_carton: prixGros,
+            nombre_carton: Math.floor(stockGlobal / (produit.unite_carton || produit.unite_par_carton || 1)),
+            categorie_id: produit.categorie_id || produitObj.categorie?.id,
+            categorie: produit.categorie_nom || produitObj.categorie?.nom || 'Non catégorisé',
+            created_at: produit.created_at || produitObj.created_at,
+            updated_at: produit.updated_at || produitObj.updated_at,
+            prix: prixDetail,
+            prix_detail: prixDetail,
+            prix_gros: prixGros,
+            prix_seuil: parseFloat(produit.prix_seuil_detail || prixDetail * 0.7)
+          };
+        });
+        
+        allProducts = [...allProducts, ...produitsFormatesPage];
+        page++;
+      }
+      
+      setTousLesProduits(allProducts);
+      
+      filtrerProduitsRecherche(allProducts);
       
     } catch (error) {
-      console.error('Erreur chargement mock:', error);
+      addNotification('error', 'Erreur lors de la recherche des produits');
     } finally {
-      setLoadingProduits(false);
+      setLoadingRecherche(false);
     }
   };
 
-  // Charger les produits depuis l'API au montage
+  const filtrerProduitsRecherche = (produitsList) => {
+    if (!rechercheProduit.trim()) {
+      setProduitsFiltres([]);
+      setTotalProduitsFiltres(0);
+      setRechercheLastPage(1);
+      return;
+    }
+
+    const searchLower = rechercheProduit.toLowerCase().trim();
+    
+    const filtres = produitsList.filter(produit => {
+      if (!produit) return false;
+      
+      const nomMatch = produit.nom?.toLowerCase().includes(searchLower) || false;
+      const codeBarreMatch = produit.code_barre?.toLowerCase().includes(searchLower) || false;
+      const categorieMatch = produit.categorie?.toLowerCase().includes(searchLower) || false;
+      
+      return nomMatch || codeBarreMatch || categorieMatch;
+    });
+    
+    setTotalProduitsFiltres(filtres.length);
+    
+    const totalPages = Math.ceil(filtres.length / itemsPerPage);
+    setRechercheLastPage(totalPages || 1);
+    
+    if (rechercheCurrentPage > totalPages && totalPages > 0) {
+      setRechercheCurrentPage(totalPages);
+    }
+    
+    const startIndex = (rechercheCurrentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const produitsPagination = filtres.slice(startIndex, endIndex);
+    
+    setProduitsFiltres(produitsPagination);
+  };
+
   useEffect(() => {
-    console.log('🔄 Composant monté, chargement des produits...');
+    if (rechercheTimeout.current) {
+      clearTimeout(rechercheTimeout.current);
+    }
+
+    rechercheTimeout.current = setTimeout(() => {
+      if (rechercheProduit.trim()) {
+        chargerTousLesProduits();
+      } else {
+        setRechercheEnCours(false);
+        setProduitsFiltres(produits);
+        setTotalProduitsFiltres(0);
+        setTousLesProduits([]);
+      }
+    }, 500);
+
+    return () => {
+      if (rechercheTimeout.current) {
+        clearTimeout(rechercheTimeout.current);
+      }
+    };
+  }, [rechercheProduit]);
+
+  useEffect(() => {
+    if (rechercheEnCours && tousLesProduits.length > 0) {
+      filtrerProduitsRecherche(tousLesProduits);
+    }
+  }, [rechercheCurrentPage, rechercheEnCours]);
+
+  useEffect(() => {
     chargerProduits(1);
     chargerInfosVendeur();
   }, []);
 
-  // Recharger les produits quand la page change
   useEffect(() => {
-    if (currentPage > 0) {
-      console.log(`🔄 Changement de page: ${currentPage}`);
+    if (currentPage > 0 && !rechercheEnCours) {
       chargerProduits(currentPage);
     }
   }, [currentPage]);
 
-  // Mettre à jour le nom du vendeur si sellerName change
   useEffect(() => {
     if (sellerName && sellerName !== vendeurInfo.nom) {
       setVendeurInfo(prev => ({ ...prev, nom: sellerName }));
     }
   }, [sellerName]);
 
-  // Filtrer les produits lorsque la recherche change
-  useEffect(() => {
-    const filtrerProduits = () => {
-      if (!produits || !Array.isArray(produits) || produits.length === 0) {
-        setProduitsFiltres([]);
-        return;
-      }
-
-      if (!rechercheProduit.trim()) {
-        setProduitsFiltres(produits);
-        return;
-      }
-
-      const searchLower = rechercheProduit.toLowerCase().trim();
-      
-      const filtres = produits.filter(produit => {
-        if (!produit) return false;
-        
-        const nomMatch = produit.nom?.toLowerCase().includes(searchLower) || false;
-        const codeBarreMatch = produit.code_barre?.toLowerCase().includes(searchLower) || false;
-        const categorieMatch = produit.categorie?.toLowerCase().includes(searchLower) || false;
-        
-        return nomMatch || codeBarreMatch || categorieMatch;
-      });
-      
-      console.log(`🔍 Recherche "${rechercheProduit}": ${filtres.length} résultats`);
-      setProduitsFiltres(filtres);
-    };
-
-    filtrerProduits();
-  }, [rechercheProduit, produits]);
-
-  // Focus sur le champ code barre au chargement
   useEffect(() => {
     if (inputCodeBarreRef.current) {
       inputCodeBarreRef.current.focus();
     }
   }, []);
 
-  // Fonction pour charger les informations du vendeur
   const chargerInfosVendeur = async () => {
     try {
       setLoadingVendeur(true);
 
-      // Charger les infos détaillées du vendeur depuis l'API profile
       const infosVendeur = await profileAPI.getProfile();
 
       if (infosVendeur) {
@@ -456,8 +487,6 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
         });
       }
     } catch (error) {
-      console.error('❌ Erreur chargement infos vendeur:', error);
-      // On garde le sellerName si fourni en prop
       if (sellerName) {
         setVendeurInfo(prev => ({ ...prev, nom: sellerName }));
       }
@@ -466,7 +495,6 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
     }
   };
 
-  // Fonction pour obtenir le nom complet du vendeur
   const getVendeurNomComplet = () => {
     if (vendeurInfo.prenom && vendeurInfo.nom) {
       return `${vendeurInfo.prenom} ${vendeurInfo.nom}`.trim();
@@ -474,7 +502,6 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
     return vendeurInfo.nom || 'Vendeur';
   };
 
-  // Fonction pour obtenir les infos vendeur formatées pour l'API
   const getVendeurApiData = () => {
     return {
       vendeur_id: vendeurInfo.id || null,
@@ -499,7 +526,6 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
       };
     }
     
-    // Type détail
     return {
       prix: produit.prix_vente_detail || 0,
       prix_seuil: produit.prix_seuil_detail || 0
@@ -508,20 +534,17 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
 
   const ajouterAuPanier = (produit, typeVenteSpecifique = null) => {
     if (!produit) {
-      console.error('❌ Produit non défini');
       return;
     }
 
     const typeVente = typeVenteSpecifique || typeVenteGlobal;
     const typeNormalise = normaliserTypeVente(typeVente);
 
-    // Vérifier si le produit est en stock
     if (produit.stock_global <= 0) {
       addNotification('error', 'Ce produit est en rupture de stock');
       return;
     }
 
-    // Pour le gros, vérifier si assez de stock pour un carton
     if (typeNormalise === 'gros' && produit.unite_carton > 1 && produit.stock_global < produit.unite_carton) {
       addNotification('error', `Stock insuffisant pour vendre en gros (nécessite ${produit.unite_carton} unités)`);
       return;
@@ -572,7 +595,6 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
         
         unite_par_carton: produit.unite_carton || 1,
         
-        // Catégorie
         categorie: produit.categorie || 'Non catégorisé'
       }]);
       addNotification('success', `${produit.nom} ajouté au panier`);
@@ -586,11 +608,9 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
     }
 
     try {
-      // Recherche par code barre via API
       const produitTrouve = await produitsDisponiblesAPI.getByCodeBarre(codeBarre);
 
       if (produitTrouve) {
-        // Formater le produit trouvé
         const produitFormate = {
           id: produitTrouve.id,
           nom: produitTrouve.nom,
@@ -634,12 +654,10 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
         addNotification('error', 'Aucun produit trouvé avec ce code barre');
       }
     } catch (error) {
-      console.error('❌ Erreur recherche code barre:', error);
       addNotification('error', 'Erreur lors de la recherche du code barre');
     }
   };
 
-  // Gérer l'entrée directe dans le champ code barre
   const handleCodeBarreKeyPress = (e) => {
     if (e.key === 'Enter') {
       ajouterParCodeBarre();
@@ -798,16 +816,13 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
       return total + (prix * quantite);
     }, 0);
 
-    // Valeurs par défaut
     let tva = 0;
-    let totalTTC = totalHT; // Par défaut, TTC = HT
+    let totalTTC = totalHT;
 
-    // SI TVA ACTIVE: on ajoute 18% au total
     if (tvaActive) {
       tva = Math.round(totalHT * 0.18);
       totalTTC = totalHT + tva;
     }
-    // SI TVA INACTIVE: totalTTC reste = totalHT (pas de changement)
 
     return {
       totalHT: Math.round(totalHT),
@@ -818,7 +833,6 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
 
   const { totalHT, tva, totalTTC } = calculerTotaux();
 
-  // Fonction pour détecter si l'erreur est liée à Pusher
   const isPusherError = (error) => {
     const errorMessage = error?.response?.data?.message || error?.message || '';
     return errorMessage.includes('Pusher') ||
@@ -832,7 +846,6 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
       return;
     }
 
-    // Validation - nom ET prénom sont obligatoires
     if (!client.nom.trim() || !client.prenom.trim()) {
       addNotification('error', 'Veuillez saisir le nom ET le prénom du client !');
 
@@ -864,7 +877,6 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
     setApiError(null);
 
     try {
-      // Vérifier les stocks avant validation
       const stockInsuffisant = panier.find(item => {
         if (!item) return false;
         const produitOriginal = produits.find(p => p && p.id === item.id);
@@ -877,7 +889,6 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
         return;
       }
 
-      // 1. Créer le client via l'API
       let clientId = null;
       let clientNomFinal = client.nom.trim();
       let clientPrenomFinal = client.prenom.trim();
@@ -885,7 +896,6 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
       let clientAdresseFinal = client.adresse?.trim() || '';
 
       try {
-        // Créer un nouveau client avec la structure requise par votre API
         const nouveauClient = {
           nom: clientNomFinal,
           prenom: clientPrenomFinal,
@@ -898,7 +908,6 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
 
         const createResponse = await clientsAPI.create(nouveauClient);
 
-        // Extraire l'ID selon la structure de votre API
         if (createResponse && createResponse.data) {
           if (createResponse.data.id) {
             clientId = createResponse.data.id;
@@ -915,19 +924,15 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
         }
 
       } catch (clientError) {
-        console.warn('⚠️ Erreur création client, on continue sans clientId:', clientError);
-        // On continue sans clientId, la commande sera créée quand même
       }
 
-      // ✅ ANALYSE DES TYPES DE VENTE DANS LE PANIER
       const typesDansPanier = [...new Set(panier.filter(item => item).map(item => item.type_vente))];
       const aDuDetail = typesDansPanier.includes('detail');
       const aDuGros = typesDansPanier.includes('gros');
       
-      // Déterminer le type de vente global de la commande
       let typeVenteGlobalCommande;
       if (aDuDetail && aDuGros) {
-        typeVenteGlobalCommande = 'mixte'; // Si les deux types sont présents
+        typeVenteGlobalCommande = 'mixte';
       } else if (aDuGros) {
         typeVenteGlobalCommande = 'gros';
       } else {
@@ -936,32 +941,19 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
 
       const typeVenteNormalise = normaliserTypeVente(typeVenteGlobal);
       
-      console.log('🔍 Analyse du panier:', {
-        typesDansPanier,
-        aDuDetail,
-        aDuGros,
-        typeVenteGlobalCommande,
-        typeVenteSelectionne: typeVenteGlobal
-      });
-
-      // Récupérer les infos du vendeur
       const vendeurData = getVendeurApiData();
 
-      // ✅ PRÉPARATION DES ITEMS AVEC LEUR PROPRE TYPE DE VENTE
       const itemsData = panier.filter(item => item).map(item => {
         const quantite = parseInt(item.quantite) || 1;
         const prixUnitaire = parseFloat(item.prix_vente) || 0;
         
-        // Utiliser le type de vente spécifique de l'article
         const typeVenteArticle = item.type_vente || normaliserTypeVente(typeVenteGlobal);
         
-        // Préparer l'objet de base
         const itemData = {
           produit_id: item.id,
           nom: item.nom,
           code_barre: item.code_barre,
           quantite: quantite,
-          // ✅ CHAMP IMPORTANT: type_vente pour chaque article
           type_vente: typeVenteArticle,
           type_vente_affichage: typeVenteArticle === 'detail' ? 'détail' : 'gros',
           prix_unitaire: prixUnitaire,
@@ -972,7 +964,6 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
           categorie: item.categorie || 'Non catégorisé'
         };
         
-        // Ajouter des informations supplémentaires pour le gros
         if (typeVenteArticle === 'gros') {
           itemData.unite_par_carton = parseInt(item.unite_par_carton || 1);
           itemData.est_vente_carton = true;
@@ -983,39 +974,20 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
         return itemData;
       });
 
-      // ✅ RECALCUL DIRECT des totaux
       let totalHTCalcule = 0;
       
-      // Parcourir chaque article du panier et additionner (prix * quantité)
       panier.filter(item => item).forEach(item => {
         const prix = Number(item.prix_vente) || 0;
         const quantite = Number(item.quantite) || 0;
         totalHTCalcule += prix * quantite;
       });
       
-      // Arrondir à l'entier
       totalHTCalcule = Math.round(totalHTCalcule);
       
-      // Calcul TVA (18% si active)
       const tvaCalculee = tvaActive ? Math.round(totalHTCalcule * 0.18) : 0;
       const totalTTCCalcule = totalHTCalcule + tvaCalculee;
-      
-      console.log('💰 TOTAUX FINAUX:', {
-        totalHTCalcule,
-        tvaCalculee,
-        totalTTCCalcule,
-        tvaActive
-      });
 
-      console.log('📦 Types de vente des articles:', itemsData.map(item => ({
-        nom: item.nom,
-        type_vente: item.type_vente,
-        type_vente_affichage: item.type_vente_affichage
-      })));
-
-      // ✅ STRUCTURE POUR L'API
       const commandeData = {
-        // Informations client
         client_id: clientId,
         client_nom: `${clientNomFinal} ${clientPrenomFinal}`.trim(),
         client_prenom: clientPrenomFinal,
@@ -1023,45 +995,37 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
         client_telephone: clientTelephoneFinal,
         client_adresse: clientAdresseFinal,
 
-        // Informations vendeur
         vendeur_id: vendeurData.vendeur_id,
         vendeur_nom: vendeurData.vendeur_nom,
         vendeur_email: vendeurData.vendeur_email,
         vendeur_telephone: vendeurData.vendeur_telephone,
         boutique_id: vendeurData.boutique_id,
 
-        // ✅ TYPE DE VENTE GLOBAL DE LA COMMANDE (important pour l'affichage dans l'historique)
-        type_vente: typeVenteGlobalCommande, // "detail", "gros", ou "mixte"
-        type_vente_original: typeVenteGlobal, // Pour garder une trace de ce que l'utilisateur a sélectionné
+        type_vente: typeVenteGlobalCommande,
+        type_vente_original: typeVenteGlobal,
         type_vente_affichage: getTypeVenteAffichage(typeVenteGlobalCommande),
         
-        // Statistiques des types de vente
         statistiques_types: {
           detail: aDuDetail,
           gros: aDuGros,
           types_presents: typesDansPanier
         },
 
-        // Items (produits) - CHAQUE ARTICLE A SON PROPRE TYPE_VENTE
         items: itemsData,
 
-        // ✅ MONTANTS
         montant_ht: totalHTCalcule,
         tva: tvaCalculee,
         montant_ttc: totalTTCCalcule,
         total: totalTTCCalcule,
         
-        // ✅ Informations TVA
         tva_appliquee: tvaActive,
         tva_taux: tvaActive ? 18 : 0,
 
-        // Métadonnées
         statut: 'en_attente',
         date_commande: new Date().toISOString(),
         mode_paiement: 'non_paye',
         notes: '',
 
-        // Résumé pour l'historique
         resume: {
           nombre_articles_detail: itemsData.filter(i => i.type_vente === 'detail').length,
           nombre_articles_gros: itemsData.filter(i => i.type_vente === 'gros').length,
@@ -1070,27 +1034,19 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
         }
       };
 
-      console.log('📦 Données commande complètes:', JSON.stringify(commandeData, null, 2));
-      console.log('🎯 Type de vente global envoyé:', commandeData.type_vente);
-
-      // 3. Envoyer à l'API des commandes
       let apiResponse = null;
       let apiError = null;
       let commandeCreee = false;
 
       try {
         apiResponse = await commandesAPI.create(commandeData);
-        console.log('✅ Réponse API:', apiResponse);
         commandeCreee = true;
       } catch (error) {
-        console.error('❌ Erreur API commandes:', error);
         apiError = error;
 
-        // Vérifier si c'est une erreur Pusher
         if (isPusherError(error)) {
           commandeCreee = true;
 
-          // Créer une réponse simulée pour continuer le processus
           apiResponse = {
             success: true,
             data: {
@@ -1108,17 +1064,14 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
         }
       }
 
-      // 4. Créer l'objet commande pour l'affichage
       let nouvelleCommande;
 
       if (commandeCreee && apiResponse) {
-        // Commande créée avec succès (même avec erreur Pusher)
         nouvelleCommande = {
           id: apiResponse?.data?.id || apiResponse?.data?.uuid || `temp-${Date.now()}`,
           numero_commande: apiResponse?.data?.numero || `CMD-${Date.now().toString().slice(-8)}`,
           date: apiResponse?.data?.created_at || new Date().toISOString(),
           
-          // ✅ TYPE DE VENTE GLOBAL (pour l'historique)
           type_vente: typeVenteGlobalCommande,
           type_vente_affichage: getTypeVenteAffichage(typeVenteGlobalCommande),
           type_vente_original: typeVenteGlobal,
@@ -1141,13 +1094,11 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
             role: vendeurInfo.role
           },
           
-          // ✅ ITEMS AVEC LEUR PROPRE TYPE DE VENTE (pour l'affichage détaillé)
           items: panier.filter(item => item).map(item => ({
             produit_id: item.id,
             nom: item.nom,
             code_barre: item.code_barre,
             quantite: item.quantite,
-            // Chaque article a son propre type
             type_vente: item.type_vente,
             type_vente_affichage: item.type_vente === 'detail' ? 'Détail' : 'Gros',
             prix_unitaire: item.prix_vente,
@@ -1162,7 +1113,6 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
             unite_par_carton: item.unite_par_carton || 1
           })),
           
-          // Statistiques pour l'affichage
           statistiques: {
             types_presents: typesDansPanier,
             nombre_detail: itemsData.filter(i => i.type_vente === 'detail').length,
@@ -1171,7 +1121,6 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
             total_gros: itemsData.filter(i => i.type_vente === 'gros').reduce((sum, i) => sum + (i.prix_unitaire * i.quantite), 0)
           },
           
-          // ✅ TOTAUX
           total_ht: totalHTCalcule,
           tva: tvaCalculee,
           total_ttc: totalTTCCalcule,
@@ -1189,13 +1138,11 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
           has_pusher_error: isPusherError(apiError)
         };
       } else {
-        // Créer une commande locale en cas d'échec total
         nouvelleCommande = {
           id: `local-${Date.now()}`,
           numero_commande: `CMD-LOCAL-${Date.now().toString().slice(-8)}`,
           date: new Date().toISOString(),
           
-          // ✅ TYPE DE VENTE GLOBAL
           type_vente: typeVenteGlobalCommande,
           type_vente_affichage: getTypeVenteAffichage(typeVenteGlobalCommande),
           type_vente_original: typeVenteGlobal,
@@ -1218,7 +1165,6 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
             role: vendeurInfo.role
           },
           
-          // ✅ ITEMS AVEC LEUR PROPRE TYPE
           items: panier.filter(item => item).map(item => ({
             produit_id: item.id,
             nom: item.nom,
@@ -1238,14 +1184,12 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
             unite_par_carton: item.unite_par_carton || 1
           })),
           
-          // Statistiques
           statistiques: {
             types_presents: typesDansPanier,
             nombre_detail: itemsData.filter(i => i.type_vente === 'detail').length,
             nombre_gros: itemsData.filter(i => i.type_vente === 'gros').length
           },
           
-          // ✅ TOTAUX
           total_ht: totalHTCalcule,
           tva: tvaCalculee,
           total_ttc: totalTTCCalcule,
@@ -1263,33 +1207,21 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
         };
       }
 
-      console.log('✅ Commande créée avec type:', nouvelleCommande.type_vente);
-      console.log('📦 Types des articles:', nouvelleCommande.items.map(i => ({
-        nom: i.nom,
-        type: i.type_vente
-      })));
-
-      // 5. Appeler le callback parent
       await onCommandeValidee(nouvelleCommande);
 
-      // ouvrir le ticket
       setCommandeImprimee(nouvelleCommande);
 
-      // 6. Réinitialiser
       setPanier([]);
       setClient({ nom: '', prenom: '', telephone: '', adresse: '' });
       setEditionPrix(null);
       setEditionQuantite(null);
       setCodeBarre('');
 
-      // 7. Focus sur le champ code barre
       if (inputCodeBarreRef.current) {
         inputCodeBarreRef.current.focus();
       }
 
-      // 8. Message de succès adapté
       if (apiError && !commandeCreee) {
-        // Échec complet
         setApiError({
           type: 'error',
           message: 'Erreur serveur. Commande sauvegardée localement.',
@@ -1298,23 +1230,18 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
 
         addNotification('warning', `Commande ${nouvelleCommande.numero_commande} sauvegardée localement (${totalTTCCalcule.toLocaleString()} FCFA)`);
       } else if (commandeCreee && isPusherError(apiError)) {
-        // Succès avec erreur Pusher
         addNotification('success', `Commande ${nouvelleCommande.numero_commande} créée avec succès (${totalTTCCalcule.toLocaleString()} FCFA) !`);
         addNotification('info', 'Les notifications temps-réel sont temporairement indisponibles');
       } else {
-        // Succès complet
         addNotification('success', `Commande ${nouvelleCommande.numero_commande} créée avec succès (${totalTTCCalcule.toLocaleString()} FCFA) !`);
       }
 
     } catch (error) {
-      console.error('❌ Erreur validation commande:', error);
 
-      // Analyser les types pour la commande locale
       const typesDansPanier = [...new Set(panier.filter(item => item).map(item => item.type_vente))];
       const typeVenteGlobalCommande = typesDansPanier.includes('detail') && typesDansPanier.includes('gros') ? 'mixte' :
                                     typesDansPanier.includes('gros') ? 'gros' : 'detail';
 
-      // Recalculer les totaux pour la commande locale
       let totalHTCalcule = 0;
       panier.filter(item => item).forEach(item => {
         const prix = Number(item.prix_vente) || 0;
@@ -1326,13 +1253,11 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
       const tvaCalculee = tvaActive ? Math.round(totalHTCalcule * 0.18) : 0;
       const totalTTCCalcule = totalHTCalcule + tvaCalculee;
 
-      // Créer une commande locale en cas d'erreur inattendue
       const commandeLocale = {
         id: `local-${Date.now()}`,
         numero_commande: `CMD-LOCAL-${Date.now().toString().slice(-8)}`,
         date: new Date().toISOString(),
         
-        // ✅ TYPE DE VENTE GLOBAL
         type_vente: typeVenteGlobalCommande,
         type_vente_affichage: getTypeVenteAffichage(typeVenteGlobalCommande),
         
@@ -1345,7 +1270,6 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
         },
         vendeur: getVendeurApiData(),
         
-        // ✅ ITEMS AVEC LEUR TYPE
         items: panier.filter(item => item).map(item => ({
           produit_id: item.id,
           nom: item.nom,
@@ -1410,14 +1334,12 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
       setCodeBarre('');
       setApiError(null);
 
-      // Focus sur le champ code barre après annulation
       if (inputCodeBarreRef.current) {
         inputCodeBarreRef.current.focus();
       }
       addNotification('info', 'Commande annulée avec succès');
     };
 
-    // Créer une modal de confirmation personnalisée
     const modalId = Date.now();
     const modal = document.createElement('div');
     modal.id = `confirm-modal-${modalId}`;
@@ -1446,7 +1368,6 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
     
     document.body.appendChild(modal);
 
-    // Gérer les clics
     document.getElementById(`confirm-cancel-${modalId}`).onclick = () => {
       document.body.removeChild(modal);
       confirmAnnulation();
@@ -1460,6 +1381,8 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
   const rechargerProduits = async () => {
     await chargerProduits(1);
     setCurrentPage(1);
+    setRechercheProduit('');
+    setRechercheEnCours(false);
     addNotification('success', 'Produits rechargés avec succès');
   };
 
@@ -1473,7 +1396,6 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
     return acc;
   }, {});
 
-  // Fonction pour afficher les produits filtrés
   const renderProduitsFiltres = () => {
     if (!produitsFiltres || !Array.isArray(produitsFiltres)) {
       return (
@@ -1506,7 +1428,6 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
               className="bg-gray-50 rounded-lg p-3 border-2 border-gray-200 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-[#472ead] flex flex-col min-w-0 w-full"
             >
               <div className="overflow-hidden">
-                {/* Titre du produit avec gestion du débordement */}
                 <h4 className="text-sm font-semibold text-gray-800 mb-2 truncate" title={produit.nom || 'Produit sans nom'}>
                   {produit.nom || 'Produit sans nom'}
                 </h4>
@@ -1524,9 +1445,7 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
                   </p>
                 </div>
 
-                {/* Prix - Section compacte */}
                 <div className="space-y-1.5 mb-2">
-                  {/* Prix détail */}
                   <div className="bg-white p-1.5 rounded border border-gray-200">
                     <div className="font-semibold text-gray-800 flex items-center gap-1 text-xs">
                       <FontAwesomeIcon icon={faShoppingBag} className="text-[#472ead] flex-shrink-0" />
@@ -1541,7 +1460,6 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
                     </div>
                   </div>
 
-                  {/* Prix gros */}
                   <div className="bg-white p-1.5 rounded border border-gray-200">
                     <div className="font-semibold text-gray-800 flex items-center gap-1 text-xs">
                       <FontAwesomeIcon icon={faPallet} className="text-[#f58020] flex-shrink-0" />
@@ -1563,7 +1481,6 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
                 </div>
               </div>
 
-              {/* Boutons d'action */}
               <div className="mt-2 flex gap-1.5">
                 <button
                   onClick={() => ajouterAuPanier(produit, 'détail')}
@@ -1603,7 +1520,6 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
 
   return (
     <div className="p-5 min-h-screen bg-gray-50 box-border">
-      {/* Styles CSS pour les animations */}
       <style>
         {`
           @keyframes slideInRight {
@@ -1622,7 +1538,6 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
         `}
       </style>
 
-      {/* Notifications */}
       {notifications.map(notification => (
         <Notification
           key={notification.id}
@@ -1646,7 +1561,6 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
             <div className="font-semibold">{new Date().toLocaleDateString('fr-FR')}</div>
             <div className="text-xs text-gray-600">{new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</div>
 
-            {/* Afficher les infos du vendeur */}
             <div className="mt-2 flex items-center gap-2 bg-gray-100 px-3 py-1 rounded-lg">
               {loadingVendeur ? (
                 <FontAwesomeIcon icon={faSpinner} className="animate-spin text-xs text-gray-500" />
@@ -1667,7 +1581,6 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
           </div>
         </div>
 
-        {/* Afficher les erreurs API */}
         {apiError && (
           <div className={`mb-4 rounded-lg p-3 flex items-center justify-between ${apiError.type === 'critical'
               ? 'bg-red-50 border border-red-200'
@@ -1714,9 +1627,7 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 h-[calc(100vh-180px)] box-border">
-        {/* Section gauche : Produits */}
         <div className="lg:col-span-2 bg-white rounded-xl p-5 shadow-sm overflow-y-auto box-border">
-          {/* Type de vente global */}
           <div className="mb-5 pb-5 border-b border-gray-100">
             <h3 className="text-base text-gray-800 mb-3 font-semibold flex items-center gap-2">
               <FontAwesomeIcon icon={faShoppingBag} className="text-[#472ead] text-sm" />
@@ -1750,7 +1661,6 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
             </div>
           </div>
 
-          {/* Code barre */}
           <div className="mb-5 pb-5 border-b border-gray-100">
             <h3 className="text-base text-gray-800 mb-3 font-semibold flex items-center gap-2">
               <FontAwesomeIcon icon={faBarcode} className="text-[#472ead] text-sm" />
@@ -1781,27 +1691,37 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
             </small>
           </div>
 
-          {/* Recherche manuelle */}
           <div className="mb-5 pb-5 border-b border-gray-100">
             <h3 className="text-base text-gray-800 mb-3 font-semibold flex items-center gap-2">
               <FontAwesomeIcon icon={faSearch} className="text-[#472ead] text-sm" />
               Recherche Produits
             </h3>
-            <input
-              type="text"
-              placeholder="Nom, code barre ou catégorie..."
-              value={rechercheProduit}
-              onChange={(e) => setRechercheProduit(e.target.value)}
-              className="w-full py-2 px-3 text-sm border-2 border-gray-200 rounded-lg transition-colors focus:border-[#472ead] focus:outline-none"
-            />
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Nom, code barre ou catégorie..."
+                value={rechercheProduit}
+                onChange={(e) => setRechercheProduit(e.target.value)}
+                className="w-full py-2 px-3 text-sm border-2 border-gray-200 rounded-lg transition-colors focus:border-[#472ead] focus:outline-none pr-10"
+              />
+              {(loadingRecherche || loadingProduits) && (
+                <div className="absolute right-3 top-2.5">
+                  <FontAwesomeIcon icon={faSpinner} className="animate-spin text-gray-400" />
+                </div>
+              )}
+            </div>
+            {rechercheEnCours && totalProduitsFiltres > 0 && (
+              <p className="text-xs text-gray-500 mt-2">
+                {totalProduitsFiltres} produit(s) trouvé(s) - Page {rechercheCurrentPage}/{rechercheLastPage}
+              </p>
+            )}
           </div>
 
-          {/* Liste des produits disponibles */}
           <div className="overflow-hidden">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-base text-gray-800 font-semibold flex items-center gap-2">
                 <FontAwesomeIcon icon={faBox} className="text-[#472ead] text-sm" />
-                Produits Disponibles 
+                {rechercheEnCours ? 'Résultats de recherche' : 'Produits Disponibles'}
                 {produitsFiltres.length > 0 && (
                   <span className="ml-2 text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full">
                     {produitsFiltres.length} produits
@@ -1809,7 +1729,7 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
                 )}
               </h3>
               <div className="flex items-center gap-2">
-                {loadingProduits && (
+                {(loadingProduits || loadingRecherche) && (
                   <div className="flex items-center gap-2 text-sm text-gray-500">
                     <FontAwesomeIcon icon={faSpinner} className="animate-spin" />
                     Chargement...
@@ -1818,7 +1738,7 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
                 <button
                   onClick={rechargerProduits}
                   className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 py-1 px-3 rounded-lg flex items-center gap-1 transition-colors"
-                  disabled={loadingProduits}
+                  disabled={loadingProduits || loadingRecherche}
                 >
                   <FontAwesomeIcon icon={faRedo} className={loadingProduits ? 'animate-spin' : ''} />
                   Recharger
@@ -1837,41 +1757,65 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
               <>
                 {renderProduitsFiltres()}
 
-                {/* 🔹 Pagination - visible seulement si plusieurs pages */}
-               {lastPage > 1 && (
-  <div className="flex justify-center items-center gap-4 mt-6 pt-4 border-t border-gray-200">
-    <button
-      disabled={currentPage === 1 || loadingProduits}
-      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-      className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-    >
-      <FontAwesomeIcon icon={faChevronLeft} className="text-xs" />
-      Précédent
-    </button>
+                {rechercheEnCours ? (
+                  rechercheLastPage > 1 && (
+                    <div className="flex justify-center items-center gap-4 mt-6 pt-4 border-t border-gray-200">
+                      <button
+                        disabled={rechercheCurrentPage === 1 || loadingRecherche}
+                        onClick={() => setRechercheCurrentPage(prev => Math.max(1, prev - 1))}
+                        className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                      >
+                        <FontAwesomeIcon icon={faChevronLeft} className="text-xs" />
+                        Précédent
+                      </button>
 
-    <span className="font-semibold text-sm bg-indigo-50 text-indigo-700 px-4 py-2 rounded-lg">
-      Page {currentPage} / {lastPage} 
-      <span className="ml-2 text-xs text-gray-500"></span> {/* ← Ajout */}
-    </span>
+                      <span className="font-semibold text-sm bg-indigo-50 text-indigo-700 px-4 py-2 rounded-lg">
+                        Page {rechercheCurrentPage} / {rechercheLastPage}
+                      </span>
 
-    <button
-      disabled={currentPage === lastPage || loadingProduits}
-      onClick={() => setCurrentPage(prev => Math.min(lastPage, prev + 1))}
-      className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-    >
-      Suivant
-      <FontAwesomeIcon icon={faChevronRight} className="text-xs" />
-    </button>
-  </div>
-)}
+                      <button
+                        disabled={rechercheCurrentPage === rechercheLastPage || loadingRecherche}
+                        onClick={() => setRechercheCurrentPage(prev => Math.min(rechercheLastPage, prev + 1))}
+                        className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                      >
+                        Suivant
+                        <FontAwesomeIcon icon={faChevronRight} className="text-xs" />
+                      </button>
+                    </div>
+                  )
+                ) : (
+                  lastPage > 1 && (
+                    <div className="flex justify-center items-center gap-4 mt-6 pt-4 border-t border-gray-200">
+                      <button
+                        disabled={currentPage === 1 || loadingProduits}
+                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                        className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                      >
+                        <FontAwesomeIcon icon={faChevronLeft} className="text-xs" />
+                        Précédent
+                      </button>
+
+                      <span className="font-semibold text-sm bg-indigo-50 text-indigo-700 px-4 py-2 rounded-lg">
+                        Page {currentPage} / {lastPage}
+                      </span>
+
+                      <button
+                        disabled={currentPage === lastPage || loadingProduits}
+                        onClick={() => setCurrentPage(prev => Math.min(lastPage, prev + 1))}
+                        className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                      >
+                        Suivant
+                        <FontAwesomeIcon icon={faChevronRight} className="text-xs" />
+                      </button>
+                    </div>
+                  )
+                )}
               </>
             )}
           </div>
         </div>
 
-        {/* Section droite : Panier et Client */}
         <div className="space-y-5 overflow-y-auto">
-          {/* Informations client - SECTION AMÉLIORÉE */}
           <div className="bg-white rounded-xl p-5 shadow-sm relative">
             <h3 className="text-base text-gray-800 mb-5 font-semibold flex items-center gap-2">
               <FontAwesomeIcon icon={faUser} className="text-[#472ead] text-sm" />
@@ -1879,7 +1823,6 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
             </h3>
             <div className="space-y-5">
               
-              {/* Nom et Prénom - ligne séparée avec plus d'espace */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-xs font-medium text-gray-600 block">
@@ -1917,7 +1860,6 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
                 </div>
               </div>
 
-              {/* Téléphone - avec plus d'espace au-dessus */}
               <div className="space-y-2 pt-1">
                 <label className="text-xs font-medium text-gray-600 block">
                   Téléphone
@@ -1935,7 +1877,6 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
                 </div>
               </div>
 
-              {/* Adresse - avec plus d'espace au-dessus */}
               <div className="space-y-2 pt-1">
                 <label className="text-xs font-medium text-gray-600 block">
                   Adresse
@@ -1953,7 +1894,6 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
                 </div>
               </div>
 
-              {/* Aperçu du nom complet - avec plus de marge au-dessus */}
               {(client.nom.trim() || client.prenom.trim()) && (
                 <div className="mt-4 p-3 bg-gradient-to-r from-emerald-50 to-green-50 rounded-lg border border-emerald-200">
                   <div className="flex items-center gap-2">
@@ -1970,7 +1910,6 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
                 </div>
               )}
 
-              {/* Indicateur de champs obligatoires */}
               <div className="text-xs text-gray-500 pt-2 border-t border-gray-100">
                 <FontAwesomeIcon icon={faInfoCircle} className="text-xs mr-1" />
                 Les champs marqués d'une astérisque (*) sont obligatoires
@@ -1978,7 +1917,6 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
             </div>
           </div>
 
-          {/* Panier */}
           <div className="bg-white rounded-xl p-5 shadow-sm flex flex-col flex-1 overflow-y-auto">
             <div className="flex justify-between items-center mb-4 pb-4 border-b border-gray-100">
               <h3 className="text-base text-gray-800 font-bold flex items-center gap-2">
@@ -1998,7 +1936,6 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
               </div>
             ) : (
               <>
-                {/* Contrôle TVA */}
                 <div className="bg-gray-50 border-2 border-gray-200 rounded-lg p-4 mb-4">
                   <div className="flex items-center justify-between">
                     <label className="flex items-center gap-3 cursor-pointer font-medium text-gray-800 text-sm">
@@ -2022,14 +1959,12 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
                       </span>
                     </label>
                     
-                    {/* Indicateur visuel de l'état de la TVA */}
                     <span className={`text-xs px-2 py-1 rounded-full ${tvaActive ? 'bg-green-100 text-green-700 font-semibold' : 'bg-gray-100 text-gray-500'}`}>
                       {tvaActive ? '✓ TVA appliquée' : 'TVA non appliquée'}
                     </span>
                   </div>
                 </div>
 
-                {/* Affichage groupé par type de vente */}
                 {Object.entries(produitsParType).map(([typeVente, produits]) => (
                   <div key={typeVente} className="mb-4 border-2 border-gray-200 rounded-lg overflow-hidden">
                     <div className="bg-gray-50 py-3 px-4 flex justify-between items-center border-b-2 border-gray-200">
@@ -2200,20 +2135,17 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
                   </div>
                 ))}
 
-                {/* Résumé - TVA */}
                 <div className="bg-gray-50 rounded-lg p-4 mb-4 border-2 border-gray-200">
                   <h4 className="text-sm text-gray-800 mb-3 font-semibold flex items-center gap-2">
                     <FontAwesomeIcon icon={faReceipt} className="text-[#472ead] text-sm" />
                     Résumé de la commande
                   </h4>
                   
-                  {/* Total HT */}
                   <div className="flex justify-between mb-2 pb-2 border-b border-gray-200 text-sm">
                     <span>Total HT:</span>
                     <span className="font-medium">{totalHT.toLocaleString()} FCFA</span>
                   </div>
                   
-                  {/* TVA - Toujours affichée avec gestion conditionnelle */}
                   <div className="flex justify-between mb-2 pb-2 border-b border-gray-200 text-sm">
                     <span>TVA (18%):</span>
                     <span className={`font-medium ${tvaActive ? 'text-amber-600' : 'text-gray-400'}`}>
@@ -2221,7 +2153,6 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
                     </span>
                   </div>
                   
-                  {/* Total TTC */}
                   <div className="flex justify-between text-sm font-bold text-gray-800 mt-2 pt-2 border-t-2 border-gray-300">
                     <strong>Total TTC:</strong>
                     <strong className={tvaActive ? 'text-green-600' : 'text-gray-800'}>
@@ -2229,14 +2160,12 @@ const [itemsPerPage] = useState(12); // ← Ajoutez cette ligne pour définir 12
                     </strong>
                   </div>
                   
-                  {/* Montant en base de données */}
                   <div className="mt-2 text-xs text-center font-semibold p-2 bg-indigo-50 text-indigo-700 rounded border border-indigo-200">
                     <FontAwesomeIcon icon={faDatabase} className="mr-1" />
                     Montant: {totalTTC.toLocaleString()} FCFA
                   </div>
                 </div>
 
-                {/* Actions */}
                 <div className="flex flex-col gap-3 mt-auto">
                   {apiError && (
                     <div className="mb-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">

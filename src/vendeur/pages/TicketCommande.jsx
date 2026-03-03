@@ -8,12 +8,11 @@ const TicketCommande = forwardRef(({ commande }, ref) => {
 
   return (
     <>
-      {/* ===== CONFIGURATION IMPRESSION THERMIQUE ===== */}
       <style>
         {`
           @media print {
             @page {
-              size: 58mm auto;   /* Largeur bobine */
+              size: 58mm auto;
               margin: 0;
             }
 
@@ -39,13 +38,11 @@ const TicketCommande = forwardRef(({ commande }, ref) => {
         `}
       </style>
 
-      {/* ===== TICKET ===== */}
       <div
         ref={ref}
         className="ticket-print bg-white text-black font-mono text-center"
-        style={{ width: "58mm" }}  // IMPORTANT
+        style={{ width: "58mm" }}
       >
-        {/* EN-TÊTE */}
         <div className="mb-2">
           <h1 className="text-lg font-bold tracking-wide">LPD</h1>
           <p className="text-xs uppercase tracking-wider">
@@ -55,7 +52,6 @@ const TicketCommande = forwardRef(({ commande }, ref) => {
 
         <div className="border-t border-dashed border-black my-2" />
 
-        {/* DATE & VENDEUR */}
         <div className="text-xs mb-2 space-y-1">
           <p>
             {date.toLocaleDateString('fr-FR')} —{" "}
@@ -66,7 +62,6 @@ const TicketCommande = forwardRef(({ commande }, ref) => {
 
         <div className="border-t border-dashed border-black my-2" />
 
-        {/* CLIENT */}
         <div className="mb-2">
           <p className="text-xs">Client</p>
           <p className="text-sm font-bold">
@@ -76,11 +71,10 @@ const TicketCommande = forwardRef(({ commande }, ref) => {
 
         <div className="border-t border-dashed border-black my-2" />
 
-        {/* QR CODE */}
         <div className="flex justify-center my-3">
           <QRCodeCanvas
             value={commande.numero_commande}
-            size={120}   // réduit pour 58mm
+            size={120}
           />
         </div>
 

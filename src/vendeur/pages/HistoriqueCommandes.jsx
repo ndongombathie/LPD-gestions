@@ -50,7 +50,6 @@ import { commandesAPI } from '../../services/api/commandes';
 import profileAPI from '../../services/api/profile';
 
 const HistoriqueCommandes = ({ sellerName = null }) => {
-  // États pour les données
   const [commandes, setCommandes] = useState([]);
   const [commandesFiltrees, setCommandesFiltrees] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -66,10 +65,8 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     montant_total: 0
   });
 
-  // États pour les filtres
   const [filtreStatut, setFiltreStatut] = useState('tous');
   const [filtreTypeVente, setFiltreTypeVente] = useState('tous');
-  // MODIFICATION: Valeur par défaut 'aujourdhui' au lieu de 'tous'
   const [filtreDate, setFiltreDate] = useState('aujourdhui');
   const [dateDebut, setDateDebut] = useState('');
   const [dateFin, setDateFin] = useState('');
@@ -83,7 +80,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
   const [sortField, setSortField] = useState('date');
   const [sortDirection, setSortDirection] = useState('desc');
   
-  // États pour la pagination
   const [pagination, setPagination] = useState({
     currentPage: 1,
     itemsPerPage: 10,
@@ -91,20 +87,15 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     totalPages: 1
   });
 
-  // États pour la pagination des commandes filtrées (affichage)
   const [commandesPaginees, setCommandesPaginees] = useState([]);
   
-  // État pour le rafraîchissement
   const [lastUpdate, setLastUpdate] = useState(Date.now());
   const [showRefreshNotification, setShowRefreshNotification] = useState(false);
   
-  // État pour la progression du chargement
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [chargementComplet, setChargementComplet] = useState(false);
 
-  // ---------- Fonction pour charger TOUTES les commandes ----------
   const chargerToutesLesCommandes = useCallback(async (showNotification = false) => {
-    console.log('🚀 Début chargement de TOUTES les commandes...');
     setLoading(true);
     setError(null);
     setChargementComplet(false);
@@ -117,22 +108,18 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
       let aPlusDePages = true;
       let totalPages = 1;
 
-      // Boucle pour charger toutes les pages
       while (aPlusDePages) {
-        console.log(`📦 Chargement page ${pageActuelle}...`);
         
         setProgress({ 
           current: pageActuelle, 
           total: totalPages > 0 ? totalPages : '?' 
         });
         
-        // Appel API avec pagination
         const response = await commandesAPI.getAll({
           page: pageActuelle,
           perPage: 100,
         });
 
-        // Extraire les données selon le format de réponse
         let commandesPage = [];
         let paginationInfo = null;
         
@@ -146,14 +133,10 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
           paginationInfo = response.data;
         }
 
-        // Récupérer les infos de pagination
         if (paginationInfo) {
           totalPages = paginationInfo.last_page || paginationInfo.total_pages || 1;
         }
 
-        console.log(`📊 Page ${pageActuelle}: ${commandesPage.length} commandes reçues`);
-
-        // Transformer les commandes de cette page
         const commandesTransformeesPage = commandesPage.map(commande => {
           const produits = extraireProduitsDeLaCommande(commande);
           const typeVente = determinerTypeVente(commande);
@@ -241,7 +224,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
 
         toutesLesCommandes = [...toutesLesCommandes, ...commandesTransformeesPage];
         
-        // Déterminer s'il y a d'autres pages
         pageActuelle++;
         
         if (paginationInfo) {
@@ -252,15 +234,11 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
           aPlusDePages = commandesPage.length === 100;
         }
         
-        // Petite pause pour éviter de surcharger l'API
         if (aPlusDePages) {
           await new Promise(resolve => setTimeout(resolve, 100));
         }
       }
 
-      console.log(`✅ TOTAL FINAL: ${toutesLesCommandes.length} commandes chargées`);
-
-      // Trier par date (plus récent d'abord)
       const commandesTriees = toutesLesCommandes.sort((a, b) => 
         new Date(b.date) - new Date(a.date)
       );
@@ -268,7 +246,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
       setCommandes(commandesTriees);
       setCommandesFiltrees(commandesTriees);
       
-      // Mettre à jour la pagination
       setPagination(prev => ({
         ...prev,
         totalItems: commandesTriees.length,
@@ -278,7 +255,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
       
       chargerStatistiques(commandesTriees);
       
-      // Sauvegarder en cache
       try {
         localStorage.setItem('commandes_cache', JSON.stringify({
           data: commandesTriees,
@@ -286,7 +262,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
           count: commandesTriees.length
         }));
       } catch (e) {
-        console.warn('Impossible de sauvegarder en cache:', e);
       }
       
       setChargementComplet(true);
@@ -297,15 +272,12 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
       }
       
     } catch (error) {
-      console.error('❌ Erreur lors du chargement des commandes:', error);
       setError(`Impossible de charger les commandes: ${error.message}`);
       
-      // Essayer de charger depuis le cache
       try {
         const cached = localStorage.getItem('commandes_cache');
         if (cached) {
           const { data, timestamp } = JSON.parse(cached);
-          console.log(`📦 Utilisation du cache du ${new Date(timestamp).toLocaleString()} avec ${data.length} commandes`);
           setCommandes(data);
           setCommandesFiltrees(data);
           setPagination(prev => ({
@@ -318,7 +290,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
           setChargementComplet(true);
         }
       } catch (cacheError) {
-        console.error('Erreur cache:', cacheError);
       }
       
     } finally {
@@ -328,7 +299,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     }
   }, [sellerName, vendeurInfo]);
 
-  // ---------- Fonction améliorée pour détecter si la TVA est appliquée ----------
   const estTVAAppliquee = (commande) => {
     if (!commande) return false;
     
@@ -394,7 +364,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     return false;
   };
 
-  // ---------- Mappage des statuts ----------
   const mapAPIStatut = (statutAPI) => {
     const mapping = {
       'validee': 'complétée',
@@ -421,7 +390,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     return mapping[statut] || statutAPI || 'en_attente_paiement';
   };
 
-  // ---------- Fonction pour extraire les produits ----------
   const extraireProduitsDeLaCommande = (commandeData) => {
     let produits = [];
     
@@ -480,7 +448,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     return produits;
   };
 
-  // ---------- Charger les informations du vendeur ----------
   const chargerInfosVendeur = useCallback(async () => {
     try {
       const response = await profileAPI.getProfile();
@@ -488,11 +455,9 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
         setVendeurInfo(response.data);
       }
     } catch (error) {
-      console.warn('Impossible de charger les infos du vendeur:', error);
     }
   }, []);
 
-  // ---------- Formater le nom complet du client ----------
   const formaterNomClient = (client) => {
     if (!client) return 'Client';
     
@@ -516,7 +481,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     return 'Client';
   };
 
-  // ---------- Vérifier si une commande est d'aujourd'hui ----------
   const estAujourdhui = (dateString) => {
     try {
       const aujourdhui = new Date();
@@ -532,7 +496,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     }
   };
 
-  // ---------- Charger les statistiques ----------
   const chargerStatistiques = useCallback((commandesList) => {
     const commandesAujourdhui = commandesList.filter(c => estAujourdhui(c.date));
     
@@ -586,7 +549,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     setStats(statsCalc);
   }, []);
 
-  // ---------- Déterminer le type de vente ----------
   const determinerTypeVente = (commande) => {
     if (commande.type_vente) {
       const typeStr = commande.type_vente.toString().toLowerCase().trim();
@@ -637,7 +599,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     return 'détail';
   };
 
-  // ---------- Charger les détails d'une commande ----------
   const chargerDetailsCommande = async (commande) => {
     if (!commande) return;
     
@@ -743,7 +704,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
         setCommandeDetails(commande);
       }
     } catch (error) {
-      console.error('❌ Erreur lors du chargement des détails:', error);
       setError(`Erreur: ${error.message}`);
       setCommandeDetails(commande);
     } finally {
@@ -752,12 +712,10 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     }
   };
 
-  // ---------- Ouvrir les détails ----------
   const ouvrirDetails = async (commande) => {
     await chargerDetailsCommande(commande);
   };
 
-  // ---------- Écouter les événements ----------
   useEffect(() => {
     const handleCommandeCreee = (event) => {
       chargerToutesLesCommandes(true);
@@ -770,12 +728,10 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     };
   }, [chargerToutesLesCommandes]);
 
-  // ---------- Effet initial ----------
   useEffect(() => {
     chargerToutesLesCommandes();
   }, [chargerToutesLesCommandes]);
 
-  // ---------- Effet pour les filtres ----------
   useEffect(() => {
     if (commandes.length === 0) return;
     
@@ -851,7 +807,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
       });
     }
     
-    // Tri
     commandesFiltreesTemp.sort((a, b) => {
       let valA, valB;
       
@@ -884,7 +839,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     
     setCommandesFiltrees(commandesFiltreesTemp);
     
-    // Reset à la première page quand les filtres changent
     setPagination(prev => ({
       ...prev,
       totalItems: commandesFiltreesTemp.length,
@@ -894,7 +848,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     
   }, [commandes, filtreStatut, filtreTypeVente, filtreDate, dateDebut, dateFin, recherche, sortField, sortDirection]);
 
-  // ---------- Effet pour la pagination ----------
   useEffect(() => {
     const startIndex = (pagination.currentPage - 1) * pagination.itemsPerPage;
     const endIndex = startIndex + pagination.itemsPerPage;
@@ -903,21 +856,18 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     setCommandesPaginees(commandesPage);
   }, [commandesFiltrees, pagination.currentPage, pagination.itemsPerPage]);
 
-  // ---------- Effet pour les stats ----------
   useEffect(() => {
     if (commandes.length > 0) {
       chargerStatistiques(commandes);
     }
   }, [commandes, chargerStatistiques]);
 
-  // ---------- Fonctions de pagination ----------
   const goToPage = (page) => {
     setPagination(prev => ({
       ...prev,
       currentPage: Math.max(1, Math.min(page, prev.totalPages))
     }));
     
-    // Scroll en haut de la liste
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -946,17 +896,15 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     }));
   };
 
-  // MODIFICATION: Fonction de réinitialisation avec 'aujourdhui' par défaut
   const reinitialiserFiltres = () => {
     setFiltreStatut('tous');
     setFiltreTypeVente('tous');
-    setFiltreDate('aujourdhui'); // ← Changé de 'tous' à 'aujourdhui'
+    setFiltreDate('aujourdhui');
     setDateDebut('');
     setDateFin('');
     setRecherche('');
   };
 
-  // ---------- Helpers ----------
   const getStatutIcone = (statut) => {
     switch (statut) {
       case 'complétée': return <FontAwesomeIcon icon={faCheckCircle} />;
@@ -1067,11 +1015,9 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
 
   const donneesModal = commandeDetails || commandeSelectionnee;
 
-  // Calcul des indices pour l'affichage
   const startIndex = (pagination.currentPage - 1) * pagination.itemsPerPage + 1;
   const endIndex = Math.min(pagination.currentPage * pagination.itemsPerPage, pagination.totalItems);
 
-  // Génération des numéros de page
   const getPageNumbers = () => {
     const delta = 2;
     const range = [];
@@ -1101,7 +1047,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
-      {/* Notification */}
       {showRefreshNotification && (
         <div className="fixed top-4 right-4 z-50 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 text-sm animate-slide-in">
           <FontAwesomeIcon icon={faBell} className="animate-bounce" />
@@ -1109,7 +1054,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
         </div>
       )}
 
-      {/* Barre de progression */}
       {loading && !chargementComplet && (
         <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-white px-4 py-2 rounded-lg shadow-lg border border-blue-200 flex items-center gap-3 text-sm">
           <FontAwesomeIcon icon={faSpinner} className="animate-spin text-blue-600" />
@@ -1123,7 +1067,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
         </div>
       )}
 
-      {/* Message d'erreur */}
       {error && (
         <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 text-sm">
           <FontAwesomeIcon icon={faExclamationTriangle} className="text-red-500" />
@@ -1134,7 +1077,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
         </div>
       )}
 
-      {/* En-tête */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -1167,7 +1109,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
           </div>
         </div>
 
-        {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <div className="bg-white rounded-lg shadow p-3 border border-gray-200">
             <div className="flex items-center justify-between">
@@ -1207,7 +1148,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
         </div>
       </div>
 
-      {/* Filtres */}
       <div className="bg-white rounded-lg shadow border border-gray-200 mb-6">
         <div 
           className="p-3 cursor-pointer hover:bg-gray-50 flex items-center justify-between"
@@ -1218,7 +1158,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
               <FontAwesomeIcon icon={faFilter} className="text-blue-600 text-sm" />
             </div>
             <span className="text-sm font-medium text-gray-900">Filtres</span>
-            {/* MODIFICATION: 'aujourdhui' est maintenant la valeur par défaut, donc on vérifie si différent de 'aujourdhui' */}
             {(filtreStatut !== 'tous' || filtreTypeVente !== 'tous' || filtreDate !== 'aujourdhui' || recherche) && (
               <span className="px-1.5 py-0.5 bg-blue-100 text-blue-800 rounded-full text-xs">
                 Actifs
@@ -1319,7 +1258,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
         )}
       </div>
 
-      {/* Sélecteur de nombre d'éléments par page */}
       <div className="flex justify-between items-center mb-3">
         <div className="text-sm text-gray-600">
           Total: <span className="font-bold">{pagination.totalItems}</span> commandes
@@ -1342,7 +1280,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
         </div>
       </div>
 
-      {/* Liste des commandes */}
       <div className="bg-white rounded-lg shadow border border-gray-200">
         {loading && !chargementComplet && progress.total === 0 ? (
           <div className="p-8 text-center">
@@ -1438,7 +1375,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
           </div>
         )}
 
-        {/* Pagination */}
         {commandesFiltrees.length > 0 && (
           <div className="px-3 py-3 border-t border-gray-200 bg-gray-50">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1506,7 +1442,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
         )}
       </div>
 
-      {/* Modal des détails */}
       {modalOuvert && donneesModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={fermerDetails}></div>
@@ -1531,7 +1466,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
                 </div>
               ) : (
                 <>
-                  {/* Infos commande */}
                   <div className="bg-gray-50 rounded-lg p-3">
                     <h4 className="text-sm font-semibold mb-2">Informations</h4>
                     <div className="grid grid-cols-2 gap-2 text-sm">
@@ -1559,7 +1493,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
                     </div>
                   </div>
 
-                  {/* Client */}
                   <div className="bg-gray-50 rounded-lg p-3">
                     <h4 className="text-sm font-semibold mb-2">Client</h4>
                     <div className="space-y-1 text-sm">
@@ -1573,13 +1506,11 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
                     </div>
                   </div>
 
-                  {/* Produits */}
                   <div>
                     <h4 className="text-sm font-semibold mb-2">Produits ({donneesModal.produits?.length || 0})</h4>
                     {renderProduitsTable()}
                   </div>
 
-                  {/* Totaux */}
                   <div className="bg-gray-50 rounded-lg p-3">
                     <div className="space-y-1 text-sm">
                       <div className="flex justify-between">

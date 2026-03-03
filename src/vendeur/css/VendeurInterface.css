@@ -1,4 +1,3 @@
-/* Styles généraux */
 * {
   margin: 0;
   padding: 0;
@@ -43,7 +42,6 @@ body {
   margin-top: 70px;
 }
 
-/* Header */
 .Header {
   position: fixed;
   top: 0;
@@ -60,7 +58,6 @@ body {
   transition: left 0.3s ease;
 }
 
-/* Bouton menu hamburger */
 .menu-toggle {
   display: none;
   background: none;
@@ -78,7 +75,6 @@ body {
   background-color: #f7fafc;
 }
 
-/* Sidebar */
 .Sidebar {
   position: fixed;
   top: 0;
@@ -92,7 +88,6 @@ body {
   transition: transform 0.3s ease;
 }
 
-/* Overlay pour mobile */
 .sidebar-overlay {
   display: none;
   position: fixed;
@@ -114,7 +109,6 @@ body {
   }
 }
 
-/* Responsive */
 @media (max-width: 1024px) {
   .main-content {
     margin-left: 0;
@@ -141,7 +135,6 @@ body {
     display: block;
   }
   
-  /* Ajustement pour que le contenu ne soit pas caché derrière le header */
   .vendeur-contenu-principal {
     padding-top: 1rem;
   }
@@ -164,7 +157,6 @@ body {
     margin: 1rem;
   }
   
-  /* Ajustement des cartes et tableaux */
   .card {
     padding: 1rem;
     margin-bottom: 1rem;
@@ -175,7 +167,6 @@ body {
     padding: 0 0.5rem;
   }
   
-  /* Ajustement des modals sur mobile */
   .modal-content {
     padding: 1.5rem;
     max-width: 95%;
@@ -208,7 +199,6 @@ body {
   }
 }
 
-/* Page de login */
 .login-page {
   display: flex;
   justify-content: center;
@@ -232,7 +222,6 @@ body {
   width: 90%;
 }
 
-/* Cartes et conteneurs */
 .card {
   background: white;
   border-radius: 10px;
@@ -244,7 +233,6 @@ body {
   overflow-x: auto;
 }
 
-/* Tableaux responsives */
 .table-responsive {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -253,10 +241,9 @@ body {
 }
 
 .table-responsive table {
-  min-width: 600px; /* Empêche le rétrécissement sur mobile */
+  min-width: 600px;
 }
 
-/* Ajustement pour les modals */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -283,7 +270,6 @@ body {
   margin: 15px;
 }
 
-/* Animation pour le sidebar */
 @media (prefers-reduced-motion: reduce) {
   .Sidebar,
   .main-content,
@@ -293,7 +279,6 @@ body {
   }
 }
 
-/* Support pour les écrans très larges */
 @media (min-width: 1920px) {
   .main-content {
     max-width: calc(100% - 260px);
@@ -309,7 +294,6 @@ body {
   }
 }
 
-/* Amélioration du scroll sur mobile */
 @media (max-width: 768px) {
   .vendeur-contenu-principal {
     -webkit-overflow-scrolling: touch;
@@ -319,7 +303,7 @@ body {
     -webkit-overflow-scrolling: touch;
   }
 }
-/* Overlay pour le sidebar mobile */
+
 .sidebar-overlay {
   display: none;
   position: fixed;
@@ -347,7 +331,6 @@ body {
   }
 }
 
-/* Ajustements pour le header sur mobile */
 @media (max-width: 1024px) {
   .main-content {
     margin-left: 0 !important;
@@ -358,7 +341,6 @@ body {
   }
 }
 
-/* Pour les très petits écrans */
 @media (max-width: 480px) {
   .vendeur-contenu-principal {
     padding: 0.75rem;

@@ -1,7 +1,3 @@
-// ==========================================================
-// 🧠 Header.jsx — LPD Manager (Vendeur) - Version avec actualisation automatique
-// ==========================================================
-
 import React, { useState, useMemo, useEffect } from "react";
 import {
   ChevronDown,
@@ -18,7 +14,6 @@ import useAuth from "../hooks/useAuth";
 import { commandesAPI } from "../services/api/commandes";
 import profileAPI from "../services/api/profile";
 
-// ================= Utils =================
 const getDisplayName = (user) => {
   if (!user) return "Utilisateur";
   
@@ -56,14 +51,12 @@ const getInitials = (name = "") => {
     .slice(0, 2) || "U";
 };
 
-// ================= Password Validation =================
 const validatePassword = (password) => {
   const errors = [];
   if (password.length < 6) errors.push("6 caractères minimum");
   return errors;
 };
 
-// ================= Password Modal =================
 function PasswordModal({ open, onClose, onSuccess }) {
   const [oldPwd, setOldPwd] = useState("");
   const [newPwd, setNewPwd] = useState("");
@@ -137,7 +130,6 @@ function PasswordModal({ open, onClose, onSuccess }) {
       setConfirmPwd("");
       setValidationErrors([]);
       
-      // Notifier le succès au parent
       if (onSuccess) onSuccess();
       
       setTimeout(() => {
@@ -163,10 +155,6 @@ function PasswordModal({ open, onClose, onSuccess }) {
         setError("Trop de tentatives. Veuillez réessayer plus tard");
       } else {
         setError("Erreur lors du changement de mot de passe. Veuillez réessayer.");
-      }
-      
-      if (process.env.NODE_ENV === 'development') {
-        console.error("Erreur changement mot de passe:", err);
       }
     } finally {
       setLoading(false);
@@ -203,7 +191,6 @@ function PasswordModal({ open, onClose, onSuccess }) {
         </div>
 
         <form onSubmit={submit} className="space-y-3">
-          {/* Ancien mot de passe */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Ancien mot de passe *
@@ -219,7 +206,6 @@ function PasswordModal({ open, onClose, onSuccess }) {
             />
           </div>
 
-          {/* Nouveau mot de passe */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Nouveau mot de passe *
@@ -245,7 +231,6 @@ function PasswordModal({ open, onClose, onSuccess }) {
             )}
           </div>
 
-          {/* Confirmation */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Confirmer le mot de passe *
@@ -270,7 +255,6 @@ function PasswordModal({ open, onClose, onSuccess }) {
             )}
           </div>
 
-          {/* Messages d'erreur/succès */}
           {error && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
               <p className="text-red-700 text-sm flex items-center gap-2">
@@ -289,7 +273,6 @@ function PasswordModal({ open, onClose, onSuccess }) {
             </div>
           )}
 
-          {/* Actions */}
           <div className="flex justify-end gap-3 pt-2">
             <button
               type="button"
@@ -320,7 +303,6 @@ function PasswordModal({ open, onClose, onSuccess }) {
   );
 }
 
-// ================= HEADER =================
 export default function Header({ 
   user, 
   onLogout, 
@@ -337,7 +319,7 @@ export default function Header({
   });
   const [ventesDuJour, setVentesDuJour] = useState(0);
   const [userProfile, setUserProfile] = useState(null);
-  const [lastUpdate, setLastUpdate] = useState(Date.now()); // Pour forcer les mises à jour
+  const [lastUpdate, setLastUpdate] = useState(Date.now());
 
   const { logout } = useAuth();
 
@@ -397,7 +379,6 @@ export default function Header({
       }
       
     } catch (error) {
-      console.error("Erreur chargement des commandes:", error);
       setVentesDuJour(0);
     } finally {
       setLoading(prev => ({ ...prev, stats: false }));
@@ -410,7 +391,6 @@ export default function Header({
       const profile = await profileAPI.getProfile();
       setUserProfile(profile);
       
-      // Mettre à jour le localStorage avec les nouvelles données
       if (profile) {
         const currentUser = localStorage.getItem('user');
         if (currentUser) {
@@ -427,36 +407,31 @@ export default function Header({
         }
       }
     } catch (error) {
-      console.error("Erreur chargement du profil:", error);
       setUserProfile(user);
     } finally {
       setLoading(prev => ({ ...prev, profile: false }));
     }
   };
 
-  // Fonction pour rafraîchir toutes les données
   const refreshData = () => {
     setLastUpdate(Date.now());
     fetchVentesDuJour();
     fetchUserProfile();
   };
 
-  // Effet principal avec dépendance à lastUpdate
   useEffect(() => {
     fetchVentesDuJour();
     fetchUserProfile();
-  }, [lastUpdate]); // Se déclenche quand lastUpdate change
+  }, [lastUpdate]);
 
-  // Intervalle de rafraîchissement automatique (toutes les 30 secondes)
   useEffect(() => {
     const interval = setInterval(() => {
       refreshData();
-    }, 30000); // 30 secondes
+    }, 30000);
     
     return () => clearInterval(interval);
   }, []);
 
-  // Écouter les événements personnalisés
   useEffect(() => {
     const handleUserUpdate = () => {
       refreshData();
@@ -468,7 +443,6 @@ export default function Header({
       }
     };
 
-    // Écouter les événements personnalisés
     window.addEventListener('userUpdated', handleUserUpdate);
     window.addEventListener('storage', handleStorageChange);
     
@@ -484,7 +458,7 @@ export default function Header({
   const displayName = useMemo(() => {
     const userData = userProfile || user;
     return getDisplayName(userData);
-  }, [userProfile, user, lastUpdate]); // Ajout de lastUpdate pour forcer le recalcul
+  }, [userProfile, user, lastUpdate]);
 
   const initials = useMemo(() => getInitials(displayName), [displayName, lastUpdate]);
 
@@ -494,14 +468,13 @@ export default function Header({
         await logout();
         if (onLogout) onLogout();
       } catch (error) {
-        console.error("Erreur déconnexion:", error);
       }
     }
     setMenuOpen(false);
   };
 
   const handlePasswordChangeSuccess = () => {
-    refreshData(); // Rafraîchir après changement de mot de passe
+    refreshData();
   };
 
   return (
@@ -511,9 +484,7 @@ export default function Header({
 
         <div className="h-16 border-b shadow-sm">
           <div className="h-full px-4 flex items-center justify-between">
-            {/* LOGO et bouton menu */}
             <div className="flex items-center gap-3">
-              {/* Bouton menu burger - visible seulement sur mobile/tablette */}
               <button
                 onClick={onMenuClick}
                 className="lg:hidden p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -522,13 +493,11 @@ export default function Header({
                 <Menu size={24} className="text-[#472EAD]" />
               </button>
 
-              {/* Logo */}
               <div className="flex items-center">
                 <span className="text-[#472EAD] font-extrabold text-xl">LP</span>
                 <span className="text-[#F58020] font-extrabold text-xl">D</span>
               </div>
 
-              {/* Titre */}
               <div className="hidden sm:block">
                 <h1 className="text-base font-semibold text-[#472EAD]">
                   LPD Manager
@@ -542,9 +511,7 @@ export default function Header({
               </div>
             </div>
 
-            {/* ACTIONS */}
             <div className="flex items-center gap-4">
-              {/* Ventes du jour - caché sur très petit écran */}
               <div className="hidden sm:flex flex-col text-right">
                 <span className="text-xs text-gray-500 flex items-center gap-1 justify-end">
                   <Banknote size={12} /> Ventes du jour
@@ -559,7 +526,6 @@ export default function Header({
                 </div>
               </div>
 
-              {/* Menu utilisateur */}
               <div className="relative">
                 <button
                   onClick={() => setMenuOpen((v) => !v)}

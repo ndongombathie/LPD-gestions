@@ -43,9 +43,7 @@ const Sidebar = ({ sectionActive, setSectionActive, user, isOpen, onClose }) => 
 
   return (
     <>
-      {/* Sidebar pour desktop - SANS FOOTER */}
       <aside className="hidden lg:flex fixed left-0 top-0 h-screen w-64 bg-white border-r border-gray-200 shadow-lg flex-col z-40">
-        {/* LOGO */}
         <div className="h-20 flex flex-col items-center justify-center bg-gradient-to-r from-[#472EAD] to-[#4e33c9] text-white">
           <div className="text-3xl font-extrabold tracking-wide text-[#F58020]">
             LPD
@@ -55,7 +53,6 @@ const Sidebar = ({ sectionActive, setSectionActive, user, isOpen, onClose }) => 
           </span>
         </div>
 
-        {/* NAVIGATION */}
         <nav className="flex-1 px-3 py-5 overflow-y-auto">
           <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3">
             Navigation
@@ -94,11 +91,8 @@ const Sidebar = ({ sectionActive, setSectionActive, user, isOpen, onClose }) => 
             })}
           </ul>
         </nav>
-        
-        {/* Plus de footer ici */}
       </aside>
 
-      {/* Sidebar mobile avec animation - SANS FOOTER */}
       <AnimatePresence>
         {isOpen && (
           <motion.aside
@@ -108,7 +102,6 @@ const Sidebar = ({ sectionActive, setSectionActive, user, isOpen, onClose }) => 
             transition={{ type: "tween", duration: 0.3 }}
             className="lg:hidden fixed left-0 top-0 h-screen w-64 bg-white border-r border-gray-200 shadow-xl flex-col z-50"
           >
-            {/* Bouton de fermeture */}
             <button
               onClick={onClose}
               className="absolute top-4 right-4 p-1 hover:bg-gray-100 rounded-full"
@@ -116,7 +109,6 @@ const Sidebar = ({ sectionActive, setSectionActive, user, isOpen, onClose }) => 
               <X size={20} className="text-gray-600" />
             </button>
 
-            {/* LOGO */}
             <div className="h-20 flex flex-col items-center justify-center bg-gradient-to-r from-[#472EAD] to-[#4e33c9] text-white">
               <div className="text-3xl font-extrabold tracking-wide text-[#F58020]">
                 LPD
@@ -126,7 +118,6 @@ const Sidebar = ({ sectionActive, setSectionActive, user, isOpen, onClose }) => 
               </span>
             </div>
 
-            {/* NAVIGATION */}
             <nav className="flex-1 px-3 py-5 overflow-y-auto">
               <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3">
                 Navigation
@@ -158,8 +149,6 @@ const Sidebar = ({ sectionActive, setSectionActive, user, isOpen, onClose }) => 
                 })}
               </ul>
             </nav>
-            
-            {/* Plus de footer ici */}
           </motion.aside>
         )}
       </AnimatePresence>
