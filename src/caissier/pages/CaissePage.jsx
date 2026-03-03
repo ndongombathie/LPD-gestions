@@ -204,7 +204,7 @@ const CaissePage = () => {
           const listener = () => {
               fetchTicketsSafe(currentPage, filterText.trim());
           };
-          channel.listen(".commande.validee", listener);
+          channel.listen("commande.validee", listener);
           return () => {
               try {
                   channel.stopListening(".commande.validee");
@@ -223,10 +223,10 @@ const CaissePage = () => {
           const listener = () => {
               fetchTicketsSafe(currentPage, filterText.trim());
           };
-          channel.listen(".paiement.cree", listener);
+          channel.listen("paiement.cree", listener);
           return () => {
               try {
-                  channel.stopListening(".paiement.cree");
+                  channel.stopListening("paiement.cree");
                   echo.leave(`private-boutique.${boutiqueId}`);
               } catch {
                 toast.error('Erreur', {

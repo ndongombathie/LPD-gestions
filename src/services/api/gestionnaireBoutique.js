@@ -93,7 +93,7 @@ export const validerProduitTransfer = async (data) => {
 export const getProduitsSousSeuil = async (page = 1, search = "", options = {}) => {
   try {
     // Le backend retourne {current_page, data: [], total, per_page, ...}
-    return await cachedGet('/produits-sous-seuil', { page, search }, options);
+    return await cachedGet('/produits-sous-seuils', { page, search }, options);
   } catch (error) {
     console.error('❌ Erreur getProduitsSousSeuil:', error);
     if (error.code === 'ECONNABORTED' || error.response?.status === 401 || error.response?.status === 404) {
