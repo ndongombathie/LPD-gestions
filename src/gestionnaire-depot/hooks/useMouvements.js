@@ -19,9 +19,28 @@ export const useMouvements = () => {
   const mapMovement = useCallback((item) => {
     let type = item.type === 'entree' ? 'Entrée' : 'Sortie';
     let sousType = '';
-    if (item.type === 'sortie') {
-      sousType = item.motif?.toLowerCase().includes('transfert') ? 'transfert' : 'diminution';
+    let source = item.source || '';
+    let destination = item.destination || '';
+    
+    if (item.type === 'entree') {
+      // Distinguer création de produit vs réapprovisionnement
+      if (item.motif?.toLowerCase().includes('création')) {
+        sousType = 'creation';
+      } else if (item.motif?.toLowerCase().includes('réapprovisionnement')) {
+        sousType = 'reapprovisionnement';
+      } else if (item.motif?.toLowerCase().includes('annulation')) {
+        sousType = 'annulation';
+      }
+    } else if (item.type === 'sortie') {
+      if (item.motif?.toLowerCase().includes('transfert')) {
+        sousType = 'transfert';
+      } else if (item.motif?.toLowerCase().includes('retour')) {
+        sousType = 'retour';
+      } else {
+        sousType = 'diminution';
+      }
     }
+
     let status = item.statut?.toLowerCase() || 'completed';
     if (item.type === 'entree') status = 'completed';
     else if (status === 'en_attente') status = 'pending';
@@ -33,8 +52,6 @@ export const useMouvements = () => {
     else if (item.nom) productName = item.nom;
     else if (item.product_nom) productName = item.product_nom;
 
-    let source = item.source || (item.type === 'entree' ? 'Fournisseur' : 'Boutique Colobane');
-
     return {
       id: item.id,
       type,
@@ -42,6 +59,7 @@ export const useMouvements = () => {
       product: productName,
       barcode: item.produit?.code_barre || item.code_barre || '',
       source,
+      destination,
       quantity: item.quantite || 0,
       date: item.date || item.created_at,
       status,
@@ -118,7 +136,7 @@ export const useMouvements = () => {
       const results = await Promise.allSettled([
         mouvementsAPI.getNbEntreesTotal(),
         mouvementsAPI.getNbSortiesTotal(),
-        mouvementsAPI.getNbTransfertsEnAttente(), // ← UTILISE LE COMPTEUR DÉDIÉ
+        mouvementsAPI.getNbTransfertsEnAttente(),
       ]);
 
       console.log('📦 Résultats bruts des stats:', results);
@@ -143,7 +161,7 @@ export const useMouvements = () => {
       setStats({
         totalEntries: extractValue(results[0]),
         totalValidated: extractValue(results[1]),
-        totalPending: extractValue(results[2]), // ← MAINTENANT LE VRAI NOMBRE
+        totalPending: extractValue(results[2]),
       });
       console.log('📈 Nouvelles stats:', stats);
     } catch (err) {
@@ -176,6 +194,17 @@ export const useMouvements = () => {
     }
   }, []);
 
+  const diminuerStock = useCallback(async (data) => {
+    try {
+      const response = await mouvementsAPI.diminuerStock(data);
+      return { success: true, data: response.data };
+    } catch (err) {
+      console.error('❌ Erreur diminuerStock:', err);
+      const errorMessage = err.response?.data?.message || err.message || 'Erreur inconnue';
+      return { success: false, error: errorMessage };
+    }
+  }, []);
+
   useEffect(() => {
     fetchStats();
   }, [fetchStats]);
@@ -192,5 +221,6 @@ export const useMouvements = () => {
     fetchStats,
     createTransfer,
     cancelTransfer,
+    diminuerStock,
   };
 };

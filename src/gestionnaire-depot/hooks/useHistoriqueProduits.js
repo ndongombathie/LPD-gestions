@@ -21,6 +21,7 @@ export const useHistoriqueProduits = () => {
         order_direction: 'desc'
       };
       
+      // Ajouter le terme de recherche s'il existe
       if (searchTerm && searchTerm.trim() !== '') {
         params.search = searchTerm.trim();
       }
@@ -43,16 +44,15 @@ export const useHistoriqueProduits = () => {
         lastPage = response.last_page || 1;
       }
 
-      // Filtrer pour ne garder que les modifications et suppressions
-      const filteredData = data.filter(item => 
-        item.action === 'Modification de produit' || 
-        item.action === 'Suppression de produit'
-      );
-
-      // Formater les données avec les informations imbriquées
-      const formatted = filteredData.map(item => {
-        // Déterminer le type d'action
-        const type = item.action === 'Modification de produit' ? 'Modification' : 'Suppression';
+      // Formater TOUTES les données sans filtrer
+      const formatted = data.map(item => {
+        // Déterminer le type d'action pour l'affichage
+        let type = 'Autre';
+        if (item.action === 'Modification de produit') type = 'Modification';
+        else if (item.action === 'Suppression de produit') type = 'Suppression';
+        else if (item.action === 'Création de produit') type = 'Création';
+        else if (item.action === 'Transfert de stock') type = 'Transfert';
+        else if (item.action === 'Réapprovisionnement') type = 'Réapprovisionnement';
         
         // Récupérer les infos du produit imbriqué
         const produit = item.produit || {};
@@ -71,7 +71,6 @@ export const useHistoriqueProduits = () => {
       });
 
       setHistory(formatted);
-      // Utiliser les vraies valeurs de pagination de l'API, PAS filteredData.length
       setTotal(totalCount);
       setTotalPages(lastPage);
       setCurrentPage(page);

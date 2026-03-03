@@ -1,1 +1,104 @@
-c
+// src/services/api/mouvements.js
+import httpClient from '../http/client';
+
+export const mouvementsAPI = {
+  // Récupération des mouvements (historique)
+  getAll: async (params = {}) => {
+    try {
+      const response = await httpClient.get('/mouvements-stock', { params });
+      return response.data;
+    } catch (error) {
+      console.error('❌ mouvementsAPI.getAll error:', error);
+      throw error;
+    }
+  },
+
+  // Création d'un transfert - UNIQUEMENT produit_id et quantite
+  createTransfer: async (data) => {
+    try {
+      const response = await httpClient.post('/stocks/transfer', data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ mouvementsAPI.createTransfer error:', error);
+      throw error;
+    }
+  },
+
+  // Annulation d'un transfert
+  cancelTransfer: async (transferId) => {
+    try {
+      const response = await httpClient.put('/annuler-produits-transfer', {
+        transfer_id: transferId,
+      });
+      return response.data;
+    } catch (error) {
+      console.error('❌ mouvementsAPI.cancelTransfer error:', error);
+      throw error;
+    }
+  },
+
+  // ✅ Diminution de stock (retour fournisseur)
+  diminuerStock: async (data) => {
+    try {
+      const response = await httpClient.put('/produits/reduire-stock', data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ mouvementsAPI.diminuerStock error:', error);
+      throw error;
+    }
+  },
+
+  // Liste des transferts en attente (pour l'onglet)
+  getTransfertsEnAttente: async (params = {}) => {
+    try {
+      const response = await httpClient.get('/produits-transfer', { params });
+      return response.data;
+    } catch (error) {
+      console.error('❌ mouvementsAPI.getTransfertsEnAttente error:', error);
+      throw error;
+    }
+  },
+
+  // Liste des transferts annulés
+  getTransfertsAnnules: async (params = {}) => {
+    try {
+      const response = await httpClient.get('/liste-transfers-annuler', { params });
+      return response.data;
+    } catch (error) {
+      console.error('❌ mouvementsAPI.getTransfertsAnnules error:', error);
+      throw error;
+    }
+  },
+
+  // Statistiques
+  getNbEntreesTotal: async () => {
+    try {
+      const response = await httpClient.get('/nombre-entree-stock-total');
+      return response.data;
+    } catch (error) {
+      console.error('❌ mouvementsAPI.getNbEntreesTotal error:', error);
+      throw error;
+    }
+  },
+
+  getNbSortiesTotal: async () => {
+    try {
+      const response = await httpClient.get('/nombre-sortie-stock-total');
+      return response.data;
+    } catch (error) {
+      console.error('❌ mouvementsAPI.getNbSortiesTotal error:', error);
+      throw error;
+    }
+  },
+
+  // Nombre de transferts en attente (pour la carte)
+  getNbTransfertsEnAttente: async () => {
+    try {
+      const response = await httpClient.get('/nombre-transfer-en-attente');
+      return response.data;
+    } catch (error) {
+      console.error('❌ mouvementsAPI.getNbTransfertsEnAttente error:', error);
+      return 0;
+    }
+  },
+};

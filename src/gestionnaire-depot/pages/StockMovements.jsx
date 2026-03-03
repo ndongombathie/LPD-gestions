@@ -487,6 +487,7 @@ export default function StockMovements() {
 
       {/* STATISTIQUES - 3 cartes */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {/* Entrées */}
         <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex items-center justify-between">
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wider">Entrées</p>
@@ -497,6 +498,8 @@ export default function StockMovements() {
             <ArrowDownRight className="text-green-600" size={20} />
           </div>
         </div>
+        
+        {/* Sorties */}
         <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex items-center justify-between">
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wider">Sorties</p>
@@ -507,6 +510,8 @@ export default function StockMovements() {
             <ArrowUpRight className="text-red-600" size={20} />
           </div>
         </div>
+        
+        {/* En attente - utilise le nombre de l'API */}
         <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex items-center justify-between">
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wider">En attente</p>
@@ -519,7 +524,7 @@ export default function StockMovements() {
         </div>
       </div>
 
-      {/* ONGLETS */}
+      {/* ONGLETS - SANS LES NOMBRES */}
       <div className="border-b border-gray-200">
         <nav className="flex space-x-4">
           <button
@@ -542,7 +547,7 @@ export default function StockMovements() {
             }`}
           >
             <Clock size={16} className="inline mr-2" />
-            En attente ({stats.totalPending})
+            En attente
           </button>
           <button
             onClick={() => { setActiveTab("annulees"); setCancelledPage(1); }}
@@ -617,7 +622,6 @@ export default function StockMovements() {
             {activeTab === "historique" && "Historique des mouvements"}
             {activeTab === "en-attente" && "Transferts en attente de validation"}
             {activeTab === "annulees" && "Transferts annulés"}
-            <span className="text-xs text-gray-500 ml-2">({totalMovements})</span>
           </p>
           <div className="flex items-center gap-2 text-xs text-gray-500">
             <Info size={14} />
@@ -659,19 +663,39 @@ export default function StockMovements() {
                           <div className="flex items-center gap-2">
                             <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${
                               item.type === "Entrée"
-                                ? "bg-green-50 text-green-700"
+                                ? item.sousType === 'creation'
+                                  ? "bg-purple-50 text-purple-700"
+                                  : item.sousType === 'reapprovisionnement'
+                                  ? "bg-green-50 text-green-700"
+                                  : "bg-green-50 text-green-700"
                                 : item.sousType === 'transfert'
                                 ? "bg-blue-50 text-blue-700"
-                                : "bg-orange-50 text-orange-700"
+                                : item.sousType === 'retour'
+                                ? "bg-orange-50 text-orange-700"
+                                : "bg-gray-50 text-gray-700"
                             }`}>
                               {item.type === "Entrée" ? (
-                                <ArrowDownRight size={14} />
+                                <>
+                                  <ArrowDownRight size={14} />
+                                  {item.sousType === 'creation' ? 'Création' : 
+                                   item.sousType === 'reapprovisionnement' ? 'Réappro' : 'Entrée'}
+                                </>
                               ) : item.sousType === 'transfert' ? (
-                                <Truck size={14} />
+                                <>
+                                  <Truck size={14} />
+                                  Transfert
+                                </>
+                              ) : item.sousType === 'retour' ? (
+                                <>
+                                  <Ban size={14} />
+                                  Retour
+                                </>
                               ) : (
-                                <MinusCircle size={14} />
+                                <>
+                                  <MinusCircle size={14} />
+                                  Diminution
+                                </>
                               )}
-                              {item.type === "Entrée" ? 'Entrée' : (item.sousType === 'transfert' ? 'Transfert' : 'Diminution')}
                             </span>
                             {activeTab === "annulees" && (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-800 rounded-full text-xs">
@@ -691,12 +715,30 @@ export default function StockMovements() {
                             {item.type === "Entrée" ? (
                               <>
                                 <Building size={12} className="text-green-500" />
-                                <span className="text-green-600">{item.source}</span>
+                                <span className="text-green-600">
+                                  {item.sousType === 'creation' ? 'Création: ' : 
+                                   item.sousType === 'reapprovisionnement' ? 'Réappro: ' : ''}
+                                  {item.source}
+                                </span>
                               </>
                             ) : (
                               <>
-                                <Store size={12} className="text-indigo-500" />
-                                <span className="text-indigo-600">{item.source}</span>
+                                {item.sousType === 'retour' ? (
+                                  <>
+                                    <Ban size={12} className="text-orange-500" />
+                                    <span className="text-orange-600">Retour: {item.destination || item.source}</span>
+                                  </>
+                                ) : item.sousType === 'transfert' ? (
+                                  <>
+                                    <Store size={12} className="text-indigo-500" />
+                                    <span className="text-indigo-600">Transfert: {item.destination}</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <MinusCircle size={12} className="text-gray-500" />
+                                    <span className="text-gray-600">Diminution</span>
+                                  </>
+                                )}
                               </>
                             )}
                           </div>
@@ -705,7 +747,7 @@ export default function StockMovements() {
                         <td className="px-4 py-3 text-xs text-gray-700">
                           <div className="flex items-center gap-2">
                             <Store size={12} className="text-indigo-500" />
-                            <span className="text-indigo-600">{item.source}</span>
+                            <span className="text-indigo-600">{item.destination || 'Boutique Colobane'}</span>
                           </div>
                         </td>
                       )}
@@ -875,26 +917,53 @@ export default function StockMovements() {
             <div className="p-6 space-y-4">
               <div className="flex items-center gap-3">
                 <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                  selectedMovement.type === "Entrée" ? "bg-green-100" : 
-                  selectedMovement.sousType === 'transfert' ? "bg-blue-100" : "bg-orange-100"
+                  selectedMovement.type === "Entrée" 
+                    ? selectedMovement.sousType === 'creation'
+                      ? "bg-purple-100"
+                      : "bg-green-100"
+                    : selectedMovement.sousType === 'transfert'
+                    ? "bg-blue-100"
+                    : selectedMovement.sousType === 'retour'
+                    ? "bg-orange-100"
+                    : "bg-gray-100"
                 }`}>
                   {selectedMovement.type === "Entrée" ? (
-                    <ArrowDownRight className="text-green-600" size={24} />
+                    <ArrowDownRight className={
+                      selectedMovement.sousType === 'creation' ? "text-purple-600" : "text-green-600"
+                    } size={24} />
                   ) : selectedMovement.sousType === 'transfert' ? (
                     <Truck className="text-blue-600" size={24} />
+                  ) : selectedMovement.sousType === 'retour' ? (
+                    <Ban className="text-orange-600" size={24} />
                   ) : (
-                    <MinusCircle className="text-orange-600" size={24} />
+                    <MinusCircle className="text-gray-600" size={24} />
                   )}
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Type</p>
                   <div className="flex items-center gap-2">
                     <p className={`text-lg font-semibold ${
-                      selectedMovement.type === "Entrée" ? "text-green-600" : 
-                      selectedMovement.sousType === 'transfert' ? "text-blue-600" : "text-orange-600"
+                      selectedMovement.type === "Entrée" 
+                        ? selectedMovement.sousType === 'creation'
+                          ? "text-purple-600"
+                          : "text-green-600"
+                        : selectedMovement.sousType === 'transfert'
+                        ? "text-blue-600"
+                        : selectedMovement.sousType === 'retour'
+                        ? "text-orange-600"
+                        : "text-gray-600"
                     }`}>
-                      {selectedMovement.type === "Entrée" ? 'Entrée' : 
-                       selectedMovement.sousType === 'transfert' ? 'Transfert' : 'Diminution'}
+                      {selectedMovement.type === "Entrée" 
+                        ? selectedMovement.sousType === 'creation'
+                          ? 'Création de produit'
+                          : selectedMovement.sousType === 'reapprovisionnement'
+                          ? 'Réapprovisionnement'
+                          : 'Entrée'
+                        : selectedMovement.sousType === 'transfert'
+                        ? 'Transfert'
+                        : selectedMovement.sousType === 'retour'
+                        ? 'Retour fournisseur'
+                        : 'Diminution'}
                     </p>
                     {selectedMovement.status === 'cancelled' && (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-800 rounded-full text-xs">
@@ -930,12 +999,20 @@ export default function StockMovements() {
                 </div>
                 <div>
                   <p className="text-xs text-gray-500">
-                    {selectedMovement.type === "Entrée" ? "Fournisseur" : "Destination"}
+                    {selectedMovement.type === "Entrée" ? "Source" : "Destination"}
                   </p>
                   <p className={`font-medium ${
-                    selectedMovement.type === "Entrée" ? "text-green-600" : "text-indigo-600"
+                    selectedMovement.type === "Entrée" ? "text-green-600" : 
+                    selectedMovement.sousType === 'transfert' ? "text-indigo-600" :
+                    selectedMovement.sousType === 'retour' ? "text-orange-600" : "text-gray-600"
                   }`}>
-                    {selectedMovement.source}
+                    {selectedMovement.type === "Entrée" 
+                      ? selectedMovement.source
+                      : selectedMovement.sousType === 'transfert'
+                      ? selectedMovement.destination
+                      : selectedMovement.sousType === 'retour'
+                      ? selectedMovement.destination
+                      : 'Dépôt'}
                   </p>
                 </div>
                 <div>
