@@ -50,7 +50,6 @@ import { commandesAPI } from '../../services/api/commandes';
 import profileAPI from '../../services/api/profile';
 
 const HistoriqueCommandes = ({ sellerName = null }) => {
-  // États pour les données
   const [commandes, setCommandes] = useState([]);
   const [commandesFiltrees, setCommandesFiltrees] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -66,7 +65,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     montant_total: 0
   });
 
-  // États pour les filtres
   const [filtreStatut, setFiltreStatut] = useState('tous');
   const [filtreTypeVente, setFiltreTypeVente] = useState('tous');
   const [filtreDate, setFiltreDate] = useState('aujourdhui');
@@ -82,7 +80,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
   const [sortField, setSortField] = useState('date');
   const [sortDirection, setSortDirection] = useState('desc');
   
-  // États pour la pagination
   const [pagination, setPagination] = useState({
     currentPage: 1,
     itemsPerPage: 10,
@@ -90,567 +87,61 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     totalPages: 1
   });
 
-  // États pour la pagination des commandes filtrées (affichage)
   const [commandesPaginees, setCommandesPaginees] = useState([]);
   
-  // État pour le rafraîchissement
   const [lastUpdate, setLastUpdate] = useState(Date.now());
   const [showRefreshNotification, setShowRefreshNotification] = useState(false);
   
-  // État pour la progression du chargement
   const [progress, setProgress] = useState({ current: 0, total: 0 });
+  const [chargementComplet, setChargementComplet] = useState(false);
 
-  // ---------- Fonction améliorée pour détecter si la TVA est appliquée ----------
-  const estTVAAppliquee = (commande) => {
-    if (!commande) return false;
-    
-    console.log('🔍 Vérification TVA pour commande:', commande.id || commande.numero_commande);
-    
-    // 1. Vérification directe des indicateurs de TVA
-    const tvaIndicators = [
-      commande.tva_appliquee,
-      commande.tva_appliquee === 1,
-      commande.tva_appliquee === '1',
-      commande.tva_appliquee === true,
-      commande.tva_appliquee === 'true',
-      commande.tva_appliquee === 'oui',
-      commande.tva_appliquee === 'yes',
-      commande.tva_active,
-      commande.tva_active === 1,
-      commande.tva_active === true,
-      commande.tva_active === '1',
-      commande.tva_active === 'true',
-      // Champs de l'API backend
-      commande.apply_tva,
-      commande.apply_tva === 1,
-      commande.apply_tva === true,
-      commande.appliquer_tva,
-      commande.has_tva,
-      commande.tva_inclus,
-      commande.tva_inclus === 1,
-      commande.tva_inclus === true,
-      commande.tva_incluse,
-      commande.tva_incluse === 1,
-      commande.tva_incluse === true,
-      commande.tva_apply,
-      commande.tva_apply === 1,
-      commande.tva_apply === true,
-      commande.with_tva,
-      commande.with_tva === 1,
-      commande.with_tva === true
-    ];
-
-    if (tvaIndicators.some(indicator => indicator === true)) {
-      console.log('✅ TVA détectée via indicateur direct');
-      return true;
-    }
-
-    // 2. Vérification du taux de TVA
-    const tvaTaux = Number(commande.tva_taux || commande.taux_tva || commande.tva_rate || commande.vat_rate || 0);
-    if (tvaTaux > 0) {
-      console.log('✅ TVA détectée via taux:', tvaTaux);
-      return true;
-    }
-
-    // 3. Vérification du montant de TVA
-    const montantTVA = Number(
-      commande.tva || 
-      commande.montant_tva || 
-      commande.tva_amount || 
-      commande.vat_amount || 
-      commande.total_tva || 
-      0
-    );
-    if (montantTVA > 0) {
-      console.log('✅ TVA détectée via montant TVA:', montantTVA);
-      return true;
-    }
-
-    // 4. Vérification via les montants (TTC > HT)
-    const montantTTC = Number(
-      commande.total_ttc || 
-      commande.montant_ttc || 
-      commande.grand_total || 
-      commande.total || 
-      commande.total_amount || 
-      0
-    );
-    
-    const montantHT = Number(
-      commande.total_ht || 
-      commande.montant_ht || 
-      commande.subtotal || 
-      commande.sub_total || 
-      commande.total_htva || 
-      0
-    );
-    
-    if (montantTTC > 0 && montantHT > 0) {
-      // Si TTC est strictement supérieur à HT, il y a probablement TVA
-      if (montantTTC > montantHT) {
-        console.log('✅ TVA détectée via TTC > HT:', montantTTC, '>', montantHT);
-        return true;
-      }
-      
-      // Calcul du ratio TTC/HT
-      const ratio = montantTTC / montantHT;
-      // Si le ratio est proche de 1.18 (ou autre taux de TVA)
-      if (Math.abs(ratio - 1.18) < 0.01 || Math.abs(ratio - 1.19) < 0.01 || ratio > 1.17) {
-        console.log('✅ TVA détectée via ratio TTC/HT:', ratio);
-        return true;
-      }
-    }
-
-    // 5. Vérification via les produits
-    if (commande.items && Array.isArray(commande.items)) {
-      for (const item of commande.items) {
-        // Vérifier si l'article a des indicateurs de TVA
-        if (item.tva_appliquee || item.tva_appliquee === 1 || item.tva_appliquee === true ||
-            item.tva_active || item.tva_active === 1 || item.tva_active === true ||
-            Number(item.tva_taux || 0) > 0 ||
-            Number(item.tva || 0) > 0 || 
-            Number(item.montant_tva || 0) > 0) {
-          console.log('✅ TVA détectée via produit avec indicateur');
-          return true;
-        }
-        
-        // Vérifier le prix TTC vs HT de l'article
-        const itemTTC = Number(item.prix_ttc || item.prix_total_ttc || item.sous_total || item.total || 0);
-        const itemHT = Number(item.prix_ht || item.prix_total_ht || item.sous_total_ht || item.subtotal || 0);
-        
-        if (itemTTC > 0 && itemHT > 0 && itemTTC > itemHT) {
-          console.log('✅ TVA détectée via produit TTC > HT');
-          return true;
-        }
-      }
-    }
-
-    // 6. Vérification via les produits dans d'autres formats
-    const produitsArrays = [
-      commande.produits,
-      commande.lignes_commande,
-      commande.lignes,
-      commande.order_items,
-      commande.products,
-      commande.details,
-      commande.articles
-    ];
-
-    for (const produits of produitsArrays) {
-      if (produits && Array.isArray(produits)) {
-        for (const produit of produits) {
-          if (produit.tva_appliquee || produit.tva_appliquee === 1 || produit.tva_appliquee === true ||
-              produit.tva_active || produit.tva_active === 1 || produit.tva_active === true ||
-              Number(produit.tva_taux || 0) > 0 ||
-              Number(produit.tva || 0) > 0) {
-            console.log('✅ TVA détectée via produit (autre format)');
-            return true;
-          }
-        }
-      }
-    }
-
-    // 7. Vérification via les métadonnées
-    if (commande.metadata) {
-      const metadata = commande.metadata;
-      if (metadata.tva_appliquee || metadata.tva_appliquee === '1' || metadata.tva_appliquee === true ||
-          metadata.apply_tva || metadata.has_tva || metadata.with_tva ||
-          Number(metadata.taux_tva || 0) > 0 ||
-          Number(metadata.tva_amount || 0) > 0) {
-        console.log('✅ TVA détectée via métadonnées');
-        return true;
-      }
-    }
-
-    // 8. Vérification via les paramètres de la boutique
-    if (commande.boutique && commande.boutique.tva_active) {
-      console.log('✅ TVA détectée via boutique');
-      return true;
-    }
-
-    // 9. Vérification via le mode de paiement ou type de vente
-    if (commande.paiement && commande.paiement.mode) {
-      if (commande.paiement.mode.toLowerCase().includes('tva') || 
-          commande.paiement.mode.toLowerCase().includes('facture')) {
-        console.log('✅ TVA détectée via mode de paiement');
-        return true;
-      }
-    }
-
-    console.log('❌ TVA non détectée');
-    return false;
-  };
-
-  // ---------- Mappage des statuts ----------
-  const mapAPIStatut = (statutAPI) => {
-    const mapping = {
-      'validee': 'complétée',
-      'completed': 'complétée',
-      'pending': 'en_attente_paiement',
-      'en_attente': 'en_attente_paiement',
-      'en attente': 'en_attente_paiement',
-      'en attente paiement': 'en_attente_paiement',
-      'cancelled': 'annulée',
-      'annulee': 'annulée',
-      'annulée': 'annulée',
-      'local_only': 'en_attente_paiement',
-      'en_attente_paiement': 'en_attente_paiement',
-      'payee': 'complétée',
-      'paid': 'complétée',
-      'delivered': 'complétée',
-      'livree': 'complétée',
-      'processing': 'en_attente_paiement',
-      'traitement': 'en_attente_paiement',
-      'attente': 'en_attente_paiement',
-      'validée': 'complétée',
-      'à préparer': 'en_attente_paiement',
-      'préparée': 'en_attente_paiement',
-      'expédiée': 'complétée',
-      'livraison en cours': 'en_attente_paiement'
-    };
-    const statut = statutAPI?.toLowerCase()?.trim();
-    return mapping[statut] || statutAPI || 'en_attente_paiement';
-  };
-
-  // ---------- Fonction pour extraire les produits des détails de la commande ----------
-  const extraireProduitsDeLaCommande = (commandeData) => {
-    let produits = [];
-    
-    const sourcesProduits = [
-      commandeData.items,
-      commandeData.produits,
-      commandeData.lignes_commande,
-      commandeData.lignes,
-      commandeData.order_items,
-      commandeData.products,
-      commandeData.details,
-      commandeData.articles
-    ];
-    
-    for (const source of sourcesProduits) {
-      if (source && Array.isArray(source) && source.length > 0) {
-        produits = source.map(item => {
-          let nomProduit = 'Produit sans nom';
-          
-          if (item.nom) nomProduit = item.nom;
-          else if (item.name) nomProduit = item.name;
-          else if (item.libelle) nomProduit = item.libelle;
-          else if (item.designation) nomProduit = item.designation;
-          else if (item.product_nom) nomProduit = item.product_nom;
-          else if (item.product_name) nomProduit = item.product_name;
-          else if (item.product?.nom) nomProduit = item.product.nom;
-          else if (item.product?.name) nomProduit = item.product.name;
-          else if (item.produit?.nom) nomProduit = item.produit.nom;
-          else if (item.produit?.name) nomProduit = item.produit.name;
-          
-          let typeVenteProduit = 'détail';
-          if (item.type_vente) {
-            const typeStr = item.type_vente.toLowerCase();
-            if (typeStr === 'gros' || typeStr === 'gross' || typeStr === 'wholesale') {
-              typeVenteProduit = 'gros';
-            } else if (typeStr === 'détail' || typeStr === 'detail' || typeStr === 'retail') {
-              typeVenteProduit = 'détail';
-            }
-          } else if (item.sale_type) {
-            const typeStr = item.sale_type.toLowerCase();
-            if (typeStr === 'gros' || typeStr === 'gross' || typeStr === 'wholesale') {
-              typeVenteProduit = 'gros';
-            } else {
-              typeVenteProduit = 'détail';
-            }
-          }
-          
-          return {
-            id: item.id || item.product_id || item.produit_id,
-            nom: nomProduit,
-            quantite: Number(item.quantite || item.quantity || item.qte || item.qty || 1),
-            prix_unitaire: Number(item.prix_unitaire || item.prix || item.price || 0),
-            prix_vente: Number(item.prix_vente || item.prix_detail || item.prix_gros || item.sale_price || item.prix_unitaire || item.prix || item.price || 0),
-            type_vente: typeVenteProduit,
-            sous_total: Number(item.sous_total || item.subtotal || item.total_item || item.total || 
-                              (Number(item.quantite || 1) * Number(item.prix_vente || item.prix || 0)) || 0)
-          };
-        });
-        break;
-      }
-    }
-    
-    if (produits.length === 0 && commandeData.produits_format) {
-      try {
-        if (typeof commandeData.produits_format === 'string') {
-          produits = JSON.parse(commandeData.produits_format);
-        } else {
-          produits = commandeData.produits_format;
-        }
-      } catch (e) {
-        console.warn('Erreur parsing produits_format:', e);
-      }
-    }
-    
-    return produits;
-  };
-
-  // ---------- Charger les informations du vendeur ----------
-  const chargerInfosVendeur = useCallback(async () => {
-    try {
-      const response = await profileAPI.getProfile();
-      if (response && response.data) {
-        setVendeurInfo(response.data);
-      }
-    } catch (error) {
-      console.warn('Impossible de charger les infos du vendeur:', error);
-    }
-  }, []);
-
-  // ---------- Formater le nom complet du client ----------
-  const formaterNomClient = (client) => {
-    if (!client) return 'Client';
-    
-    if (typeof client === 'object') {
-      if (client.nom && client.prenom) return `${client.prenom} ${client.nom}`;
-      if (client.nom_complet) return client.nom_complet;
-      if (client.full_name) return client.full_name;
-      if (client.name) return client.name;
-      if (client.nom) return client.nom;
-      
-      const prenom = client.firstName || client.first_name || client.prenom || '';
-      const nom = client.lastName || client.last_name || client.nom || client.name || '';
-      
-      if (prenom && nom) return `${prenom} ${nom}`;
-      if (nom) return nom;
-      if (prenom) return prenom;
-    }
-    
-    if (typeof client === 'string') return client;
-    
-    return 'Client';
-  };
-
-  // ---------- Fonction pour vérifier si une commande est d'aujourd'hui ----------
-  const estAujourdhui = (dateString) => {
-    try {
-      const aujourdhui = new Date();
-      const dateCommande = new Date(dateString);
-      
-      return (
-        dateCommande.getDate() === aujourdhui.getDate() &&
-        dateCommande.getMonth() === aujourdhui.getMonth() &&
-        dateCommande.getFullYear() === aujourdhui.getFullYear()
-      );
-    } catch {
-      return false;
-    }
-  };
-
-  // ---------- Charger les statistiques ----------
-  const chargerStatistiques = useCallback((commandesList) => {
-    const commandesAujourdhui = commandesList.filter(c => estAujourdhui(c.date));
-    
-    let totalGros = 0;
-    let totalDetail = 0;
-    let montantTotal = 0;
-    
-    commandesList.forEach(commande => {
-      if (commande.type_vente === 'gros') totalGros++;
-      else if (commande.type_vente === 'détail') totalDetail++;
-      else if (commande.type_vente === 'mixte') {
-        totalGros++;
-        totalDetail++;
-      }
-      
-      if (commande.total_ttc) {
-        montantTotal += commande.total_ttc;
-      } else if (commande.montant_ttc) {
-        montantTotal += commande.montant_ttc;
-      } else if (commande.total) {
-        montantTotal += commande.total;
-      }
-    });
-    
-    const statsCalc = {
-      aujourdhui: commandesAujourdhui.length,
-      en_attente: commandesAujourdhui.filter(c => {
-        const statut = c.statut?.toLowerCase() || '';
-        return statut.includes('attente') || 
-               statut === 'en_attente_paiement' || 
-               statut === 'pending' ||
-               statut === 'processing';
-      }).length,
-      valide: commandesAujourdhui.filter(c => {
-        const statut = c.statut?.toLowerCase() || '';
-        return statut === 'complétée' || 
-               statut === 'completed' ||
-               statut === 'payee' ||
-               statut === 'paid' ||
-               statut === 'delivered' ||
-               statut === 'livree' ||
-               statut === 'validée';
-      }).length,
-      annulee: commandesAujourdhui.filter(c => {
-        const statut = c.statut?.toLowerCase() || '';
-        return statut === 'annulée' || 
-               statut === 'cancelled' ||
-               statut === 'annulee';
-      }).length,
-      total_gros: totalGros,
-      total_detail: totalDetail,
-      total_ventes: commandesList.length,
-      montant_total: montantTotal
-    };
-    
-    setStats(statsCalc);
-  }, []);
-
-  // ---------- FONCTION CORRIGÉE : Déterminer le type de vente d'une commande ----------
-  const determinerTypeVente = (commande) => {
-    // PRIORITÉ 1: Vérifier le type_vente directement sur la commande
-    if (commande.type_vente) {
-      const typeStr = commande.type_vente.toString().toLowerCase().trim();
-      if (typeStr === 'gros' || typeStr === 'gross' || typeStr === 'wholesale') {
-        return 'gros';
-      }
-      if (typeStr === 'détail' || typeStr === 'detail' || typeStr === 'retail') {
-        return 'détail';
-      }
-      if (typeStr === 'mixte' || typeStr === 'mixed') {
-        return 'mixte';
-      }
-      // Si c'est une autre valeur mais qu'elle contient "gros"
-      if (typeStr.includes('gros')) {
-        return 'gros';
-      }
-      if (typeStr.includes('détail') || typeStr.includes('detail')) {
-        return 'détail';
-      }
-    }
-    
-    // PRIORITÉ 2: Vérifier sale_type
-    if (commande.sale_type) {
-      const saleTypeStr = commande.sale_type.toString().toLowerCase().trim();
-      if (saleTypeStr === 'gros' || saleTypeStr === 'wholesale') {
-        return 'gros';
-      }
-      if (saleTypeStr === 'détail' || saleTypeStr === 'retail') {
-        return 'détail';
-      }
-      if (saleTypeStr === 'mixte' || saleTypeStr === 'mixed') {
-        return 'mixte';
-      }
-    }
-    
-    // PRIORITÉ 3: Vérifier dans les métadonnées
-    if (commande.metadata && commande.metadata.type_vente) {
-      const metaType = commande.metadata.type_vente.toString().toLowerCase();
-      if (metaType.includes('gros')) return 'gros';
-      if (metaType.includes('détail') || metaType.includes('detail')) return 'détail';
-      if (metaType.includes('mixte')) return 'mixte';
-    }
-    
-    // PRIORITÉ 4: Analyser les produits pour déterminer le type
-    const produits = extraireProduitsDeLaCommande(commande);
-    
-    if (produits && produits.length > 0) {
-      let aDuGros = false;
-      let aDuDetail = false;
-      
-      produits.forEach(p => {
-        // Vérifier le type de vente du produit
-        if (p.type_vente) {
-          const productType = p.type_vente.toString().toLowerCase();
-          if (productType === 'gros' || productType === 'gross' || productType === 'wholesale') {
-            aDuGros = true;
-          } else if (productType === 'détail' || productType === 'detail' || productType === 'retail') {
-            aDuDetail = true;
-          }
-        }
-        
-        // Vérifier par les champs de prix spécifiques
-        if (p.prix_gros && p.prix_gros > 0) {
-          aDuGros = true;
-        }
-        if (p.prix_detail && p.prix_detail > 0) {
-          aDuDetail = true;
-        }
-      });
-      
-      if (aDuGros && aDuDetail) {
-        return 'mixte';
-      } else if (aDuGros) {
-        return 'gros';
-      } else if (aDuDetail) {
-        return 'détail';
-      }
-    }
-    
-    // PRIORITÉ 5: Vérifier par le montant total (si > seuil, considérer comme gros)
-    const montant = commande.total_ttc || commande.montant_ttc || commande.total || 0;
-    if (montant > 50000) { // Seuil de 50 000 FCFA pour considérer comme gros
-      return 'gros';
-    }
-    
-    // Par défaut, retourner 'détail'
-    return 'détail';
-  };
-
-  // ---------- Charger TOUTES les commandes avec pagination massive ----------
-  const chargerCommandes = useCallback(async (showNotification = false) => {
-    console.log('🚀 Début chargement massif des commandes...');
+  const chargerToutesLesCommandes = useCallback(async (showNotification = false) => {
     setLoading(true);
     setError(null);
-    setProgress({ current: 0, total: 0 });
+    setChargementComplet(false);
     
     try {
       chargerInfosVendeur();
 
-      // Configuration pour charger un maximum de commandes
-      const BATCH_SIZE = 200;
-      const MAX_PAGES = 50;
-      
       let toutesLesCommandes = [];
       let pageActuelle = 1;
       let aPlusDePages = true;
-      let totalPagesAPI = 1;
+      let totalPages = 1;
 
-      while (aPlusDePages && pageActuelle <= MAX_PAGES) {
-        console.log(`📦 Chargement lot ${pageActuelle}...`);
+      while (aPlusDePages) {
         
-        setProgress({ current: pageActuelle, total: Math.min(totalPagesAPI, MAX_PAGES) });
+        setProgress({ 
+          current: pageActuelle, 
+          total: totalPages > 0 ? totalPages : '?' 
+        });
         
         const response = await commandesAPI.getAll({
           page: pageActuelle,
-          perPage: BATCH_SIZE,
-          sort: 'desc',
-          orderBy: 'date'
+          perPage: 100,
         });
 
-        // Extraire les données de la page courante
         let commandesPage = [];
         let paginationInfo = null;
         
         if (response?.data && Array.isArray(response.data)) {
           commandesPage = response.data;
+          paginationInfo = response;
         } else if (Array.isArray(response)) {
           commandesPage = response;
         } else if (response?.data?.data && Array.isArray(response.data.data)) {
           commandesPage = response.data.data;
-          paginationInfo = response.data.pagination || response.data.meta;
+          paginationInfo = response.data;
         }
 
-        // Récupérer les infos de pagination
         if (paginationInfo) {
-          totalPagesAPI = paginationInfo.total_pages || paginationInfo.last_page || paginationInfo.pageCount || 1;
+          totalPages = paginationInfo.last_page || paginationInfo.total_pages || 1;
         }
 
-        // Transformer les commandes de cette page
         const commandesTransformeesPage = commandesPage.map(commande => {
           const produits = extraireProduitsDeLaCommande(commande);
-          // Utiliser la fonction corrigée pour déterminer le type de vente
           const typeVente = determinerTypeVente(commande);
-          
-          // Détection de la TVA avec la fonction améliorée
           const tvaAppliquee = estTVAAppliquee(commande);
           
-          // Récupération des montants
           const montantTTC = Number(
             commande.total_ttc || 
             commande.total || 
@@ -723,7 +214,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
             tva_active: tvaAppliquee,
             tva_taux: tvaAppliquee ? 18 : 0,
             statut: mapAPIStatut(commande.statut || commande.status),
-            // Utiliser le typeVente déterminé par la fonction corrigée
             type_vente: typeVente,
             date: commande.date || commande.created_at || 
                   commande.date_commande || commande.updated_at || new Date().toISOString(),
@@ -733,28 +223,22 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
         });
 
         toutesLesCommandes = [...toutesLesCommandes, ...commandesTransformeesPage];
-        console.log(`📊 Lot ${pageActuelle}: +${commandesTransformeesPage.length} commandes (total: ${toutesLesCommandes.length})`);
         
-        // Déterminer s'il y a d'autres pages à charger
         pageActuelle++;
         
         if (paginationInfo) {
-          aPlusDePages = pageActuelle <= paginationInfo.total_pages;
-        } else if (commandesPage.length < BATCH_SIZE) {
+          aPlusDePages = pageActuelle <= paginationInfo.last_page;
+        } else if (commandesPage.length < 100) {
           aPlusDePages = false;
         } else {
-          aPlusDePages = commandesPage.length > 0;
+          aPlusDePages = commandesPage.length === 100;
         }
         
-        // Petite pause pour éviter de surcharger l'API
         if (aPlusDePages) {
-          await new Promise(resolve => setTimeout(resolve, 50));
+          await new Promise(resolve => setTimeout(resolve, 100));
         }
       }
 
-      console.log(`✅ TOTAL FINAL: ${toutesLesCommandes.length} commandes chargées`);
-
-      // Trier par date (plus récent d'abord)
       const commandesTriees = toutesLesCommandes.sort((a, b) => 
         new Date(b.date) - new Date(a.date)
       );
@@ -762,17 +246,15 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
       setCommandes(commandesTriees);
       setCommandesFiltrees(commandesTriees);
       
-      // Mettre à jour la pagination
       setPagination(prev => ({
         ...prev,
         totalItems: commandesTriees.length,
         totalPages: Math.ceil(commandesTriees.length / prev.itemsPerPage),
-        currentPage: 1 // Reset à la première page
+        currentPage: 1
       }));
       
       chargerStatistiques(commandesTriees);
       
-      // Sauvegarder en cache
       try {
         localStorage.setItem('commandes_cache', JSON.stringify({
           data: commandesTriees,
@@ -780,8 +262,9 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
           count: commandesTriees.length
         }));
       } catch (e) {
-        console.warn('Impossible de sauvegarder en cache:', e);
       }
+      
+      setChargementComplet(true);
       
       if (showNotification) {
         setShowRefreshNotification(true);
@@ -789,16 +272,333 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
       }
       
     } catch (error) {
-      console.error('❌ Erreur lors du chargement des commandes:', error);
       setError(`Impossible de charger les commandes: ${error.message}`);
+      
+      try {
+        const cached = localStorage.getItem('commandes_cache');
+        if (cached) {
+          const { data, timestamp } = JSON.parse(cached);
+          setCommandes(data);
+          setCommandesFiltrees(data);
+          setPagination(prev => ({
+            ...prev,
+            totalItems: data.length,
+            totalPages: Math.ceil(data.length / prev.itemsPerPage)
+          }));
+          chargerStatistiques(data);
+          setError(null);
+          setChargementComplet(true);
+        }
+      } catch (cacheError) {
+      }
+      
     } finally {
       setLoading(false);
       setLastUpdate(Date.now());
       setProgress({ current: 0, total: 0 });
     }
-  }, [sellerName, vendeurInfo, chargerInfosVendeur, chargerStatistiques]);
+  }, [sellerName, vendeurInfo]);
 
-  // ---------- Charger les détails d'une commande ----------
+  const estTVAAppliquee = (commande) => {
+    if (!commande) return false;
+    
+    const tvaIndicators = [
+      commande.tva_appliquee,
+      commande.tva_appliquee === 1,
+      commande.tva_appliquee === '1',
+      commande.tva_appliquee === true,
+      commande.tva_appliquee === 'true',
+      commande.tva_active,
+      commande.tva_active === 1,
+      commande.tva_active === true,
+      commande.apply_tva,
+      commande.apply_tva === 1,
+      commande.apply_tva === true,
+      commande.appliquer_tva,
+      commande.has_tva,
+      commande.tva_inclus,
+      commande.tva_inclus === 1,
+      commande.tva_inclus === true,
+      commande.tva_incluse,
+      commande.tva_incluse === 1,
+      commande.tva_incluse === true
+    ];
+
+    if (tvaIndicators.some(indicator => indicator === true)) {
+      return true;
+    }
+
+    const tvaTaux = Number(commande.tva_taux || commande.taux_tva || commande.tva_rate || 0);
+    if (tvaTaux > 0) {
+      return true;
+    }
+
+    const montantTVA = Number(
+      commande.tva || 
+      commande.montant_tva || 
+      commande.tva_amount || 
+      0
+    );
+    if (montantTVA > 0) {
+      return true;
+    }
+
+    const montantTTC = Number(
+      commande.total_ttc || 
+      commande.montant_ttc || 
+      commande.total || 
+      0
+    );
+    
+    const montantHT = Number(
+      commande.total_ht || 
+      commande.montant_ht || 
+      commande.subtotal ||
+      0
+    );
+    
+    if (montantTTC > 0 && montantHT > 0 && montantTTC > montantHT) {
+      return true;
+    }
+
+    return false;
+  };
+
+  const mapAPIStatut = (statutAPI) => {
+    const mapping = {
+      'validee': 'complétée',
+      'completed': 'complétée',
+      'pending': 'en_attente_paiement',
+      'en_attente': 'en_attente_paiement',
+      'en attente': 'en_attente_paiement',
+      'en attente paiement': 'en_attente_paiement',
+      'cancelled': 'annulée',
+      'annulee': 'annulée',
+      'annulée': 'annulée',
+      'local_only': 'en_attente_paiement',
+      'en_attente_paiement': 'en_attente_paiement',
+      'payee': 'complétée',
+      'paid': 'complétée',
+      'delivered': 'complétée',
+      'livree': 'complétée',
+      'processing': 'en_attente_paiement',
+      'traitement': 'en_attente_paiement',
+      'attente': 'en_attente_paiement',
+      'validée': 'complétée'
+    };
+    const statut = statutAPI?.toLowerCase()?.trim();
+    return mapping[statut] || statutAPI || 'en_attente_paiement';
+  };
+
+  const extraireProduitsDeLaCommande = (commandeData) => {
+    let produits = [];
+    
+    const sourcesProduits = [
+      commandeData.items,
+      commandeData.produits,
+      commandeData.lignes_commande,
+      commandeData.lignes,
+      commandeData.order_items,
+      commandeData.products,
+      commandeData.details,
+      commandeData.articles
+    ];
+    
+    for (const source of sourcesProduits) {
+      if (source && Array.isArray(source) && source.length > 0) {
+        produits = source.map(item => {
+          let nomProduit = 'Produit sans nom';
+          
+          if (item.nom) nomProduit = item.nom;
+          else if (item.name) nomProduit = item.name;
+          else if (item.libelle) nomProduit = item.libelle;
+          else if (item.designation) nomProduit = item.designation;
+          else if (item.product_nom) nomProduit = item.product_nom;
+          else if (item.product_name) nomProduit = item.product_name;
+          else if (item.product?.nom) nomProduit = item.product.nom;
+          else if (item.product?.name) nomProduit = item.product.name;
+          else if (item.produit?.nom) nomProduit = item.produit.nom;
+          else if (item.produit?.name) nomProduit = item.produit.name;
+          
+          let typeVenteProduit = 'détail';
+          if (item.type_vente) {
+            const typeStr = item.type_vente.toLowerCase();
+            if (typeStr === 'gros' || typeStr === 'gross' || typeStr === 'wholesale') {
+              typeVenteProduit = 'gros';
+            } else if (typeStr === 'détail' || typeStr === 'detail' || typeStr === 'retail') {
+              typeVenteProduit = 'détail';
+            }
+          }
+          
+          return {
+            id: item.id || item.product_id || item.produit_id,
+            nom: nomProduit,
+            quantite: Number(item.quantite || item.quantity || item.qte || item.qty || 1),
+            prix_unitaire: Number(item.prix_unitaire || item.prix || item.price || 0),
+            prix_vente: Number(item.prix_vente || item.prix_detail || item.prix_gros || item.sale_price || item.prix_unitaire || 0),
+            type_vente: typeVenteProduit,
+            sous_total: Number(item.sous_total || item.subtotal || item.total_item || 
+                              (Number(item.quantite || 1) * Number(item.prix_vente || item.prix || 0)) || 0)
+          };
+        });
+        break;
+      }
+    }
+    
+    return produits;
+  };
+
+  const chargerInfosVendeur = useCallback(async () => {
+    try {
+      const response = await profileAPI.getProfile();
+      if (response && response.data) {
+        setVendeurInfo(response.data);
+      }
+    } catch (error) {
+    }
+  }, []);
+
+  const formaterNomClient = (client) => {
+    if (!client) return 'Client';
+    
+    if (typeof client === 'object') {
+      if (client.nom && client.prenom) return `${client.prenom} ${client.nom}`;
+      if (client.nom_complet) return client.nom_complet;
+      if (client.full_name) return client.full_name;
+      if (client.name) return client.name;
+      if (client.nom) return client.nom;
+      
+      const prenom = client.firstName || client.first_name || client.prenom || '';
+      const nom = client.lastName || client.last_name || client.nom || client.name || '';
+      
+      if (prenom && nom) return `${prenom} ${nom}`;
+      if (nom) return nom;
+      if (prenom) return prenom;
+    }
+    
+    if (typeof client === 'string') return client;
+    
+    return 'Client';
+  };
+
+  const estAujourdhui = (dateString) => {
+    try {
+      const aujourdhui = new Date();
+      const dateCommande = new Date(dateString);
+      
+      return (
+        dateCommande.getDate() === aujourdhui.getDate() &&
+        dateCommande.getMonth() === aujourdhui.getMonth() &&
+        dateCommande.getFullYear() === aujourdhui.getFullYear()
+      );
+    } catch {
+      return false;
+    }
+  };
+
+  const chargerStatistiques = useCallback((commandesList) => {
+    const commandesAujourdhui = commandesList.filter(c => estAujourdhui(c.date));
+    
+    let totalGros = 0;
+    let totalDetail = 0;
+    let montantTotal = 0;
+    
+    commandesList.forEach(commande => {
+      if (commande.type_vente === 'gros') totalGros++;
+      else if (commande.type_vente === 'détail') totalDetail++;
+      else if (commande.type_vente === 'mixte') {
+        totalGros++;
+        totalDetail++;
+      }
+      
+      if (commande.total_ttc) {
+        montantTotal += commande.total_ttc;
+      } else if (commande.montant_ttc) {
+        montantTotal += commande.montant_ttc;
+      } else if (commande.total) {
+        montantTotal += commande.total;
+      }
+    });
+    
+    const statsCalc = {
+      aujourdhui: commandesAujourdhui.length,
+      en_attente: commandesAujourdhui.filter(c => {
+        const statut = c.statut?.toLowerCase() || '';
+        return statut.includes('attente') || 
+               statut === 'en_attente_paiement' || 
+               statut === 'pending';
+      }).length,
+      valide: commandesAujourdhui.filter(c => {
+        const statut = c.statut?.toLowerCase() || '';
+        return statut === 'complétée' || 
+               statut === 'completed' ||
+               statut === 'payee' ||
+               statut === 'paid';
+      }).length,
+      annulee: commandesAujourdhui.filter(c => {
+        const statut = c.statut?.toLowerCase() || '';
+        return statut === 'annulée' || 
+               statut === 'cancelled';
+      }).length,
+      total_gros: totalGros,
+      total_detail: totalDetail,
+      total_ventes: commandesList.length,
+      montant_total: montantTotal
+    };
+    
+    setStats(statsCalc);
+  }, []);
+
+  const determinerTypeVente = (commande) => {
+    if (commande.type_vente) {
+      const typeStr = commande.type_vente.toString().toLowerCase().trim();
+      if (typeStr === 'gros' || typeStr === 'gross' || typeStr === 'wholesale') {
+        return 'gros';
+      }
+      if (typeStr === 'détail' || typeStr === 'detail' || typeStr === 'retail') {
+        return 'détail';
+      }
+      if (typeStr === 'mixte' || typeStr === 'mixed') {
+        return 'mixte';
+      }
+    }
+    
+    const produits = extraireProduitsDeLaCommande(commande);
+    
+    if (produits && produits.length > 0) {
+      let aDuGros = false;
+      let aDuDetail = false;
+      
+      produits.forEach(p => {
+        if (p.type_vente) {
+          const productType = p.type_vente.toString().toLowerCase();
+          if (productType === 'gros' || productType === 'gross' || productType === 'wholesale') {
+            aDuGros = true;
+          } else if (productType === 'détail' || productType === 'detail' || productType === 'retail') {
+            aDuDetail = true;
+          }
+        }
+        
+        if (p.prix_gros && p.prix_gros > 0) {
+          aDuGros = true;
+        }
+        if (p.prix_detail && p.prix_detail > 0) {
+          aDuDetail = true;
+        }
+      });
+      
+      if (aDuGros && aDuDetail) {
+        return 'mixte';
+      } else if (aDuGros) {
+        return 'gros';
+      } else if (aDuDetail) {
+        return 'détail';
+      }
+    }
+    
+    return 'détail';
+  };
+
   const chargerDetailsCommande = async (commande) => {
     if (!commande) return;
     
@@ -807,7 +607,7 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     setError(null);
     
     try {
-      if (!commande.id) {
+      if (!commande.id || commande.id.toString().startsWith('mock-')) {
         setCommandeDetails(commande);
         setModalOuvert(true);
         setDetailsLoading(false);
@@ -824,7 +624,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
           produits.push(...commande.produits);
         }
         
-        // Utiliser la fonction corrigée pour déterminer le type de vente
         let typeVente = commande.type_vente;
         if (!typeVente) {
           typeVente = determinerTypeVente(details);
@@ -836,7 +635,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
           details.total_ttc || 
           details.total || 
           details.montant_ttc || 
-          details.grand_total ||
           commande.total_ttc || 
           0
         );
@@ -844,7 +642,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
         const totalHT = Number(
           details.total_ht || 
           details.montant_ht || 
-          details.subtotal ||
           (tvaAppliquee ? Math.round(totalTTC / 1.18) : totalTTC) ||
           commande.total_ht || 
           0
@@ -854,7 +651,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
           ? Number(
               details.tva || 
               details.montant_tva ||
-              details.tva_amount ||
               Math.round(totalHT * 0.18) || 
               commande.tva || 
               (totalTTC - totalHT) ||
@@ -908,7 +704,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
         setCommandeDetails(commande);
       }
     } catch (error) {
-      console.error('❌ Erreur lors du chargement des détails:', error);
       setError(`Erreur: ${error.message}`);
       setCommandeDetails(commande);
     } finally {
@@ -917,15 +712,13 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     }
   };
 
-  // ---------- Ouvrir les détails ----------
   const ouvrirDetails = async (commande) => {
     await chargerDetailsCommande(commande);
   };
 
-  // ---------- Écouter les événements de création de commande ----------
   useEffect(() => {
     const handleCommandeCreee = (event) => {
-      chargerCommandes(true);
+      chargerToutesLesCommandes(true);
     };
 
     window.addEventListener('commande-creee', handleCommandeCreee);
@@ -933,20 +726,17 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     return () => {
       window.removeEventListener('commande-creee', handleCommandeCreee);
     };
-  }, [chargerCommandes]);
+  }, [chargerToutesLesCommandes]);
 
-  // ---------- Effet initial ----------
   useEffect(() => {
-    chargerCommandes();
-  }, [chargerCommandes]);
+    chargerToutesLesCommandes();
+  }, [chargerToutesLesCommandes]);
 
-  // ---------- Effet pour les filtres et la pagination ----------
   useEffect(() => {
     if (commandes.length === 0) return;
     
     let commandesFiltreesTemp = [...commandes];
     
-    // Application des filtres
     if (filtreStatut !== 'tous') {
       commandesFiltreesTemp = commandesFiltreesTemp.filter(c => c.statut === filtreStatut);
     }
@@ -1017,7 +807,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
       });
     }
     
-    // Tri
     commandesFiltreesTemp.sort((a, b) => {
       let valA, valB;
       
@@ -1050,19 +839,16 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     
     setCommandesFiltrees(commandesFiltreesTemp);
     
-    // Mettre à jour la pagination avec les nouvelles données filtrées
     setPagination(prev => ({
       ...prev,
       totalItems: commandesFiltreesTemp.length,
       totalPages: Math.ceil(commandesFiltreesTemp.length / prev.itemsPerPage),
-      currentPage: 1 // Revenir à la première page quand les filtres changent
+      currentPage: 1
     }));
     
   }, [commandes, filtreStatut, filtreTypeVente, filtreDate, dateDebut, dateFin, recherche, sortField, sortDirection]);
 
-  // ---------- Effet pour la pagination ----------
   useEffect(() => {
-    // Calculer les commandes à afficher pour la page courante
     const startIndex = (pagination.currentPage - 1) * pagination.itemsPerPage;
     const endIndex = startIndex + pagination.itemsPerPage;
     const commandesPage = commandesFiltrees.slice(startIndex, endIndex);
@@ -1070,19 +856,19 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     setCommandesPaginees(commandesPage);
   }, [commandesFiltrees, pagination.currentPage, pagination.itemsPerPage]);
 
-  // ---------- Effet pour mettre à jour les statistiques ----------
   useEffect(() => {
     if (commandes.length > 0) {
       chargerStatistiques(commandes);
     }
   }, [commandes, chargerStatistiques]);
 
-  // ---------- Fonctions de pagination ----------
   const goToPage = (page) => {
     setPagination(prev => ({
       ...prev,
       currentPage: Math.max(1, Math.min(page, prev.totalPages))
     }));
+    
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const nextPage = () => {
@@ -1110,7 +896,15 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     }));
   };
 
-  // ---------- Helpers ----------
+  const reinitialiserFiltres = () => {
+    setFiltreStatut('tous');
+    setFiltreTypeVente('tous');
+    setFiltreDate('aujourdhui');
+    setDateDebut('');
+    setDateFin('');
+    setRecherche('');
+  };
+
   const getStatutIcone = (statut) => {
     switch (statut) {
       case 'complétée': return <FontAwesomeIcon icon={faCheckCircle} />;
@@ -1165,30 +959,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     }, 300);
   };
 
-  const reinitialiserFiltres = () => {
-    setFiltreStatut('tous');
-    setFiltreTypeVente('tous');
-    setFiltreDate('tous');
-    setDateDebut('');
-    setDateFin('');
-    setRecherche('');
-  };
-
-  const trierPar = (field) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDirection('desc');
-    }
-  };
-
-  const getSortIcon = (field) => {
-    if (sortField !== field) return faSort;
-    return sortDirection === 'asc' ? faArrowUp : faArrowDown;
-  };
-
-  // ---------- Rendu de la table des produits dans le modal ----------
   const renderProduitsTable = () => {
     if (!commandeDetails?.produits || commandeDetails.produits.length === 0) {
       return (
@@ -1245,13 +1015,11 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
 
   const donneesModal = commandeDetails || commandeSelectionnee;
 
-  // Calcul des indices pour l'affichage
   const startIndex = (pagination.currentPage - 1) * pagination.itemsPerPage + 1;
   const endIndex = Math.min(pagination.currentPage * pagination.itemsPerPage, pagination.totalItems);
 
-  // Génération des numéros de page pour la navigation
   const getPageNumbers = () => {
-    const delta = 2; // Nombre de pages à afficher de chaque côté de la page courante
+    const delta = 2;
     const range = [];
     const rangeWithDots = [];
     let l;
@@ -1279,7 +1047,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
-      {/* Notification de mise à jour */}
       {showRefreshNotification && (
         <div className="fixed top-4 right-4 z-50 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 text-sm animate-slide-in">
           <FontAwesomeIcon icon={faBell} className="animate-bounce" />
@@ -1287,21 +1054,19 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
         </div>
       )}
 
-      {/* Barre de progression */}
-      {loading && progress.total > 0 && (
+      {loading && !chargementComplet && (
         <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-white px-4 py-2 rounded-lg shadow-lg border border-blue-200 flex items-center gap-3 text-sm">
           <FontAwesomeIcon icon={faSpinner} className="animate-spin text-blue-600" />
-          <span>Chargement... {progress.current}/{progress.total}</span>
+          <span>Chargement des commandes... Page {progress.current}/{progress.total}</span>
           <div className="w-24 h-1.5 bg-gray-200 rounded-full overflow-hidden">
             <div 
               className="h-full bg-blue-600 transition-all duration-300"
-              style={{ width: `${(progress.current / progress.total) * 100}%` }}
+              style={{ width: progress.total > 0 ? `${(progress.current / progress.total) * 100}%` : '10%' }}
             ></div>
           </div>
         </div>
       )}
 
-      {/* Message d'erreur */}
       {error && (
         <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 text-sm">
           <FontAwesomeIcon icon={faExclamationTriangle} className="text-red-500" />
@@ -1312,7 +1077,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
         </div>
       )}
 
-      {/* En-tête */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -1321,7 +1085,8 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
               Historique des Commandes
             </h1>
             <p className="text-sm text-gray-600 mt-1">
-              {commandes.length} commandes • Dernière màj: {new Date(lastUpdate).toLocaleTimeString('fr-FR')}
+              {commandes.length} commandes au total • Dernière màj: {new Date(lastUpdate).toLocaleTimeString('fr-FR')}
+              {!loading && commandes.length > 0 && ` • ${pagination.totalPages} pages`}
             </p>
           </div>
           
@@ -1334,7 +1099,7 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
             )}
             
             <button 
-              onClick={() => chargerCommandes(true)}
+              onClick={() => chargerToutesLesCommandes(true)}
               disabled={loading}
               className="inline-flex items-center px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
             >
@@ -1344,7 +1109,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
           </div>
         </div>
 
-        {/* Stats compactes */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <div className="bg-white rounded-lg shadow p-3 border border-gray-200">
             <div className="flex items-center justify-between">
@@ -1384,7 +1148,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
         </div>
       </div>
 
-      {/* Filtres */}
       <div className="bg-white rounded-lg shadow border border-gray-200 mb-6">
         <div 
           className="p-3 cursor-pointer hover:bg-gray-50 flex items-center justify-between"
@@ -1395,7 +1158,7 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
               <FontAwesomeIcon icon={faFilter} className="text-blue-600 text-sm" />
             </div>
             <span className="text-sm font-medium text-gray-900">Filtres</span>
-            {(filtreStatut !== 'tous' || filtreTypeVente !== 'tous' || filtreDate !== 'tous' || recherche) && (
+            {(filtreStatut !== 'tous' || filtreTypeVente !== 'tous' || filtreDate !== 'aujourdhui' || recherche) && (
               <span className="px-1.5 py-0.5 bg-blue-100 text-blue-800 rounded-full text-xs">
                 Actifs
               </span>
@@ -1495,8 +1258,10 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
         )}
       </div>
 
-      {/* Sélecteur de nombre d'éléments par page */}
-      <div className="flex justify-end mb-3">
+      <div className="flex justify-between items-center mb-3">
+        <div className="text-sm text-gray-600">
+          Total: <span className="font-bold">{pagination.totalItems}</span> commandes
+        </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-600">Afficher:</span>
           <select
@@ -1515,9 +1280,8 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
         </div>
       </div>
 
-      {/* Liste des commandes */}
       <div className="bg-white rounded-lg shadow border border-gray-200">
-        {loading && progress.total === 0 ? (
+        {loading && !chargementComplet && progress.total === 0 ? (
           <div className="p-8 text-center">
             <FontAwesomeIcon icon={faSpinner} className="animate-spin text-2xl text-blue-600 mb-2" />
             <p className="text-sm text-gray-600">Chargement des commandes...</p>
@@ -1541,7 +1305,7 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
               <div key={commande.id} className="p-3 hover:bg-gray-50">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <FontAwesomeIcon icon={faFileInvoiceDollar} className="text-blue-600 text-xs" />
                       <span className="text-sm font-semibold text-gray-900">{commande.numero_commande}</span>
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${getStatutCouleur(commande.statut)}`}>
@@ -1558,7 +1322,7 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
                       </span>
                     </div>
                     
-                    <div className="flex items-center gap-3 text-xs text-gray-600 mb-1">
+                    <div className="flex items-center gap-3 text-xs text-gray-600 mb-1 flex-wrap">
                       <span className="flex items-center gap-1">
                         <FontAwesomeIcon icon={faUser} className="text-gray-400" />
                         {commande.client?.nom || 'Client'}
@@ -1579,7 +1343,7 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
                       <span className="text-gray-600">
                         {commande.produits?.length || 0} produit(s)
                       </span>
-                      {commande.tva_appliquee || commande.tva > 0 || commande.tva_taux > 0 ? (
+                      {(commande.tva_appliquee || commande.tva > 0) ? (
                         <span className="text-green-600 text-xs flex items-center gap-1">
                           <FontAwesomeIcon icon={faCheckCircle} className="text-xs" />
                           TVA 18%
@@ -1611,12 +1375,11 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
           </div>
         )}
 
-        {/* Pagination */}
         {commandesFiltrees.length > 0 && (
           <div className="px-3 py-3 border-t border-gray-200 bg-gray-50">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="text-xs text-gray-600">
-                Affichage de {startIndex} à {endIndex} sur {pagination.totalItems} commandes
+                Page {pagination.currentPage} sur {pagination.totalPages}
               </div>
               
               <div className="flex items-center gap-1">
@@ -1679,7 +1442,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
         )}
       </div>
 
-      {/* Modal des détails */}
       {modalOuvert && donneesModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={fermerDetails}></div>
@@ -1704,7 +1466,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
                 </div>
               ) : (
                 <>
-                  {/* Infos commande */}
                   <div className="bg-gray-50 rounded-lg p-3">
                     <h4 className="text-sm font-semibold mb-2">Informations</h4>
                     <div className="grid grid-cols-2 gap-2 text-sm">
@@ -1732,7 +1493,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
                     </div>
                   </div>
 
-                  {/* Client */}
                   <div className="bg-gray-50 rounded-lg p-3">
                     <h4 className="text-sm font-semibold mb-2">Client</h4>
                     <div className="space-y-1 text-sm">
@@ -1746,13 +1506,11 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
                     </div>
                   </div>
 
-                  {/* Produits */}
                   <div>
                     <h4 className="text-sm font-semibold mb-2">Produits ({donneesModal.produits?.length || 0})</h4>
                     {renderProduitsTable()}
                   </div>
 
-                  {/* Totaux avec TVA */}
                   <div className="bg-gray-50 rounded-lg p-3">
                     <div className="space-y-1 text-sm">
                       <div className="flex justify-between">
@@ -1762,9 +1520,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
                       <div className="flex justify-between">
                         <span className="text-gray-600 flex items-center gap-1">
                           TVA (18%):
-                          {(donneesModal.tva_appliquee === false || donneesModal.tva === 0) && (
-                            <span className="ml-1 text-xs text-gray-400">(non appliquée)</span>
-                          )}
                         </span>
                         <span className="font-medium">{formaterMontant(donneesModal.tva)} FCFA</span>
                       </div>
@@ -1772,18 +1527,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
                         <span>Total TTC:</span>
                         <span className="text-blue-600">{formaterMontant(donneesModal.total_ttc || donneesModal.montant_ttc)} FCFA</span>
                       </div>
-                      
-                      {(donneesModal.tva_appliquee || donneesModal.tva > 0) ? (
-                        <div className="mt-2 text-xs text-center p-2 bg-green-50 text-green-700 rounded border border-green-200">
-                          <FontAwesomeIcon icon={faCheckCircle} className="mr-1" />
-                          TVA appliquée (18%)
-                        </div>
-                      ) : (
-                        <div className="mt-2 text-xs text-center p-2 bg-gray-50 text-gray-500 rounded border border-gray-200">
-                          <FontAwesomeIcon icon={faInfoCircle} className="mr-1" />
-                          TVA non appliquée
-                        </div>
-                      )}
                     </div>
                   </div>
                 </>

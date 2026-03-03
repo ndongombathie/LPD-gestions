@@ -1,7 +1,3 @@
-// ==========================================================
-// 📊 TableauDeBord.jsx — Vendeur PREMIUM (LPD Manager)
-// ==========================================================
-
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
   TrendingUp,
@@ -11,7 +7,6 @@ import {
   RefreshCw,
   Loader2,
   AlertCircle,
-  Clock,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { commandesAPI } from "../services/api/commandes";
@@ -25,7 +20,6 @@ const TableauDeBord = () => {
   const [lastUpdate, setLastUpdate] = useState(null);
   const [aucuneVente, setAucuneVente] = useState(false);
 
-  // ========== FONCTIONS UTILITAIRES ==========
   const estAujourdhui = (dateString) => {
     try {
       const aujourdhui = new Date();
@@ -58,9 +52,7 @@ const TableauDeBord = () => {
   const formaterMontant = (v) => 
     new Intl.NumberFormat("fr-FR").format(v || 0) + " FCFA";
 
-  // ========== CALCUL DES STATISTIQUES ==========
   const stats = useMemo(() => {
-    // Si aucune vente, retourner des statistiques à zéro
     if (aucuneVente || commandes.length === 0) {
       return {
         ventesAujourdhui: 0,
@@ -90,15 +82,12 @@ const TableauDeBord = () => {
     };
   }, [commandes, aucuneVente]);
 
-  // ========== CHARGEMENT DES COMMANDES ==========
   const chargerCommandes = useCallback(async (showRefreshAnimation = false) => {
     setRefreshing(true);
     setError(null);
     setAucuneVente(false);
     
     try {
-      console.log("Chargement de l'historique des commandes...");
-      
       const response = await commandesAPI.getAll({
         perPage: 100,
         page: 1,
@@ -106,7 +95,6 @@ const TableauDeBord = () => {
         orderBy: 'date'
       });
       
-      // Gestion des différents formats de réponse
       let commandesData = [];
       if (response.data && Array.isArray(response.data)) {
         commandesData = response.data;
@@ -116,9 +104,7 @@ const TableauDeBord = () => {
         commandesData = response.data.data;
       }
       
-      // Vérifier s'il y a des données
       if (commandesData && commandesData.length > 0) {
-        // Transformer les données
         const commandesTransformees = commandesData.map(commande => {
           return {
             id: commande.id || commande.uuid,
@@ -128,25 +114,19 @@ const TableauDeBord = () => {
             date: commande.date || commande.created_at || new Date().toISOString(),
           };
         })
-        .filter(c => c.date) // Filtrer ceux sans date
-        .sort((a, b) => new Date(b.date) - new Date(a.date)); // Trier du plus récent au plus ancien
-        
-        console.log(`${commandesTransformees.length} commandes chargées`);
+        .filter(c => c.date)
+        .sort((a, b) => new Date(b.date) - new Date(a.date));
         
         if (commandesTransformees.length > 0) {
           setCommandes(commandesTransformees);
-          // Prendre les 4 plus récentes
           setCommandesRecentes(commandesTransformees.slice(0, 4));
           setAucuneVente(false);
         } else {
-          // Pas de commandes après transformation
           setCommandes([]);
           setCommandesRecentes([]);
           setAucuneVente(true);
         }
       } else {
-        // Pas de données reçues de l'API
-        console.log("Aucune commande trouvée dans l'API");
         setCommandes([]);
         setCommandesRecentes([]);
         setAucuneVente(true);
@@ -155,10 +135,8 @@ const TableauDeBord = () => {
       setLastUpdate(new Date());
       
     } catch (err) {
-      console.error("Erreur chargement des commandes:", err);
       setError("Impossible de charger les données du dashboard");
       
-      // En cas d'erreur, on affiche un état vide mais pas de données mock
       setCommandes([]);
       setCommandesRecentes([]);
       setAucuneVente(true);
@@ -169,7 +147,6 @@ const TableauDeBord = () => {
     }
   }, []);
 
-  // ========== CHARGEMENT INITIAL ==========
   useEffect(() => {
     chargerCommandes();
 
@@ -177,12 +154,11 @@ const TableauDeBord = () => {
       if (!loading) {
         chargerCommandes(true);
       }
-    }, 30000); // Rafraîchir toutes les 30 secondes
+    }, 30000);
 
     return () => clearInterval(interval);
   }, [chargerCommandes]);
 
-  // ========== RENDU ==========
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[300px] space-y-4">
@@ -194,7 +170,6 @@ const TableauDeBord = () => {
 
   return (
     <div className="space-y-8">
-      {/* ===== HEADER ===== */}
       <motion.div
         initial={{ opacity: 0, y: -15 }}
         animate={{ opacity: 1, y: 0 }}
@@ -243,13 +218,11 @@ const TableauDeBord = () => {
         </div>
       </motion.div>
 
-      {/* ===== 2 KPI CARDS ===== */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="grid grid-cols-1 md:grid-cols-2 gap-6"
       >
-        {/* Carte 1 : Ventes du jour */}
         <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
           <div className="flex justify-between items-start">
             <div>
@@ -274,7 +247,6 @@ const TableauDeBord = () => {
           </div>
         </div>
 
-        {/* Carte 2 : Commandes traitées */}
         <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
           <div className="flex justify-between items-start">
             <div>
@@ -314,7 +286,6 @@ const TableauDeBord = () => {
         </div>
       </motion.div>
 
-      {/* ===== COMMANDES RÉCENTES ===== */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -404,7 +375,6 @@ const TableauDeBord = () => {
           )}
         </div>
 
-        {/* Indicateur de mise à jour */}
         {lastUpdate && !aucuneVente && commandesRecentes.length > 0 && (
           <div className="mt-4 pt-4 border-t border-gray-200 text-center">
             <p className="text-xs text-gray-400 flex items-center justify-center gap-1">
