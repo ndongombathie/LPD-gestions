@@ -44,25 +44,20 @@ import { produitsDisponiblesAPI } from '../../services/api/produits-disponibles'
 import { commandesAPI } from '../../services/api/commandes';
 import { clientsAPI } from '../../services/api/clients';
 import profileAPI from '../../services/api/profile';
-import gestionnaireBoutiqueAPI from '../../services/api/gestionnaireBoutique';
-import useDebouncedValue from '../../gestionnaire-boutique/hooks/useDebouncedValue';
 
 const Notification = ({ type, message, onClose }) => {
   const [isVisible, setIsVisible] = useState(true);
   const [progress, setProgress] = useState(100);
 
   useEffect(() => {
-    const dismissMs = 1500;
-    const tickMs = 50;
     const timer = setTimeout(() => {
       setIsVisible(false);
       setTimeout(() => onClose(), 150);
-    }, dismissMs);
+    }, 1500);
 
-    const step = 100 / (dismissMs / tickMs);
     const progressInterval = setInterval(() => {
-      setProgress(prev => Math.max(0, prev - step));
-    }, tickMs);
+      setProgress(prev => Math.max(0, prev - (100 / 2000) * 50));
+    }, 50);
 
     return () => {
       clearTimeout(timer);

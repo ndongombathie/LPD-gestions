@@ -56,13 +56,11 @@ const formatProduit = (transferItem) => {
   
   const stockDisponible = parseInt(transferItem.quantite) || 0;
   
-  // Calculer les seuils de prix
-  const prixSeuilDetail = parseFloat(produit.prix_seuil_detail) || 0;
-  const prixSeuilGros = parseFloat(produit.prix_seuil_gros) || 0;
+  const prixSeuilDetail = parseFloat(produit.prix_seuil_detail) || Math.round(prixFinalDetail * 0.7);
+  const prixSeuilGros = parseFloat(produit.prix_seuil_gros) || Math.round(prixFinalGros * 0.7);
   
-  // Calculer nombre de cartons
-  const uniteCarton = parseInt(produit.unite_carton) || 0;
-  const nombreCarton = parseInt(transferItem.nombre_carton) || 0;
+  const uniteCarton = parseInt(produit.unite_carton) || 1;
+  const nombreCarton = parseInt(transferItem.nombre_carton) || Math.floor(stockDisponible / uniteCarton);
   
   return {
     id: produit.id,
