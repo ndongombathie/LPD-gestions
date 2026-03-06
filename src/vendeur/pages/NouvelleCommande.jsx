@@ -915,15 +915,14 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
           else if (createResponse.data.data && createResponse.data.data.id) {
             clientId = createResponse.data.data.id;
           }
-          else if (createResponse.data && typeof createResponse.data === 'object' && createResponse.data.id) {
-            clientId = createResponse.data.id;
-          }
+         
         }
         else if (createResponse && createResponse.id) {
           clientId = createResponse.id;
         }
 
-      } catch (clientError) {
+      } catch  {
+          addNotification('error', 'Erreur lors de la création du client. La commande sera créée sans lier le client.');
       }
 
       const typesDansPanier = [...new Set(panier.filter(item => item).map(item => item.type_vente))];
@@ -939,7 +938,6 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
         typeVenteGlobalCommande = 'detail';
       }
 
-      const typeVenteNormalise = normaliserTypeVente(typeVenteGlobal);
       
       const vendeurData = getVendeurApiData();
 
@@ -954,7 +952,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
           nom: item.nom,
           code_barre: item.code_barre,
           quantite: quantite,
-          type_vente: typeVenteArticle,
+          mode_vente: typeVenteArticle,
           type_vente_affichage: typeVenteArticle === 'detail' ? 'détail' : 'gros',
           prix_unitaire: prixUnitaire,
           prix_detail: parseFloat(item.prix_detail || 0),
