@@ -263,7 +263,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
         return {
           id: produitObj.id || produit.id,
           nom: produitObj.nom || produit.nom || 'Produit sans nom',
-          code_barre: produitObj.code_barre || produit.code_barre || '',
+          code_barre: produit.produit.code || produit.code_barre || '',
           
           // Prix selon votre modèle
           prix_vente_detail: prixDetail,
@@ -933,7 +933,6 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
         typeVenteGlobalCommande = 'detail';
       }
 
-      const typeVenteNormalise = normaliserTypeVente(typeVenteGlobal);
       
       console.log('🔍 Analyse du panier:', {
         typesDansPanier,
@@ -961,7 +960,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
           code_barre: item.code_barre,
           quantite: quantite,
           // ✅ CHAMP IMPORTANT: type_vente pour chaque article
-          type_vente: typeVenteArticle,
+          mode_vente: typeVenteArticle,
           type_vente_affichage: typeVenteArticle === 'detail' ? 'détail' : 'gros',
           prix_unitaire: prixUnitaire,
           prix_detail: parseFloat(item.prix_detail || 0),
@@ -1350,7 +1349,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
           nom: item.nom,
           code_barre: item.code_barre,
           quantite: item.quantite,
-          type_vente: item.type_vente,
+          mode_vente: item.type_vente,
           type_vente_affichage: item.type_vente === 'detail' ? 'Détail' : 'Gros',
           prix_unitaire: item.prix_vente,
           prix_base: item.prix_base,
