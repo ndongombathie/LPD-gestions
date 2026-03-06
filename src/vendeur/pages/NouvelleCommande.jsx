@@ -892,7 +892,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
           code_barre: item.code_barre,
           quantite: quantite,
           // ✅ CHAMP IMPORTANT: type_vente pour chaque article
-          type_vente: typeVenteArticle,
+          mode_vente: typeVenteArticle,
           type_vente_affichage: typeVenteArticle === 'detail' ? 'détail' : 'gros',
           prix_unitaire: prixUnitaire,
           prix_detail: parseFloat(item.prix_detail || 0),
@@ -961,7 +961,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
         boutique_id: vendeurData.boutique_id,
 
         // ✅ TYPE DE VENTE GLOBAL DE LA COMMANDE (important pour l'affichage dans l'historique)
-        type_vente: typeVenteGlobalCommande, // "detail", "gros", ou "mixte"
+        mode_vente: typeVenteGlobalCommande, // "detail", "gros", ou "mixte"
         type_vente_original: typeVenteGlobal, // Pour garder une trace de ce que l'utilisateur a sélectionné
         type_vente_affichage: getTypeVenteAffichage(typeVenteGlobalCommande),
         
