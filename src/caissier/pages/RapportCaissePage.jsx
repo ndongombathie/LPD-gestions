@@ -25,8 +25,14 @@ const formatCurrencyPdf = (amount) => {
   return `${n.toLocaleString('fr-FR', { useGrouping: false })} FCFA`;
 };
 
+/** Date du jour en local YYYY-MM-DD */
+const getTodayLocal = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
 const RapportCaissePage = () => {
-  const today = new Date().toISOString().split('T')[0];
+  const today = getTodayLocal();
   const [selectedDate, setSelectedDate] = useState(today);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
@@ -85,16 +91,17 @@ const RapportCaissePage = () => {
         const [journal, ventes, commandesPayeesResponse, decaissementsResponse] = await Promise.all([
           caissierApi.getCaissierCaisseJournal(selectedDate),
           caissierApi.getVentesParMoyen(selectedDate),
-          // Charger seulement les commandes payées (pas toutes les commandes)
-          caissierApi.getCommandesPayees(),
-          // Charger les décaissements validés (statut "valide") pour la date sélectionnée
+          caissierApi.getCommandesPayees({ per_page: 500 }),
           caissierApi.getDecaissements({ per_page: 500, date: selectedDate }),
         ]);
 
         if (cancelled) return;
 
-        const commandesPayees = commandesPayeesResponse?.data || commandesPayeesResponse || [];
-        const decaissements = decaissementsResponse?.data || decaissementsResponse || [];
+        // Réponse paginée Laravel : { data: [...], total, ... } ou tableau direct
+        const rawCommandes = commandesPayeesResponse?.data ?? commandesPayeesResponse;
+        const commandesPayees = Array.isArray(rawCommandes) ? rawCommandes : (rawCommandes?.data ?? []);
+        const rawDec = decaissementsResponse?.data ?? decaissementsResponse;
+        const decaissements = Array.isArray(rawDec) ? rawDec : (rawDec?.data ?? []);
 
         // Tickets encaissés = paiements du jour (heure exacte)
         const ticketsEncaisses = [];
@@ -157,14 +164,22 @@ const RapportCaissePage = () => {
           })
           .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
 
+        const totalDecaissementsCalcule = decaissementsDuJour.reduce((s, d) => s + (d.montant || 0), 0);
+        // Backend = source unique de vérité pour les totaux (computeTotals quand pas de journal)
+        const fondOuverture = journal?.fond_ouverture ?? 0;
+        const totalEncaissements = journal?.total_encaissements ?? 0;
+        const totalDecaissements = journal?.total_decaissements ?? 0;
+        const soldeTheorique = journal?.solde_theorique ?? (fondOuverture + totalEncaissements - totalDecaissements);
+        const soldeCloture = journal?.cloture ? (journal?.solde_reel ?? soldeTheorique) : soldeTheorique;
+
         setRapport({
           id: journal?.id,
-          fond_ouverture: journal?.fond_ouverture ?? 0,
-          total_encaissements: journal?.total_encaissements ?? 0,
-          total_decaissements: journal?.total_decaissements ?? 0,
-          solde_theorique: journal?.solde_theorique ?? 0,
+          fond_ouverture: fondOuverture,
+          total_encaissements: totalEncaissements,
+          total_decaissements: totalDecaissements,
+          solde_theorique: soldeTheorique,
           solde_reel: journal?.solde_reel ?? null,
-          solde_cloture: journal?.solde_reel ?? journal?.solde_theorique ?? 0,
+          solde_cloture: soldeCloture,
           cloture: Boolean(journal?.cloture),
           observations: journal?.observations ?? null,
           tickets_encaisses: ticketsEncaisses,
@@ -567,11 +582,11 @@ const RapportCaissePage = () => {
                 <div className="text-center p-5 bg-gray-50 rounded-lg">
                   <p className="text-sm text-gray-600">Solde de clôture</p>
                   <p className="text-2xl font-bold text-[#F58020] mt-2">
-                    {formatCurrency(rapport.solde_cloture || 0)}
+                    {formatCurrency(rapport.solde_cloture ?? rapport.solde_theorique ?? 0)}
                   </p>
-                  <p className="text-sm text-gray-500 mt-1">
-                    Calculé: {formatCurrency((rapport.fond_ouverture || 0) + (rapport.total_encaissements || 0) - (rapport.total_decaissements || 0))}
-                  </p>
+                  {rapport.cloture && rapport.solde_reel != null && (
+                    <p className="text-xs text-gray-500 mt-1">Solde réel saisi à la clôture</p>
+                  )}
                 </div>
             </div>
           </Card>

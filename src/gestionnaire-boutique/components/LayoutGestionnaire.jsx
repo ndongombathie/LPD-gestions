@@ -13,8 +13,8 @@ export default function LayoutGestionnaire({ children }) {
       <div className="flex flex-col flex-1 min-h-0 ml-64">
         <Navbar />
         
-        <main className="flex-1 overflow-y-auto bg-gradient-to-b from-white to-gray-50 px-8 py-6 pb-20">
-          <div className="max-w-7xl mx-auto">
+        <main className="flex-1 overflow-y-auto bg-gradient-to-b from-white to-gray-50 px-2 sm:px-4 md:px-6 py-4 sm:py-5 pb-20 w-full">
+          <div className="w-full max-w-[1600px] mx-auto">
             {children ?? <Outlet />}
           </div>
         </main>

@@ -20,9 +20,11 @@ export default function DepotLayout() {
         {/* Header Fixe */}
         <Header />
 
-        {/* Contenu dynamique */}
-        <main className="p-6">
-          <Outlet />
+        {/* Contenu dynamique - full width, marges réduites */}
+        <main className="flex-1 overflow-y-auto px-2 sm:px-4 md:px-6 py-4 w-full">
+          <div className="w-full max-w-[1600px] mx-auto">
+            <Outlet />
+          </div>
         </main>
 
       </div>
