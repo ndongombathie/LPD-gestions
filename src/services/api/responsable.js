@@ -2,11 +2,8 @@
  * ============================================================
  * 🧑‍💼 API – Responsable Module
  *
- * APIs actuelles :
+ * APIs disponibles :
  *  - GET /api/decaissements-all
- *
- * APIs futures :
- *  - GET /api/ventes-speciales-responsable
  *  - GET /api/clients-dette
  *
  * Structure :
@@ -23,8 +20,7 @@ import httpClient from "../http/client";
 
 const ENDPOINTS = {
   decaissements: "/decaissements-all",
-  ventesSpeciales: "/ventes-speciales-responsable",
-  clientsEndettes: "/clients-dette", // ✅ CORRIGÉ (important)
+  clientsEndettes: "/clients-dette",
 };
 
 const DEFAULT_PER_PAGE = 10;
@@ -32,6 +28,7 @@ const DEFAULT_PER_PAGE = 10;
 /* ===================== UTILITAIRES ===================== */
 
 const safeDate = (date) => (date ? new Date(date) : null);
+
 const safeNumber = (value) => Number(value) || 0;
 
 const formatStatut = (statut) => {
@@ -123,67 +120,25 @@ const getAllDecaissements = async (params = {}) => {
       data,
       pagination: normalizePagination(payload, page, per_page, data.length),
     };
+
   } catch (error) {
+
     console.error(
       "❌ Erreur chargement décaissements (Responsable):",
       error?.response?.data || error.message
     );
+
     throw error;
   }
 };
 
 /* ============================================================
-   🛒 2️⃣ VENTES SPÉCIALES
-   ============================================================ */
-
-const getVentesSpeciales = async (params = {}) => {
-  try {
-    const {
-      page = 1,
-      per_page = DEFAULT_PER_PAGE,
-    } = params;
-
-    const response = await httpClient.get(ENDPOINTS.ventesSpeciales, {
-      params: { page, per_page },
-    });
-
-    const payload = response?.data ?? {};
-    const rawData = Array.isArray(payload?.data) ? payload.data : [];
-
-    const data = rawData.map((vente) => ({
-      id: vente?.id,
-      reference: vente?.reference,
-      montant_total: safeNumber(vente?.montant_total),
-      date: safeDate(vente?.date),
-      client: vente?.client
-        ? {
-            id: vente.client?.id,
-            nom: vente.client?.nom,
-            prenom: vente.client?.prenom,
-            fullName: `${vente.client?.prenom ?? ""} ${vente.client?.nom ?? ""}`.trim(),
-          }
-        : null,
-    }));
-
-    return {
-      data,
-      pagination: normalizePagination(payload, page, per_page, data.length),
-    };
-  } catch (error) {
-    console.error(
-      "❌ Erreur chargement ventes spéciales (Responsable):",
-      error?.response?.data || error.message
-    );
-    throw error;
-  }
-};
-
-/* ============================================================
-   💳 3️⃣ CLIENTS ENDETTÉS
+   💳 2️⃣ CLIENTS ENDETTÉS
    ============================================================ */
 
 const getClientsEndettes = async (params = {}) => {
   try {
+
     const {
       page = 1,
       per_page = DEFAULT_PER_PAGE,
@@ -212,11 +167,14 @@ const getClientsEndettes = async (params = {}) => {
       data,
       pagination: normalizePagination(payload, page, per_page, data.length),
     };
+
   } catch (error) {
+
     console.error(
       "❌ Erreur chargement clients endettés (Responsable):",
       error?.response?.data || error.message
     );
+
     throw error;
   }
 };
@@ -227,7 +185,6 @@ const getClientsEndettes = async (params = {}) => {
 
 const responsableAPI = {
   getAllDecaissements,
-  getVentesSpeciales,
   getClientsEndettes,
 };
 

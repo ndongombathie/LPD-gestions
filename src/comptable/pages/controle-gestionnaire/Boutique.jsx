@@ -1,12 +1,10 @@
 // ==========================================================
-// 🏪 Boutique.jsx — VERSION PRO MAX 100% FIABLE STABLE
-// Regroupement + Recherche globale + Impression complète réelle
+// 🏪 Boutique.jsx — VERSION SIMPLE SANS IMPRESSION
+// Regroupement + Recherche globale
 // ==========================================================
 
 import React, { useEffect, useMemo, useState, useCallback } from "react";
-import { Search, Printer, AlertTriangle, CheckCircle } from "lucide-react";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import { Search, AlertTriangle, CheckCircle } from "lucide-react";
 import boutiqueAPI from "@/services/api/boutique";
 
 const PER_PAGE = 25;
@@ -25,7 +23,6 @@ const getEtat = (quantite, seuil) => {
 export default function Boutique() {
   const [rows, setRows] = useState([]);
   const [allRows, setAllRows] = useState([]);
-  const [allPaginatedRows, setAllPaginatedRows] = useState([]);
   const [pagination, setPagination] = useState(null);
 
   const [page, setPage] = useState(1);
@@ -84,39 +81,10 @@ export default function Boutique() {
     }
   }, []);
 
-  /* ================= FETCH TOUTES LES PAGES PAGINÉES ================= */
-  const fetchAllPaginated = useCallback(async () => {
-    try {
-      let currentPage = 1;
-      let lastPage = 1;
-      let allPaginatedData = [];
-
-      do {
-        const res = await boutiqueAPI.getProduitsControle({
-          page: currentPage,
-          per_page: PER_PAGE,
-        });
-
-        allPaginatedData = [...allPaginatedData, ...(res.data ?? [])];
-        lastPage = res.pagination?.lastPage ?? 1;
-        currentPage++;
-
-      } while (currentPage <= lastPage);
-
-      setAllPaginatedRows(allPaginatedData);
-      return allPaginatedData;
-
-    } catch (error) {
-      console.error("Erreur fetch global paginé boutique :", error);
-      return [];
-    }
-  }, []);
-
   useEffect(() => {
     fetchPaginated();
     fetchAll();
-    fetchAllPaginated();
-  }, [fetchPaginated, fetchAll, fetchAllPaginated]);
+  }, [fetchPaginated, fetchAll]);
 
   /* ================= NORMALISATION + REGROUPEMENT ================= */
   const normalizeAndGroup = (data) => {
@@ -124,15 +92,18 @@ export default function Boutique() {
 
     data.forEach((row) => {
       const produit = row.produit ?? {};
-      const key = `${produit.nom}-${produit.categorie_id}`;
+      
+      // Utilisation de l'ID du produit comme clé pour le regroupement
+      // (plus fiable que nom + catégorie_id)
+      const key = produit.id || `${produit.nom}-${produit.categorie_id}`;
 
       const quantite = Number(row.quantite ?? 0);
       const seuil = Number(row.seuil ?? 0);
       const nombre_carton = Number(row.nombre_carton ?? 0);
       
-      // Récupérer la catégorie
+      // Récupérer la catégorie depuis produit.categorie (structure JSON correcte)
       const categorie = produit.categorie ?? {};
-      const nom_categorie = categorie.nom_categorie ?? "Non catégorisé";
+      const nom_categorie = categorie.nom ?? "Non catégorisé";
 
       if (!map.has(key)) {
         map.set(key, {
@@ -163,24 +134,6 @@ export default function Boutique() {
 
   const pageData = useMemo(() => normalizeAndGroup(rows), [rows]);
   const globalData = useMemo(() => normalizeAndGroup(allRows), [allRows]);
-  
-  // Données paginées NON regroupées pour impression
-  const paginatedDataForPrint = useMemo(() => {
-    return allPaginatedRows.map((row) => {
-      const produit = row.produit ?? {};
-      const categorie = produit.categorie ?? {};
-      
-      return {
-        nom: produit.nom ?? "—",
-        categorie_nom: categorie.nom_categorie ?? "Non catégorisé",
-        prix_achat: produit.prix_achat ?? 0,
-        nombre_carton: Number(row.nombre_carton ?? 0),
-        quantite: Number(row.quantite ?? 0),
-        seuil: Number(row.seuil ?? 0),
-        etat: getEtat(Number(row.quantite ?? 0), Number(row.seuil ?? 0))
-      };
-    });
-  }, [allPaginatedRows]);
 
   /* ================= RECHERCHE GLOBALE ================= */
   const filteredData = useMemo(() => {
@@ -192,215 +145,6 @@ export default function Boutique() {
       p.categorie_nom.toLowerCase().includes(q)
     );
   }, [searchTerm, pageData, globalData]);
-
-  /* ================= PDF PAGE ACTUELLE ================= */
-  const generatePagePDF = (data, fileName) => {
-    const doc = new jsPDF();
-    const now = new Date();
-
-    doc.setFillColor(71, 46, 173);
-    doc.roundedRect(14, 10, 180, 24, 3, 3, "F");
-
-    doc.setTextColor(245, 128, 32);
-    doc.setFontSize(26);
-    doc.text("LPD", 105, 26, { align: "center" });
-
-    doc.setTextColor(255);
-    doc.setFontSize(10);
-    doc.text("LIBRAIRIE PAPETERIE DARADJI", 105, 32, {
-      align: "center",
-    });
-
-    doc.setTextColor(0);
-    doc.text(
-      `Date impression : ${now.toLocaleDateString("fr-FR")} ${now.toLocaleTimeString("fr-FR")}`,
-      14,
-      42
-    );
-    
-    doc.text(`Page ${pagination?.currentPage || 1} / ${pagination?.lastPage || 1}`, 14, 48);
-
-    autoTable(doc, {
-      startY: 55,
-      head: [[
-        "Produit",
-        "Catégorie",
-        "Prix Achat",
-        "Cartons",
-        "Seuil",
-        "État"
-      ]],
-      body: data.map((p) => [
-        p.nom,
-        p.categorie_nom,
-        formatFCFA(p.prix_achat),
-        p.nombre_carton,
-        p.seuil,
-        getEtat(p.quantite, p.seuil)
-      ]),
-      headStyles: { fillColor: [71, 46, 173] },
-      styles: { fontSize: 8 },
-    });
-
-    doc.save(fileName);
-  };
-
-  /* ================= PDF TOUTES LES PAGES (IMPRESSION GLOBALE) ================= */
-  const generateAllPagesPDF = async () => {
-    const doc = new jsPDF();
-    const now = new Date();
-    let currentPage = 1;
-    let lastPage = pagination?.lastPage || 1;
-    let yOffset = 55;
-
-    // En-tête principal
-    doc.setFillColor(71, 46, 173);
-    doc.roundedRect(14, 10, 180, 24, 3, 3, "F");
-
-    doc.setTextColor(245, 128, 32);
-    doc.setFontSize(26);
-    doc.text("LPD", 105, 26, { align: "center" });
-
-    doc.setTextColor(255);
-    doc.setFontSize(10);
-    doc.text("LIBRAIRIE PAPETERIE DARADJI", 105, 32, {
-      align: "center",
-    });
-
-    doc.setTextColor(0);
-    doc.text(
-      `Date impression globale : ${now.toLocaleDateString("fr-FR")} ${now.toLocaleTimeString("fr-FR")}`,
-      14,
-      42
-    );
-    
-    doc.text(`TOTAL: ${allPaginatedRows.length} produits sur ${lastPage} pages`, 14, 48);
-
-    // Paginer à travers toutes les pages
-    for (let pageNum = 1; pageNum <= lastPage; pageNum++) {
-      try {
-        // Récupérer les données de la page courante
-        const res = await boutiqueAPI.getProduitsControle({
-          page: pageNum,
-          per_page: PER_PAGE,
-        });
-
-        const pageRows = res.data ?? [];
-        
-        // Préparer les données pour cette page
-        const pagePrintData = pageRows.map((row) => {
-          const produit = row.produit ?? {};
-          const categorie = produit.categorie ?? {};
-          
-          return {
-            nom: produit.nom ?? "—",
-            categorie_nom: categorie.nom_categorie ?? "Non catégorisé",
-            prix_achat: produit.prix_achat ?? 0,
-            nombre_carton: Number(row.nombre_carton ?? 0),
-            quantite: Number(row.quantite ?? 0),
-            seuil: Number(row.seuil ?? 0)
-          };
-        });
-
-        // Ajouter un en-tête de page
-        if (pageNum > 1) {
-          doc.addPage();
-          yOffset = 20;
-        } else {
-          yOffset = 55;
-        }
-
-        // Titre de la page
-        doc.setFillColor(71, 46, 173, 0.1);
-        doc.setFontSize(10);
-        doc.setTextColor(71, 46, 173);
-        doc.text(`Page ${pageNum} / ${lastPage}`, 14, yOffset - 5);
-
-        // Tableau pour cette page
-        autoTable(doc, {
-          startY: yOffset,
-          head: [[
-            "Produit",
-            "Catégorie",
-            "Prix Achat",
-            "Cartons",
-            "Seuil",
-            "État"
-          ]],
-          body: pagePrintData.map((p) => [
-            p.nom,
-            p.categorie_nom,
-            formatFCFA(p.prix_achat),
-            p.nombre_carton,
-            p.seuil,
-            getEtat(p.quantite, p.seuil)
-          ]),
-          headStyles: { fillColor: [71, 46, 173] },
-          styles: { fontSize: 8 },
-          didDrawPage: (data) => {
-            // Pied de page
-            doc.setFontSize(8);
-            doc.setTextColor(100);
-            doc.text(
-              `LPD - Document généré le ${now.toLocaleDateString("fr-FR")}`,
-              14,
-              doc.internal.pageSize.height - 10
-            );
-          }
-        });
-
-        yOffset = doc.lastAutoTable.finalY + 10;
-
-      } catch (error) {
-        console.error(`Erreur chargement page ${pageNum}:`, error);
-      }
-    }
-
-    // Page récapitulative
-    doc.addPage();
-    
-    // Résumé global
-    doc.setFillColor(71, 46, 173);
-    doc.roundedRect(14, 20, 180, 24, 3, 3, "F");
-    doc.setTextColor(255);
-    doc.setFontSize(16);
-    doc.text("RÉCAPITULATIF GLOBAL", 105, 35, { align: "center" });
-    
-    doc.setTextColor(0);
-    doc.setFontSize(12);
-    doc.text(`Total pages: ${lastPage}`, 14, 60);
-    doc.text(`Total produits: ${allPaginatedRows.length}`, 14, 70);
-    doc.text(`Date d'impression: ${now.toLocaleDateString("fr-FR")} ${now.toLocaleTimeString("fr-FR")}`, 14, 80);
-
-    // Statistiques par état de stock
-    const stats = allPaginatedRows.reduce((acc, row) => {
-      const etat = getEtat(Number(row.quantite ?? 0), Number(row.seuil ?? 0));
-      acc[etat] = (acc[etat] || 0) + 1;
-      return acc;
-    }, {});
-
-    doc.setFontSize(10);
-    doc.setTextColor(71, 46, 173);
-    doc.text("État des stocks:", 14, 100);
-    doc.setTextColor(0);
-    
-    let yPos = 110;
-    Object.entries(stats).forEach(([etat, count]) => {
-      const pourcentage = ((count / allPaginatedRows.length) * 100).toFixed(1);
-      doc.text(`- ${etat}: ${count} produits (${pourcentage}%)`, 20, yPos);
-      yPos += 10;
-    });
-
-    doc.save("Stock_Boutique_Toutes_Pages.pdf");
-  };
-
-  const imprimerPage = () => {
-    generatePagePDF(filteredData, "Stock_Boutique_Page.pdf");
-  };
-
-  const imprimerGlobale = () => {
-    generateAllPagesPDF();
-  };
 
   // Fonction pour afficher la fiche produit
   const afficherFiche = (produit) => {
@@ -421,9 +165,9 @@ export default function Boutique() {
         Contrôle Gestionnaire — Boutique
       </h1>
 
-      {/* FILTRES */}
-      <div className="bg-white rounded-2xl shadow-md p-4 flex gap-4 items-center flex-wrap">
-        <div className="flex items-center gap-2 flex-1 min-w-[250px]">
+      {/* RECHERCHE SEULEMENT (sans bouton d'impression) */}
+      <div className="bg-white rounded-2xl shadow-md p-4">
+        <div className="flex items-center gap-2">
           <Search size={18} className="text-[#472EAD]" />
           <input
             className="w-full px-3 py-2 rounded-lg bg-gray-50 text-sm"
@@ -435,21 +179,6 @@ export default function Boutique() {
             }}
           />
         </div>
-
-        <button
-          onClick={imprimerPage}
-          className="px-4 py-2 bg-[#472EAD] text-white rounded-xl flex items-center gap-2 hover:bg-[#5a3bc9] transition-colors"
-        >
-          <Printer size={16} /> Imprimer page
-        </button>
-
-        <button
-          onClick={imprimerGlobale}
-          className="px-4 py-2 bg-emerald-600 text-white rounded-xl flex items-center gap-2 hover:bg-emerald-700 transition-colors"
-          title="Imprime TOUTES les pages de la boutique"
-        >
-          <Printer size={16} /> Imprimer TOUTES les pages ({pagination?.lastPage || 0})
-        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -459,9 +188,6 @@ export default function Boutique() {
             <span className="text-sm text-gray-600">
               Affichage page {pagination?.currentPage || 1} / {pagination?.lastPage || 1}
               {searchTerm && " - Résultats filtrés"}
-            </span>
-            <span className="text-sm font-semibold text-[#472EAD]">
-              Total: {globalData.length} produits
             </span>
           </div>
 
@@ -639,9 +365,6 @@ export default function Boutique() {
           <div className="flex items-center gap-2">
             <span className="font-semibold text-[#472EAD]">
               Page {pagination.currentPage} / {pagination.lastPage}
-            </span>
-            <span className="text-gray-500">
-              ({pagination.total || 0} produits)
             </span>
           </div>
 

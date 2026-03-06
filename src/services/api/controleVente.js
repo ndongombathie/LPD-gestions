@@ -1,15 +1,13 @@
 // ==========================================================
-// 🧾 Controle Vente API — VERSION ENTERPRISE STABLE
-// Compatible Laravel pagination
-// Endpoint: GET api/commandes-payees
+// 🧾 Controle Vente API — VERSION STABLE + FILTRE TYPE CLIENT
 // ==========================================================
 
 import httpClient from "../http/client";
 
 const ENDPOINT = "/commandes-payees";
-const DEFAULT_PER_PAGE = 15;
+const DEFAULT_PER_PAGE = 10;
 
-/* ================= UTIL ================= */
+// ---------- helpers ----------
 
 const toNumber = (v) => {
   const n = Number(v);
@@ -20,14 +18,15 @@ const safeString = (v) => (v ? String(v) : "");
 
 const fullName = (person) => {
   if (!person) return "";
-  return `${safeString(person.nom)} ${safeString(person.prenom)}`.trim();
+  return `${safeString(person.prenom)} ${safeString(person.nom)}`.trim();
 };
 
-/* ================= API ================= */
+// ---------- API ----------
 
 const controleVenteAPI = {
 
   async getCommandes(params = {}) {
+
     try {
 
       const {
@@ -35,9 +34,8 @@ const controleVenteAPI = {
         per_page = DEFAULT_PER_PAGE,
         date_debut,
         date_fin,
+        type_client // 🔥 filtre client
       } = params;
-
-      /* ================= BUILD QUERY SAFE ================= */
 
       const queryParams = {
         page,
@@ -47,7 +45,8 @@ const controleVenteAPI = {
       if (date_debut) queryParams.date_debut = date_debut;
       if (date_fin) queryParams.date_fin = date_fin;
 
-      /* ================= REQUEST ================= */
+      // 🔥 filtre type client
+      if (type_client) queryParams.type_client = type_client;
 
       const res = await httpClient.get(ENDPOINT, {
         params: queryParams,
@@ -55,21 +54,35 @@ const controleVenteAPI = {
 
       const payload = res?.data ?? {};
 
-      /* ================= MAP DATA ================= */
-
       const items = Array.isArray(payload.data)
         ? payload.data.map((cmd) => {
 
             const total = toNumber(cmd.total);
 
-            const totalPaye = Array.isArray(cmd.paiements)
-              ? cmd.paiements.reduce(
-                  (sum, p) => sum + toNumber(p.montant),
-                  0
-                )
-              : 0;
+            const paiements = Array.isArray(cmd.paiements)
+              ? cmd.paiements
+              : [];
 
-            const reste = total - totalPaye;
+            const totalPaye = paiements.reduce(
+              (sum, p) => sum + toNumber(p.montant),
+              0
+            );
+
+            // ---------- calcul reste ----------
+
+            let reste = total - totalPaye;
+
+            if (paiements.length > 0) {
+
+              const dernierPaiement = paiements[paiements.length - 1];
+
+              if (dernierPaiement?.reste_du !== undefined) {
+                reste = toNumber(dernierPaiement.reste_du);
+              }
+
+            }
+
+            // ---------- nombre produits ----------
 
             const nombreProduits = Array.isArray(cmd.details)
               ? cmd.details.reduce(
@@ -79,48 +92,76 @@ const controleVenteAPI = {
               : 0;
 
             return {
+
               id: cmd.id ?? null,
 
-              // ⚠ On garde la date brute du backend
+              numero: cmd.numero ?? null,
+
               date: cmd.date ?? cmd.created_at ?? null,
 
               statut: safeString(cmd.statut),
+
               typeVente: safeString(cmd.type_vente),
 
               total,
+
               totalPaye,
+
               reste,
 
               nombreProduits,
 
+              // ---------- client ----------
+
+              typeClient: safeString(cmd.client?.type_client),
+
               clientNom: fullName(cmd.client),
+
+              clientTelephone: safeString(cmd.client?.telephone),
+
+              // ---------- vendeur ----------
+
               vendeurNom: fullName(cmd.vendeur),
 
-              paiements: Array.isArray(cmd.paiements) ? cmd.paiements : [],
+              // ---------- relations ----------
+
+              paiements,
+
               details: Array.isArray(cmd.details) ? cmd.details : [],
+
             };
+
           })
         : [];
 
-      /* ================= RETURN ================= */
-
       return {
+
         items,
+
         pagination: {
+
           currentPage: payload.current_page ?? 1,
+
           lastPage: payload.last_page ?? 1,
+
           total: payload.total ?? 0,
+
           perPage: payload.per_page ?? DEFAULT_PER_PAGE,
-          nextPageUrl: payload.next_page_url ?? null,
-          prevPageUrl: payload.prev_page_url ?? null,
+
         },
+
       };
 
     } catch (error) {
-      console.error("❌ Erreur GET commandes payées:", error);
+
+      console.error("Erreur GET commandes payées:", error);
+
       throw error;
+
     }
+
   },
+
 };
 
 export default controleVenteAPI;
