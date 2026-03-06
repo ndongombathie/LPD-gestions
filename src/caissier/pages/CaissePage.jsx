@@ -154,48 +154,39 @@ const CaissePage = () => {
   };
 
   useEffect(() => {
-    fetchTicketsSafe(1, '');
-    fetchDashboardStats(); // Charger les statistiques pour initialiser le compteur de tickets traités
-  }, []); // Seulement au montage
+      if (!boutiqueId) return;
 
-   useEffect(() => {
-          if (!boutiqueId) return;
-          const channel = echo.private(`boutique.${boutiqueId}`);
-          const listener = () => {
-              fetchTicketsSafe(currentPage, filterText.trim());
-          };
-          channel.listen(".commande.validee", listener);
-          return () => {
-              try {
-                  channel.stopListening(".commande.validee");
-                  echo.leave(`private-boutique.${boutiqueId}`);
-              } catch  {
-                toast.error('Erreur', {
-               description: 'Impossible de charger les tickets en attente'
-      });
-              }
-          };
-      }, [boutiqueId]);
+      const channel = echo.private(`boutique.${boutiqueId}`);
+
+      const listener = () => {
+          fetchTicketsSafe(currentPage, filterText.trim());
+      };
+
+      channel.listen(".commande.validee", listener);
+
+      return () => {
+          channel.stopListening(".commande.validee");
+          echo.leave(`boutique.${boutiqueId}`);
+      };
+  }, [boutiqueId, currentPage, filterText]);
+    
   
   useEffect(() => {
-          if (!boutiqueId) return;
-          const channel = echo.private(`boutique.${boutiqueId}`);
-          const listener = () => {
-              fetchTicketsSafe(currentPage, filterText.trim());
-          };
-          channel.listen(".paiement.cree", listener);
-          return () => {
-              try {
-                  channel.stopListening(".paiement.cree");
-                  echo.leave(`private-boutique.${boutiqueId}`);
-              } catch {
-                toast.error('Erreur', {
-                description: 'Impossible de charger les tickets en attente'
-      });
-                
-              }
-          };
-      }, [boutiqueId]);
+      if (!boutiqueId) return;
+
+      const channel = echo.private(`boutique.${boutiqueId}`);
+
+      const listener = () => {
+          fetchTicketsSafe(currentPage, filterText.trim());
+      };
+
+      channel.listen(".paiement.cree", listener);
+
+      return () => {
+          channel.stopListening(".paiement.cree");
+          echo.leave(`boutique.${boutiqueId}`);
+      };
+  }, [boutiqueId, currentPage, filterText]);
 
   // Si on arrive depuis une notification (selectedTicketId), ouvrir directement le ticket
   const handledSelectedTicketRef = useRef(false);
