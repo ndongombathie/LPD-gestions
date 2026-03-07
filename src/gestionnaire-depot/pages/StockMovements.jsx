@@ -1,5 +1,6 @@
 // src/gestionnaire-depot/pages/StockMovements.jsx
 import React, { useMemo, useState, useEffect, useRef } from "react";
+import toast from 'react-hot-toast';
 import "../styles/depot-fix.css";
 import {
   ArrowDownRight,
@@ -51,7 +52,6 @@ export default function StockMovements() {
   const [loadingProducts, setLoadingProducts] = useState(false);
 
   // ===== ÉTATS DES FILTRES =====
-  const [searchTerm, setSearchTerm] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [activeTab, setActiveTab] = useState("historique"); // "historique", "en-attente", "annulees"
@@ -112,6 +112,7 @@ export default function StockMovements() {
         setProducts(formatted);
       } catch (err) {
         console.error("❌ Erreur chargement produits:", err);
+        toast.error("Erreur lors du chargement des produits");
       } finally {
         setLoadingProducts(false);
       }
@@ -126,9 +127,9 @@ export default function StockMovements() {
     else if (activeTab === "en-attente") currentPage = pendingPage;
     else if (activeTab === "annulees") currentPage = cancelledPage;
 
-    const filters = { searchTerm, dateFrom, dateTo, activeTab };
+    const filters = { dateFrom, dateTo, activeTab };
     fetchMovements(currentPage, pageSize, filters);
-  }, [activeTab, historyPage, pendingPage, cancelledPage, pageSize, searchTerm, dateFrom, dateTo, fetchMovements]);
+  }, [activeTab, historyPage, pendingPage, cancelledPage, pageSize, dateFrom, dateTo, fetchMovements]);
 
   // ===== GESTION DU CHANGEMENT DE PAGE =====
   const handlePageChange = (newPage) => {
@@ -139,10 +140,10 @@ export default function StockMovements() {
 
   // ===== RÉINITIALISATION DES FILTRES =====
   const handleResetFilters = () => {
-    setSearchTerm("");
     setDateFrom("");
     setDateTo("");
     handlePageChange(1);
+    toast.success("Filtres réinitialisés");
   };
 
   // ===== GESTION FORMULAIRE DE TRANSFERT =====
@@ -227,31 +228,37 @@ export default function StockMovements() {
     if (result.success) {
       const currentPage = activeTab === "historique" ? historyPage : 
                          activeTab === "en-attente" ? pendingPage : cancelledPage;
-      const filters = { searchTerm, dateFrom, dateTo, activeTab };
+      const filters = { dateFrom, dateTo, activeTab };
       
       await fetchMovements(currentPage, pageSize, filters);
       await fetchStats();
       
-      alert("✅ Transfert créé !");
+      toast.success("✅ Transfert créé avec succès !");
       closeModal();
     } else {
       setFormError(result.error);
+      toast.error(result.error);
     }
     
     setIsSubmitting(false);
   };
 
   const cancelPendingSortie = async (sortieId) => {
+    const loadingToast = toast.loading("Annulation en cours...");
     const result = await cancelTransfer(sortieId);
+    
     if (result.success) {
       setCancelPendingId(null);
       const currentPage = activeTab === "historique" ? historyPage : activeTab === "en-attente" ? pendingPage : cancelledPage;
-      const filters = { searchTerm, dateFrom, dateTo, activeTab };
+      const filters = { dateFrom, dateTo, activeTab };
       await fetchMovements(currentPage, pageSize, filters);
       await fetchStats();
-      alert("✅ Transfert annulé.");
+      
+      toast.dismiss(loadingToast);
+      toast.success("✅ Transfert annulé avec succès !");
     } else {
-      alert(result.error);
+      toast.dismiss(loadingToast);
+      toast.error(result.error || "Erreur lors de l'annulation");
     }
   };
 
@@ -487,7 +494,6 @@ export default function StockMovements() {
 
       {/* STATISTIQUES - 3 cartes */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {/* Entrées */}
         <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex items-center justify-between">
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wider">Entrées</p>
@@ -499,7 +505,6 @@ export default function StockMovements() {
           </div>
         </div>
         
-        {/* Sorties */}
         <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex items-center justify-between">
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wider">Sorties</p>
@@ -511,7 +516,6 @@ export default function StockMovements() {
           </div>
         </div>
         
-        {/* En attente - utilise le nombre de l'API */}
         <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex items-center justify-between">
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wider">En attente</p>
@@ -524,7 +528,7 @@ export default function StockMovements() {
         </div>
       </div>
 
-      {/* ONGLETS - SANS LES NOMBRES */}
+      {/* ONGLETS */}
       <div className="border-b border-gray-200">
         <nav className="flex space-x-4">
           <button
@@ -563,26 +567,13 @@ export default function StockMovements() {
         </nav>
       </div>
 
-      {/* FILTRES COMMUNS */}
+      {/* FILTRES SIMPLIFIÉS */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 space-y-4">
         <div className="flex items-center gap-2 text-xs text-gray-500">
           <Filter size={14} />
-          <span className="font-medium">Filtres</span>
+          <span className="font-medium">Filtres par date</span>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <p className="text-xs font-medium text-gray-600 mb-1">Recherche</p>
-            <div className="relative">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Produit, fournisseur..."
-                className="w-full border border-gray-300 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                value={searchTerm}
-                onChange={(e) => { setSearchTerm(e.target.value); handlePageChange(1); }}
-              />
-            </div>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <p className="text-xs font-medium text-gray-600 mb-1">Date début</p>
             <input
@@ -652,137 +643,138 @@ export default function StockMovements() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {movements.map((item) => (
-                    <tr
-                      key={item.id}
-                      className="hover:bg-gray-50 transition-colors cursor-pointer"
-                      onClick={() => setSelectedMovement(item)}
-                    >
-                      {activeTab !== "en-attente" && (
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${
-                              item.type === "Entrée"
-                                ? item.sousType === 'creation'
-                                  ? "bg-purple-50 text-purple-700"
-                                  : item.sousType === 'reapprovisionnement'
-                                  ? "bg-green-50 text-green-700"
-                                  : "bg-green-50 text-green-700"
-                                : item.sousType === 'transfert'
-                                ? "bg-blue-50 text-blue-700"
-                                : item.sousType === 'retour'
-                                ? "bg-orange-50 text-orange-700"
-                                : "bg-gray-50 text-gray-700"
-                            }`}>
+                  {movements.map((item) => {
+                    // item.sousType est déjà défini dans le hook
+                    return (
+                      <tr
+                        key={item.id}
+                        className="hover:bg-gray-50 transition-colors cursor-pointer"
+                        onClick={() => setSelectedMovement(item)}
+                      >
+                        {activeTab !== "en-attente" && (
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              {/* Pour les entrées : afficher le type principal + étiquette */}
+                              {item.type === "Entrée" ? (
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="text-xs font-medium text-gray-500">Entrée</span>
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium tracking-wide ${
+                                    item.sousType === 'creation' 
+                                      ? 'bg-purple-100 text-purple-700 border border-purple-200'
+                                      : item.sousType === 'reapprovisionnement'
+                                      ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                                      : item.sousType === 'annulation'
+                                      ? 'bg-cyan-100 text-cyan-700 border border-cyan-200'
+                                      : 'bg-gray-100 text-gray-700 border border-gray-200'
+                                  }`}>
+                                    {item.sousType === 'creation' && 'Ajout produit'}
+                                    {item.sousType === 'reapprovisionnement' && 'Approvisionnement'}
+                                    {item.sousType === 'annulation' && 'Annulation'}
+                                  </span>
+                                </div>
+                              ) : (
+                                /* Pour les sorties */
+                                <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${
+                                  item.sousType === 'transfert'
+                                    ? 'bg-blue-50 text-blue-700'
+                                    : 'bg-gray-50 text-gray-700'
+                                }`}>
+                                  {item.sousType === 'transfert' ? (
+                                    <>
+                                      <Truck size={14} />
+                                      Transfert
+                                    </>
+                                  ) : (
+                                    <>
+                                      <MinusCircle size={14} />
+                                      Diminution
+                                    </>
+                                  )}
+                                </span>
+                              )}
+                              {activeTab === "annulees" && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-800 rounded-full text-xs">
+                                  <Ban size={10} /> Annulé
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                        )}
+                        <td className="px-4 py-3 text-gray-800 flex items-center gap-2">
+                          <Package size={14} className="text-gray-400" />
+                          {item.product}
+                        </td>
+                        {activeTab !== "en-attente" ? (
+                          <td className="px-4 py-3 text-xs text-gray-700">
+                            <div className="flex items-center gap-2">
                               {item.type === "Entrée" ? (
                                 <>
-                                  <ArrowDownRight size={14} />
-                                  {item.sousType === 'creation' ? 'Création' : 
-                                   item.sousType === 'reapprovisionnement' ? 'Réappro' : 'Entrée'}
-                                </>
-                              ) : item.sousType === 'transfert' ? (
-                                <>
-                                  <Truck size={14} />
-                                  Transfert
-                                </>
-                              ) : item.sousType === 'retour' ? (
-                                <>
-                                  <Ban size={14} />
-                                  Retour
+                                  <Building size={12} className="text-green-500" />
+                                  <span className="text-green-600">
+                                    {item.sousType === 'creation' ? 'Ajout: ' : 
+                                     item.sousType === 'reapprovisionnement' ? 'Appro: ' : 
+                                     item.sousType === 'annulation' ? 'Retour: ' : ''}
+                                    {item.sousType === 'annulation' ? 'Dépôt' : item.source}
+                                  </span>
                                 </>
                               ) : (
                                 <>
-                                  <MinusCircle size={14} />
-                                  Diminution
+                                  {item.sousType === 'transfert' ? (
+                                    <>
+                                      <Store size={12} className="text-indigo-500" />
+                                      <span className="text-indigo-600">Boutique Colobane</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <MinusCircle size={12} className="text-gray-500" />
+                                      <span className="text-gray-600">Fournisseur</span>
+                                    </>
+                                  )}
                                 </>
                               )}
-                            </span>
-                            {activeTab === "annulees" && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-800 rounded-full text-xs">
-                                <Ban size={10} /> Annulé
-                              </span>
-                            )}
-                          </div>
+                            </div>
+                          </td>
+                        ) : (
+                          <td className="px-4 py-3 text-xs text-gray-700">
+                            <div className="flex items-center gap-2">
+                              <Store size={12} className="text-indigo-500" />
+                              <span className="text-indigo-600">Boutique Colobane</span>
+                            </div>
+                          </td>
+                        )}
+                        <td className="px-4 py-3 text-center">
+                          <span className={`font-semibold ${
+                            item.type === "Entrée" ? "text-green-600" : "text-red-600"
+                          }`}>
+                            {item.type === "Entrée" ? "+" : "-"}{item.quantity}
+                          </span>
                         </td>
-                      )}
-                      <td className="px-4 py-3 text-gray-800 flex items-center gap-2">
-                        <Package size={14} className="text-gray-400" />
-                        {item.product}
-                      </td>
-                      {activeTab !== "en-attente" ? (
-                        <td className="px-4 py-3 text-xs text-gray-700">
-                          <div className="flex items-center gap-2">
-                            {item.type === "Entrée" ? (
-                              <>
-                                <Building size={12} className="text-green-500" />
-                                <span className="text-green-600">
-                                  {item.sousType === 'creation' ? 'Création: ' : 
-                                   item.sousType === 'reapprovisionnement' ? 'Réappro: ' : ''}
-                                  {item.source}
-                                </span>
-                              </>
-                            ) : (
-                              <>
-                                {item.sousType === 'retour' ? (
-                                  <>
-                                    <Ban size={12} className="text-orange-500" />
-                                    <span className="text-orange-600">Retour: {item.destination || item.source}</span>
-                                  </>
-                                ) : item.sousType === 'transfert' ? (
-                                  <>
-                                    <Store size={12} className="text-indigo-500" />
-                                    <span className="text-indigo-600">Transfert: {item.destination}</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <MinusCircle size={12} className="text-gray-500" />
-                                    <span className="text-gray-600">Diminution</span>
-                                  </>
-                                )}
-                              </>
-                            )}
-                          </div>
+                        <td className="px-4 py-3 text-center text-xs text-gray-500">
+                          {formatDateTime(item.date)}
                         </td>
-                      ) : (
-                        <td className="px-4 py-3 text-xs text-gray-700">
-                          <div className="flex items-center gap-2">
-                            <Store size={12} className="text-indigo-500" />
-                            <span className="text-indigo-600">{item.destination || 'Boutique Colobane'}</span>
-                          </div>
-                        </td>
-                      )}
-                      <td className="px-4 py-3 text-center">
-                        <span className={`font-semibold ${
-                          item.type === "Entrée" ? "text-green-600" : "text-red-600"
-                        }`}>
-                          {item.type === "Entrée" ? "+" : "-"}{item.quantity}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-center text-xs text-gray-500">
-                        {formatDateTime(item.date)}
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setSelectedMovement(item); }}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
-                          >
-                            <Info size={14} className="text-gray-500" />
-                            Détails
-                          </button>
-                          {activeTab === "en-attente" && (
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex items-center justify-center gap-2">
                             <button
-                              onClick={(e) => { e.stopPropagation(); setCancelPendingId(item.id); }}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-red-300 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50 transition-colors shadow-sm"
+                              onClick={(e) => { e.stopPropagation(); setSelectedMovement(item); }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
                             >
-                              <XCircle size={14} />
-                              Annuler
+                              <Info size={14} className="text-gray-500" />
+                              Détails
                             </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                            {activeTab === "en-attente" && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setCancelPendingId(item.id); }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-red-300 rounded-lg text-xs font-medium text-red-600 hover:bg-red-50 transition-colors shadow-sm"
+                              >
+                                <XCircle size={14} />
+                                Annuler
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                   {movements.length === 0 && (
                     <tr>
                       <td colSpan={activeTab === "en-attente" ? 5 : 6} className="px-4 py-6 text-center text-gray-400 text-sm italic">
@@ -808,7 +800,7 @@ export default function StockMovements() {
         )}
       </div>
 
-      {/* MODALE NOUVEAU TRANSFERT */}
+      {/* ===== MODALE NOUVEAU TRANSFERT ===== */}
       {modalOpen && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -901,7 +893,7 @@ export default function StockMovements() {
         </div>
       )}
 
-      {/* MODALE DÉTAILS */}
+      {/* ===== MODALE DÉTAILS ===== */}
       {selectedMovement && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
@@ -920,21 +912,23 @@ export default function StockMovements() {
                   selectedMovement.type === "Entrée" 
                     ? selectedMovement.sousType === 'creation'
                       ? "bg-purple-100"
+                      : selectedMovement.sousType === 'reapprovisionnement'
+                      ? "bg-green-100"
+                      : selectedMovement.sousType === 'annulation'
+                      ? "bg-cyan-100"
                       : "bg-green-100"
                     : selectedMovement.sousType === 'transfert'
                     ? "bg-blue-100"
-                    : selectedMovement.sousType === 'retour'
-                    ? "bg-orange-100"
                     : "bg-gray-100"
                 }`}>
                   {selectedMovement.type === "Entrée" ? (
                     <ArrowDownRight className={
-                      selectedMovement.sousType === 'creation' ? "text-purple-600" : "text-green-600"
+                      selectedMovement.sousType === 'creation' ? "text-purple-600" : 
+                      selectedMovement.sousType === 'reapprovisionnement' ? "text-green-600" :
+                      selectedMovement.sousType === 'annulation' ? "text-cyan-600" : "text-green-600"
                     } size={24} />
                   ) : selectedMovement.sousType === 'transfert' ? (
                     <Truck className="text-blue-600" size={24} />
-                  ) : selectedMovement.sousType === 'retour' ? (
-                    <Ban className="text-orange-600" size={24} />
                   ) : (
                     <MinusCircle className="text-gray-600" size={24} />
                   )}
@@ -946,23 +940,25 @@ export default function StockMovements() {
                       selectedMovement.type === "Entrée" 
                         ? selectedMovement.sousType === 'creation'
                           ? "text-purple-600"
+                          : selectedMovement.sousType === 'reapprovisionnement'
+                          ? "text-green-600"
+                          : selectedMovement.sousType === 'annulation'
+                          ? "text-cyan-600"
                           : "text-green-600"
                         : selectedMovement.sousType === 'transfert'
                         ? "text-blue-600"
-                        : selectedMovement.sousType === 'retour'
-                        ? "text-orange-600"
                         : "text-gray-600"
                     }`}>
                       {selectedMovement.type === "Entrée" 
                         ? selectedMovement.sousType === 'creation'
-                          ? 'Création de produit'
+                          ? 'Ajout produit'
                           : selectedMovement.sousType === 'reapprovisionnement'
-                          ? 'Réapprovisionnement'
+                          ? 'Approvisionnement'
+                          : selectedMovement.sousType === 'annulation'
+                          ? 'Annulation de transfert'
                           : 'Entrée'
                         : selectedMovement.sousType === 'transfert'
                         ? 'Transfert'
-                        : selectedMovement.sousType === 'retour'
-                        ? 'Retour fournisseur'
                         : 'Diminution'}
                     </p>
                     {selectedMovement.status === 'cancelled' && (
@@ -997,24 +993,35 @@ export default function StockMovements() {
                     {selectedMovement.type === "Entrée" ? "+" : "-"}{selectedMovement.quantity} cartons
                   </p>
                 </div>
-                <div>
-                  <p className="text-xs text-gray-500">
-                    {selectedMovement.type === "Entrée" ? "Source" : "Destination"}
-                  </p>
-                  <p className={`font-medium ${
-                    selectedMovement.type === "Entrée" ? "text-green-600" : 
-                    selectedMovement.sousType === 'transfert' ? "text-indigo-600" :
-                    selectedMovement.sousType === 'retour' ? "text-orange-600" : "text-gray-600"
-                  }`}>
-                    {selectedMovement.type === "Entrée" 
-                      ? selectedMovement.source
-                      : selectedMovement.sousType === 'transfert'
-                      ? selectedMovement.destination
-                      : selectedMovement.sousType === 'retour'
-                      ? selectedMovement.destination
-                      : 'Dépôt'}
-                  </p>
-                </div>
+                
+                {/* SOURCE pour les entrées */}
+                {selectedMovement.type === "Entrée" && (
+                  <div>
+                    <p className="text-xs text-gray-500">Source</p>
+                    <p className="font-medium text-green-600">
+                      {selectedMovement.sousType === 'annulation' 
+                        ? 'Dépôt'
+                        : 'Fournisseur'
+                      }
+                    </p>
+                  </div>
+                )}
+                
+                {/* DESTINATION pour les sorties */}
+                {selectedMovement.type === "Sortie" && (
+                  <div>
+                    <p className="text-xs text-gray-500">Destination</p>
+                    <p className={`font-medium ${
+                      selectedMovement.sousType === 'transfert' ? "text-indigo-600" : "text-gray-600"
+                    }`}>
+                      {selectedMovement.sousType === 'transfert' 
+                        ? 'Boutique Colobane'
+                        : 'Fournisseur'
+                      }
+                    </p>
+                  </div>
+                )}
+                
                 <div>
                   <p className="text-xs text-gray-500">Date</p>
                   <p className="text-sm text-gray-700">{formatDateTime(selectedMovement.date)}</p>
@@ -1039,7 +1046,7 @@ export default function StockMovements() {
         </div>
       )}
 
-      {/* MODALE CONFIRMATION ANNULATION */}
+      {/* ===== MODALE CONFIRMATION ANNULATION ===== */}
       {cancelPendingId && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">

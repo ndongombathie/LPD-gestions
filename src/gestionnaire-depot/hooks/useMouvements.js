@@ -17,32 +17,42 @@ export const useMouvements = () => {
   const [errorStats, setErrorStats] = useState(null);
 
   const mapMovement = useCallback((item) => {
-    let type = item.type === 'entree' ? 'Entrée' : 'Sortie';
+    // Déterminer le type (Entrée / Sortie) et le sous-type
+    let type = 'Sortie';
     let sousType = '';
     let source = item.source || '';
     let destination = item.destination || '';
-    
+
     if (item.type === 'entree') {
-      // Distinguer création de produit vs réapprovisionnement
-      if (item.motif?.toLowerCase().includes('création')) {
+      type = 'Entrée';
+      const motif = (item.motif || '').toLowerCase();
+      if (motif.includes('création')) {
         sousType = 'creation';
-      } else if (item.motif?.toLowerCase().includes('réapprovisionnement')) {
+      } else if (motif.includes('réapprovisionnement')) {
         sousType = 'reapprovisionnement';
-      } else if (item.motif?.toLowerCase().includes('annulation')) {
+      } else if (motif.includes('annulation')) {
         sousType = 'annulation';
       }
     } else if (item.type === 'sortie') {
-      if (item.motif?.toLowerCase().includes('transfert')) {
+      type = 'Sortie';
+      const motif = (item.motif || '').toLowerCase();
+      if (motif.includes('transfert')) {
         sousType = 'transfert';
-      } else if (item.motif?.toLowerCase().includes('retour')) {
+      } else if (motif.includes('retour')) {
         sousType = 'retour';
       } else {
         sousType = 'diminution';
       }
+    } else {
+      // Cas particulier : les transferts annulés (pas de champ type)
+      if (item.status === 'annuler') {
+        type = 'Entrée';
+        sousType = 'annulation';
+      }
     }
 
     let status = item.statut?.toLowerCase() || 'completed';
-    if (item.type === 'entree') status = 'completed';
+    if (type === 'Entrée') status = 'completed';
     else if (status === 'en_attente') status = 'pending';
     else if (status === 'validé') status = 'validated';
     else if (status === 'annulé') status = 'cancelled';
