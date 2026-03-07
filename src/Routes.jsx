@@ -2,7 +2,8 @@
 // 🗺️ Routes.jsx — Configuration centralisée des routes LPD
 // ==========================================================
 
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { AnimatePresence } from "framer-motion";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 // =================== AUTHENTIFICATION ===================

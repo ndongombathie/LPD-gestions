@@ -23,6 +23,13 @@ export { default as profileAPI } from './profile';
 export { default as gestionnaireBoutiqueAPI } from './gestionnaireBoutique';
 
 /**
+ * ✅ AJOUT — API RAPPORTS (Audit Logs)
+ */
+export { default as rapportsAPI } from './rapports';
+
+
+
+/**
  * Objet centralisé pour accès facile
  */
 export default {
@@ -30,44 +37,62 @@ export default {
     const { authAPI } = await import('./auth');
     return authAPI;
   },
+
   commandes: async () => {
     const { commandesAPI } = await import('./commandes');
     return commandesAPI;
   },
+
   clients: async () => {
     const { clientsAPI } = await import('./clients');
     return clientsAPI;
   },
+
   produits: async () => {
     const { produitsAPI } = await import('./produits');
     return produitsAPI;
   },
+
   fournisseurs: async () => {
     const { fournisseursAPI } = await import('./fournisseurs');
     return fournisseursAPI;
   },
+
   utilisateurs: async () => {
     const { utilisateursAPI } = await import('./utilisateurs');
     return utilisateursAPI;
   },
+
   decaissements: async () => {
     const { decaissementsAPI } = await import('./decaissements');
     return decaissementsAPI;
   },
+
   stock: async () => {
     const { stockAPI } = await import('./stock');
     return stockAPI;
   },
+
   paiements: async () => {
     const { paiementsAPI } = await import('./paiements');
     return paiementsAPI;
   },
+
   profile: async () => {
     const { default: profileAPI } = await import('./profile');
     return profileAPI;
   },
+
   gestionnaireBoutique: async () => {
     const { default: gestionnaireBoutiqueAPI } = await import('./gestionnaireBoutique');
     return gestionnaireBoutiqueAPI;
+  },
+
+  /**
+   * ✅ AJOUT — accès dynamique aux rapports
+   */
+  rapports: async () => {
+    const { default: rapportsAPI } = await import('./rapports');
+    return rapportsAPI;
   },
 };

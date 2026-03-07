@@ -1,10 +1,10 @@
-// ==========================================================   
+// ==========================================================
 // 🧍‍♂️ ClientsSpeciaux.jsx — Interface Responsable (LPD Manager)
 // Gestion des clients privilégiés (vente en gros + paiements par tranches)
-// Version ULTRA PRO (agrégats + historique + nouvelle tranche + édition tranche)
+// Version FINALE corrigée avec backend Laravel - SYNCHRONISÉ
 // ==========================================================
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   UserPlus,
@@ -17,11 +17,21 @@ import {
   X,
   ListChecks,
   BadgeDollarSign,
+  Phone,
 } from "lucide-react";
+import { useRef } from "react";
+import QRCode from "react-qr-code";
+import { jsPDF } from "jspdf";
 import FormModal from "../components/FormModal.jsx";
 import DataTable from "../components/DataTable.jsx";
 import VoirDetailClient from "../components/VoirDetailClient.jsx";
-import { clientsAPI, commandesAPI, paiementsAPI } from '@/services/api';
+import { logger } from "@/utils/logger";
+import Pagination from "../components/Pagination.jsx";
+import { useClientsSpeciaux } from "@/hooks/useClientsSpeciaux";
+import { usePaiementsClients } from "@/hooks/usePaiementsClients";
+import NouvelleTrancheModal from "../components/NouvelleTrancheModal.jsx";
+import { commandesAPI } from '@/services/api';
+import { normalizeCommande } from "@/utils/normalizeCommande";
 
 const cls = (...a) => a.filter(Boolean).join(" ");
 const formatFCFA = (n) =>
@@ -29,8 +39,9 @@ const formatFCFA = (n) =>
     style: "currency",
     currency: "XOF",
   }).format(Number(n || 0));
+const getPaiementEffectiveStatus = (paiement) =>
+  String(paiement?.statut_paiement || "inconnu").toLowerCase();
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
 
 // ==========================================================
 // ✅ Toasts Premium
@@ -78,509 +89,33 @@ function Toasts({ toasts, remove }) {
   );
 }
 
-// ==========================================================
-// 🔧 Helper : normaliser une commande (même modèle que Commandes.jsx)
-// ==========================================================
-function normalizeCommande(cmd) {
-  const client =
-    cmd.client ||
-    cmd.client_special ||
-    cmd.clientSpecial ||
-    cmd.client_speciale ||
-    cmd.client_speciale_detail ||
-    {};
 
-  let clientNom =
-    cmd.client_nom ||
-    cmd.nom_client ||
-    cmd.nom_client_special ||
-    cmd.client_name ||
-    cmd.customer_name ||
-    client.nom ||
-    client.nom_client ||
-    client.nom_client_special ||
-    client.raison_sociale ||
-    client.raisonSociale ||
-    client.name ||
-    client.libelle ||
-    client.intitule ||
-    "";
-
-  if (!clientNom && client && typeof client === "object") {
-    const firstStringValue = Object.values(client).find(
-      (v) => typeof v === "string" && v.trim() !== ""
-    );
-    if (firstStringValue) clientNom = firstStringValue;
-  }
-
-  const clientCode =
-    cmd.client_code ||
-    cmd.code_client ||
-    client.code_client ||
-    client.codeClient ||
-    client.code ||
-    cmd.code ||
-    undefined;
-
-  const lignesSource =
-    cmd.lignes || cmd.ligne_commandes || cmd.details || cmd.items || [];
-
-  const lignes = (lignesSource || []).map((l) => {
-    const qte = Number(l.quantite || l.qte || l.qty || 0);
-    const pu = Number(l.prix_unitaire || l.prix || l.price || 0);
-    const modeVente = l.mode_vente || l.modeVente || l.mode || "detail";
-
-    const totalHTLigne = Number(
-      l.total_ht || l.totalHT || (qte && pu ? qte * pu : 0)
-    );
-    const totalTTCLigne = Number(
-      l.total_ttc || l.totalTTC || l.total || totalHTLigne * 1.18 || 0
-    );
-
-    const quantiteUnites = Number(
-      l.quantite_unites ||
-        l.quantiteUnites ||
-        (modeVente === "gros" ? qte * (l.unites_par_carton || 1) : qte)
-    );
-
-    return {
-      id: l.id,
-      produitId: l.produit_id || l.produitId || null,
-      libelle: l.libelle || l.nom_produit || l.designation || l.nom || "",
-      ref: l.ref || l.code_produit || l.reference || l.code || null,
-      qte,
-      prixUnitaire: pu,
-      totalHT: totalHTLigne,
-      totalTTC: totalTTCLigne,
-      modeVente,
-      quantiteUnites,
-    };
-  });
-
-  let totalHT = Number(cmd.total_ht ?? cmd.totalHT ?? cmd.montant_ht ?? 0);
-  let totalTTC = Number(
-    cmd.total_ttc ?? cmd.totalTTC ?? cmd.montant_total ?? cmd.total ?? 0
-  );
-
-  if ((!totalHT || Number.isNaN(totalHT)) && lignes.length) {
-    totalHT = lignes.reduce(
-      (s, l) => s + (Number(l.totalHT) || l.qte * l.prixUnitaire || 0),
-      0
-    );
-  }
-
-  if ((!totalTTC || Number.isNaN(totalTTC)) && lignes.length) {
-    totalTTC = lignes.reduce(
-      (s, l) => s + (Number(l.totalTTC) || Number(l.totalHT) || 0),
-      0
-    );
-  }
-
-  let totalTVA = Number(
-    cmd.total_tva ?? cmd.totalTVA ?? cmd.montant_tva ?? (totalTTC - totalHT)
-  );
-  if (Number.isNaN(totalTVA)) {
-    totalTVA = totalTTC - totalHT;
-  }
-
-  const montantPaye = Number(
-    cmd.montant_paye || cmd.montantPaye || cmd.total_paye || 0
-  );
-  const resteAPayer = Number(
-    cmd.reste_a_payer ||
-      cmd.resteAPayer ||
-      cmd.montant_restant ||
-      totalTTC - montantPaye
-  );
-
-  const statut = cmd.statut || "en_attente_caisse";
-  const statutLabelMap = {
-    en_attente_caisse: "En attente caisse",
-    partiellement_payee: "Partiellement payée",
-    soldee: "Soldée",
-    annulee: "Annulée",
-  };
-  const statutLabel =
-    cmd.statut_label || cmd.statutLabel || statutLabelMap[statut] || statut;
-
-  const paiements = (cmd.paiements || []).map((p) => ({
-    id: p.id,
-    date: p.date_paiement || p.date || null,
-    montant: Number(p.montant || p.montant_paye || 0),
-    mode: p.mode_paiement || p.mode || "",
-    commentaire: p.commentaire || "",
-    statut:
-      p.statut || p.status || p.statut_paiement || p.statutPaiement || null,
-    type: p.type_paiement || p.type || p.typePaiement || null,
-  }));
-
-  return {
-    id: cmd.id,
-    numero: cmd.numero || cmd.reference || cmd.code || `CMD-${cmd.id}`,
-    clientId: cmd.client_id || cmd.clientId || client.id || null,
-    clientNom,
-    clientCode,
-    dateCommande:
-      cmd.date_commande ||
-      cmd.dateCommande ||
-      (cmd.created_at ? String(cmd.created_at).slice(0, 10) : todayISO()),
-    lignes,
-    totalHT,
-    totalTVA,
-    totalTTC,
-    tauxTVA: totalHT ? totalTVA / totalHT : 0.18,
-    paiements,
-    montantPaye,
-    resteAPayer,
-    statut,
-    statutLabel,
-  };
-}
 
 // ==========================================================
-// 💸 Modal Nouvelle Tranche (côté Responsable)
-// ==========================================================
-function NouvelleTrancheModal({
-  open,
-  onClose,
-  client,
-  commandes,
-  onSubmit,
-  toast,
-}) {
-  // ✅ Commandes éligibles = reste à payer > 0, non annulées, ET aucune tranche en attente caisse déjà enregistrée
-  const commandesEligibles = useMemo(
-    () =>
-      (commandes || []).filter((c) => {
-        if ((c.resteAPayer || 0) <= 0 || c.statut === "annulee") return false;
-        const hasTrancheEnAttente = (c.paiements || []).some(
-          (p) =>
-            p.type === "tranche" &&
-            p.statut === "en_attente_caisse" &&
-            p.montant
-        );
-        return !hasTrancheEnAttente;
-      }),
-    [commandes]
-  );
-
-  const [commandeId, setCommandeId] = useState("");
-  const [montant, setMontant] = useState("");
-  const [mode, setMode] = useState("especes");
-  const [date, setDate] = useState(todayISO());
-  const [commentaire, setCommentaire] = useState("");
-
-  // 🔄 Réinitialisation propre à chaque ouverture
-  useEffect(() => {
-    if (!open) return;
-    if (commandesEligibles.length > 0) {
-      setCommandeId(String(commandesEligibles[0].id));
-    } else {
-      setCommandeId("");
-    }
-    setMontant("");
-    setMode("especes");
-    setDate(todayISO());
-    setCommentaire("");
-  }, [open, commandesEligibles]);
-
-  const commandeSelectionnee =
-    commandesEligibles.find((c) => String(c.id) === String(commandeId)) ||
-    null;
-
-  const handleClose = () => {
-    onClose();
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!commandeSelectionnee) {
-      toast(
-        "error",
-        "Aucune commande",
-        "Ce client n'a aucune commande éligible pour une nouvelle tranche."
-      );
-      return;
-    }
-
-    const m = Number(montant);
-
-    if (!m || m <= 0) {
-      toast(
-        "error",
-        "Montant invalide",
-        "Veuillez saisir un montant de tranche valide."
-      );
-      return;
-    }
-
-    // 🔍 Calcul du reste théorique en tenant compte des tranches déjà en attente
-    const totalTTCCommande = Number(commandeSelectionnee.totalTTC || 0);
-    const montantDejaEncaisse = Number(commandeSelectionnee.montantPaye || 0);
-    const totalTranchesEnAttente = (commandeSelectionnee.paiements || [])
-      .filter(
-        (p) =>
-          p.type === "tranche" &&
-          p.statut === "en_attente_caisse" &&
-          p.montant
-      )
-      .reduce((s, p) => s + Number(p.montant || 0), 0);
-
-    const resteTheorique = Math.max(
-      totalTTCCommande - montantDejaEncaisse - totalTranchesEnAttente,
-      0
-    );
-
-    if (resteTheorique <= 0) {
-      toast(
-        "error",
-        "Aucun reste pour nouvelle tranche",
-        "Le montant total de la commande est déjà couvert par les encaissements et tranches en attente."
-      );
-      return;
-    }
-
-    if (m > resteTheorique) {
-      toast(
-        "error",
-        "Montant trop élevé",
-        `La tranche ne peut pas dépasser le reste théorique disponible (${formatFCFA(
-          resteTheorique
-        )}) en tenant compte des autres tranches en attente.`
-      );
-      return;
-    }
-
-    onSubmit(commandeSelectionnee, {
-      montant: m,
-      mode,
-      date,
-      commentaire: commentaire?.trim() || "",
-    });
-  };
-
-  if (!open || !client) return null;
-
-  const baseInput =
-    "w-full rounded-xl border px-3 py-2.5 text-sm bg-white shadow-sm border-gray-300 focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD]";
-
-  return (
-    <div className="fixed inset-0 z-[110] bg-black/40 flex items-center justify-center px-2">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 10 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        className="bg-white w-full max-w-lg rounded-2xl shadow-2xl p-6"
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between border-b pb-3 mb-4">
-          <div>
-            <h2 className="text-lg font-semibold text-[#472EAD] flex items-center gap-2">
-              <BadgeDollarSign className="w-5 h-5" />
-              Nouvelle tranche — {client.nom}
-            </h2>
-            <p className="text-xs text-gray-500">
-              Préparation d&apos;un paiement partiel{" "}
-              <span className="font-semibold">(validation en caisse)</span>.
-            </p>
-          </div>
-          <button
-            onClick={handleClose}
-            className="rounded-full p-1.5 hover:bg-gray-100 text-gray-500"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* Infos client */}
-        <div className="mb-4 text-xs text-gray-600">
-          <div className="font-semibold text-gray-700">{client.nom}</div>
-          <div>{client.entreprise}</div>
-          <div className="text-gray-500">
-            {client.adresse} — {client.contact}
-          </div>
-        </div>
-
-        {commandesEligibles.length === 0 ? (
-          <div className="text-sm text-gray-500 mb-4">
-            Ce client n&apos;a actuellement{" "}
-            <span className="font-semibold">
-              aucune commande éligible à une tranche
-            </span>{" "}
-            (soit aucune dette, soit une tranche est déjà en attente caisse).
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-4 text-sm">
-            {/* Commande + reste */}
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">
-                Commande concernée
-              </label>
-              <select
-                value={commandeId}
-                onChange={(e) => setCommandeId(e.target.value)}
-                className={baseInput}
-              >
-                {commandesEligibles.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.numero} — Date : {c.dateCommande} — Reste théorique :{" "}
-                    {formatFCFA(
-                      Math.max(
-                        (c.totalTTC || 0) -
-                          (c.montantPaye || 0) -
-                          (c.paiements || [])
-                            .filter(
-                              (p) =>
-                                p.type === "tranche" &&
-                                p.statut === "en_attente_caisse" &&
-                                p.montant
-                            )
-                            .reduce(
-                              (s, p) => s + Number(p.montant || 0),
-                              0
-                            ),
-                        0
-                      )
-                    )}
-                  </option>
-                ))}
-              </select>
-              {commandeSelectionnee && (
-                <div className="mt-1 text-[11px] text-gray-500">
-                  Total TTC :{" "}
-                  <span className="font-semibold">
-                    {formatFCFA(commandeSelectionnee.totalTTC)}
-                  </span>{" "}
-                  — Payé (encaissé) :{" "}
-                  <span className="font-semibold text-emerald-700">
-                    {formatFCFA(commandeSelectionnee.montantPaye)}
-                  </span>{" "}
-                  — Reste théorique (avec tranches en attente) :{" "}
-                  <span className="font-semibold text-rose-700">
-                    {(() => {
-                      const total = Number(
-                        commandeSelectionnee.totalTTC || 0
-                      );
-                      const encaisse = Number(
-                        commandeSelectionnee.montantPaye || 0
-                      );
-                      const tranchesAttente = (
-                        commandeSelectionnee.paiements || []
-                      )
-                        .filter(
-                          (p) =>
-                            p.type === "tranche" &&
-                            p.statut === "en_attente_caisse" &&
-                            p.montant
-                        )
-                        .reduce(
-                          (s, p) => s + Number(p.montant || 0),
-                          0
-                        );
-                      return formatFCFA(
-                        Math.max(total - encaisse - tranchesAttente, 0)
-                      );
-                    })()}
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* Montant + date */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="sm:col-span-2">
-                <label className="block text-xs text-gray-500 mb-1">
-                  Montant de la tranche
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  value={montant}
-                  onChange={(e) => setMontant(e.target.value)}
-                  className={baseInput}
-                  placeholder="Ex : 30000"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">
-                  Date du paiement
-                </label>
-                <input
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className={baseInput}
-                />
-              </div>
-            </div>
-
-            {/* Mode + commentaire */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">
-                  Mode de paiement
-                </label>
-                <select
-                  value={mode}
-                  onChange={(e) => setMode(e.target.value)}
-                  className={baseInput}
-                >
-                  <option value="especes">Espèces</option>
-                  <option value="wave">Wave</option>
-                  <option value="orange_money">Orange Money</option>
-                  <option value="cheque">Chèque</option>
-                  <option value="virement">Virement</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">
-                  Commentaire (optionnel)
-                </label>
-                <input
-                  value={commentaire}
-                  onChange={(e) => setCommentaire(e.target.value)}
-                  placeholder="Ex : 2ème tranche, client présent"
-                  className={baseInput}
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={handleClose}
-                className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm hover:bg-gray-50 shadow-sm"
-              >
-                Annuler
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-2 rounded-lg text-sm text-white bg-[#472EAD] hover:opacity-95 shadow-sm"
-                disabled={!commandeSelectionnee}
-              >
-                Envoyer à la caisse
-              </button>
-            </div>
-          </form>
-        )}
-      </motion.div>
-    </div>
-  );
-}
-
-// ==========================================================
-// 🧾 Formulaire client spécial
+// 🧾 Formulaire client spécial - CORRIGÉ AVEC CHAMPS COMPLETS
 // ==========================================================
 function ClientForm({ initial, onSubmit, onCancel, submitting }) {
   const [form, setForm] = useState(
-    initial ?? { nom: "", contact: "", entreprise: "", adresse: "" }
+    initial ?? { 
+      nom: "",
+      prenom: "",
+      telephone: "",
+      contact: "",
+      numero_cni: "",
+      entreprise: "",
+      adresse: ""
+    }
   );
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
     if (initial) {
       setForm({
+        prenom: initial.prenom || "",
         nom: initial.nom || "",
+        telephone: initial.telephone || "",
         contact: initial.contact || "",
+        numero_cni: initial.numero_cni || "",
         entreprise: initial.entreprise || "",
         adresse: initial.adresse || "",
       });
@@ -594,18 +129,32 @@ function ClientForm({ initial, onSubmit, onCancel, submitting }) {
 
   const validate = () => {
     const e = {};
-    if (!form.nom.trim()) e.nom = "Le nom est requis.";
-    if (!form.contact.match(/^[0-9]{9}$/))
-      e.contact = "Le contact doit contenir exactement 9 chiffres.";
-    if (!form.entreprise.trim()) e.entreprise = "L’entreprise est requise.";
-    if (!form.adresse.trim()) e.adresse = "L’adresse est requise.";
+
+    if (!form.nom.trim())
+      e.nom = "Le nom est requis.";
+
+    if (!form.prenom.trim())
+      e.prenom = "Le prénom est requis.";
+
+    // ✅ SÉCURISÉ : Vérifie que le téléphone existe et ne contient que des chiffres
+    if (!form.telephone || !/^[0-9]+$/.test(form.telephone))
+      e.telephone = "Le téléphone doit contenir uniquement des chiffres.";
+
+    if (!form.adresse.trim())
+      e.adresse = "L'adresse est requise.";
+
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
   const handleSubmit = (ev) => {
     ev.preventDefault();
-    if (validate()) onSubmit(form);
+    console.log("CLIENT UPDATE FORM:", initial);
+
+    if (validate()) onSubmit({
+      ...form,
+      id: initial?.id
+    });
   };
 
   const base = (err) =>
@@ -618,15 +167,15 @@ function ClientForm({ initial, onSubmit, onCancel, submitting }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* Nom complet */}
+        {/* Nom */}
         <div>
           <label className="block text-sm font-medium text-gray-700">
-            Nom complet <span className="text-rose-600">*</span>
+            Nom <span className="text-rose-600">*</span>
           </label>
           <input
             value={form.nom}
             onChange={(e) => update("nom", e.target.value)}
-            placeholder="Ex : DIOP Mamadou"
+            placeholder="Ex : DIOP"
             className={base(errors.nom)}
             required
           />
@@ -635,45 +184,88 @@ function ClientForm({ initial, onSubmit, onCancel, submitting }) {
           )}
         </div>
 
-        {/* Contact */}
+        {/* Prénom */}
         <div>
           <label className="block text-sm font-medium text-gray-700">
-            Contact <span className="text-rose-600">*</span>
+            Prénom <span className="text-rose-600">*</span>
+          </label>
+          <input
+            value={form.prenom}
+            onChange={(e) => update("prenom", e.target.value)}
+            placeholder="Ex : Mamadou"
+            className={base(errors.prenom)}
+            required
+          />
+          {errors.prenom && (
+            <p className="text-xs text-rose-600 mt-1">{errors.prenom}</p>
+          )}
+        </div>
+
+        {/* Téléphone (nouveau champ) */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700">
+            Téléphone <span className="text-rose-600">*</span>
+          </label>
+          <input
+            value={form.telephone}
+            onChange={(e) => {
+              const clean = e.target.value.replace(/\D/g, "");
+              update("telephone", clean);
+            }}
+            placeholder="Ex : 771234567"
+            className={base(errors.telephone)}
+            required
+          />
+          {errors.telephone && (
+            <p className="text-xs text-rose-600 mt-1">{errors.telephone}</p>
+          )}
+        </div>
+
+        {/* Contact (champ existant) */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700">
+            Contact (optionnel)
           </label>
           <input
             value={form.contact}
-            onChange={(e) =>
-              update("contact", e.target.value.replace(/\D/g, "").slice(0, 9))
-            }
-            placeholder="Ex : 771234567"
-            maxLength={9}
+            onChange={(e) => update("contact", e.target.value)}
+            placeholder="Ex : Email ou autre"
             className={base(errors.contact)}
-            required
           />
-          {errors.contact && (
-            <p className="text-xs text-rose-600 mt-1">{errors.contact}</p>
-          )}
+        </div>
+
+        {/* Numéro CNI (nouveau champ) - AVEC NETTOYAGE 13 CHIFFRES MAX */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700">
+            Numéro CNI (optionnel)
+          </label>
+          <input
+            value={form.numero_cni}
+            onChange={(e) => {
+              const clean = e.target.value.replace(/\D/g, "").slice(0, 13);
+              update("numero_cni", clean);
+            }}
+            placeholder="Ex : 1 234 5678 9012 3"
+            className={base(errors.numero_cni)}
+            maxLength={13}
+          />
         </div>
 
         {/* Entreprise */}
         <div>
           <label className="block text-sm font-medium text-gray-700">
-            Entreprise <span className="text-rose-600">*</span>
+            Entreprise (optionnel)
           </label>
           <input
             value={form.entreprise}
             onChange={(e) => update("entreprise", e.target.value)}
             placeholder="Ex : Imprisol SARL"
             className={base(errors.entreprise)}
-            required
           />
-          {errors.entreprise && (
-            <p className="text-xs text-rose-600 mt-1">{errors.entreprise}</p>
-          )}
         </div>
 
         {/* Adresse */}
-        <div>
+        <div className="sm:col-span-2">
           <label className="block text-sm font-medium text-gray-700">
             Adresse <span className="text-rose-600">*</span>
           </label>
@@ -695,10 +287,17 @@ function ClientForm({ initial, onSubmit, onCancel, submitting }) {
         <button
           type="button"
           onClick={onCancel}
-          className="px-4 py-2.5 rounded-lg border border-gray-300 bg-white text-sm hover:bg-gray-50 shadow-sm"
+          disabled={submitting}
+          className={cls(
+            "px-4 py-2.5 rounded-lg border border-gray-300 bg-white text-sm shadow-sm",
+            submitting
+              ? "opacity-60 cursor-not-allowed"
+              : "hover:bg-gray-50"
+          )}
         >
           Annuler
         </button>
+
         <button
           type="submit"
           disabled={submitting}
@@ -719,13 +318,273 @@ function ClientForm({ initial, onSubmit, onCancel, submitting }) {
 }
 
 // ==========================================================
-// 📋 Page principale Clients Spéciaux
+// 🧾 Modal QR Code Commande (ticket)
+// ==========================================================
+
+function QrCommandeModal({ open, onClose, commande, qrPayload }) {
+  const qrWrapperRef = useRef(null);
+
+  if (!open || !commande || !qrPayload) return null;
+
+  const handlePrint = () => {
+    try {
+      const canvas = qrWrapperRef.current?.querySelector("canvas");
+      if (!canvas) {
+        window.print();
+        return;
+      }
+
+      const dataUrl = canvas.toDataURL("image/png");
+
+      // 📏 VRAI FORMAT TICKET (80 mm de large)
+      const doc = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: [80, 130], // largeur ticket, hauteur ~13 cm
+      });
+
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const centerX = pageWidth / 2;
+
+      // ================= HEADER VIOLET =================
+      const headerHeight = 36;
+      doc.setFillColor(71, 46, 173);
+      doc.setDrawColor(71, 46, 173);
+      doc.rect(0, 0, pageWidth, headerHeight, "F");
+
+      // --- Logo "ellipse" + LPD ---
+      const logoEllipseY = 10; // un peu en haut du header
+      doc.setFillColor(71, 46, 173);
+      doc.setDrawColor(255, 255, 255);
+      doc.ellipse(centerX, logoEllipseY, 16, 10, "F");
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.setTextColor(245, 128, 32);
+      const logoText = "LPD";
+      const logoTextWidth = doc.getTextWidth(logoText);
+      doc.text(logoText, centerX - logoTextWidth / 2, logoEllipseY + 4);
+
+      // --- Texte sous le logo ---
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(255, 255, 255);
+      const title1 = "LIBRAIRIE PAPETERIE DARADJI";
+      doc.text(title1, centerX, 22, { align: "center" });
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(229, 231, 235);
+      const title2 = `#${commande.numero}`;
+      doc.text(title2, centerX, 28.5, { align: "center" });
+
+      // ================= QR CODE =================
+      const qrSize = 40; // mm
+      const qrX = (pageWidth - qrSize) / 2;
+      const qrY = headerHeight + 6;
+      doc.addImage(dataUrl, "PNG", qrX, qrY, qrSize, qrSize);
+
+      // ================= INFOS COMMANDE =================
+      const infoStartY = qrY + qrSize + 8;
+      const leftX = 8;
+
+      // Badge "Client spécial" à droite
+      const badgeText = "Client spécial";
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      const badgeTextWidth = doc.getTextWidth(badgeText);
+      const badgeWidth = badgeTextWidth + 10;
+      const badgeHeight = 8;
+      const badgeX = pageWidth - badgeWidth - 8;
+      const badgeY = infoStartY - 5;
+
+      doc.setFillColor(254, 249, 195);
+      doc.setDrawColor(234, 179, 8);
+      doc.roundedRect(badgeX, badgeY, badgeWidth, badgeHeight, 4, 4, "FD");
+
+      doc.setTextColor(202, 138, 4);
+      doc.text(badgeText, badgeX + 5, badgeY + 5);
+
+      // Texte à gauche
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(17, 24, 39);
+      doc.text(
+        `Client : ${commande.clientNom || "Client spécial"}`,
+        leftX,
+        infoStartY
+      );
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.text(`Date : ${commande.dateCommande}`, leftX, infoStartY + 5);
+
+      // ================= TEXTE D'AIDE BAS DE TICKET =================
+      const aideY = pageHeight - 12;
+      doc.setFontSize(8);
+      doc.setTextColor(107, 114, 128);
+      const aideText =
+        "Présentez ce QR code à la caisse pour retrouver la commande.";
+      doc.text(aideText, centerX, aideY, { align: "center" });
+
+      const noteY = aideY + 5;
+      doc.setFontSize(7);
+      doc.setTextColor(202, 138, 4);
+      const noteText = "Ticket spécial LPD — Client privilégié";
+      doc.text(noteText, centerX, noteY, { align: "center" });
+
+      // ================= SAUVEGARDE =================
+      doc.save(`Ticket_commande_${commande.numero}.pdf`);
+    } catch (e) {
+      logger.error("commande.qr.print", e);
+      window.print();
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[115] bg-black/40 backdrop-blur-sm flex items-center justify-center px-3">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 20 }}
+        className="bg-white w-full max-w-sm sm:max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+      >
+        {/* Header compact avec logo LPD */}
+        <div className="h-16 flex flex-col justify-center border-b border-gray-200 bg-gradient-to-r from-[#472EAD] to-[#4e33c9] text-white shadow-md">
+          <div className="flex items-center justify-between w-full px-4">
+            <div className="flex items-center gap-2">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="40"
+                height="26"
+                viewBox="0 0 200 120"
+                fill="none"
+              >
+                <ellipse cx="100" cy="60" rx="90" ry="45" fill="#472EAD" />
+                <text
+                  x="50%"
+                  y="66%"
+                  textAnchor="middle"
+                  fill="#F58020"
+                  fontFamily="Arial Black, sans-serif"
+                  fontSize="48"
+                  fontWeight="900"
+                  dy=".1em"
+                >
+                  LPD
+                </text>
+              </svg>
+              <div className="flex flex-col">
+                <span className="text-[11px] font-semibold tracking-wider uppercase leading-none">
+                  Librairie Papeterie Daradji
+                </span>
+                <span className="text-[10px] text-white/80">
+                  #{commande.numero}
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="text-white/80 hover:text-white rounded-full p-1 hover:bg-white/10"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+
+        {/* Contenu */}
+        <div className="p-4 flex-1 flex flex-col gap-3">
+          <div className="text-center">
+            <h2 className="text-sm font-semibold text-[#472EAD]">
+              QR de la commande
+            </h2>
+            <p className="text-[11px] text-gray-500 mt-1">
+              À présenter à la caisse pour charger automatiquement la commande.
+            </p>
+          </div>
+
+          {/* QR + infos commande */}
+          <div
+            ref={qrWrapperRef}
+            className="flex flex-col items-center justify-center gap-2 mt-1"
+          >
+            <div className="p-2 rounded-2xl border border-gray-200 bg-white shadow-sm">
+              <QRCode value={qrPayload} size={160} includeMargin />
+            </div>
+
+            <div className="text-xs text-gray-600 text-center space-y-0.5">
+              <div className="font-semibold text-gray-800">
+                Commande #{commande.numero}
+              </div>
+              <div className="truncate max-w-[220px]">
+                {commande.clientNom || "Client spécial"}
+              </div>
+              <div className="text-[11px] text-gray-500">
+                Montant TTC :{" "}
+                <span className="font-semibold text-emerald-600">
+                  {formatFCFA(commande.totalTTC)}
+                </span>
+              </div>
+              {commande.montantTranche && (
+                <div className="text-[11px] text-[#472EAD] font-semibold">
+                  Montant à encaisser : {formatFCFA(commande.montantTranche)}
+                </div>
+              )}
+              <div className="text-[11px] text-gray-400">
+                Date : {commande.dateCommande}
+              </div>
+            </div>
+          </div>
+
+          {/* Texte d'aide */}
+          <div className="bg-[#F9FAFF] border border-[#E4E0FF] rounded-xl px-3 py-2 text-[11px] text-gray-600">
+            Le QR contient le numéro de commande. 
+            La caisse recharge automatiquement les informations depuis le système.
+          </div>
+
+          {/* Boutons */}
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-3 py-2 rounded-lg border border-gray-300 bg-white text-xs sm:text-sm text-gray-700 hover:bg-gray-50"
+            >
+              Fermer
+            </button>
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="px-4 py-2 rounded-lg bg-gradient-to-r from-[#472EAD] to-[#6A4DF5] text-white text-xs sm:text-sm font-semibold shadow-sm hover:opacity-95"
+            >
+              Imprimer le QR
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+// ==========================================================
+// 📋 Page principale Clients Spéciaux - CORRIGÉE AVEC STATUTS LARAVEL
+// Version avec le même cadre visuel que Utilisateurs.jsx
 // ==========================================================
 export default function ClientsSpeciaux() {
-  const [clients, setClients] = useState([]);
-  const [commandes, setCommandes] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // ✅ 1️⃣ Ajouter page et searchInput
+  const [page, setPage] = useState(1);
+  const [loadingPage, setLoadingPage] = useState(false);
+  const [initialLoad, setInitialLoad] = useState(true);
+  const [searchInput, setSearchInput] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [etatFilter, setEtatFilter] = useState("tous"); 
+// "tous" | "endettes" | "a_jour"
+  const [statsCommandes, setStatsCommandes] = useState({
+  totalTTC: 0,
+  totalPaye: 0,
+  reste: 0,
+});
+  
   const [openAdd, setOpenAdd] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -735,6 +594,31 @@ export default function ClientsSpeciaux() {
   const [openHistorique, setOpenHistorique] = useState(false);
   const [trancheClient, setTrancheClient] = useState(null);
   const [openTranche, setOpenTranche] = useState(false);
+  const [lastCreatedCommande, setLastCreatedCommande] = useState(null);
+  const [showQrModal, setShowQrModal] = useState(false);
+
+  useEffect(() => {
+    setPage(1);
+    setSearchTerm(searchInput);
+  }, [searchInput]);
+  useEffect(() => {
+  const loadStats = async () => {
+    try {
+      const response = await commandesAPI.getStatsSpecial();
+      setStatsCommandes({
+  totalTTC: response.data.totalTTC,
+  totalPaye: response.data.totalPaye,
+  reste: response.data.dette, // 👈 mapping ici
+});
+      
+    } catch (e) {
+      console.error("Erreur stats commandes", e);
+    }
+  };
+
+  loadStats();
+}, []);
+
 
   const toast = (type, title, message) => {
     const id = Date.now();
@@ -743,322 +627,53 @@ export default function ClientsSpeciaux() {
   };
   const removeToast = (id) => setToasts((t) => t.filter((x) => x.id !== id));
 
-  // ======================================================
-  // 🔗 Chargement des clients spéciaux + commandes
-  // ======================================================
-  const fetchData = async () => {
-    try {
-      setLoading(true);
+  // ✅ 1️⃣ Appel du hook corrigé avec etatFilter
+const {
+  clients,
+  commandes,
+  totalPages,
+  totalClients, // ✅ AJOUT ICI
+  loading,
+  handleAdd,
+  handleEdit,
+  handleDelete,
+} = useClientsSpeciaux(toast, {
+  page,
+  search: searchTerm,
+  etat: etatFilter,
+});
 
-      const [clientsRes, commandesRes] = await Promise.all([
-        clientsAPI.getAll({ type_client: "special" }),
-        commandesAPI.getAll(),
-      ]);
-
-      const clientsPayload = Array.isArray(clientsRes?.data)
-        ? clientsRes.data
-        : clientsRes;
-
-      const normalizedClients = (clientsPayload || []).map((c) => ({
-        id: c.id,
-        nom: c.nom || "",
-        contact: c.contact || c.telephone || "",
-        entreprise: c.entreprise || "",
-        adresse: c.adresse || "",
-      }));
-
-      const commandesPayload = Array.isArray(commandesRes.data?.data)
-        ? commandesRes.data.data
-        : commandesRes.data;
-
-      const allCommandes = (commandesPayload || []).map(normalizeCommande);
-
-      const clientIds = new Set(normalizedClients.map((c) => c.id));
-      const commandesClientsSpeciaux = allCommandes.filter((cmd) =>
-        clientIds.has(cmd.clientId)
-      );
-
-      setClients(normalizedClients);
-      setCommandes(commandesClientsSpeciaux);
-    } catch (error) {
-      console.error("Erreur chargement clients/commandes :", error);
-      toast(
-        "error",
-        "Erreur de chargement",
-        "Impossible de charger les clients spéciaux."
-      );
-    } finally {
-      setLoading(false);
-    }
+  // Gestionnaire de changement de page avec loader
+  const handlePageChange = (newPage) => {
+    if (newPage < 1 || newPage > totalPages) return;
+    if (newPage === page) return;
+    if (loadingPage) return; // Éviter les clics multiples
+    
+    setLoadingPage(true);
+    setPage(newPage);
   };
 
+  // Désactiver le loader de page quand les données sont chargées
   useEffect(() => {
-    fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // On ignore TOUTES les commandes annulées pour les agrégats
-  const commandesActives = useMemo(
-    () => commandes.filter((c) => c.statut !== "annulee"),
-    [commandes]
-  );
-
-  // Agrégation : enrichir chaque client avec ses commandes actives + tranches en attente
-  const clientsEnrichis = useMemo(() => {
-    return clients.map((c) => {
-      const cs = commandesActives.filter((cmd) => cmd.clientId === c.id);
-      if (!cs.length) {
-        return {
-          ...c,
-          nbCommandes: 0,
-          totalTTC: 0,
-          totalPaye: 0,
-          detteTotale: 0,
-          derniereActivite: null,
-          nbTranchesEnAttente: 0,
-          montantTranchesEnAttente: 0,
-        };
-      }
-
-      const totalTTC = cs.reduce((s, x) => s + (x.totalTTC || 0), 0);
-      const totalPaye = cs.reduce((s, x) => s + (x.montantPaye || 0), 0);
-      const detteTotale = cs.reduce(
-        (s, x) => s + Math.max(x.resteAPayer || 0, 0),
-        0
-      );
-
-      const datesActivite = [
-        ...cs.map((x) => x.dateCommande),
-        ...cs.flatMap((x) => (x.paiements || []).map((p) => p.date)),
-      ].filter(Boolean);
-      const derniereActivite = datesActivite.length
-        ? datesActivite.sort().slice(-1)[0]
-        : null;
-
-      const paiementsClient = cs.flatMap((cmd) => cmd.paiements || []);
-      const tranchesEnAttente = paiementsClient.filter(
-        (p) =>
-          p.type === "tranche" &&
-          p.statut === "en_attente_caisse" &&
-          p.montant
-      );
-      const nbTranchesEnAttente = tranchesEnAttente.length;
-      const montantTranchesEnAttente = tranchesEnAttente.reduce(
-        (s, p) => s + Number(p.montant || 0),
-        0
-      );
-
-      return {
-        ...c,
-        nbCommandes: cs.length,
-        totalTTC,
-        totalPaye,
-        detteTotale,
-        derniereActivite,
-        nbTranchesEnAttente,
-        montantTranchesEnAttente,
-      };
-    });
-  }, [clients, commandesActives]);
-
-  // Stats globales (basées sur clientsEnrichis donc SANS commandes annulées)
-  const statsGlobales = useMemo(() => {
-    const nbClients = clientsEnrichis.length;
-    const totalTTC = clientsEnrichis.reduce((s, c) => s + c.totalTTC, 0);
-    const totalPaye = clientsEnrichis.reduce((s, c) => s + c.totalPaye, 0);
-    const detteTotale = clientsEnrichis.reduce(
-      (s, c) => s + c.detteTotale,
-      0
-    );
-    return { nbClients, totalTTC, totalPaye, detteTotale };
-  }, [clientsEnrichis]);
-
-  // ============================
-  // 🔁 CRUD connecté au backend
-  // ============================
-  const handleAdd = async (data) => {
-    setSubmitting(true);
-    try {
-      const payload = {
-        nom: data.nom,
-        prenom: null,
-        entreprise: data.entreprise,
-        adresse: data.adresse,
-        numero_cni: null,
-        telephone: null,
-        type_client: "special",
-        solde: 0,
-        contact: data.contact,
-      };
-
-      const c = await clientsAPI.create(payload);
-
-      const newClient = {
-        id: c.id,
-        nom: c.nom || data.nom,
-        contact: c.contact || c.telephone || data.contact,
-        entreprise: c.entreprise || data.entreprise,
-        adresse: c.adresse || data.adresse,
-      };
-
-      setClients((prev) => [newClient, ...prev]);
-
-      toast(
-        "success",
-        "Client ajouté",
-        `${newClient.nom} a été ajouté avec succès.`
-      );
-      setOpenAdd(false);
-    } catch (error) {
-      console.error("Erreur création client spécial :", error);
-
-      if (error.response) {
-        const { status, data } = error.response;
-
-        if (status === 422 && data?.errors) {
-          const firstError =
-            Object.values(data.errors)[0]?.[0] ||
-            "Vérifiez les champs obligatoires.";
-          toast("error", "Impossible d'ajouter ce client spécial", firstError);
-        } else {
-          toast(
-            "error",
-            "Création impossible",
-            data?.message || "Erreur lors de la création du client."
-          );
-        }
-      } else {
-        toast(
-          "error",
-          "Erreur réseau",
-          "Impossible de contacter le serveur."
-        );
-      }
-    } finally {
-      setSubmitting(false);
+    if (!loading) {
+      setLoadingPage(false);
+      setInitialLoad(false);
     }
-  };
+  }, [loading]);
 
-  const handleEdit = async (data) => {
-    if (!editTarget) return;
-    setSubmitting(true);
-
-    try {
-      const payload = {
-        nom: data.nom,
-        entreprise: data.entreprise,
-        adresse: data.adresse,
-        contact: data.contact,
-      };
-
-      await clientsAPI.update(editTarget.id, payload);
-
-      setClients((prev) =>
-        prev.map((c) =>
-          c.id === editTarget.id
-            ? {
-                ...c,
-                nom: data.nom,
-                entreprise: data.entreprise,
-                adresse: data.adresse,
-                contact: data.contact,
-              }
-            : c
-        )
-      );
-
-      toast("success", "Client modifié", `${data.nom} a été mis à jour.`);
-      setEditTarget(null);
-    } catch (error) {
-      console.error(error);
-      toast(
-        "error",
-        "Erreur",
-        "Impossible de modifier ce client spécial pour le moment."
-      );
-    } finally {
-      setSubmitting(false);
+  // ✅ 6️⃣ Désactiver le loader de page quand les données arrivent
+  useEffect(() => {
+    if (clients.length > 0) {
+      setLoadingPage(false);
     }
-  };
+  }, [clients]);
 
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
-    setSubmitting(true);
-
-    try {
-      await clientsAPI.delete(deleteTarget.id);
-
-      setClients((prev) => prev.filter((c) => c.id !== deleteTarget.id));
-
-      toast(
-        "success",
-        "Client supprimé",
-        `${deleteTarget.nom} a été supprimé.`
-      );
-      setDeleteTarget(null);
-    } catch (error) {
-      console.error(error);
-      toast(
-        "error",
-        "Erreur",
-        "Impossible de supprimer ce client spécial pour le moment."
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  // 🔄 Charge les paiements d'un client
-  const loadPaiementsForClient = async (clientId) => {
-    try {
-      const commandesClient = commandes.filter((c) => c.clientId === clientId);
-      if (!commandesClient.length) return;
-
-      const updated = [...commandes];
-
-      await Promise.all(
-        commandesClient.map(async (cmd) => {
-          try {
-            const payload = await paiementsAPI.getByCommande(cmd.id);
-
-            const paiements = (payload || []).map((p) => ({
-              id: p.id,
-              date: p.date_paiement || p.date || "",
-              montant:
-                Number(
-                  p.montant || p.montant_paye || p.montant_paiement || 0
-                ) || 0,
-              mode: p.mode_paiement || p.mode || "especes",
-              commentaire: p.commentaire || "",
-              statut:
-                p.statut ||
-                p.status ||
-                p.statut_paiement ||
-                p.statutPaiement ||
-                null,
-              type: p.type_paiement || p.type || p.typePaiement || null,
-            }));
-
-            const idx = updated.findIndex((c) => c.id === cmd.id);
-            if (idx !== -1) {
-              updated[idx] = { ...updated[idx], paiements };
-            }
-          } catch (e) {
-            console.error("Erreur chargement paiements commande :", e);
-          }
-        })
-      );
-
-      setCommandes(updated);
-    } catch (error) {
-      console.error("Erreur chargement paiements client :", error);
-      toast(
-        "error",
-        "Erreur",
-        "Impossible de charger les paiements de ce client."
-      );
-    }
-  };
+  const {
+    loadPaiementsForClient,
+    handleTrancheSubmit,
+    handleVoirDetailEditTranche,
+    handleVoirDetailDeleteTranche,
+  } = usePaiementsClients(toast);
 
   const openHistoriqueClient = (client) => {
     setHistoriqueClient(client);
@@ -1066,517 +681,576 @@ export default function ClientsSpeciaux() {
     loadPaiementsForClient(client.id);
   };
 
-  const openTrancheClient = (client) => {
-    setTrancheClient(client);
+const openTrancheClient = async (client) => {
+  try {
+    const raw =
+      await commandesAPI.getCommandesAvecResteClientSpecial(client.id);
+
+    const normalized = raw
+      .map(normalizeCommande)
+      .filter(Boolean);
+
+    setTrancheClient({
+      ...client,
+      commandesSpecifiques: normalized,
+    });
+
     setOpenTranche(true);
+
+  } catch (e) {
+    toast("error", "Erreur", "Impossible de charger les commandes du client.");
+  }
+};
+
+  // ✅ Ouvrir modal uniquement si dette globale > 0
+  const isTrancheDisabled = (client) => {
+    return Number(client.dette || 0) <= 0;
+  };
+  
+  // ✅ 5️⃣ Corrige suppression
+  const isDeleteDisabled = (client) => {
+    const dette = Number(client.dette || 0);
+    return dette > 0;
   };
 
-  // 🔗 Enregistrement d'une nouvelle tranche côté API (préparation Responsable)
-  const handleTrancheSubmit = async (commande, tranche) => {
-    try {
-      const res = await paiementsAPI.create(commande.id, {
-        montant: tranche.montant,
-        mode_paiement: tranche.mode,
-        date_paiement: tranche.date,
-        type_paiement: "tranche",
-        statut_paiement: "en_attente_caisse",
-        statut: "en_attente_caisse",
-        commentaire: tranche.commentaire || "",
-      });
-
-      const created = Array.isArray(res.data?.data)
-        ? res.data.data[0]
-        : res.data;
-
-      const nouveauPaiement = {
-        id: created?.id || Date.now(),
-        date: created?.date_paiement || created?.date || tranche.date,
-        montant:
-          Number(
-            created?.montant ||
-              created?.montant_paye ||
-              created?.montant_paiement ||
-              tranche.montant
-          ) || tranche.montant,
-        mode: created?.mode_paiement || created?.mode || tranche.mode,
-        commentaire: created?.commentaire || tranche.commentaire || "",
-        statut:
-          created?.statut ||
-          created?.status ||
-          created?.statut_paiement ||
-          "en_attente_caisse",
-        type: created?.type_paiement || created?.type || "tranche",
-      };
-
-      // ⚠️ IMPORTANT : on NE touche PAS au montant payé / reste / statut de la commande ici.
-      // La commande ne sera soldée que quand la caisse encaisse réellement.
-      setCommandes((prev) =>
-        prev.map((c) =>
-          c.id === commande.id
-            ? {
-                ...c,
-                paiements: [...(c.paiements || []), nouveauPaiement],
-              }
-            : c
-        )
-      );
-
-      toast(
-        "success",
-        "Tranche en attente caisse",
-        `${trancheClient?.nom || commande.clientNom} — ${formatFCFA(
-          tranche.montant
-        )}`
-      );
-
-      setOpenTranche(false);
-      setTrancheClient(null);
-    } catch (error) {
-      console.error("Erreur enregistrement tranche :", error);
-
-      if (error.response?.status === 422 && error.response.data?.errors) {
-        const firstError =
-          Object.values(error.response.data.errors)[0]?.[0] ||
-          "Vérifiez les informations de la tranche.";
-        toast("error", "Tranche refusée", firstError);
-      } else {
-        toast(
-          "error",
-          "Erreur",
-          "Impossible d'enregistrer cette tranche pour le moment."
-        );
-      }
-    }
-  };
-
-  // 🔄 Édition de tranche depuis VoirDetailClient (modal interne)
-  const handleVoirDetailEditTranche = async (commande, updatedPaiement) => {
-    try {
-      await paiementsAPI.update(updatedPaiement.id, {
-        montant: updatedPaiement.montant,
-        mode_paiement: updatedPaiement.mode,
-        date_paiement: updatedPaiement.date,
-        commentaire: updatedPaiement.commentaire || "",
-        // Toujours en attente caisse tant que non encaissé
-        statut_paiement: "en_attente_caisse",
-      });
-
-      setCommandes((prev) =>
-        prev.map((c) => {
-          if (c.id !== commande.id) return c;
-          return {
-            ...c,
-            paiements: (c.paiements || []).map((p) =>
-              p.id === updatedPaiement.id
-                ? {
-                    ...p,
-                    montant: updatedPaiement.montant,
-                    mode: updatedPaiement.mode,
-                    date: updatedPaiement.date,
-                    commentaire: updatedPaiement.commentaire || "",
-                    statut: "en_attente_caisse",
-                    type: p.type || "tranche",
-                  }
-                : p
-            ),
-          };
-        })
-      );
-
-      toast(
-        "success",
-        "Tranche modifiée",
-        "La tranche a été mise à jour (toujours en attente caisse)."
-      );
-    } catch (error) {
-      console.error("Erreur modification tranche (VoirDetail) :", error);
-
-      if (error.response?.status === 422 && error.response.data?.errors) {
-        const firstError =
-          Object.values(error.response.data.errors)[0]?.[0] ||
-          "Vérifiez les informations de la tranche.";
-        toast("error", "Modification refusée", firstError);
-      } else {
-        toast(
-          "error",
-          "Erreur",
-          "Impossible de modifier cette tranche pour le moment."
-        );
-      }
-    }
-  };
-
-  // 🔄 Suppression de tranche depuis VoirDetailClient
-  const handleVoirDetailDeleteTranche = async (commande, paiement) => {
-    try {
-      await paiementsAPI.delete(paiement.id);
-
-      setCommandes((prev) =>
-        prev.map((c) =>
-          c.id === commande.id
-            ? {
-                ...c,
-                paiements: (c.paiements || []).filter(
-                  (p) => p.id !== paiement.id
-                ),
-              }
-            : c
-        )
-      );
-
-      toast("success", "Tranche supprimée", "La tranche a été supprimée.");
-    } catch (error) {
-      console.error("Erreur suppression tranche (VoirDetail) :", error);
-      toast(
-        "error",
-        "Erreur",
-        "Impossible de supprimer cette tranche pour le moment."
-      );
-    }
-  };
-
-  const filtered = useMemo(() => {
-    const q = searchTerm.toLowerCase();
-    return clientsEnrichis.filter(
-      (c) =>
-        c.nom.toLowerCase().includes(q) ||
-        (c.contact || "").toLowerCase().includes(q) ||
-        (c.entreprise || "").toLowerCase().includes(q) ||
-        (c.adresse || "").toLowerCase().includes(q)
-    );
-  }, [clientsEnrichis, searchTerm]);
-
-  // Loader compact aligné
-  if (loading)
+  // ✅ 6️⃣ Loader d'affichage initial - UNIQUEMENT au premier chargement
+  if (initialLoad && loading && clients.length === 0) {
     return (
-      <div className="flex items-center justify-center h-[60vh] overflow-x-hidden">
-        <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-gray-200 shadow-sm">
+      <div className="flex items-center justify-center min-h-[70vh] bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white">
+        <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-white/80 border border-[#E4E0FF] shadow-sm">
           <Loader2 className="w-5 h-5 text-[#472EAD] animate-spin" />
-          <span className="text-xs font-medium text-[#472EAD]">
+          <span className="text-sm font-medium text-[#472EAD]">
             Chargement des clients spéciaux...
           </span>
         </div>
       </div>
     );
+  }
 
   return (
-    <div className="w-full h-full overflow-x-hidden">
-      <div className="w-full h-full bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white px-3 sm:px-4 lg:px-6 py-4 sm:py-5 overflow-y-auto">
-        <div className="max-w-6xl mx-auto space-y-5">
-          {/* HEADER */}
-          <motion.header
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35 }}
-            className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
-          >
-            <div className="space-y-1.5">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/70 border border-[#E4E0FF]">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                <span className="text-[11px] font-semibold tracking-wide text-[#472EAD] uppercase">
-                  Module Clients spéciaux — Responsable
+    <div className="min-h-screen w-full bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white px-3 sm:px-4 lg:px-6 py-6 sm:py-8 overflow-y-auto">
+      <div className="max-w-6xl mx-auto space-y-8">
+        
+        {/* HEADER avec badge intégré */}
+        <motion.header
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45 }}
+          className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mt-6 mb-8"
+        >
+          <div className="space-y-2 flex-1">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/70 border border-[#E4E0FF] shadow-xs">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              <span className="text-[11px] font-semibold tracking-wide text-[#472EAD] uppercase">
+                Module Clients spéciaux — Responsable
+              </span>
+            </div>
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#2F1F7A]">
+                Clients spéciaux
+              </h1>
+              <p className="mt-1 text-sm text-gray-500">
+                Gestion des clients privilégiés, commandes en gros et
+                paiements par tranches (préparation côté Responsable,{" "}
+                <span className="font-semibold">
+                  encaissement côté caisse
                 </span>
-              </div>
-              <div>
-                <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-[#2F1F7A]">
-                  Clients spéciaux
-                </h1>
-                <p className="mt-0.5 text-xs sm:text-sm text-gray-500">
-                  Gestion des clients privilégiés, commandes en gros et
-                  paiements par tranches (préparation côté Responsable,{" "}
-                  <span className="font-semibold">
-                    encaissement côté caisse
-                  </span>
-                  ).
-                </p>
-              </div>
-              <p className="text-[11px] text-gray-400">
-                {statsGlobales.nbClients} client
-                {statsGlobales.nbClients > 1 && "s"} spéciaux enregistrés
+                ).
               </p>
             </div>
+            <p className="text-[11px] text-gray-400">
+              {/* ✅ 7️⃣ Supprimé statsGlobales.nbClients */}
+            </p>
+          </div>
 
-            <div className="flex flex-wrap gap-2 justify-start sm:justify-end">
-              <button
-                onClick={() => setOpenAdd(true)}
-                className="flex items-center gap-2 px-4 py-2.5 bg-[#472EAD] text-white rounded-lg shadow-md hover:bg-[#5A3CF5] hover:shadow-lg text-xs sm:text-sm transition"
-              >
-                <UserPlus size={16} />
-                Nouveau client
-              </button>
+          {/* BADGE TOTAL aligné à droite au même niveau */}
+          <div className="flex items-center justify-end">
+            <button
+              onClick={() => setOpenAdd(true)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-[#472EAD] text-white rounded-lg shadow-md hover:bg-[#5A3CF5] hover:shadow-lg text-xs sm:text-sm transition"
+            >
+              <UserPlus size={16} />
+              Nouveau client
+            </button>
+          </div>
+        </motion.header>
+
+        {/* CARTES STATS GLOBALES */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Clients spéciaux */}
+          <div className="rounded-xl border border-yellow-400 bg-gradient-to-br from-yellow-50 via-amber-50 to-yellow-100 px-3 py-2.5 shadow-sm">
+            <div className="text-[15px] font-semibold text-yellow-800 mb-0.5">
+              Clients spéciaux
             </div>
-          </motion.header>
-
-          {/* CARTES STATS GLOBALES */}
-          <motion.div
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="w-full max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3"
-          >
-            {/* Clients spéciaux */}
-            <div className="rounded-xl border border-yellow-400 bg-gradient-to-br from-yellow-50 via-amber-50 to-yellow-100 px-3 py-2.5 shadow-sm">
-              <div className="text-[15px] font-semibold text-yellow-800 mb-0.5">
-                Clients spéciaux
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-lg font-extrabold text-yellow-700">
-                  {statsGlobales.nbClients}
-                </span>
-                <BadgeDollarSign className="w-5 h-5 text-yellow-600" />
-              </div>
+            <div className="flex items-center justify-between">
+              <span className="text-lg font-extrabold text-yellow-700">
+                {totalClients}
+              </span>
+              <BadgeDollarSign className="w-5 h-5 text-yellow-600" />
             </div>
+          </div>
 
-            {/* Total TTC commandes */}
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
-              <div className="text-[15px] text-gray-500 mb-0.5">
-                Total TTC commandes
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm sm:text-lg font-extrabold text-emerald-700">
-                  {formatFCFA(statsGlobales.totalTTC)}
-                </span>
-              </div>
+          {/* Total TTC commandes */}
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+            <div className="text-[15px] text-gray-500 mb-0.5">
+              Total TTC commandes
             </div>
-
-            {/* Total payé */}
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
-              <div className="text-[15px] text-gray-500 mb-0.5">
-                Total payé (encaissé)
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm sm:text-lg font-extrabold text-emerald-700">
-                  {formatFCFA(statsGlobales.totalPaye)}
-                </span>
-                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-              </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm sm:text-lg font-extrabold text-emerald-700">
+                {formatFCFA(statsCommandes.totalTTC)}
+              </span>
             </div>
+          </div>
 
-            {/* Dette globale */}
-            <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5">
-              <div className="text-[15px] text-gray-500 mb-0.5">
-                Dette globale
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm sm:text-lg font-extrabold text-rose-700">
-                  {formatFCFA(statsGlobales.detteTotale)}
-                </span>
-                <AlertCircle className="w-5 h-5 text-rose-600" />
-              </div>
+          {/* Total payé */}
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+            <div className="text-[15px] text-gray-500 mb-0.5">
+              Total payé (encaissé)
             </div>
-          </motion.div>
-
-          {/* RECHERCHE + TABLEAU */}
-          <section className="bg-white/95 border border-[#E4E0FF] rounded-2xl shadow-[0_12px_30px_rgba(15,23,42,0.06)] px-3 sm:px-4 py-3 sm:py-4 space-y-3">
-            {/* RECHERCHE */}
-            <div className="relative">
-              <Search className="absolute left-3 top-2.5 text-gray-400 w-4 h-4" />
-              <input
-                type="text"
-                placeholder="Rechercher par nom, contact, entreprise, adresse..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-xl text-sm bg-white shadow-sm focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD] placeholder:text-gray-400"
-              />
+            <div className="flex items-center justify-between">
+              <span className="text-sm sm:text-lg font-extrabold text-emerald-700">
+                {formatFCFA(statsCommandes.totalPaye)}
+              </span>
+              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
             </div>
+          </div>
 
-            {/* TABLEAU PRINCIPAL */}
-            <DataTable
-              columns={[
-                {
-                  key: "nom",
-                  label: "Client",
-                  render: (_, row) => (
-                    <div>
-                      <div className="font-semibold text-sm">{row.nom}</div>
-                      <div className="text-[11px] text-gray-500">
-                        {row.entreprise}
-                      </div>
-                      <div className="text-[11px] text-gray-400">
-                        {row.adresse}
-                      </div>
-                    </div>
-                  ),
-                },
-                { key: "contact", label: "Contact" },
-                {
-                  key: "totalTTC",
-                  label: "Total TTC",
-                  render: (v) => (
-                    <span className="text-xs font-semibold text-gray-700">
-                      {formatFCFA(v)}
-                    </span>
-                  ),
-                },
-                {
-                  key: "totalPaye",
-                  label: "Total payé",
-                  render: (v) => (
-                    <span className="text-xs font-semibold text-emerald-700">
-                      {formatFCFA(v)}
-                    </span>
-                  ),
-                },
-                {
-                  key: "detteTotale",
-                  label: "Dette",
-                  render: (v) =>
-                    v > 0 ? (
-                      <span className="text-xs font-semibold text-rose-700">
-                        {formatFCFA(v)}
-                      </span>
-                    ) : (
-                      <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
-                        A jour
-                      </span>
-                    ),
-                },
-                {
-                  key: "tranches",
-                  label: "Tranches",
-                  render: (_, row) =>
-                    row.nbTranchesEnAttente > 0 ? (
-                      <div className="flex flex-col text-xs">
-                        <span className="font-semibold text-amber-700">
-                          {row.nbTranchesEnAttente} en attente
-                        </span>
-                        <span className="text-[11px] text-gray-600">
-                          {formatFCFA(row.montantTranchesEnAttente)}
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
-                        Aucune tranche en attente
-                      </span>
-                    ),
-                },
-                {
-                  key: "nbCommandes",
-                  label: "Commandes",
-                  render: (v) => (
-                    <span className="text-xs font-semibold text-gray-700">
-                      {v || 0}
-                    </span>
-                  ),
-                },
-              ]}
-              data={filtered}
-              actions={[
-                {
-                  icon: <BadgeDollarSign size={16} />,
-                  title: "Nouvelle tranche (en attente caisse)",
-                  color: "text-emerald-700",
-                  hoverBg: "bg-emerald-50",
-                  onClick: (row) => openTrancheClient(row),
-                },
-                {
-                  icon: <ListChecks size={16} />,
-                  title: "Historique commandes / paiements",
-                  color: "text-[#472EAD]",
-                  hoverBg: "bg-[#F7F5FF]",
-                  onClick: (row) => openHistoriqueClient(row),
-                },
-                {
-                  icon: <Edit2 size={16} />,
-                  title: "Modifier",
-                  color: "text-[#472EAD]",
-                  hoverBg: "bg-[#F7F5FF]",
-                  onClick: (row) => setEditTarget(row),
-                },
-                {
-                  icon: <Trash2 size={16} />,
-                  title: "Supprimer",
-                  color: "text-rose-600",
-                  hoverBg: "bg-rose-50",
-                  onClick: (row) => setDeleteTarget(row),
-                },
-              ]}
+          {/* Dette globale */}
+          <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5">
+            <div className="text-[15px] text-gray-500 mb-0.5">
+              Dette globale
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm sm:text-lg font-extrabold text-rose-700">
+                {formatFCFA(statsCommandes.reste)}
+              </span>
+              <AlertCircle className="w-5 h-5 text-rose-600" />
+            </div>
+          </div>
+        </div>
+
+        {/* RECHERCHE + TABLEAU */}
+        <section className="bg-white/90 border border-[#E4E0FF] rounded-2xl shadow-[0_18px_45px_rgba(15,23,42,0.06)] px-4 sm:px-5 py-4 sm:py-5 space-y-4">
+          
+        {/* Barre recherche + filtre état */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          
+          {/* Recherche */}
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-2.5 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              placeholder="Rechercher par nom ou contact ..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-xl text-sm bg-white/80 shadow-sm focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD] placeholder:text-gray-400"
             />
-          </section>
+          </div>
 
-          {/* MODALES CRUD */}
-          <FormModal
-            open={openAdd}
-            onClose={() => setOpenAdd(false)}
-            title="Nouveau client spécial"
-          >
+          {/* Filtre état */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setEtatFilter("tous")}
+              className={cls(
+                "px-3 py-2 text-xs rounded-lg border transition",
+                etatFilter === "tous"
+                  ? "bg-[#472EAD] text-white border-[#472EAD]"
+                  : "bg-white border-gray-300 text-gray-600 hover:bg-gray-50"
+              )}
+            >
+              Tous
+            </button>
+
+            <button
+              onClick={() => setEtatFilter("endettes")}
+              className={cls(
+                "px-3 py-2 text-xs rounded-lg border transition",
+                etatFilter === "endettes"
+                  ? "bg-rose-600 text-white border-rose-600"
+                  : "bg-white border-gray-300 text-gray-600 hover:bg-gray-50"
+              )}
+            >
+              Endettés
+            </button>
+
+            <button
+              onClick={() => setEtatFilter("a_jour")}
+              className={cls(
+                "px-3 py-2 text-xs rounded-lg border transition",
+                etatFilter === "a_jour"
+                  ? "bg-emerald-600 text-white border-emerald-600"
+                  : "bg-white border-gray-300 text-gray-600 hover:bg-gray-50"
+              )}
+            >
+              À jour
+            </button>
+          </div>
+        </div>
+
+          {/* Résumé affichage */}
+          <div className="flex items-center justify-between text-[11px] text-gray-500 mb-2">
+            <span>
+              Affichage :{" "}
+              <span className="font-semibold">{clients.length}</span>
+            </span>
+            <span>
+              Page <span className="font-semibold">{page}</span> /{" "}
+              <span className="font-semibold">{totalPages}</span>
+            </span>
+          </div>
+
+          {/* TABLEAU PRINCIPAL */}
+          <div className="mt-2 relative">
+            {clients.length === 0 && !loading ? (
+              <div className="flex flex-col items-center justify-center py-14 text-center text-gray-400">
+                <Search className="w-8 h-8 mb-3 opacity-60" />
+                <p className="text-sm font-medium">
+                  Aucun client spécial trouvé
+                </p>
+                <p className="text-xs mt-1">
+                  Essayez de modifier votre recherche.
+                </p>
+              </div>
+            ) : (
+              <>
+                <DataTable
+                  columns={[
+                    {
+                      key: "nom",
+                      label: "Client",
+                      render: (_, row) => (
+                        <div className="space-y-[2px]">
+                          <div className="font-semibold text-sm text-gray-800">
+                            {row.nom} {row.prenom}
+                          </div>
+
+                          <div className="text-[11px] text-gray-500 flex items-center gap-1">
+                            <Phone className="w-3 h-3"/>
+                            {row.telephone}
+                          </div>
+
+                          <div className="text-[11px] text-gray-400">
+                            {row.adresse}
+                          </div>
+                        </div>
+                      )
+                    },
+                    {
+                      key: "totalTTC",
+                      label: "Total TTC",
+                      render: (v) => (
+                        <span className="text-xs font-semibold text-gray-700">
+                          {formatFCFA(v || 0)}
+                        </span>
+                      ),
+                    },
+                    {
+                      key: "totalPaye",
+                      label: "Total payé",
+                      render: (v) => (
+                        <span className="text-xs font-semibold text-emerald-700">
+                          {formatFCFA(v || 0)}
+                        </span>
+                      ),
+                    },
+                    {
+                      // ✅ 4️⃣ Corrigé detteTotale → dette
+                      key: "dette",
+                      label: "Dette",
+                      render: (v) =>
+                        v > 0 ? (
+                          <span className="text-xs font-semibold text-rose-700">
+                            {formatFCFA(v)}
+                          </span>
+                        ) : (
+                          <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                            A jour
+                          </span>
+                        ),
+                    },
+                    {
+                      key: "tranches",
+                      label: "Tranches",
+                      render: (_, row) => {
+                        const nbTranches = row.nbTranchesEnAttente || 0;
+                        const montantTranches = row.montantTranchesEnAttente || 0;
+                        
+                        return nbTranches > 0 ? (
+                          <div className="flex flex-col text-xs">
+                            <span className="font-semibold text-amber-700">
+                              {nbTranches} en attente
+                            </span>
+
+                          </div>
+                        ) : (
+                          <span className="text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                            Aucune tranche en attente
+                          </span>
+                        );
+                      },
+                    },
+                    {
+                      key: "commandes_count",
+                      label: "Commandes",
+                      render: (_, row) => {
+                        const total = row.commandes_count ?? 0;
+                        const enDette = row.commandes_en_dette_count ?? 0;
+
+                        return (
+                          <div className="flex flex-col text-xs">
+                            <span className="font-semibold text-gray-800">
+                              {total} total
+                            </span>
+
+                            {enDette > 0 ? (
+                              <span className="text-rose-600 font-medium">
+                                {enDette} en dette
+                              </span>
+                            ) : (
+                              <span className="text-emerald-600 font-medium">
+                                0 en dette
+                              </span>
+                            )}
+                          </div>
+                        );
+                      },
+                    }
+                  ]}
+                  // ✅ 3️⃣ filteredClients → clients
+                  data={clients}
+                  actions={[
+                    {
+                      icon: <BadgeDollarSign size={16} />,
+                      title: "Nouvelle tranche (en attente caisse)",
+                      color: "text-emerald-700",
+                      hoverBg: "bg-emerald-50",
+                      onClick: (row) => {
+                        if (isTrancheDisabled(row)) {
+                          toast(
+                            "error",
+                            "Nouvelle tranche impossible",
+                            "Ce client n'a aucune commande avec un reste à payer."
+                          );
+                          return;
+                        }
+                        openTrancheClient(row);
+                      },
+                      disabled: false,                  
+                    },
+                    {
+                      icon: <ListChecks size={16} />,
+                      title: "Historique commandes / paiements",
+                      color: "text-[#472EAD]",
+                      hoverBg: "bg-[#F7F5FF]",
+                      onClick: (row) => openHistoriqueClient(row),
+                    },
+                    {
+                      icon: <Edit2 size={16} />,
+                      title: "Modifier",
+                      color: "text-[#472EAD]",
+                      hoverBg: "bg-[#F7F5FF]",
+                      onClick: (row) => setEditTarget(row),
+                    },
+                    {
+                      icon: <Trash2 size={16} />,
+                      title: "Supprimer",
+                      color: "text-rose-600",
+                      hoverBg: "bg-rose-50",
+                      onClick: (row) => {
+                        if (isDeleteDisabled(row)) {
+                          toast(
+                            "error",
+                            "Suppression impossible",
+                            "Ce client possède encore une dette. Veuillez solder ses commandes avant suppression."
+                          );
+                          return;
+                        }
+                        setDeleteTarget(row);
+                      },
+                    },
+                  ]}
+                />
+
+                
+                <div className="mt-6">
+                  <Pagination
+                    page={page}
+                    totalPages={totalPages}
+                    onPageChange={handlePageChange}
+                  />
+                  
+                  {/* Indicateur de chargement pendant le changement de page - UNIQUEMENT CELUI-CI */}
+                  {loadingPage && (
+                    <div className="flex justify-center py-2 text-xs text-gray-400 mt-2">
+                      <Loader2 className="w-3 h-3 mr-1 animate-spin text-[#472EAD]" />
+                      Chargement de la page...
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </section>
+
+        {/* MODALES CRUD */}
+        <FormModal
+          open={openAdd}
+          onClose={() => setOpenAdd(false)}
+          title="Nouveau client spécial"
+        >
+          <ClientForm
+            onSubmit={(data) => {
+              setSubmitting(true);
+              handleAdd({
+                ...data,
+                onSuccess: () => {
+                  setSubmitting(false);
+                  setOpenAdd(false);
+                  setPage(1); // Retour à la première page pour voir le nouveau client
+                },
+                onError: () => setSubmitting(false),
+              });
+            }}
+            onCancel={() => setOpenAdd(false)}
+            submitting={submitting}
+          />
+        </FormModal>
+
+        <FormModal
+          open={!!editTarget}
+          onClose={() => setEditTarget(null)}
+          title={`Modifier : ${[editTarget?.prenom, editTarget?.nom].filter(Boolean).join(" ")}`}
+        >
+          {editTarget && (
             <ClientForm
-              onSubmit={handleAdd}
-              onCancel={() => setOpenAdd(false)}
+              initial={editTarget}
+              onSubmit={(data) => {
+                setSubmitting(true);
+                handleEdit({
+                  ...data,
+                  onSuccess: () => {
+                    setSubmitting(false);
+                    setEditTarget(null);
+                  },
+                  onError: () => setSubmitting(false),
+                });
+              }}
+              onCancel={() => setEditTarget(null)}
               submitting={submitting}
             />
-          </FormModal>
+          )}
+        </FormModal>
 
-          <FormModal
-            open={!!editTarget}
-            onClose={() => setEditTarget(null)}
-            title={`Modifier : ${editTarget?.nom}`}
-          >
-            {editTarget && (
-              <ClientForm
-                initial={editTarget}
-                onSubmit={handleEdit}
-                onCancel={() => setEditTarget(null)}
-                submitting={submitting}
-              />
-            )}
-          </FormModal>
+        <FormModal
+          open={!!deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          title="Confirmer la suppression"
+          width="max-w-md"
+        >
+          <p className="text-sm text-gray-600 mb-4">
+            Voulez-vous vraiment supprimer{" "}
+            <span className="font-semibold">
+                {[deleteTarget?.prenom, deleteTarget?.nom].filter(Boolean).join(" ")}
+              </span>
+              ?
+          </p>
+          <div className="flex justify-end gap-3">
+            <button
+              onClick={() => setDeleteTarget(null)}
+              disabled={submitting}
+              className={cls(
+                "px-4 py-2 border border-gray-300 rounded-lg text-sm bg-white shadow-sm",
+                submitting
+                  ? "opacity-60 cursor-not-allowed"
+                  : "hover:bg-gray-50"
+              )}
+            >
+              Annuler
+            </button>
+            <button
+              onClick={() => {
+                setSubmitting(true);
+                handleDelete(deleteTarget.id, () => {
+                  setSubmitting(false);
+                  setDeleteTarget(null);
+                });
+              }}
+              disabled={submitting}
+              className={cls(
+                "px-4 py-2 rounded-lg text-sm text-white bg-rose-600 shadow-sm",
+                submitting
+                  ? "opacity-70 cursor-not-allowed"
+                  : "hover:bg-rose-700"
+              )}
+            >
+              {submitting ? "Suppression en cours..." : "Supprimer"}
+            </button>
+          </div>
+        </FormModal>
 
-          <FormModal
-            open={!!deleteTarget}
-            onClose={() => setDeleteTarget(null)}
-            title="Confirmer la suppression"
-            width="max-w-md"
-          >
-            <p className="text-sm text-gray-600 mb-4">
-              Voulez-vous vraiment supprimer{" "}
-              <span className="font-semibold">{deleteTarget?.nom}</span> ?
-            </p>
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setDeleteTarget(null)}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-sm bg-white hover:bg-gray-50 shadow-sm"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={handleDelete}
-                className="px-4 py-2 rounded-lg text-sm text-white bg-rose-600 hover:bg-rose-700 shadow-sm"
-              >
-                Supprimer
-              </button>
-            </div>
-          </FormModal>
+        {/* MODALE HISTORIQUE CLIENT */}
+        <VoirDetailClient
+          open={openHistorique}
+          onClose={() => setOpenHistorique(false)}
+          client={historiqueClient}
+          commandes={trancheClient?.commandesSpecifiques || []}
+          onEditTranche={handleVoirDetailEditTranche}
+          onDeleteTranche={handleVoirDetailDeleteTranche}
+        />
 
-          {/* MODALE HISTORIQUE CLIENT (VoirDetailClient.jsx) */}
-          <VoirDetailClient
-            open={openHistorique}
-            onClose={() => setOpenHistorique(false)}
-            client={historiqueClient}
-            commandes={commandes.filter(
-              (cmd) => cmd.clientId === historiqueClient?.id
-            )}
-            onEditTranche={handleVoirDetailEditTranche}
-            onDeleteTranche={handleVoirDetailDeleteTranche}
-          />
+        {/* MODALE NOUVELLE TRANCHE */}
+        <NouvelleTrancheModal
+          open={openTranche}
+          onClose={() => {
+            setOpenTranche(false);
+            setTrancheClient(null);
+          }}
+          client={trancheClient}
+          commandes={trancheClient?.commandesSpecifiques || []}
+          onSubmit={async (commande, paiement, done) => {
+            try {
+              await handleTrancheSubmit(commande, paiement, done);
+              const nouveauMontantPaye =
+                Number(commande.montantPaye || 0) + Number(paiement);
 
-          {/* MODALE NOUVELLE TRANCHE */}
-          <NouvelleTrancheModal
-            open={openTranche}
-            onClose={() => {
+              const nouveauReste =
+                Math.max(
+                  Number(commande.resteAPayer ?? commande.totalTTC ?? 0) - Number(paiement),
+                  0
+                );
+
+              setLastCreatedCommande({
+                ...commande,
+                montantPaye: nouveauMontantPaye,
+                montantTranche: paiement,
+                resteAPayer: nouveauReste,
+              });
               setOpenTranche(false);
-              setTrancheClient(null);
-            }}
-            client={trancheClient}
-            commandes={commandes.filter(
-              (cmd) => cmd.clientId === trancheClient?.id
-            )}
-            onSubmit={handleTrancheSubmit}
-            toast={toast}
-          />
+              setShowQrModal(true);
 
-          {/* TOASTS */}
-          <Toasts toasts={toasts} remove={removeToast} />
-        </div>
+            } catch (e) {
+              done();
+              toast("error", "Erreur", "Impossible d'enregistrer la tranche.");
+            }
+          }}
+          toast={toast}
+        />
+        <QrCommandeModal
+          open={showQrModal}
+          onClose={() => {
+            setShowQrModal(false);
+            setLastCreatedCommande(null);
+          }}
+          commande={lastCreatedCommande}
+          qrPayload={
+            lastCreatedCommande
+              ? String(lastCreatedCommande.numero || lastCreatedCommande.id)
+              : ""
+          }
+        />
+
+        {/* TOASTS */}
+        <Toasts toasts={toasts} remove={removeToast} />
       </div>
     </div>
   );

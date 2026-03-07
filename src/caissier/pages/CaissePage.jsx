@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Card, { CardHeader } from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
@@ -10,19 +11,26 @@ import { printInvoice } from '../components/InvoicePrint';
 import QRScanner from '../components/QRScanner';
 import caissierApi from '../services/caissierApi';
 import { toast } from 'sonner';
-import { initializeEcho, getEcho, disconnectEcho } from '../../utils/echo';
+import { echo } from '../../utils/echo';
 
 const CaissePage = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const boutiqueId = localStorage.getItem('boutique_id');
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [processedCount, setProcessedCount] = useState(0);
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [ticketToCancel, setTicketToCancel] = useState(null);
+  const [isCancellingTicket, setIsCancellingTicket] = useState(false);
   const [filterText, setFilterText] = useState('');
   const [showArticleDetails, setShowArticleDetails] = useState({});
+  const [currentPage, setCurrentPage] = useState(1);
   const [paymentData, setPaymentData] = useState({
     moyenPaiement: 'especes',
     autreMoyenPaiement: '',
@@ -38,6 +46,9 @@ const CaissePage = () => {
     const totalTTC = commande.total || 0;
     const totalHT = totalTTC / (1 + tauxTVA);
     const tva = totalTTC - totalHT;
+    console.log('boutiqueId:', boutiqueId);
+  
+    
 
     // Calculer le reste dû à partir des paiements
     const totalPaye = paiements.reduce((sum, p) => sum + (p.montant || 0), 0);
@@ -71,7 +82,7 @@ const CaissePage = () => {
       tva: tva,
       total_ttc: totalTTC,
       moyen_paiement: moyenPaiementDefini, // Pour les clients spéciaux, récupéré depuis les paiements
-      statut: resteDu > 0 ? (totalPaye > 0 ? 'partiellement_paye' : 'en_attente') : 'encaissé',
+      statut: resteDu > 0 ? (totalPaye > 0 ? 'partiellement_payee' : 'attente') : 'encaissé',
       client_special: isClientSpecial,
       client_nom: commande.client ? `${commande.client.prenom || ''} ${commande.client.nom || ''}`.trim() : null,
       lignes: lignes,
@@ -81,22 +92,27 @@ const CaissePage = () => {
     };
   };
 
-  // Fonction pour charger les tickets
-  const fetchTickets = async () => {
+  const [totalAmount, setTotalAmount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const PAGE_SIZE = 10;
+
+  // Fonction pour charger les tickets (pagination côté serveur - charge uniquement la page courante)
+  const fetchTickets = async (page = 1, search = '') => {
     try {
       setLoading(true);
-      const response = await caissierApi.getCommandesAttente();
-      const commandes = response.data || [];
+      const response = await caissierApi.getCommandesAttente({ page, per_page: PAGE_SIZE, search: search || undefined });
+      const commandes = response?.data || [];
       
-      // Les paiements sont maintenant inclus dans la réponse (via with('paiements'))
-      // Plus besoin de faire des appels API supplémentaires pour chaque commande
       const ticketsTransformes = commandes.map(commande => {
         const paiements = commande.paiements || [];
         return transformCommandeToTicket(commande, paiements);
       });
       
       setTickets(ticketsTransformes);
-    } catch (error) {
+      setPendingCount(response?.total ?? ticketsTransformes.length);
+      setTotalAmount(response?.total_amount ?? ticketsTransformes.reduce((s, t) => s + (t.total_ttc || 0), 0));
+      setTotalPages(Math.max(1, response?.last_page ?? 1));
+    } catch {
       // Erreur silencieuse - ne pas afficher de message localhost
       toast.error('Erreur', {
         description: 'Impossible de charger les tickets en attente'
@@ -107,44 +123,94 @@ const CaissePage = () => {
   };
 
   // Référence pour stocker les abonnements WebSocket
-  const echoRef = useRef(null);
-  const subscriptionsRef = useRef([]);
+  const fetchingRef = useRef(false);
 
-  // Charger les tickets au montage et configurer WebSockets
+  const fetchTicketsSafe = async (page = 1, search = '') => {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
+    try {
+      await fetchTickets(page, search);
+    } finally {
+      fetchingRef.current = false;
+    }
+  };
+
+  const loadPage = (page) => {
+    setCurrentPage(page);
+    fetchTicketsSafe(page, filterText.trim());
+  };
+
+  // Fonction pour charger les statistiques du dashboard (pour le compteur de tickets traités)
+  const fetchDashboardStats = async () => {
+    try {
+      const stats = await caissierApi.getDashboardStats();
+      setProcessedCount(stats.ticketsTraites || 0);
+    } catch  {
+      // Erreur silencieuse - ne pas bloquer l'application
+    }
+  };
+
   useEffect(() => {
-    // Chargement initial - priorité absolue
-    fetchTickets();
-
-    // Initialiser WebSocket de manière asynchrone pour ne pas bloquer le rendu
-    // Utiliser setTimeout pour différer l'initialisation
-    const timeoutId = setTimeout(() => {
-      try {
-        const echo = initializeEcho();
-        if (echo) {
-          echoRef.current = echo;
-        }
-      } catch (e) {
-        // Ignorer les erreurs WebSocket - ne pas bloquer l'application
-      }
-    }, 2000); // Démarrer après 2 secondes pour ne pas ralentir le chargement initial
-
-    return () => {
-      clearTimeout(timeoutId);
-      // Nettoyage WebSocket si nécessaire
-      if (echoRef.current) {
-        try {
-          subscriptionsRef.current.forEach(sub => {
-            if (sub.channel && echoRef.current) {
-              echoRef.current.leave(sub.channel);
-            }
-          });
-        } catch (e) {
-          // Ignorer les erreurs de nettoyage
-        }
-        subscriptionsRef.current = [];
-      }
-    };
+    fetchTicketsSafe(1, '');
+    fetchDashboardStats(); // Charger les statistiques pour initialiser le compteur de tickets traités
   }, []); // Seulement au montage
+
+   useEffect(() => {
+          if (!boutiqueId) return;
+          const channel = echo.private(`boutique.${boutiqueId}`);
+          const listener = () => {
+              fetchTicketsSafe(currentPage, filterText.trim());
+          };
+          channel.listen(".commande.validee", listener);
+          return () => {
+              try {
+                  channel.stopListening(".commande.validee");
+                  echo.leave(`private-boutique.${boutiqueId}`);
+              } catch  {
+                toast.error('Erreur', {
+               description: 'Impossible de charger les tickets en attente'
+      });
+              }
+          };
+      }, [boutiqueId]);
+  
+  useEffect(() => {
+          if (!boutiqueId) return;
+          const channel = echo.private(`boutique.${boutiqueId}`);
+          const listener = () => {
+              fetchTicketsSafe(currentPage, filterText.trim());
+          };
+          channel.listen(".paiement.cree", listener);
+          return () => {
+              try {
+                  channel.stopListening(".paiement.cree");
+                  echo.leave(`private-boutique.${boutiqueId}`);
+              } catch {
+                toast.error('Erreur', {
+                description: 'Impossible de charger les tickets en attente'
+      });
+                
+              }
+          };
+      }, [boutiqueId]);
+
+  // Si on arrive depuis une notification (selectedTicketId), ouvrir directement le ticket
+  const handledSelectedTicketRef = useRef(false);
+  useEffect(() => {
+    const selectedTicketId = location?.state?.selectedTicketId;
+    if (!selectedTicketId) return;
+    if (handledSelectedTicketRef.current) return;
+    if (!tickets || tickets.length === 0) return;
+
+    const ticket = tickets.find((t) => t.id === selectedTicketId || t.commande_id === selectedTicketId);
+    if (!ticket) return;
+
+    handledSelectedTicketRef.current = true;
+    handleEncaisse(ticket);
+
+    // Nettoyer l'état de navigation pour éviter de rouvrir au refresh
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location?.state?.selectedTicketId, tickets]);
 
   const handleEncaisse = (ticket) => {
     setSelectedTicket(ticket);
@@ -204,6 +270,13 @@ const CaissePage = () => {
 
     setIsProcessingPayment(true);
     try {
+      const ticketEncaisse = {
+        ...selectedTicket,
+        moyen_paiement: moyenPaiementFinal,
+        montant_paye: montant,
+        statut: 'encaissé',
+      };
+
       // Appel API pour créer le paiement
       await caissierApi.creerPaiement(selectedTicket.commande_id, {
         montant: montant,
@@ -211,7 +284,11 @@ const CaissePage = () => {
       });
 
       toast.success('Encaissement réussi', {
-        description: `Paiement de ${formatCurrency(montant)} enregistré`
+        description: `Paiement de ${formatCurrency(montant)} enregistré`,
+        action: {
+          label: 'Imprimer',
+          onClick: () => printInvoice(ticketEncaisse),
+        }
       });
 
       // Fermer le modal immédiatement
@@ -219,33 +296,36 @@ const CaissePage = () => {
       setSelectedTicket(null);
 
       // Recharger les tickets pour que le ticket disparaisse immédiatement
-      await fetchTickets();
-
-      // Proposer l'impression de la facture
-      setTimeout(() => {
-        if (window.confirm('Voulez-vous imprimer la facture ?')) {
-          const ticketEncaisse = {
-            ...selectedTicket,
-            moyen_paiement: moyenPaiementFinal,
-            montant_paye: montant,
-            statut: 'encaissé',
-          };
-          printInvoice(ticketEncaisse);
-        }
-      }, 500);
+      await fetchTicketsSafe(currentPage, filterText.trim());
+      // Mettre à jour le compteur de tickets traités
+      await fetchDashboardStats();
     } catch (error) {
       // Vérifier si le paiement a quand même été créé (code 200 ou 201)
       const statusCode = error.response?.status;
       if (statusCode === 200 || statusCode === 201) {
+        const ticketEncaisse = {
+          ...selectedTicket,
+          moyen_paiement: moyenPaiementFinal,
+          montant_paye: montant,
+          statut: 'encaissé',
+        };
         toast.success('Encaissement réussi', {
-          description: `Paiement de ${formatCurrency(montant)} enregistré`
+          description: `Paiement de ${formatCurrency(montant)} enregistré`,
+          action: {
+            label: 'Imprimer',
+            onClick: () => printInvoice(ticketEncaisse),
+          }
         });
         setIsPaymentModalOpen(false);
         setSelectedTicket(null);
-        await fetchTickets();
+        await fetchTicketsSafe(currentPage, filterText.trim());
+        // Mettre à jour le compteur de tickets traités
+        await fetchDashboardStats();
       } else {
         toast.error('Erreur', {
-          description: error.response?.data?.message || 'Impossible d\'enregistrer le paiement'
+          description: String(error.response?.data?.message || 'Impossible d\'enregistrer le paiement')
+            .replace(/https?:\/\/localhost:[0-9]+/gi, '')
+            .trim()
         });
       }
     } finally {
@@ -255,42 +335,178 @@ const CaissePage = () => {
 
   const handleQRScan = async (qrData) => {
     try {
-      // QR Code scanné - silencieux
-      const ticketTrouve = tickets.find(t => 
-        t.numero === qrData || 
-        t.id === qrData || 
-        t.commande_id === qrData ||
-        qrData.includes(t.numero) ||
-        qrData.includes(t.id)
-      );
+      const raw = (qrData ?? '').toString().trim();
 
-      if (ticketTrouve) {
-        handleEncaisse(ticketTrouve);
+      // Fonction pour extraire l'ID de commande depuis différents formats de QR code
+      const extractCommandeId = (value) => {
+        if (!value) return null;
+        const s = value.toString().trim();
+
+        // Format JSON: { "commande_id": "...", "id": "..." } ou similaire
+        try {
+          const obj = JSON.parse(s);
+          const candidate = obj?.commande_id || obj?.commandeId || obj?.id;
+          if (typeof candidate === 'string' && candidate.length > 0) return candidate;
+        } catch {
+          // Pas un JSON valide, continuer
+        }
+
+        // UUID dans une string (format standard: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+        const uuidMatch = s.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+        if (uuidMatch?.[0]) return uuidMatch[0];
+
+        // Format CMD-XXXXXXXX (numéro de ticket)
+        const cmdMatch = s.match(/CMD-([0-9A-F]{8})/i);
+        if (cmdMatch?.[1]) {
+          // Chercher dans les tickets chargés pour trouver l'ID complet
+          const ticket = tickets.find(t => t.numero?.toUpperCase() === s.toUpperCase());
+          if (ticket?.commande_id) return ticket.commande_id;
+        }
+
+        // Essayer de trouver dans les tickets déjà chargés par numéro complet
+        const ticketTrouve = tickets.find((t) => {
+          const numero = t?.numero?.toString?.() || '';
+          const id = t?.id?.toString?.() || '';
+          const commandeId = t?.commande_id?.toString?.() || '';
+          return (
+            raw === numero ||
+            raw === id ||
+            raw === commandeId ||
+            (numero && raw.includes(numero)) ||
+            (id && raw.includes(id)) ||
+            (commandeId && raw.includes(commandeId))
+          );
+        });
+        if (ticketTrouve?.commande_id) return ticketTrouve.commande_id;
+
+        return null;
+      };
+
+      // 1) Vérifier d'abord dans les tickets déjà chargés (pour éviter un appel API inutile)
+      const ticketLocal = tickets.find((t) => {
+        const numero = t?.numero?.toString?.() || '';
+        const id = t?.id?.toString?.() || '';
+        const commandeId = t?.commande_id?.toString?.() || '';
+        return (
+          raw === numero ||
+          raw === id ||
+          raw === commandeId ||
+          (numero && raw.toUpperCase() === numero.toUpperCase()) ||
+          (numero && raw.includes(numero.replace('CMD-', '')))
+        );
+      });
+
+      if (ticketLocal) {
+        handleEncaisse(ticketLocal);
         setIsQRScannerOpen(false);
-      } else {
-        alert(`Ticket non trouvé pour le QR code: ${qrData}\n\nVérifiez que le ticket existe dans la liste.`);
+        toast.success('Ticket trouvé', {
+          description: `Ticket ${ticketLocal.numero} chargé avec succès`
+        });
+        return;
       }
-    } catch (error) {
-      // Erreur lors du scan QR - silencieux
-      alert('Erreur lors du traitement du QR code. Veuillez réessayer.');
+
+      // 2) Extraire l'ID de commande depuis le QR code
+      const commandeId = extractCommandeId(raw);
+      if (!commandeId) {
+        toast.error('QR code invalide', {
+          description: 'Ce QR code ne correspond à aucune commande. Format attendu: UUID ou CMD-XXXXXXXX'
+        });
+        return;
+      }
+
+      // 3) Récupérer directement les détails complets de la commande via l'API
+      // Cette approche est plus fiable que de chercher dans la liste paginée
+      toast.loading('Chargement du ticket...', { id: 'qr-loading' });
+      
+      try {
+        // Récupérer les détails complets de la commande (inclut détails produits, vendeur, client)
+        const commandeDetails = await caissierApi.getCommandeDetails(commandeId);
+        
+        // Récupérer les paiements de la commande
+        const paiements = await caissierApi.getPaiements(commandeId);
+        
+        // Transformer en ticket avec toutes les informations
+        const ticketFromDetails = transformCommandeToTicket(
+          commandeDetails, 
+          Array.isArray(paiements) ? paiements : []
+        );
+
+        // Vérifier le statut de la commande
+        if (ticketFromDetails?.statut === 'encaissé') {
+          toast.dismiss('qr-loading');
+          toast.error('Commande déjà encaissée', {
+            description: `Le ticket ${ticketFromDetails.numero} a déjà été complètement encaissé.`
+          });
+          setIsQRScannerOpen(false);
+          return;
+        }
+
+        // Vérifier si la commande est en attente (statut 'attente')
+        if (commandeDetails?.statut !== 'attente') {
+          toast.dismiss('qr-loading');
+          toast.warning('Commande non disponible', {
+            description: `Le ticket ${ticketFromDetails.numero} n'est pas en attente d'encaissement (statut: ${commandeDetails?.statut || 'inconnu'}).`
+          });
+          setIsQRScannerOpen(false);
+          return;
+        }
+
+        // Tout est OK, ouvrir le modal d'encaissement avec toutes les informations
+        toast.dismiss('qr-loading');
+        
+        // Mettre à jour le filtre pour afficher ce ticket dans la liste (optionnel mais utile)
+        // Cela permet de voir le ticket dans la liste même s'il n'était pas sur la page courante
+        const numeroTicket = ticketFromDetails.numero || `CMD-${commandeId.substring(0, 8).toUpperCase()}`;
+        if (!filterText.includes(numeroTicket) && !filterText.includes(commandeId.substring(0, 8))) {
+          // Optionnel : mettre à jour le filtre pour rechercher ce ticket
+          // setFilterText(numeroTicket); // Décommenter si vous voulez filtrer automatiquement
+        }
+        
+        toast.success('Ticket chargé', {
+          description: `Ticket ${numeroTicket} chargé avec succès`
+        });
+        
+        handleEncaisse(ticketFromDetails);
+        setIsQRScannerOpen(false);
+        
+      } catch (error) {
+        toast.dismiss('qr-loading');
+        
+        // Vérifier si c'est une erreur 404 (commande non trouvée)
+        if (error.response?.status === 404) {
+          toast.error('Commande introuvable', {
+            description: 'Cette commande n\'existe pas ou n\'est plus disponible.'
+          });
+        } else {
+          toast.error('Erreur', {
+            description: 'Erreur lors du chargement du ticket. Veuillez réessayer.'
+          });
+        }
+      }
+    } catch {
+      // Erreur générale lors du traitement
+      toast.error('Erreur', {
+        description: 'Erreur lors du traitement du QR code. Veuillez réessayer.'
+      });
     }
   };
 
-  // Inclure les tickets en attente ET partiellement payés (pour permettre les paiements par tranche)
-  const pendingTickets = tickets.filter(t => t.statut === 'en_attente' || t.statut === 'partiellement_paye');
-  const processedTickets = tickets.filter(t => t.statut === 'encaissé');
+  // Tickets = données de la page courante (serveur). Recherche gérée côté serveur
+  const displayedTickets = tickets;
 
-  // Filtrer les tickets selon le texte de recherche
-  const filteredPendingTickets = pendingTickets.filter(ticket => {
-    if (!filterText.trim()) return true;
-    const searchText = filterText.toLowerCase();
-    return (
-      ticket.numero.toLowerCase().includes(searchText) ||
-      (ticket.client_nom && ticket.client_nom.toLowerCase().includes(searchText)) ||
-      String(ticket.id).toLowerCase().includes(searchText) ||
-      String(ticket.commande_id).toLowerCase().includes(searchText)
-    );
-  });
+  // Recherche avec debounce (300ms) - ne pas déclencher au montage (le premier useEffect le fait)
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    const timer = setTimeout(() => {
+      setCurrentPage(1);
+      fetchTicketsSafe(1, filterText.trim());
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [filterText]);
 
   const moyensPaiement = [
     { value: 'especes', label: 'Espèces' },
@@ -311,7 +527,7 @@ const CaissePage = () => {
   };
 
   return (
-    <div className="space-y-6 relative z-10">
+    <div className="space-y-14 relative z-10">
       {/* En-tête */}
       <div className="flex items-center justify-between">
         <div>
@@ -335,13 +551,13 @@ const CaissePage = () => {
       </div>
 
       {/* Statistiques */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="border-l-4 border-l-[#F58020] hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <Card className="bg-white border-l-4 border-l-[#F58020] hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Tickets en attente</p>
               <p className="text-3xl font-bold text-[#F58020] mt-2">
-                {pendingTickets.length}
+                {pendingCount}
               </p>
             </div>
             <div className="w-12 h-12 bg-[#FFF7ED] rounded-full flex items-center justify-center">
@@ -351,12 +567,12 @@ const CaissePage = () => {
             </div>
           </div>
         </Card>
-        <Card className="border-l-4 border-l-[#472EAD] hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
+        <Card className="bg-white border-l-4 border-l-[#472EAD] hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Total en attente</p>
               <p className="text-2xl font-bold text-[#472EAD] mt-2">
-                {formatCurrency(pendingTickets.reduce((sum, t) => sum + t.total_ttc, 0))}
+                {formatCurrency(totalAmount)}
               </p>
             </div>
             <div className="w-12 h-12 bg-[#F7F5FF] rounded-full flex items-center justify-center">
@@ -366,12 +582,12 @@ const CaissePage = () => {
             </div>
           </div>
         </Card>
-        <Card className="border-l-4 border-l-green-500 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
+        <Card className="bg-white border-l-4 border-l-green-500 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Tickets traités</p>
               <p className="text-3xl font-bold text-green-600 mt-2">
-                {processedTickets.length}
+                {processedCount ?? 0}
               </p>
             </div>
             <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
@@ -384,16 +600,17 @@ const CaissePage = () => {
       </div>
 
       {/* Tickets en attente */}
-      <Card>
+      <div className="pt-4">
+      <Card className="bg-white">
         <CardHeader
           title="Tickets en attente d'encaissement"
-          subtitle={`${filteredPendingTickets.length} ticket(s) trouvé(s) sur ${pendingTickets.length} total`}
+          subtitle={`${displayedTickets.length} ticket(s) sur cette page / ${pendingCount} total`}
         />
         {/* Filtre de recherche */}
         <div className="mb-4">
           <Input
             type="text"
-            placeholder="Rechercher par numéro de ticket, ID ou nom de client..."
+            placeholder="Rechercher par N° ticket, vendeur, client ou ID..."
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}
             className="w-full"
@@ -404,20 +621,20 @@ const CaissePage = () => {
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#472EAD] mx-auto"></div>
             <p className="mt-4 text-gray-600">Chargement des tickets...</p>
           </div>
-        ) : pendingTickets.length === 0 ? (
+        ) : pendingCount === 0 ? (
           <div className="text-center py-12">
             <p className="text-gray-500">Aucun ticket en attente</p>
           </div>
-        ) : filteredPendingTickets.length === 0 ? (
+        ) : displayedTickets.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-gray-500">Aucun ticket ne correspond à votre recherche</p>
           </div>
         ) : (
-          <div className="space-y-2">
-            {filteredPendingTickets.map((ticket) => (
+          <div className="space-y-4">
+            {displayedTickets.map((ticket) => (
               <div
                 key={ticket.id}
-                className="border-l-4 border-l-[#472EAD] border border-gray-200 rounded-lg p-3 hover:shadow-lg hover:border-[#E4E0FF] transition-all bg-white"
+                className="border-l-4 border-l-[#472EAD] border border-gray-200 rounded-lg p-4 hover:shadow-lg hover:border-[#E4E0FF] transition-all bg-white"
               >
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex-1 min-w-0">
@@ -428,7 +645,11 @@ const CaissePage = () => {
                       {ticket.client_special && (
                         <Badge variant="accent" className="text-xs">Client spécial</Badge>
                       )}
-                      <Badge variant="warning" className="text-xs">En attente</Badge>
+                      {ticket.statut === 'partiellement_payee' ? (
+                        <Badge variant="info" className="text-xs">Partiellement payé</Badge>
+                      ) : (
+                        <Badge variant="warning" className="text-xs">En attente</Badge>
+                      )}
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
                       <div className="min-w-0">
@@ -572,9 +793,47 @@ const CaissePage = () => {
                 </div>
               </div>
             ))}
+            {/* Pagination en bas de page (15 par page) */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between gap-3 py-3 px-4 mt-4 bg-gray-50 rounded-lg border border-gray-200">
+                <p className="text-sm text-gray-600">
+                  Affichage{' '}
+                  <span className="font-medium text-gray-900">
+                    {(currentPage - 1) * PAGE_SIZE + 1}-{Math.min(currentPage * PAGE_SIZE, pendingCount)}
+                  </span>
+                  {' '}sur{' '}
+                  <span className="font-medium text-gray-900">{pendingCount}</span>
+                  {' '}ticket(s)
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => loadPage(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1}
+                    className="border border-gray-300 font-semibold hover:bg-gray-100 disabled:opacity-50"
+                  >
+                    Précédent
+                  </Button>
+                  <span className="text-sm text-gray-600 px-2">
+                    Page {currentPage} / {totalPages}
+                  </span>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => loadPage(Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage === totalPages}
+                    className="border border-gray-300 font-semibold hover:bg-gray-100 disabled:opacity-50"
+                  >
+                    Suivant
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </Card>
+      </div>
 
       {/* Modal d'encaissement */}
       <Modal
@@ -807,6 +1066,7 @@ const CaissePage = () => {
       <Modal
         isOpen={isCancelModalOpen}
         onClose={() => {
+          if (isCancellingTicket) return;
           setIsCancelModalOpen(false);
           setTicketToCancel(null);
         }}
@@ -817,19 +1077,22 @@ const CaissePage = () => {
             <Button
               variant="secondary"
               onClick={() => {
+                if (isCancellingTicket) return;
                 setIsCancelModalOpen(false);
                 setTicketToCancel(null);
               }}
-              className="border border-gray-300 font-semibold hover:bg-gray-100"
+              disabled={isCancellingTicket}
+              className="border border-gray-300 font-semibold hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Non, garder le ticket
             </Button>
             <Button
               variant="primary"
               onClick={async () => {
-                if (!ticketToCancel) return;
+                if (!ticketToCancel || isCancellingTicket) return;
                 
                 try {
+                  setIsCancellingTicket(true);
                   // Appel API pour annuler la commande
                   await caissierApi.annulerCommande(ticketToCancel.commande_id);
                   
@@ -838,20 +1101,35 @@ const CaissePage = () => {
                   });
 
                   // Recharger les tickets
-                  await fetchTickets();
+                  await fetchTicketsSafe(currentPage, filterText.trim());
+                  // Mettre à jour le compteur de tickets traités (au cas où le ticket annulé était encaissé)
+                  await fetchDashboardStats();
                   
                   setIsCancelModalOpen(false);
                   setTicketToCancel(null);
-                } catch (error) {
+                } catch {
                   // Erreur lors de l'annulation - silencieux
                   toast.error('Erreur', {
                     description: 'Impossible d\'annuler le ticket'
                   });
+                } finally {
+                  setIsCancellingTicket(false);
                 }
               }}
-              className="bg-red-600 hover:bg-red-700 text-white font-semibold shadow-md hover:shadow-lg"
+              disabled={isCancellingTicket}
+              className="bg-red-600 hover:bg-red-700 text-white font-semibold shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Oui, annuler le ticket
+              {isCancellingTicket ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Annulation...
+                </>
+              ) : (
+                'Oui, annuler le ticket'
+              )}
             </Button>
           </>
         }
