@@ -30,6 +30,7 @@ import {
   LineChart,
   DollarSign,
   Hourglass,
+  ArrowDownCircle,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -43,6 +44,16 @@ const formatFCFA = (n) =>
     currency: "XOF",
     minimumFractionDigits: 0,
   }).format(Number(n || 0));
+
+// Formatage de la date en français
+const formatDate = (date) => {
+  return new Intl.DateTimeFormat("fr-FR", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  }).format(date);
+};
 
 // ==========================================================
 // 🎨 STYLES - CHARTE COLORÉE UNIFIÉE
@@ -132,6 +143,19 @@ const alertStyles = {
     hover: "hover:shadow-emerald-100/50",
     gradient: "from-emerald-500 to-emerald-600",
     number: "text-emerald-700"
+  },
+  // Nouveau style pour les décaissements
+  rose: {
+    border: "border-rose-500",
+    bg: "bg-gradient-to-br from-rose-50 to-rose-100/50",
+    text: "text-rose-800",
+    icon: "text-rose-600",
+    badge: "bg-rose-600 text-white font-semibold shadow-sm",
+    iconBg: "bg-rose-100",
+    lightBg: "bg-rose-50",
+    hover: "hover:shadow-rose-100/50",
+    gradient: "from-rose-500 to-rose-600",
+    number: "text-rose-700"
   }
 };
 
@@ -150,6 +174,9 @@ export default function Dashboard() {
   const [firstLoad, setFirstLoad] = useState(
     !sessionStorage.getItem("dashboard_welcome_seen")
   );
+
+  // Date courante
+  const [currentDate] = useState(new Date());
 
   const hasData = !!finance || !!alertesStock || !!utilisateurs;
   const showSkeletons = loading && !hasData;
@@ -206,7 +233,7 @@ export default function Dashboard() {
               variants={staggerContainer}
               className="space-y-10"
             >
-              {/* === HEADER RAFFINÉ === */}
+              {/* === HEADER RAFFINÉ AVEC DATE === */}
               <motion.div variants={fadeUp} className="mb-8">
                 <div className="flex items-end justify-between">
                   <div className="space-y-1">
@@ -214,14 +241,22 @@ export default function Dashboard() {
                       <div className="w-1 h-4 bg-[#472EAD] rounded-full" />
                       <span>Responsable</span>
                     </div>
-                    <h1 className="text-3xl font-medium tracking-tight text-gray-900">
-                      Tableau de bord
-                    </h1>
-
+                    <div className="flex items-end gap-4">
+                      <h1 className="text-3xl font-medium tracking-tight text-gray-900">
+                        Tableau de bord
+                      </h1>
+                      {/* Date courante ajoutée ici */}
+                      <div className="flex items-center gap-2 text-sm text-gray-500 bg-white/80 backdrop-blur-sm px-4 py-1.5 rounded-full border border-gray-200/60 shadow-sm">
+                        <Clock className="w-4 h-4 text-[#472EAD]" />
+                        <span className="font-medium capitalize">
+                          {formatDate(currentDate)}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                   
                   <div className="hidden sm:block">
-
+                    {/* Espace réservé pour d'éventuels actions */}
                   </div>
                 </div>
               </motion.div>
@@ -403,31 +438,31 @@ export default function Dashboard() {
                         </div>
                       </motion.div>
 
-                      {/* Reste à encaisser - Style Ambre */}
+                      {/* Total décaissé - NOUVELLE CARTE (remplace "À encaisser") */}
                       <motion.div 
                         whileHover={{ scale: 1.02, y: -2 }}
-                        className={`relative overflow-hidden bg-white rounded-2xl p-6 border-l-4 ${alertStyles.amber.border} shadow-lg hover:shadow-xl transition-all duration-300`}
+                        className={`relative overflow-hidden bg-white rounded-2xl p-6 border-l-4 ${alertStyles.rose.border} shadow-lg hover:shadow-xl transition-all duration-300`}
                       >
-                        <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent" />
+                        <div className="absolute inset-0 bg-gradient-to-br from-rose-500/5 to-transparent" />
                         <div className="relative">
                           <div className="flex items-center gap-3 mb-3">
-                            <div className={`p-2 ${alertStyles.amber.iconBg} rounded-xl`}>
-                              <Hourglass className={`w-4 h-4 ${alertStyles.amber.icon}`} />
+                            <div className={`p-2 ${alertStyles.rose.iconBg} rounded-xl`}>
+                              <ArrowDownCircle className={`w-4 h-4 ${alertStyles.rose.icon}`} />
                             </div>
-                            <span className="text-xs text-gray-400 font-medium">À ENCAISSER</span>
+                            <span className="text-xs text-gray-400 font-medium">DÉCAISSÉ</span>
                           </div>
-                          <div className={`text-2xl font-bold ${alertStyles.amber.number} tracking-tight`}>
-                            {formatFCFA(Number(finance?.resteAEncaisser || 0))}
+                          <div className={`text-2xl font-bold ${alertStyles.rose.number} tracking-tight`}>
+                            {formatFCFA(Number(finance?.totalDecaissement || 0))}
                           </div>
-                          {finance?.totalFacture > 0 && (
+                          {finance?.totalDecaissement > 0 && (
                             <>
                               <div className="text-[10px] text-gray-400 mt-2 font-medium">
-                                {((finance.resteAEncaisser / finance.totalFacture) * 100).toFixed(1)}% du total
+                                Total des dépenses
                               </div>
-                              <div className="mt-2 w-full bg-amber-100 rounded-full h-1.5">
+                              <div className="mt-2 w-full bg-rose-100 rounded-full h-1.5">
                                 <div 
-                                  className="bg-amber-600 h-1.5 rounded-full" 
-                                  style={{ width: `${(finance.resteAEncaisser / finance.totalFacture) * 100}%` }}
+                                  className="bg-rose-600 h-1.5 rounded-full" 
+                                  style={{ width: `${Math.min(100, (finance.totalDecaissement / finance.totalFacture) * 100)}%` }}
                                 />
                               </div>
                             </>
@@ -599,13 +634,6 @@ export default function Dashboard() {
                     </div>
                   </motion.div>
                 )}
-              </motion.div>
-
-              {/* === FOOTER SUBTIL === */}
-              <motion.div variants={fadeUp} className="pt-4 border-t border-gray-100">
-                <p className="text-[10px] text-gray-300 text-right tracking-wide">
-                  
-                </p>
               </motion.div>
             </motion.div>
           )}
