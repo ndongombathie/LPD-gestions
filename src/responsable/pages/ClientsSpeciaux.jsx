@@ -4,7 +4,7 @@
 // Version FINALE corrigée avec backend Laravel - SYNCHRONISÉ
 // ==========================================================
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   UserPlus,
@@ -30,6 +30,8 @@ import Pagination from "../components/Pagination.jsx";
 import { useClientsSpeciaux } from "@/hooks/useClientsSpeciaux";
 import { usePaiementsClients } from "@/hooks/usePaiementsClients";
 import NouvelleTrancheModal from "../components/NouvelleTrancheModal.jsx";
+import { commandesAPI } from '@/services/api';
+import { normalizeCommande } from "@/utils/normalizeCommande";
 
 const cls = (...a) => a.filter(Boolean).join(" ");
 const formatFCFA = (n) =>
@@ -90,19 +92,30 @@ function Toasts({ toasts, remove }) {
 
 
 // ==========================================================
-// 🧾 Formulaire client spécial
+// 🧾 Formulaire client spécial - CORRIGÉ AVEC CHAMPS COMPLETS
 // ==========================================================
 function ClientForm({ initial, onSubmit, onCancel, submitting }) {
   const [form, setForm] = useState(
-    initial ?? { nom: "", contact: "", entreprise: "", adresse: "" }
+    initial ?? { 
+      nom: "",
+      prenom: "",
+      telephone: "",
+      contact: "",
+      numero_cni: "",
+      entreprise: "",
+      adresse: ""
+    }
   );
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
     if (initial) {
       setForm({
+        prenom: initial.prenom || "",
         nom: initial.nom || "",
+        telephone: initial.telephone || "",
         contact: initial.contact || "",
+        numero_cni: initial.numero_cni || "",
         entreprise: initial.entreprise || "",
         adresse: initial.adresse || "",
       });
@@ -120,8 +133,12 @@ function ClientForm({ initial, onSubmit, onCancel, submitting }) {
     if (!form.nom.trim())
       e.nom = "Le nom est requis.";
 
-    if (!form.contact.match(/^[0-9]{9}$/))
-      e.contact = "Le contact doit contenir exactement 9 chiffres.";
+    if (!form.prenom.trim())
+      e.prenom = "Le prénom est requis.";
+
+    // ✅ SÉCURISÉ : Vérifie que le téléphone existe et ne contient que des chiffres
+    if (!form.telephone || !/^[0-9]+$/.test(form.telephone))
+      e.telephone = "Le téléphone doit contenir uniquement des chiffres.";
 
     if (!form.adresse.trim())
       e.adresse = "L'adresse est requise.";
@@ -150,15 +167,15 @@ function ClientForm({ initial, onSubmit, onCancel, submitting }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* Nom complet */}
+        {/* Nom */}
         <div>
           <label className="block text-sm font-medium text-gray-700">
-            Nom complet <span className="text-rose-600">*</span>
+            Nom <span className="text-rose-600">*</span>
           </label>
           <input
             value={form.nom}
             onChange={(e) => update("nom", e.target.value)}
-            placeholder="Ex : DIOP Mamadou"
+            placeholder="Ex : DIOP"
             className={base(errors.nom)}
             required
           />
@@ -167,25 +184,71 @@ function ClientForm({ initial, onSubmit, onCancel, submitting }) {
           )}
         </div>
 
-        {/* Contact */}
+        {/* Prénom */}
         <div>
           <label className="block text-sm font-medium text-gray-700">
-            Contact <span className="text-rose-600">*</span>
+            Prénom <span className="text-rose-600">*</span>
+          </label>
+          <input
+            value={form.prenom}
+            onChange={(e) => update("prenom", e.target.value)}
+            placeholder="Ex : Mamadou"
+            className={base(errors.prenom)}
+            required
+          />
+          {errors.prenom && (
+            <p className="text-xs text-rose-600 mt-1">{errors.prenom}</p>
+          )}
+        </div>
+
+        {/* Téléphone (nouveau champ) */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700">
+            Téléphone <span className="text-rose-600">*</span>
+          </label>
+          <input
+            value={form.telephone}
+            onChange={(e) => {
+              const clean = e.target.value.replace(/\D/g, "");
+              update("telephone", clean);
+            }}
+            placeholder="Ex : 771234567"
+            className={base(errors.telephone)}
+            required
+          />
+          {errors.telephone && (
+            <p className="text-xs text-rose-600 mt-1">{errors.telephone}</p>
+          )}
+        </div>
+
+        {/* Contact (champ existant) */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700">
+            Contact (optionnel)
           </label>
           <input
             value={form.contact}
-            onChange={(e) => {
-              const clean = e.target.value.replace(/\D/g, "").slice(0, 9);
-              update("contact", clean);
-            }}
-            placeholder="Ex : 771234567"
-            maxLength={9}
+            onChange={(e) => update("contact", e.target.value)}
+            placeholder="Ex : Email ou autre"
             className={base(errors.contact)}
-            required
           />
-          {errors.contact && (
-            <p className="text-xs text-rose-600 mt-1">{errors.contact}</p>
-          )}
+        </div>
+
+        {/* Numéro CNI (nouveau champ) - AVEC NETTOYAGE 13 CHIFFRES MAX */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700">
+            Numéro CNI (optionnel)
+          </label>
+          <input
+            value={form.numero_cni}
+            onChange={(e) => {
+              const clean = e.target.value.replace(/\D/g, "").slice(0, 13);
+              update("numero_cni", clean);
+            }}
+            placeholder="Ex : 1 234 5678 9012 3"
+            className={base(errors.numero_cni)}
+            maxLength={13}
+          />
         </div>
 
         {/* Entreprise */}
@@ -196,16 +259,13 @@ function ClientForm({ initial, onSubmit, onCancel, submitting }) {
           <input
             value={form.entreprise}
             onChange={(e) => update("entreprise", e.target.value)}
-            placeholder="Ex : Imprisol SARL (optionnel)"
+            placeholder="Ex : Imprisol SARL"
             className={base(errors.entreprise)}
           />
-          {errors.entreprise && (
-            <p className="text-xs text-rose-600 mt-1">{errors.entreprise}</p>
-          )}
         </div>
 
         {/* Adresse */}
-        <div>
+        <div className="sm:col-span-2">
           <label className="block text-sm font-medium text-gray-700">
             Adresse <span className="text-rose-600">*</span>
           </label>
@@ -517,6 +577,13 @@ export default function ClientsSpeciaux() {
   const [initialLoad, setInitialLoad] = useState(true);
   const [searchInput, setSearchInput] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [etatFilter, setEtatFilter] = useState("tous"); 
+// "tous" | "endettes" | "a_jour"
+  const [statsCommandes, setStatsCommandes] = useState({
+  totalTTC: 0,
+  totalPaye: 0,
+  reste: 0,
+});
   
   const [openAdd, setOpenAdd] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
@@ -534,6 +601,23 @@ export default function ClientsSpeciaux() {
     setPage(1);
     setSearchTerm(searchInput);
   }, [searchInput]);
+  useEffect(() => {
+  const loadStats = async () => {
+    try {
+      const response = await commandesAPI.getStatsSpecial();
+      setStatsCommandes({
+  totalTTC: response.data.totalTTC,
+  totalPaye: response.data.totalPaye,
+  reste: response.data.dette, // 👈 mapping ici
+});
+      
+    } catch (e) {
+      console.error("Erreur stats commandes", e);
+    }
+  };
+
+  loadStats();
+}, []);
 
 
   const toast = (type, title, message) => {
@@ -543,32 +627,21 @@ export default function ClientsSpeciaux() {
   };
   const removeToast = (id) => setToasts((t) => t.filter((x) => x.id !== id));
 
-  // ✅ 3️⃣ Appel du hook (LA GROSSE CORRECTION)
-  const {
-    clients,
-    commandes,
-    clientsEnrichis,
-    statsGlobales,
-    totalPages,
-    loading,
-    handleAdd,
-    handleEdit,
-    handleDelete,
-  } = useClientsSpeciaux(toast, {
-    page,
-    search: searchTerm,
-  });
-  const filteredClients = useMemo(() => {
-  if (!searchInput.trim()) return clientsEnrichis;
-
-  const term = searchInput.toLowerCase();
-
-  return clientsEnrichis.filter((c) =>
-    c.nom?.toLowerCase().includes(term) ||
-    c.contact?.toLowerCase().includes(term) ||
-    c.entreprise?.toLowerCase().includes(term)
-  );
-}, [clientsEnrichis, searchInput]);
+  // ✅ 1️⃣ Appel du hook corrigé avec etatFilter
+const {
+  clients,
+  commandes,
+  totalPages,
+  totalClients, // ✅ AJOUT ICI
+  loading,
+  handleAdd,
+  handleEdit,
+  handleDelete,
+} = useClientsSpeciaux(toast, {
+  page,
+  search: searchTerm,
+  etat: etatFilter,
+});
 
   // Gestionnaire de changement de page avec loader
   const handlePageChange = (newPage) => {
@@ -588,12 +661,12 @@ export default function ClientsSpeciaux() {
     }
   }, [loading]);
 
-  // Désactiver le loader de page quand les données arrivent (même si loading est encore true)
+  // ✅ 6️⃣ Désactiver le loader de page quand les données arrivent
   useEffect(() => {
-    if (clientsEnrichis.length > 0) {
+    if (clients.length > 0) {
       setLoadingPage(false);
     }
-  }, [clientsEnrichis]);
+  }, [clients]);
 
   const {
     loadPaiementsForClient,
@@ -608,33 +681,40 @@ export default function ClientsSpeciaux() {
     loadPaiementsForClient(client.id);
   };
 
-  const openTrancheClient = (client) => {
-    setTrancheClient(client);
-    setOpenTranche(true);
-  };
+const openTrancheClient = async (client) => {
+  try {
+    const raw =
+      await commandesAPI.getCommandesAvecResteClientSpecial(client.id);
 
-  // ✅ CORRECTION : Désactiver le bouton "Nouvelle tranche" basé sur resteAPayer
-  const isTrancheDisabled = (client) => {
-    const commandesClient = commandes.filter(cmd => 
-      cmd.clientId === client.id && cmd.statut !== "annulee"
-    );
+    const normalized = raw
+      .map(normalizeCommande)
+      .filter(Boolean);
 
-    if (commandesClient.length === 0) return true;
-
-    // ✅ CORRECTION : Vérifier si au moins une commande a un resteAPayer > 0
-    return !commandesClient.some(cmd => {
-      const reste = Number(cmd.resteAPayer || 0);
-      return reste > 0;
+    setTrancheClient({
+      ...client,
+      commandesSpecifiques: normalized,
     });
+
+    setOpenTranche(true);
+
+  } catch (e) {
+    toast("error", "Erreur", "Impossible de charger les commandes du client.");
+  }
+};
+
+  // ✅ Ouvrir modal uniquement si dette globale > 0
+  const isTrancheDisabled = (client) => {
+    return Number(client.dette || 0) <= 0;
   };
   
+  // ✅ 5️⃣ Corrige suppression
   const isDeleteDisabled = (client) => {
-    const dette = Number(client.detteTotale || 0);
+    const dette = Number(client.dette || 0);
     return dette > 0;
   };
 
-  // Loader d'affichage initial - UNIQUEMENT au premier chargement
-  if (initialLoad && loading && clientsEnrichis.length === 0) {
+  // ✅ 6️⃣ Loader d'affichage initial - UNIQUEMENT au premier chargement
+  if (initialLoad && loading && clients.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-[70vh] bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white">
         <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-white/80 border border-[#E4E0FF] shadow-sm">
@@ -679,8 +759,7 @@ export default function ClientsSpeciaux() {
               </p>
             </div>
             <p className="text-[11px] text-gray-400">
-              {statsGlobales.nbClients} client
-              {statsGlobales.nbClients > 1 && "s"} spéciaux enregistrés
+              {/* ✅ 7️⃣ Supprimé statsGlobales.nbClients */}
             </p>
           </div>
 
@@ -705,7 +784,7 @@ export default function ClientsSpeciaux() {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-lg font-extrabold text-yellow-700">
-                {statsGlobales.nbClients}
+                {totalClients}
               </span>
               <BadgeDollarSign className="w-5 h-5 text-yellow-600" />
             </div>
@@ -718,7 +797,7 @@ export default function ClientsSpeciaux() {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm sm:text-lg font-extrabold text-emerald-700">
-                {formatFCFA(statsGlobales.totalTTC)}
+                {formatFCFA(statsCommandes.totalTTC)}
               </span>
             </div>
           </div>
@@ -730,7 +809,7 @@ export default function ClientsSpeciaux() {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm sm:text-lg font-extrabold text-emerald-700">
-                {formatFCFA(statsGlobales.totalPaye)}
+                {formatFCFA(statsCommandes.totalPaye)}
               </span>
               <CheckCircle2 className="w-5 h-5 text-emerald-600" />
             </div>
@@ -743,7 +822,7 @@ export default function ClientsSpeciaux() {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm sm:text-lg font-extrabold text-rose-700">
-                {formatFCFA(statsGlobales.detteTotale)}
+                {formatFCFA(statsCommandes.reste)}
               </span>
               <AlertCircle className="w-5 h-5 text-rose-600" />
             </div>
@@ -753,24 +832,66 @@ export default function ClientsSpeciaux() {
         {/* RECHERCHE + TABLEAU */}
         <section className="bg-white/90 border border-[#E4E0FF] rounded-2xl shadow-[0_18px_45px_rgba(15,23,42,0.06)] px-4 sm:px-5 py-4 sm:py-5 space-y-4">
           
-          {/* Barre de recherche */}
-          <div className="relative">
+        {/* Barre recherche + filtre état */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          
+          {/* Recherche */}
+          <div className="relative flex-1">
             <Search className="absolute left-3 top-2.5 text-gray-400 w-4 h-4" />
             <input
               type="text"
-              placeholder="Rechercher par nom ou email ..."
+              placeholder="Rechercher par nom ou contact ..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-xl text-sm bg-white/80 shadow-sm focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD] placeholder:text-gray-400"
             />
           </div>
 
+          {/* Filtre état */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setEtatFilter("tous")}
+              className={cls(
+                "px-3 py-2 text-xs rounded-lg border transition",
+                etatFilter === "tous"
+                  ? "bg-[#472EAD] text-white border-[#472EAD]"
+                  : "bg-white border-gray-300 text-gray-600 hover:bg-gray-50"
+              )}
+            >
+              Tous
+            </button>
+
+            <button
+              onClick={() => setEtatFilter("endettes")}
+              className={cls(
+                "px-3 py-2 text-xs rounded-lg border transition",
+                etatFilter === "endettes"
+                  ? "bg-rose-600 text-white border-rose-600"
+                  : "bg-white border-gray-300 text-gray-600 hover:bg-gray-50"
+              )}
+            >
+              Endettés
+            </button>
+
+            <button
+              onClick={() => setEtatFilter("a_jour")}
+              className={cls(
+                "px-3 py-2 text-xs rounded-lg border transition",
+                etatFilter === "a_jour"
+                  ? "bg-emerald-600 text-white border-emerald-600"
+                  : "bg-white border-gray-300 text-gray-600 hover:bg-gray-50"
+              )}
+            >
+              À jour
+            </button>
+          </div>
+        </div>
+
           {/* Résumé affichage */}
           <div className="flex items-center justify-between text-[11px] text-gray-500 mb-2">
             <span>
               Affichage :{" "}
-              <span className="font-semibold">{filteredClients.length}</span> sur{" "}
-              <span className="font-semibold">{statsGlobales.nbClients}</span>
+              <span className="font-semibold">{clients.length}</span>
             </span>
             <span>
               Page <span className="font-semibold">{page}</span> /{" "}
@@ -780,7 +901,7 @@ export default function ClientsSpeciaux() {
 
           {/* TABLEAU PRINCIPAL */}
           <div className="mt-2 relative">
-            {filteredClients.length === 0 && !loading ? (
+            {clients.length === 0 && !loading ? (
               <div className="flex flex-col items-center justify-center py-14 text-center text-gray-400">
                 <Search className="w-8 h-8 mb-3 opacity-60" />
                 <p className="text-sm font-medium">
@@ -800,23 +921,19 @@ export default function ClientsSpeciaux() {
                       render: (_, row) => (
                         <div className="space-y-[2px]">
                           <div className="font-semibold text-sm text-gray-800">
-                            {row.nom}
+                            {row.nom} {row.prenom}
                           </div>
-                          <div className="text-[11px] text-gray-500">
-                            {row.entreprise
-                              ? row.entreprise
-                              : <span className="italic text-gray-400">Particulier</span>}
+
+                          <div className="text-[11px] text-gray-500 flex items-center gap-1">
+                            <Phone className="w-3 h-3"/>
+                            {row.telephone}
                           </div>
+
                           <div className="text-[11px] text-gray-400">
                             {row.adresse}
                           </div>
-                          {row.contact && (
-                            <div className="text-[11px] text-gray-500 flex items-center gap-1">
-                              {row.contact}
-                            </div>
-                          )}
                         </div>
-                      ),
+                      )
                     },
                     {
                       key: "totalTTC",
@@ -837,7 +954,8 @@ export default function ClientsSpeciaux() {
                       ),
                     },
                     {
-                      key: "detteTotale",
+                      // ✅ 4️⃣ Corrigé detteTotale → dette
+                      key: "dette",
                       label: "Dette",
                       render: (v) =>
                         v > 0 ? (
@@ -862,9 +980,7 @@ export default function ClientsSpeciaux() {
                             <span className="font-semibold text-amber-700">
                               {nbTranches} en attente
                             </span>
-                            <span className="text-[11px] text-gray-600">
-                              {formatFCFA(montantTranches)}
-                            </span>
+
                           </div>
                         ) : (
                           <span className="text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
@@ -874,16 +990,34 @@ export default function ClientsSpeciaux() {
                       },
                     },
                     {
-                      key: "nbCommandes",
+                      key: "commandes_count",
                       label: "Commandes",
-                      render: (v) => (
-                        <span className="text-xs font-semibold text-gray-700">
-                          {v ?? 0}
-                        </span>
-                      ),
-                    },
+                      render: (_, row) => {
+                        const total = row.commandes_count ?? 0;
+                        const enDette = row.commandes_en_dette_count ?? 0;
+
+                        return (
+                          <div className="flex flex-col text-xs">
+                            <span className="font-semibold text-gray-800">
+                              {total} total
+                            </span>
+
+                            {enDette > 0 ? (
+                              <span className="text-rose-600 font-medium">
+                                {enDette} en dette
+                              </span>
+                            ) : (
+                              <span className="text-emerald-600 font-medium">
+                                0 en dette
+                              </span>
+                            )}
+                          </div>
+                        );
+                      },
+                    }
                   ]}
-                  data={filteredClients}
+                  // ✅ 3️⃣ filteredClients → clients
+                  data={clients}
                   actions={[
                     {
                       icon: <BadgeDollarSign size={16} />,
@@ -972,6 +1106,7 @@ export default function ClientsSpeciaux() {
                 onSuccess: () => {
                   setSubmitting(false);
                   setOpenAdd(false);
+                  setPage(1); // Retour à la première page pour voir le nouveau client
                 },
                 onError: () => setSubmitting(false),
               });
@@ -984,7 +1119,7 @@ export default function ClientsSpeciaux() {
         <FormModal
           open={!!editTarget}
           onClose={() => setEditTarget(null)}
-          title={`Modifier : ${editTarget?.nom}`}
+          title={`Modifier : ${[editTarget?.prenom, editTarget?.nom].filter(Boolean).join(" ")}`}
         >
           {editTarget && (
             <ClientForm
@@ -1014,7 +1149,10 @@ export default function ClientsSpeciaux() {
         >
           <p className="text-sm text-gray-600 mb-4">
             Voulez-vous vraiment supprimer{" "}
-            <span className="font-semibold">{deleteTarget?.nom}</span> ?
+            <span className="font-semibold">
+                {[deleteTarget?.prenom, deleteTarget?.nom].filter(Boolean).join(" ")}
+              </span>
+              ?
           </p>
           <div className="flex justify-end gap-3">
             <button
@@ -1055,9 +1193,7 @@ export default function ClientsSpeciaux() {
           open={openHistorique}
           onClose={() => setOpenHistorique(false)}
           client={historiqueClient}
-          commandes={commandes.filter(
-            (cmd) => cmd.clientId === historiqueClient?.id
-          )}
+          commandes={trancheClient?.commandesSpecifiques || []}
           onEditTranche={handleVoirDetailEditTranche}
           onDeleteTranche={handleVoirDetailDeleteTranche}
         />
@@ -1070,9 +1206,7 @@ export default function ClientsSpeciaux() {
             setTrancheClient(null);
           }}
           client={trancheClient}
-          commandes={commandes.filter(
-            (cmd) => cmd.clientId === trancheClient?.id
-          )}
+          commandes={trancheClient?.commandesSpecifiques || []}
           onSubmit={async (commande, paiement, done) => {
             try {
               await handleTrancheSubmit(commande, paiement, done);

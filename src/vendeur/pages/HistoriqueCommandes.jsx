@@ -616,12 +616,13 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
         
         setProgress({ current: pageActuelle, total: Math.min(totalPagesAPI, MAX_PAGES) });
         
-        const response = await commandesAPI.getAll({
-          page: pageActuelle,
-          perPage: BATCH_SIZE,
-          sort: 'desc',
-          orderBy: 'date'
-        });
+      const response = await commandesAPI.getAll({
+        page: pageActuelle,
+        perPage: BATCH_SIZE,
+        sort: 'desc',
+        orderBy: 'date',
+        type_client: 'normal'
+      });
 
         // Extraire les données de la page courante
         let commandesPage = [];

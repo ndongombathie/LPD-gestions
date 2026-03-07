@@ -167,9 +167,8 @@ export default function RapportsFournisseurs({
   onDateFinChange,
   onRechercheChange 
 }) {
-  // ✅ ÉTAPE 1 — Ajouter un second loading
+  // États
   const [loading, setLoading] = useState(true);
-  const [loadingPage, setLoadingPage] = useState(false);
   const [logs, setLogs] = useState([]);
   const [stats, setStats] = useState({
     total: 0,
@@ -177,8 +176,7 @@ export default function RapportsFournisseurs({
     modifications: 0,
     suppressions: 0,
   });
-  const [totalPages, setTotalPages] = useState(1);
-  const [globalStats, setGlobalStats] = useState(null); // Stats globales
+  const [globalStats, setGlobalStats] = useState(null);
 
   // Filtres spécifiques au module
   const [filterAction, setFilterAction] = useState("tous"); // "tous", "creation", "modification", "suppression"
@@ -186,11 +184,6 @@ export default function RapportsFournisseurs({
   const [itemsPerPage] = useState(10);
   const [selectedLog, setSelectedLog] = useState(null); // Pour le modal de détails
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-
-  // ✅ ÉTAPE 1 — Ajouter un state debounce
-  const [debouncedRecherche, setDebouncedRecherche] = useState(recherche);
-  const [debouncedDateDebut, setDebouncedDateDebut] = useState(dateDebut);
-  const [debouncedDateFin, setDebouncedDateFin] = useState(dateFin);
 
   // Types d'actions disponibles
   const actionsTypes = [
@@ -200,40 +193,37 @@ export default function RapportsFournisseurs({
     { id: "suppression", label: "Suppressions" },
   ];
 
-  // ✅ ÉTAPE 2 — Ajouter le debounce
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedRecherche(recherche);
-      setDebouncedDateDebut(dateDebut);
-      setDebouncedDateFin(dateFin);
-    }, 400); // délai confortable UX
-
-    return () => clearTimeout(timer);
-  }, [recherche, dateDebut, dateFin]);
-
-  // Charger les données d'audit
+  // Charger toutes les données d'audit une seule fois
   useEffect(() => {
     const loadData = async () => {
       try {
-        // ✅ ÉTAPE 2 — Modifier le chargement API
-        setLoading(currentPage === 1);
-        setLoadingPage(currentPage !== 1);
+        setLoading(true);
         
-        // Charger les logs d'audit des fournisseurs
+        // Charger tous les logs d'audit des fournisseurs sans pagination
         const response = await rapportsAPI.getLogsFournisseurs({
-          // ✅ ÉTAPE 4 — Modifier l'appel API pour utiliser les valeurs debouncées
-          dateDebut: debouncedDateDebut,
-          dateFin: debouncedDateFin,
+          dateDebut,
+          dateFin,
           action: filterAction !== "tous" ? filterAction : undefined,
-          recherche: debouncedRecherche,
-          page: currentPage,
-          perPage: itemsPerPage
+          // Pas de recherche, pas de page, pas de perPage
         });
         
-        // Structure API Laravel paginée
-        const logsData = response.data || [];
-        const totalItems = response.total || logsData.length;
-        const lastPage = response.last_page || Math.ceil(totalItems / itemsPerPage);
+        // Vérifier la structure de la réponse
+        let logsData = [];
+        let totalItems = 0;
+        let statsData = null;
+        
+        if (Array.isArray(response)) {
+          logsData = response;
+          totalItems = response.length;
+        } else if (response && response.data) {
+          logsData = response.data;
+          totalItems = response.total || logsData.length;
+          statsData = response.stats;
+        } else if (response && response.logs) {
+          logsData = response.logs;
+          totalItems = response.total || logsData.length;
+          statsData = response.stats;
+        }
         
         // Normaliser les données de log
         const normalized = logsData.map((log) => ({
@@ -248,23 +238,34 @@ export default function RapportsFournisseurs({
         }));
         
         setLogs(normalized);
-        setTotalPages(lastPage);
         
-        // Récupérer les stats globales de l'API
-        if (response.stats) {
-          setGlobalStats(response.stats);
+        // Récupérer les stats globales
+        if (statsData) {
+          setGlobalStats(statsData);
           setStats({
-            total: response.stats.total || totalItems,
-            creations: response.stats.creations || 0,
-            modifications: response.stats.modifications || 0,
-            suppressions: response.stats.suppressions || 0,
+            total: statsData.total || totalItems,
+            creations: statsData.creations || 0,
+            modifications: statsData.modifications || 0,
+            suppressions: statsData.suppressions || 0,
           });
         } else {
-          // Calculer les statistiques sur la page actuelle
-          const pageStats = calculatePageStats(normalized);
+          // Calculer les statistiques sur toutes les données
+          const totalCreations = normalized.filter(log => 
+            log.action?.toLowerCase().includes('creation') || 
+            log.action?.toLowerCase().includes('création')
+          ).length;
+          const totalModifications = normalized.filter(log => 
+            log.action?.toLowerCase().includes('modification')
+          ).length;
+          const totalSuppressions = normalized.filter(log => 
+            log.action?.toLowerCase().includes('suppression')
+          ).length;
+          
           setStats({
             total: totalItems,
-            ...pageStats,
+            creations: totalCreations,
+            modifications: totalModifications,
+            suppressions: totalSuppressions,
           });
         }
         
@@ -273,33 +274,45 @@ export default function RapportsFournisseurs({
         toast.error("Erreur lors du chargement de rapport fournisseurs");
       } finally {
         setLoading(false);
-        setLoadingPage(false);
       }
     };
 
     loadData();
-    // ✅ ÉTAPE 3 — Modifier le useEffect principal pour utiliser les valeurs debouncées
-  }, [debouncedDateDebut, debouncedDateFin, filterAction, debouncedRecherche, currentPage, itemsPerPage]);
+    // Dépendances : uniquement les filtres qui nécessitent un rechargement backend
+  }, [dateDebut, dateFin, filterAction]);
 
-  // Calculer les statistiques de la page actuelle
-  const calculatePageStats = (data) => {
-    const creations = data.filter(log => 
-      log.action?.toLowerCase().includes('creation') || 
-      log.action?.toLowerCase().includes('création')
-    ).length;
-    const modifications = data.filter(log => 
-      log.action?.toLowerCase().includes('modification')
-    ).length;
-    const suppressions = data.filter(log => 
-      log.action?.toLowerCase().includes('suppression')
-    ).length;
-    
-    return {
-      creations,
-      modifications,
-      suppressions,
-    };
-  };
+  // ✅ FILTRAGE FRONTEND (instantané)
+  const logsFiltres = useMemo(() => {
+    return logs
+      .filter(log => {
+        // Filtre par recherche texte (nom du fournisseur)
+        if (recherche && recherche.trim() !== '') {
+          return log.fournisseur?.toLowerCase().includes(recherche.toLowerCase());
+        }
+        return true;
+      })
+      .sort((a, b) => new Date(b.date) - new Date(a.date)); // Plus récent d'abord
+  }, [logs, recherche]);
+
+  // ✅ PAGINATION FRONTEND
+  const paginatedLogs = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return logsFiltres.slice(start, start + itemsPerPage);
+  }, [logsFiltres, currentPage, itemsPerPage]);
+
+  // Recalculer le nombre total de pages
+  const totalPages = useMemo(() => {
+    return Math.ceil(logsFiltres.length / itemsPerPage);
+  }, [logsFiltres.length, itemsPerPage]);
+
+  // Mettre à jour currentPage si elle dépasse le nombre total de pages
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    } else if (totalPages === 0) {
+      setCurrentPage(1);
+    }
+  }, [totalPages, currentPage]);
 
   // Fonction pour ouvrir le modal de détails
   const openDetailsModal = (log) => {
@@ -307,196 +320,183 @@ export default function RapportsFournisseurs({
     setShowDetailsModal(true);
   };
 
-  // Logs filtrés (déjà filtrés côté API)
-  const logsFiltres = useMemo(() => {
-    return [...logs].sort((a, b) => new Date(b.date) - new Date(a.date)); // Plus récent d'abord
-  }, [logs]);
-
   // Helper pour la date du jour
   const todayISO = () => {
     return new Date().toISOString().split('T')[0];
   };
 
-// Export PDF - Fonction améliorée avec le nouveau template
-const exportPDF = async () => {
-  try {
-    if (!logsFiltres.length) {
-      toast.info("Aucune donnée à exporter");
-      return;
+  // Export PDF - Fonction améliorée avec le nouveau template
+  const exportPDF = async () => {
+    try {
+      if (!logsFiltres.length) {
+        toast.info("Aucune donnée à exporter");
+        return;
+      }
+
+      const doc = new jsPDF("p", "mm", "a4");
+      const pageWidth = doc.internal.pageSize.getWidth();
+
+      // En-tête LPD
+      doc.setFillColor(71, 46, 173);
+      doc.rect(0, 0, pageWidth, 28, "F");
+
+      doc.setTextColor(245, 128, 32);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(26);
+      doc.text("LPD", pageWidth / 2, 15, { align: "center" });
+
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.text("Librairie Papeterie Daradji", pageWidth / 2, 21, {
+        align: "center",
+      });
+
+      let y = 34;
+      doc.setTextColor(40, 40, 40);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.text("Journal d'audit des fournisseurs", 14, y);
+
+      y += 6;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.text(`Généré le : ${todayISO()}`, 14, y);
+
+      y += 4;
+      doc.setDrawColor(228, 224, 255);
+      doc.line(14, y, pageWidth - 14, y);
+
+      y += 6;
+
+      const boxX = 14.7;
+      const boxY = y;
+      const boxW = pageWidth - 32;
+      const boxH = 40; // Augmenté pour tout contenir proprement
+
+      doc.setDrawColor(228, 224, 255);
+      doc.setFillColor(247, 246, 255);
+      doc.roundedRect(boxX, boxY, boxW, boxH, 2, 2, "FD");
+
+      const textX = boxX + 4;
+      const rightColX = boxX + boxW - 8;
+      let lineY = boxY + 7;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.setTextColor(60, 60, 80);
+      doc.text("Récapitulatif des actions", textX, lineY);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(80, 80, 80);
+
+      // Ligne 1 : Total et Période
+      lineY += 5;
+      doc.text(`Total : ${stats.total}`, textX, lineY);
+      
+      // Gestion de la période sur la droite
+      const periodeLabel = dateDebut && dateFin 
+        ? `Période :` 
+        : "Période : Non sélectionnée";
+      
+      doc.text(periodeLabel, rightColX, lineY, { align: "right" });
+
+      // Ligne 2 : Créations et Date de début (si période spécifiée)
+      lineY += 5;
+      doc.text(`Créations : ${stats.creations}`, textX, lineY);
+      
+      if (dateDebut && dateFin) {
+        doc.text(dateDebut, rightColX, lineY, { align: "right" });
+      }
+
+      // Ligne 3 : Modifications et Date de fin (si période spécifiée)
+      lineY += 5;
+      doc.text(`Modifications : ${stats.modifications}`, textX, lineY);
+      
+      if (dateDebut && dateFin) {
+        doc.text(dateFin, rightColX, lineY, { align: "right" });
+      }
+
+      // Ligne 4 : Suppressions et Filtre
+      lineY += 5;
+      doc.text(`Suppressions : ${stats.suppressions}`, textX, lineY);
+      
+      // Filtre d'action actuel
+      const currentActionFilter = filterAction !== "tous" 
+        ? actionsTypes.find(a => a.id === filterAction)?.label 
+        : "Toutes actions";
+      
+      // Vérifier si le filtre est trop long
+      let filtreDisplay = `Filtre : ${currentActionFilter}`;
+      const maxFiltreWidth = 60; // mm
+      
+      if (doc.getStringUnitWidth(filtreDisplay) * 2.834 > maxFiltreWidth) {
+        // Tronquer si trop long
+        filtreDisplay = `Filtre : ${currentActionFilter.substring(0, 20)}...`;
+      }
+      
+      doc.text(filtreDisplay, rightColX, lineY, { align: "right" });
+
+      const startTableY = y + boxH + 8;
+
+      autoTable(doc, {
+        startY: startTableY,
+        margin: { top: startTableY, left: 14, right: 14 },
+        head: [["Date", "Action", "Fournisseur", "Utilisateur", "Détails"]],
+        body: logsFiltres.map(log => [
+          formatDateHeure(log.date),
+          formatActionLabel(log.action),
+          log.fournisseur || "-",
+          log.utilisateur || "-",
+          log.details?.substring(0, 50) + (log.details?.length > 50 ? "..." : "") || "-"
+        ]),
+        styles: { 
+          fontSize: 8, 
+          cellPadding: 2, 
+          textColor: [55, 65, 81],
+          overflow: 'linebreak'
+        },
+        headStyles: { 
+          fillColor: [71, 46, 173], 
+          textColor: 255, 
+          fontStyle: "bold" 
+        },
+        alternateRowStyles: { 
+          fillColor: [247, 245, 255] 
+        },
+        theme: "striped",
+        columnStyles: {
+          0: { cellWidth: 30 },
+          1: { cellWidth: 25 },
+          2: { cellWidth: 40 },
+          3: { cellWidth: 25 },
+          4: { cellWidth: 50 }
+        },
+      });
+
+      // Pied de page
+      const pageCount = doc.internal.getNumberOfPages();
+      for(let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(128, 128, 128);
+        doc.text(
+          `Page ${i} sur ${pageCount} - ERP System`,
+          pageWidth / 2,
+          doc.internal.pageSize.height - 10,
+          { align: 'center' }
+        );
+      }
+
+      const fileName = `Journal_Audit_Fournisseurs_${todayISO()}.pdf`;
+      doc.save(fileName);
+      toast.success("Journal d'audit exporté en PDF avec succès.");
+    } catch (error) {
+      console.error("Erreur lors de l'export PDF:", error);
+      toast.error("Erreur lors de l'export du PDF");
     }
-
-    const doc = new jsPDF("p", "mm", "a4");
-    const pageWidth = doc.internal.pageSize.getWidth();
-
-    // En-tête LPD
-    doc.setFillColor(71, 46, 173);
-    doc.rect(0, 0, pageWidth, 28, "F");
-
-    doc.setTextColor(245, 128, 32);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(26);
-    doc.text("LPD", pageWidth / 2, 15, { align: "center" });
-
-    doc.setTextColor(255, 255, 255);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.text("Librairie Papeterie Daradji", pageWidth / 2, 21, {
-      align: "center",
-    });
-
-    let y = 34;
-    doc.setTextColor(40, 40, 40);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(13);
-    doc.text("Journal d'audit des fournisseurs", 14, y);
-
-    y += 6;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.text(`Généré le : ${todayISO()}`, 14, y);
-
-    y += 4;
-    doc.setDrawColor(228, 224, 255);
-    doc.line(14, y, pageWidth - 14, y);
-
-    y += 6;
-
-    const boxX = 14.7;
-    const boxY = y;
-    const boxW = pageWidth - 32;
-    const boxH = 40; // Augmenté pour tout contenir proprement
-
-    doc.setDrawColor(228, 224, 255);
-    doc.setFillColor(247, 246, 255);
-    doc.roundedRect(boxX, boxY, boxW, boxH, 2, 2, "FD");
-
-    const textX = boxX + 4;
-    const rightColX = boxX + boxW - 8;
-    let lineY = boxY + 7;
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.setTextColor(60, 60, 80);
-    doc.text("Récapitulatif des actions", textX, lineY);
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.5);
-    doc.setTextColor(80, 80, 80);
-
-    // ✅ CORRECTION : Organisation en grille propre
-
-    // Ligne 1 : Total et Période
-    lineY += 5;
-    doc.text(`Total : ${stats.total}`, textX, lineY);
-    
-    // Gestion de la période sur la droite
-    const periodeLabel = dateDebut && dateFin 
-      ? `Période :` 
-      : "Période : Non sélectionnée";
-    
-    doc.text(periodeLabel, rightColX, lineY, { align: "right" });
-
-    // Ligne 2 : Créations et Date de début (si période spécifiée)
-    lineY += 5;
-    doc.text(`Créations : ${stats.creations}`, textX, lineY);
-    
-    if (dateDebut && dateFin) {
-      doc.text(dateDebut, rightColX, lineY, { align: "right" });
-    }
-
-    // Ligne 3 : Modifications et Date de fin (si période spécifiée)
-    lineY += 5;
-    doc.text(`Modifications : ${stats.modifications}`, textX, lineY);
-    
-    if (dateDebut && dateFin) {
-      doc.text(dateFin, rightColX, lineY, { align: "right" });
-    }
-
-    // Ligne 4 : Suppressions et Filtre
-    lineY += 5;
-    doc.text(`Suppressions : ${stats.suppressions}`, textX, lineY);
-    
-    // Filtre d'action actuel
-    const currentActionFilter = filterAction !== "tous" 
-      ? actionsTypes.find(a => a.id === filterAction)?.label 
-      : "Toutes actions";
-    
-    // Vérifier si le filtre est trop long
-    let filtreDisplay = `Filtre : ${currentActionFilter}`;
-    const maxFiltreWidth = 60; // mm
-    
-    if (doc.getStringUnitWidth(filtreDisplay) * 2.834 > maxFiltreWidth) {
-      // Tronquer si trop long
-      filtreDisplay = `Filtre : ${currentActionFilter.substring(0, 20)}...`;
-    }
-    
-    doc.text(filtreDisplay, rightColX, lineY, { align: "right" });
-
-    // Si pas de période, on remplit l'espace vide à droite
-    if (!dateDebut || !dateFin) {
-      // On peut mettre un espace ou rien
-      // Les lignes 2 et 3 restent vides à droite
-    }
-
-    const startTableY = y + boxH + 8;
-
-    autoTable(doc, {
-      startY: startTableY,
-      margin: { top: startTableY, left: 14, right: 14 },
-      head: [["Date", "Action", "Fournisseur", "Utilisateur", "Détails"]],
-      body: logsFiltres.map(log => [
-        formatDateHeure(log.date),
-        formatActionLabel(log.action),
-        log.fournisseur || "-",
-        log.utilisateur || "-",
-        log.details?.substring(0, 50) + (log.details?.length > 50 ? "..." : "") || "-"
-      ]),
-      styles: { 
-        fontSize: 8, 
-        cellPadding: 2, 
-        textColor: [55, 65, 81],
-        overflow: 'linebreak'
-      },
-      headStyles: { 
-        fillColor: [71, 46, 173], 
-        textColor: 255, 
-        fontStyle: "bold" 
-      },
-      alternateRowStyles: { 
-        fillColor: [247, 245, 255] 
-      },
-      theme: "striped",
-      columnStyles: {
-        0: { cellWidth: 30 },
-        1: { cellWidth: 25 },
-        2: { cellWidth: 40 },
-        3: { cellWidth: 25 },
-        4: { cellWidth: 50 }
-      },
-    });
-
-    // Pied de page
-    const pageCount = doc.internal.getNumberOfPages();
-    for(let i = 1; i <= pageCount; i++) {
-      doc.setPage(i);
-      doc.setFontSize(8);
-      doc.setTextColor(128, 128, 128);
-      doc.text(
-        `Page ${i} sur ${pageCount} - ERP System`,
-        pageWidth / 2,
-        doc.internal.pageSize.height - 10,
-        { align: 'center' }
-      );
-    }
-
-    const fileName = `Journal_Audit_Fournisseurs_${todayISO()}.pdf`;
-    doc.save(fileName);
-    toast.success("Journal d'audit exporté en PDF avec succès.");
-  } catch (error) {
-    console.error("Erreur lors de l'export PDF:", error);
-    toast.error("Erreur lors de l'export du PDF");
-  }
-};
+  };
 
   // Pagination
   const handlePrevPage = () => {
@@ -507,7 +507,7 @@ const exportPDF = async () => {
     if (currentPage < totalPages) setCurrentPage(currentPage + 1);
   };
 
-  // ✅ ÉTAPE 3 — Loader plein écran (IMPORTANT)
+  // Loader initial
   if (loading)
     return (
       <div className="flex items-center justify-center min-h-[70vh] bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white">
@@ -577,7 +577,7 @@ const exportPDF = async () => {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
-                  Créations {!globalStats && <span className="text-emerald-500">(page)</span>}
+                  Créations
                 </p>
                 <p className="text-2xl font-bold text-emerald-700">{stats.creations}</p>
               </div>
@@ -587,13 +587,9 @@ const exportPDF = async () => {
             </div>
             <div className="flex items-center text-xs text-gray-500">
               <div className="flex-1 border-t border-emerald-100 pt-3">
-                {globalStats ? (
-                  <span className="text-emerald-600 font-medium">
-                    {stats.total > 0 ? Math.round((stats.creations / stats.total) * 100) : 0}% du total
-                  </span>
-                ) : (
-                  <span>Page actuelle</span>
-                )}
+                <span className="text-emerald-600 font-medium">
+                  {stats.total > 0 ? Math.round((stats.creations / stats.total) * 100) : 0}% du total
+                </span>
               </div>
             </div>
           </div>
@@ -603,7 +599,7 @@ const exportPDF = async () => {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
-                  Modifications {!globalStats && <span className="text-blue-500">(page)</span>}
+                  Modifications
                 </p>
                 <p className="text-2xl font-bold text-blue-700">{stats.modifications}</p>
               </div>
@@ -613,13 +609,9 @@ const exportPDF = async () => {
             </div>
             <div className="flex items-center text-xs text-gray-500">
               <div className="flex-1 border-t border-blue-100 pt-3">
-                {globalStats ? (
-                  <span className="text-blue-600 font-medium">
-                    {stats.total > 0 ? Math.round((stats.modifications / stats.total) * 100) : 0}% du total
-                  </span>
-                ) : (
-                  <span>Page actuelle</span>
-                )}
+                <span className="text-blue-600 font-medium">
+                  {stats.total > 0 ? Math.round((stats.modifications / stats.total) * 100) : 0}% du total
+                </span>
               </div>
             </div>
           </div>
@@ -629,7 +621,7 @@ const exportPDF = async () => {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
-                  Suppressions {!globalStats && <span className="text-rose-500">(page)</span>}
+                  Suppressions
                 </p>
                 <p className="text-2xl font-bold text-rose-700">{stats.suppressions}</p>
               </div>
@@ -639,35 +631,13 @@ const exportPDF = async () => {
             </div>
             <div className="flex items-center text-xs text-gray-500">
               <div className="flex-1 border-t border-rose-100 pt-3">
-                {globalStats ? (
-                  <span className="text-rose-600 font-medium">
-                    {stats.total > 0 ? Math.round((stats.suppressions / stats.total) * 100) : 0}% du total
-                  </span>
-                ) : (
-                  <span>Page actuelle</span>
-                )}
+                <span className="text-rose-600 font-medium">
+                  {stats.total > 0 ? Math.round((stats.suppressions / stats.total) * 100) : 0}% du total
+                </span>
               </div>
             </div>
           </div>
         </div>
-        
-        {/* Note sur les statistiques */}
-        {!globalStats && (
-          <div className="mt-6 p-4 bg-gradient-to-r from-amber-50 to-amber-50/50 border border-amber-200 rounded-xl">
-            <div className="flex items-start gap-3">
-              <BarChart3 className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="text-sm font-medium text-amber-800">
-                  Statistiques de la page actuelle uniquement
-                </p>
-                <p className="text-sm text-amber-700 mt-1">
-                  Les statistiques sont calculées sur les {logsFiltres.length} actions affichées.
-                  Pour voir les statistiques globales, veuillez utiliser l'export PDF.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
       </motion.div>
 
       {/* FILTRES SPÉCIFIQUES AU MODULE */}
@@ -732,7 +702,7 @@ const exportPDF = async () => {
           </div>
         </div>
 
-        {/* Barre de recherche */}
+        {/* Barre de recherche - FILTRAGE FRONTEND INSTANTANÉ */}
         <div className="mt-5">
           <div className="relative max-w-md">
             <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -747,18 +717,21 @@ const exportPDF = async () => {
               className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl text-sm bg-white/80 shadow-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 transition"
             />
           </div>
+          <p className="text-xs text-gray-500 mt-2 ml-2">
+            🔍 Recherche instantanée • {logsFiltres.length} résultat{logsFiltres.length > 1 ? 's' : ''} trouvé{logsFiltres.length > 1 ? 's' : ''}
+          </p>
         </div>
       </div>
 
       {/* TABLEAU DU JOURNAL D'AUDIT */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm relative">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
         {/* EN-TÊTE TABLEAU */}
         <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <h3 className="font-semibold text-gray-800">Journal d'activité des fournisseurs</h3>
               <span className="bg-[#472EAD] text-white text-xs font-medium px-3 py-1.5 rounded-full">
-                {logsFiltres.length} action{logsFiltres.length > 1 ? 's' : ''} affichée{logsFiltres.length > 1 ? 's' : ''} sur {stats.total}
+                {paginatedLogs.length} action{paginatedLogs.length > 1 ? 's' : ''} affichée{paginatedLogs.length > 1 ? 's' : ''} sur {logsFiltres.length}
               </span>
             </div>
             <div className="text-sm text-gray-500">
@@ -766,16 +739,6 @@ const exportPDF = async () => {
             </div>
           </div>
         </div>
-
-        {/* ✅ ÉTAPE 4 — Overlay uniquement pendant navigation */}
-        {loadingPage && (
-          <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-10">
-            <div className="flex flex-col items-center gap-3">
-              <RefreshCw className="w-8 h-8 text-[#472EAD] animate-spin" />
-              <span className="text-sm font-medium text-gray-600">Chargement des données...</span>
-            </div>
-          </div>
-        )}
 
         {/* TABLEAU */}
         <div className="overflow-hidden">
@@ -800,8 +763,8 @@ const exportPDF = async () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {logsFiltres.length ? (
-                logsFiltres.map((log) => {
+              {paginatedLogs.length ? (
+                paginatedLogs.map((log) => {
                   const color = getActionColor(log.action);
                   return (
                     <tr key={log.id} className="hover:bg-gray-50/50 transition-colors duration-150">
@@ -881,7 +844,7 @@ const exportPDF = async () => {
                 <span className="font-semibold text-gray-900">{totalPages}</span>
               </p>
               <p className="text-sm text-gray-500">
-                {logsFiltres.length} action{logsFiltres.length > 1 ? 's' : ''} affichée{logsFiltres.length > 1 ? 's' : ''} sur {stats.total}
+                {paginatedLogs.length} action{paginatedLogs.length > 1 ? 's' : ''} affichée{paginatedLogs.length > 1 ? 's' : ''} sur {logsFiltres.length}
               </p>
             </div>
             <div className="flex gap-2">
@@ -905,8 +868,6 @@ const exportPDF = async () => {
           </div>
         )}
       </div>
-
-
 
       {/* MODAL DE DÉTAILS */}
       {showDetailsModal && selectedLog && (

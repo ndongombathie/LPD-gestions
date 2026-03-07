@@ -18,7 +18,6 @@ import Rapports from "./pages/Rapports.jsx";
 import JournalActivites from "./pages/JournalActivites.jsx";
 import ClientsSpeciaux from "./pages/ClientsSpeciaux.jsx";
 import Decaissements from "./pages/Decaissements.jsx";
-import FondOuverture from "./pages/FondOuverture.jsx";
 
 // Auth
 import Connexion from "../authentification/login/Connexion.jsx";

@@ -14,6 +14,8 @@ const ENDPOINTS = {
   DELETE: '/clients/:id',
   GET_SPECIAL: '/clients?type_client=special',
   GET_ALL_SPECIAUX: '/clients/speciaux/all',
+  GET_RESUME_FINANCIER_SPECIAUX: '/clients/speciaux/resume-financier',
+  GET_STATS_CLIENT: '/clients/:id/stats',
 };
 
 export const clientsAPI = {
@@ -30,7 +32,41 @@ export const clientsAPI = {
       throw error;
     }
   },
-
+/**
+ * 📊 Stats d'un client spécial
+ */
+getStatsClient: async (id) => {
+  try {
+    const response = await httpClient.get(
+      ENDPOINTS.GET_STATS_CLIENT.replace(':id', id)
+    );
+    return response.data;
+  } catch (error) {
+    console.error(
+      '❌ Erreur getStatsClient:',
+      error.response?.data || error.message
+    );
+    throw error;
+  }
+},
+/**
+ * Résumé financier des clients spéciaux (backend source of truth)
+ */
+getResumeFinancierSpeciaux: async (params = {}) => {
+  try {
+    const response = await httpClient.get(
+      ENDPOINTS.GET_RESUME_FINANCIER_SPECIAUX,
+      { params }
+    );
+    return response.data;
+  } catch (error) {
+    console.error(
+      "❌ Erreur getResumeFinancierSpeciaux:",
+      error.message
+    );
+    throw error;
+  }
+},
   /**
    * 🔍 Rechercher des clients par nom
    */
@@ -79,18 +115,18 @@ export const clientsAPI = {
   /**
    * Clients spéciaux (sans pagination)
    */
-  getAllSpeciaux: async (params = {}) => {
-    try {
-      const response = await httpClient.get(
-        ENDPOINTS.GET_ALL_SPECIAUX,
-        { params }
-      );
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erreur getAllSpeciaux:', error.message);
-      throw error;
-    }
-  },
+getAllSpeciaux: async (params = {}) => {
+  try {
+    const response = await httpClient.get(
+      ENDPOINTS.GET_ALL_SPECIAUX,
+      { params }
+    );
+    return response; // ✅ on retourne la réponse complète Axios
+  } catch (error) {
+    console.error('❌ Erreur getAllSpeciaux:', error.message);
+    throw error;
+  }
+},
 
   /**
    * Obtenir un client par ID

@@ -30,6 +30,7 @@ const ENDPOINTS = {
   // Responsable / Clients spéciaux
   SEND_TRANCHE: '/commandes/:id/envoyer-tranche',
   GET_STATS_SPECIAL: '/stats-commandes-speciales',
+  GET_WITH_RESTE_SPECIAL: '/commandes/client-special/:clientId/avec-reste',
 };
 
 export const commandesAPI = {
@@ -37,12 +38,19 @@ export const commandesAPI = {
   getAll: async (params = {}) => {
     try {
       const response = await httpClient.get(ENDPOINTS.GET_ALL, { params });
-      return response.data;
+      return response; // ✅ on retourne Axios complet
     } catch (error) {
       console.error('❌ Erreur getAll commandes:', error.message);
-      return { data: [], meta: { total: 0 } };
+      return { data: { data: [], meta: { total: 0 } } };
     }
   },
+
+getCommandesAvecResteClientSpecial: async (clientId) => {
+  const response = await httpClient.get(
+    ENDPOINTS.GET_WITH_RESTE_SPECIAL.replace(':clientId', clientId)
+  );
+  return response.data;
+},
 
   getPending: async (params = {}) => {
     try {
@@ -83,10 +91,12 @@ export const commandesAPI = {
   getStats: async () => {
     try {
       const response = await httpClient.get(ENDPOINTS.GET_STATS);
-      return response.data;
+      return response; // ✅ important
     } catch {
       const all = await commandesAPI.getAll();
-      return calculerStatsLocal(all.data || []);
+      return {
+        data: calculerStatsLocal(all?.data?.data || [])
+      };
     }
   },
 
@@ -195,7 +205,7 @@ export const commandesAPI = {
       ENDPOINTS.GET_STATS_SPECIAL,
       { params }
     );
-    return response.data;
+    return response; // ✅ important
   },
 };
 

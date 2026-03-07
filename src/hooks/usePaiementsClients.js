@@ -27,29 +27,34 @@ export function usePaiementsClients(toast) {
   // ✅ CORRECTION : Utilise commandesAPI.envoyerTranche()
   // ✅ CORRECTION : N'envoie que le montant
   // ======================================================
-  const trancheMutation = useMutation({
-    mutationFn: ({ commandeId, montant }) =>
-      commandesAPI.envoyerTranche(commandeId, {
-        montant,
-      }),
+const trancheMutation = useMutation({
+  mutationFn: ({ commandeId, montant }) =>
+    commandesAPI.sendTranche(commandeId, {
+      montant,
+    }),
 
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["clients-speciaux"],
-      });
+  onSuccess: () => {
+    queryClient.invalidateQueries({
+      queryKey: ["clients-speciaux"],
+    });
 
-      toast(
-        "success",
-        "Tranche envoyée",
-        "La tranche est en attente caisse."
-      );
-    },
+    toast(
+      "success",
+      "Tranche envoyée",
+      "La tranche est en attente caisse."
+    );
+  },
 
-    onError: (error) => {
-      logger.error("usePaiementsClients.create", { error });
-      toast("error", "Erreur", "Impossible de créer la tranche.");
-    },
-  });
+onError: (error) => {
+  logger.error("usePaiementsClients.create", { error });
+
+  const message =
+    error?.response?.data?.message ||
+    "Impossible de créer la tranche.";
+
+  toast("error", "Erreur", message);
+},
+});
 
   // ======================================================
   // ✏️ Modifier une tranche (reste en attente)

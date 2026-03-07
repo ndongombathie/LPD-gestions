@@ -4,7 +4,8 @@
 import httpClient from '../http/client';
 
 const ENDPOINTS = {
-  GET_ALL: '/decaissements',
+  GET_ALL: '/decaissements-all',
+  GET_RESPONSABLE: '/responsable/decaissements', // ✅ nouveau
   GET_BY_ID: '/decaissements/:id',
   CREATE: '/decaissements',
   UPDATE: '/decaissements/:id',
@@ -12,6 +13,8 @@ const ENDPOINTS = {
   VALIDATE: '/decaissements/:id/valider',
   EXPORT_ALL: '/decaissements/export',
   GET_ALL_CAISSIERS: '/caissiers/all',
+  STATS: '/decaissements/stats',
+  CREATE_RESPONSABLE: '/responsable/decaissements',
 };
 
 export const decaissementsAPI = {
@@ -25,6 +28,45 @@ export const decaissementsAPI = {
       throw error;
     }
   },
+createResponsable: async (data) => {
+  try {
+    const response = await httpClient.post(
+      ENDPOINTS.CREATE_RESPONSABLE,
+      data
+    );
+    return response.data;
+  } catch (error) {
+    console.error(
+      '❌ Erreur createResponsable décaissement:',
+      error.response?.data || error.message
+    );
+    throw error;
+  }
+},
+getAllResponsable: async (params = {}) => {
+  try {
+    const response = await httpClient.get(
+      ENDPOINTS.GET_RESPONSABLE,
+      { params }
+    );
+    return response.data;
+  } catch (error) {
+    console.error(
+      '❌ Erreur getAllResponsable décaissements:',
+      error.response?.data || error.message
+    );
+    throw error;
+  }
+},
+  getStats: async (params = {}) => {
+  try {
+    const response = await httpClient.get(ENDPOINTS.STATS, { params });
+    return response.data;
+  } catch (error) {
+    console.error('❌ Erreur getStats décaissements:', error.response?.data || error.message);
+    throw error;
+  }
+},
 
   getById: async (id) => {
     try {

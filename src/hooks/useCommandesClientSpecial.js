@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import toast from "react-hot-toast";
 import { commandesAPI } from "@/services/api";
 import { normalizeCommande } from "@/utils/normalizeCommande";
 import { logger } from "@/utils/logger";
@@ -6,11 +7,12 @@ import { logger } from "@/utils/logger";
 export function useCommandesClientSpecial({
   clientId,
   page,
-  perPage = 10,
+  per_page = 10,
   search,
   statut,
-  toast,
-}) {
+  date_debut,
+  date_fin,
+}){
 
   // ✅ NORMALISATION DES PARAMÈTRES
   const normalizedSearch =
@@ -24,9 +26,11 @@ export function useCommandesClientSpecial({
       "commandes-client-special",
       clientId,
       page,
-      perPage,
+      per_page,
       normalizedSearch,
       normalizedStatut,
+      date_debut,
+      date_fin,
     ],
 
     enabled: !!clientId,
@@ -35,18 +39,19 @@ export function useCommandesClientSpecial({
 
     queryFn: async () => {
       try {
-        const res = await commandesAPI.getAll({
-          type_client: "special",
-          client_id: clientId,
-          page,
-          perPage,
-          search: normalizedSearch,
-          statut: normalizedStatut,
-        });
+          const res = await commandesAPI.getAll({
+            client_id: clientId,
+            page,
+            per_page,
+            search: normalizedSearch,
+            statut: normalizedStatut,
+            start_date: date_debut,
+            end_date: date_fin,
+          });
 
-        const payload = Array.isArray(res.data)
-          ? res.data
-          : res.data?.data || [];
+        const payload = Array.isArray(res.data?.data)
+          ? res.data.data
+          : [];
 
         const commandes = payload
           .map(normalizeCommande)
@@ -55,20 +60,16 @@ export function useCommandesClientSpecial({
         return {
           commandes,
           meta: {
-            current_page: res.current_page ?? 1,
-            last_page: res.last_page ?? 1,
-            total: res.total ?? 0,
+            current_page: res.data?.current_page ?? 1,
+            last_page: res.data?.last_page ?? 1,
+            total: res.data?.total ?? 0,
           },
           stats: res.stats ?? {},
         };
 
       } catch (error) {
         logger.error("useCommandesClientSpecial.fetch", { error });
-        toast(
-          "error",
-          "Erreur",
-          "Impossible de charger les commandes."
-        );
+        toast.error("Impossible de charger les commandes.");
         throw error;
       }
     },
