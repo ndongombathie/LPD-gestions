@@ -1375,14 +1375,12 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
           </div>
         )}
 
-        {/* Pagination - Style NouvelleCommande */}
         {commandesFiltrees.length > 0 && (
           <div className="mt-4 flex flex-col items-center gap-3 pb-4 pt-3 border-t border-gray-200">
             <div className="text-xs text-gray-600">
               Page {pagination.currentPage} / {pagination.totalPages} • {pagination.totalItems} commandes
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {/* Lien "Précédent" */}
               <button
                 onClick={prevPage}
                 disabled={pagination.currentPage === 1}
@@ -1395,7 +1393,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
                 Précédent
               </button>
 
-              {/* Numéros de page */}
               {getPageNumbers().map((item, index) => {
                 if (item === '...') {
                   return (
@@ -1426,7 +1423,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
                 );
               })}
 
-              {/* Lien "Suivant" */}
               <button
                 onClick={nextPage}
                 disabled={pagination.currentPage === pagination.totalPages}
