@@ -70,7 +70,7 @@ GET api/commandes-par-vendeur/{id}
 
 # Nombre total de vendeurs
 GET         api/vendeurs-count
-# Nombre totaò de caissier
+# Nombre totat de caissier
 GET         api/caissiers-count
 
 # Nombre total de gestionnaire de boutique
