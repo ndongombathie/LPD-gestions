@@ -59,9 +59,9 @@ GET      api/nombre-entree-stock-total
 # le nombre de sortie dans le stock
 GET      api/nombre-sortie-stock-total
 # nombre de transfert en attente
-GET       api/tproduits-transfer
+GET       api/nombre-transfer-en-attente
 # nombre de transfert annuler
-GET       api/transfers-annuler
+GET       api/nombre-transfers-annuler
 # liste des transfert annuler 
 GET       api/liste-transfers-annuler
 

@@ -12,6 +12,7 @@ import {
   FileText,
   Clock,
   Banknote,
+  Wallet,
 } from "lucide-react";
 import { motion } from "framer-motion";
 
