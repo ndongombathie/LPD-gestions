@@ -1,88 +1,66 @@
-/**
- * 📊 Dashboard API
- * 
- * Endpoints pour les statistiques et données du tableau de bord
- */
+// ==========================================================
+// 📊 Dashboard API — VERSION ULTRA ROBUSTE PRODUCTION
+// ==========================================================
 
-import httpClient from '../http/client';
+import httpClient from "../http/client";
 
-const ENDPOINTS = {
-  GET_STATS: '/dashboard/stats',
-  GET_RECENT_ACTIVITIES: '/dashboard/activities/recent',
-  GET_CLIENT_GROWTH: '/dashboard/clients/growth',
-  GET_SALES_DATA: '/dashboard/sales',
-  GET_METRICS: '/dashboard/metrics',
+const safeNumber = (value) => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
 };
 
-export const dashboardAPI = {
-  /**
-   * Récupérer les statistiques principales
-   */
-  getStats: async (params = {}) => {
-    try {
-      const response = await httpClient.get(ENDPOINTS.GET_STATS, { params });
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erreur getStats dashboard:', error.message);
-      throw error;
-    }
-  },
+const dashboardAPI = {
 
-  /**
-   * Récupérer les activités récentes
-   */
-  getRecentActivities: async (limit = 10) => {
-    try {
-      const response = await httpClient.get(ENDPOINTS.GET_RECENT_ACTIVITIES, {
-        params: { limit }
-      });
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erreur getRecentActivities:', error.message);
-      throw error;
-    }
-  },
+  async getDashboardStats() {
 
-  /**
-   * Obtenir la croissance des clients
-   */
-  getClientGrowth: async (period = 'monthly') => {
     try {
-      const response = await httpClient.get(ENDPOINTS.GET_CLIENT_GROWTH, {
-        params: { period }
-      });
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erreur getClientGrowth:', error.message);
-      throw error;
-    }
-  },
 
-  /**
-   * Récupérer les données de vente
-   */
-  getSalesData: async (startDate, endDate) => {
-    try {
-      const response = await httpClient.get(ENDPOINTS.GET_SALES_DATA, {
-        params: { start_date: startDate, end_date: endDate }
-      });
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erreur getSalesData:', error.message);
-      throw error;
-    }
-  },
+      const responses = await Promise.allSettled([
+        httpClient.get("/nombre-produits"),
+        httpClient.get("/quantite-totale-produit"),
+        httpClient.get("/nombre-versement-total"),
+        httpClient.get("/somme-versement-total"),
+        httpClient.get("/somme-paiements-total"),
+      ]);
 
-  /**
-   * Récupérer toutes les métriques
-   */
-  getAllMetrics: async () => {
-    try {
-      const response = await httpClient.get(ENDPOINTS.GET_METRICS);
-      return response.data;
+      const getData = (index) =>
+        responses[index].status === "fulfilled"
+          ? responses[index].value?.data
+          : null;
+
+      const nombreProduitsData = getData(0);
+      const quantiteTotaleData = getData(1);
+      const nombreVersementsData = getData(2);
+      const sommeVersementsData = getData(3);
+      const sommeEncaissementsData = getData(4);
+
+      return {
+        nombreProduits: safeNumber(nombreProduitsData),
+
+        quantiteTotale: safeNumber(
+          quantiteTotaleData?.total_quantity
+        ),
+
+        nombreVersements: safeNumber(nombreVersementsData),
+
+        sommeVersements: safeNumber(sommeVersementsData),
+
+        sommeEncaissements: safeNumber(sommeEncaissementsData),
+      };
+
     } catch (error) {
-      console.error('❌ Erreur getAllMetrics:', error.message);
-      throw error;
+
+      console.error("❌ Dashboard global error:", error);
+
+      return {
+        nombreProduits: 0,
+        quantiteTotale: 0,
+        nombreVersements: 0,
+        sommeVersements: 0,
+        sommeEncaissements: 0,
+      };
     }
   },
 };
+
+export default dashboardAPI;

@@ -1,279 +1,460 @@
 // ==========================================================
-// 🏪 Depot.jsx — Contrôle Gestionnaire Dépôt (PRO)
-// DESIGN SHADOW (SANS BORDURES)
+// 🏭 DepotControle.jsx — VERSION COMPLETE AVEC MOUVEMENTS + FOURNISSEUR + SEUIL
 // ==========================================================
 
-import React, { useState, useMemo } from "react";
-import {
-  Search,
-  Printer,
-  AlertTriangle,
-  CheckCircle,
-} from "lucide-react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
+import { Search, Eye, X } from "lucide-react";
+import depotAPI from "@/services/api/depot";
 
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+export default function DepotControle() {
 
-// 📊 Recharts
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  CartesianGrid,
-} from "recharts";
+  const [produits, setProduits] = useState([]);
+  const [allProduits, setAllProduits] = useState([]);
+  const [pagination, setPagination] = useState(null);
+  const [filteredResults, setFilteredResults] = useState([]);
 
-// ==========================================================
-// 📦 STOCK DÉPÔT
-// ==========================================================
-const stockDepot = [
-  {
-    id: 1,
-    produit: "Ramette A4 80g",
-    categorie: "Papeterie",
-    quantite: 120,
-    minStock: 50,
-    sorties: 340,
-    historiqueReappro: [
-      { date: "2025-01-15", avant: 20, ajout: 100 },
-      { date: "2025-02-03", avant: 80, ajout: 40 },
-    ],
-    date: "2025-02-16",
-  },
-  {
-    id: 2,
-    produit: "Carton Stylos Bic",
-    categorie: "Papeterie",
-    quantite: 15,
-    minStock: 30,
-    sorties: 120,
-    historiqueReappro: [
-      { date: "2025-01-05", avant: 5, ajout: 60 },
-      { date: "2025-02-12", avant: 25, ajout: 20 },
-    ],
-    date: "2025-02-16",
-  },
-  {
-    id: 3,
-    produit: "Toner HP 85A",
-    categorie: "Impression",
-    quantite: 0,
-    minStock: 2,
-    sorties: 12,
-    historiqueReappro: [],
-    date: "2025-02-15",
-  },
-];
+  const [page, setPage] = useState(1);
+  const perPage = 15;
 
-// ==========================================================
-// 🔧 ÉTAT DU STOCK
-// ==========================================================
-const getEtat = (p) => {
-  if (p.quantite === 0) return "rupture";
-  if (p.quantite <= p.minStock) return "faible";
-  return "ok";
-};
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const [selectedProduit, setSelectedProduit] = useState(null);
 
-export default function Depot() {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [dateDebut, setDateDebut] = useState("");
-  const [dateFin, setDateFin] = useState("");
+  const [mouvements, setMouvements] = useState([]);
+  const [loadingMouvements, setLoadingMouvements] = useState(false);
 
-  // ==========================================================
-  // 🔍 FILTRAGE
-  // ==========================================================
-  const filteredData = useMemo(() => {
-    let data = [...stockDepot];
+  /* ================= FETCH PRODUITS ================= */
 
-    if (searchTerm.trim()) {
-      const q = searchTerm.toLowerCase();
-      data = data.filter(
-        (p) =>
-          p.produit.toLowerCase().includes(q) ||
-          p.categorie.toLowerCase().includes(q)
-      );
+  const fetchPaginated = useCallback(async () => {
+    try {
+
+      setLoading(true);
+
+      const res = await depotAPI.getProduitsControle({
+        page,
+        per_page: perPage,
+      });
+
+      setProduits(res?.data || []);
+      setPagination(res?.pagination || null);
+
+    } catch {
+
+      setError("Erreur lors du chargement des produits dépôt");
+
+    } finally {
+
+      setLoading(false);
+
+    }
+  }, [page]);
+
+  const fetchAllProduits = useCallback(async () => {
+
+    try {
+
+      let allData = [];
+      let currentPage = 1;
+      let lastPage = 1;
+
+      do {
+
+        const res = await depotAPI.getProduitsControle({
+          page: currentPage,
+          per_page: 100,
+        });
+
+        const pageData = res?.data || [];
+
+        allData = [...allData, ...pageData];
+
+        lastPage = res?.pagination?.lastPage || 1;
+
+        currentPage++;
+
+      } while (currentPage <= lastPage);
+
+      setAllProduits(allData);
+
+    } catch (error) {
+
+      console.error(error);
+
     }
 
-    if (dateDebut) data = data.filter((p) => p.date >= dateDebut);
-    if (dateFin) data = data.filter((p) => p.date <= dateFin);
+  }, []);
 
-    return data;
-  }, [searchTerm, dateDebut, dateFin]);
+  useEffect(() => {
 
-  // ==========================================================
-  // 🖨 PDF
-  // ==========================================================
-  const imprimerPDF = () => {
-    const doc = new jsPDF();
-    doc.text("Stock Dépôt — Rapport LPD", 14, 16);
+    fetchPaginated();
+    fetchAllProduits();
 
-    autoTable(doc, {
-      startY: 26,
-      head: [
-        ["Produit", "Stock", "Entrées", "Sorties", "Réappro.", "Dernier"],
-      ],
-      body: filteredData.map((p) => {
-        const totalReappro = p.historiqueReappro.reduce(
-          (s, h) => s + h.ajout,
-          0
-        );
-        const nbReappro = p.historiqueReappro.length;
-        const dernier = nbReappro
-          ? p.historiqueReappro[nbReappro - 1].date
-          : "-";
+  }, [fetchPaginated, fetchAllProduits]);
 
-        return [
-          p.produit,
-          p.quantite,
-          totalReappro,
-          p.sorties,
-          nbReappro,
-          dernier,
-        ];
-      }),
-      headStyles: { fillColor: [71, 46, 173] },
+  /* ================= RECHERCHE ================= */
+
+  const globalGroupedProduits = useMemo(() => {
+
+    const map = new Map();
+
+    allProduits.forEach((p) => {
+
+      const key = `${p.nom}-${p.categorie_id}`;
+
+      if (!map.has(key)) {
+
+        map.set(key, { ...p });
+
+      } else {
+
+        const existing = map.get(key);
+
+        existing.nombre_carton += p.nombre_carton || 0;
+
+      }
+
     });
 
-    doc.save("Stock_Depot_LPD.pdf");
+    return Array.from(map.values());
+
+  }, [allProduits]);
+
+  useEffect(() => {
+
+    if (search.trim()) {
+
+      setIsSearching(true);
+
+      const filtered = globalGroupedProduits.filter((p) =>
+        p.nom?.toLowerCase().includes(search.toLowerCase())
+      );
+
+      setFilteredResults(filtered);
+
+      setPage(1);
+
+    } else {
+
+      setIsSearching(false);
+
+      setFilteredResults([]);
+
+    }
+
+  }, [search, globalGroupedProduits]);
+
+  const displayedProduits = useMemo(() => {
+
+    if (isSearching) {
+
+      const startIndex = (page - 1) * perPage;
+      const endIndex = startIndex + perPage;
+
+      return filteredResults.slice(startIndex, endIndex);
+
+    }
+
+    return produits;
+
+  }, [isSearching, filteredResults, produits, page]);
+
+  const totalPages = useMemo(() => {
+
+    if (isSearching) {
+      return Math.ceil(filteredResults.length / perPage);
+    }
+
+    return pagination?.lastPage || 1;
+
+  }, [isSearching, filteredResults.length, pagination?.lastPage]);
+
+  /* ================= FORMAT ================= */
+
+  const formatFCFA = (value = 0) => {
+
+    return Number(value)
+      .toLocaleString("fr-FR")
+      .replace(/\s/g, ".") + " FCFA";
+
   };
 
+  /* ================= MOUVEMENTS ================= */
+
+  const afficherFiche = async (produit) => {
+
+    try {
+
+      setSelectedProduit(produit);
+      setLoadingMouvements(true);
+      setMouvements([]);
+
+      const res = await depotAPI.getMouvementsProduit(produit.id);
+
+      setMouvements(res?.data || []);
+
+    } catch (error) {
+
+      console.error("Erreur chargement mouvements:", error);
+
+    } finally {
+
+      setLoadingMouvements(false);
+
+    }
+
+  };
+
+  const fermerFiche = () => {
+
+    setSelectedProduit(null);
+    setMouvements([]);
+
+  };
+
+  /* ================= PAGINATION ================= */
+
+  const handlePageChange = (newPage) => {
+
+    if (newPage >= 1 && newPage <= totalPages) {
+
+      setPage(newPage);
+
+      if (!isSearching) fetchPaginated();
+
+    }
+
+  };
+
+  if (loading && !produits.length) return <p className="p-6">Chargement…</p>;
+
+  if (error) return <p className="p-6 text-red-600">{error}</p>;
+
   return (
-    <div className="space-y-8">
 
-      {/* ================= TITRE ================= */}
-      <div>
-        <h1 className="text-xl font-semibold text-[#472EAD]">
-          Contrôle Gestionnaire — Dépôt
-        </h1>
-        <p className="text-sm text-gray-500">
-          Suivi du stock dépôt, entrées, sorties et réapprovisionnements
-        </p>
-      </div>
+    <div className="p-6 flex flex-col gap-8">
 
-      {/* ================= FILTRES ================= */}
-      <div className="bg-white rounded-2xl shadow-md p-4 flex flex-wrap gap-4">
-        <div className="flex items-center gap-2 flex-1">
-          <Search size={18} className="text-[#472EAD]" />
+      <h1 className="text-xl font-semibold text-[#472EAD]">
+        Contrôle Gestionnaire — Dépôt
+      </h1>
+
+      {/* ===== RECHERCHE UNIQUEMENT ===== */}
+
+      <div className="bg-white p-4 rounded-xl shadow">
+
+        <div className="flex items-center gap-2">
+
+          <Search size={18} className="text-gray-500" />
+
           <input
-            className="w-full px-3 py-2 rounded-lg bg-gray-50 text-sm focus:ring-2 focus:ring-[#472EAD]/30"
-            placeholder="Rechercher produit ou catégorie…"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            type="text"
+            placeholder="Rechercher par nom de produit..."
+            className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-[#472EAD]"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
           />
+
         </div>
 
-        <input
-          type="date"
-          value={dateDebut}
-          onChange={(e) => setDateDebut(e.target.value)}
-          className="px-3 py-2 rounded-lg bg-gray-50 text-sm"
-        />
-
-        <input
-          type="date"
-          value={dateFin}
-          onChange={(e) => setDateFin(e.target.value)}
-          className="px-3 py-2 rounded-lg bg-gray-50 text-sm"
-        />
-
-        <button
-          onClick={imprimerPDF}
-          className="ml-auto px-4 py-2 bg-[#472EAD] text-white rounded-xl shadow hover:shadow-lg"
-        >
-          <Printer size={16} /> Imprimer
-        </button>
       </div>
 
-      {/* ================= GRAPHIQUE ================= */}
-      <div className="bg-white rounded-2xl shadow-md p-5">
-        <h2 className="text-sm font-semibold text-[#472EAD] mb-4">
-          Entrées & Sorties du Dépôt
-        </h2>
+      {/* ===== TABLE ===== */}
 
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={stockDepot}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="produit" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="sorties" fill="#ef4444" name="Sorties" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-      {/* ================= TABLE ================= */}
-      <div className="bg-white rounded-2xl shadow-md p-4 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-[#F5F3FF] text-[#472EAD]">
-            <tr>
-              <th className="px-3 py-2 text-left">Produit</th>
-              <th className="px-3 py-2 text-center">État</th>
-              <th className="px-3 py-2 text-center">Stock</th>
-              <th className="px-3 py-2 text-center">Entrées</th>
-              <th className="px-3 py-2 text-center">Sorties</th>
-              <th className="px-3 py-2 text-center">Dernier réappro</th>
-            </tr>
-          </thead>
+        <div className={`${selectedProduit ? "lg:col-span-2" : "lg:col-span-3"} bg-white rounded-xl shadow overflow-x-auto`}>
 
-          <tbody>
-            {filteredData.map((p) => {
-              const totalReappro = p.historiqueReappro.reduce(
-                (s, h) => s + h.ajout,
-                0
-              );
-              const dernier = p.historiqueReappro.length
-                ? p.historiqueReappro[p.historiqueReappro.length - 1]
-                : null;
+          <table className="w-full text-sm">
 
-              const etat = getEtat(p);
+            <thead className="bg-[#F5F3FF] text-[#472EAD]">
 
-              return (
-                <tr key={p.id} className="hover:bg-gray-50">
-                  <td className="px-3 py-2">{p.produit}</td>
+              <tr>
 
-                  <td className="px-3 py-2 text-center">
-                    {etat === "rupture" && (
-                      <span className="text-red-600 flex justify-center gap-1">
-                        <AlertTriangle size={14} /> Rupture
-                      </span>
-                    )}
-                    {etat === "faible" && (
-                      <span className="text-orange-500 font-medium">
-                        Stock faible
-                      </span>
-                    )}
-                    {etat === "ok" && (
-                      <span className="text-emerald-600 flex justify-center gap-1">
-                        <CheckCircle size={14} /> OK
-                      </span>
-                    )}
+                <th className="p-3 text-left">Produit</th>
+                <th className="p-3 text-left">Fournisseur</th>
+                <th className="p-3 text-center">Prix Achat</th>
+                <th className="p-3 text-center">Cartons</th>
+                <th className="p-3 text-center">Seuil</th>
+                <th className="p-3 text-center">Fiche</th>
+
+              </tr>
+
+            </thead>
+
+            <tbody>
+
+              {displayedProduits.map((p) => (
+
+                <tr key={p.id} className="hover:bg-gray-50 border-b">
+
+                  <td className="p-3 font-medium">{p.nom}</td>
+
+                  <td className="p-3">
+                    {p.fournisseur_nom || p.fournisseur?.nom || "Non défini"}
                   </td>
 
-                  <td className="px-3 py-2 text-center">{p.quantite}</td>
-                  <td className="px-3 py-2 text-center">{totalReappro}</td>
-                  <td className="px-3 py-2 text-center">{p.sorties}</td>
+                  <td className="p-3 text-center">{formatFCFA(p.prix_achat)}</td>
 
-                  <td className="px-3 py-2 text-center">
-                    {dernier ? (
-                      <span className="text-sm text-gray-600">
-                        {dernier.date} (+{dernier.ajout})
-                      </span>
-                    ) : (
-                      <span className="text-gray-400">Jamais</span>
-                    )}
+                  <td className="p-3 text-center">{p.nombre_carton}</td>
+
+                  <td className="p-3 text-center">{p.stock_seuil || 0}</td>
+
+                  <td className="p-3 text-center">
+
+                    <button
+                      onClick={() => afficherFiche(p)}
+                      className="p-1.5 bg-[#472EAD] text-white rounded-lg"
+                      title="Voir la fiche produit"
+                    >
+                      <Eye size={16} />
+                    </button>
+
                   </td>
+
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+
+              ))}
+
+            </tbody>
+
+          </table>
+
+        </div>
+
+        {/* ===== FICHE PRODUIT ===== */}
+
+        {selectedProduit && (
+
+          <div className="bg-white rounded-xl shadow p-5">
+
+            <div className="flex justify-between items-center mb-4">
+
+              <h2 className="text-lg font-semibold text-[#472EAD]">
+                Fiche Produit
+              </h2>
+
+              <button onClick={fermerFiche} className="hover:text-gray-700">
+                <X size={18} />
+              </button>
+
+            </div>
+
+            <div className="space-y-4">
+
+              <h3 className="font-bold text-lg">{selectedProduit.nom}</h3>
+
+              <div className="border-t pt-3">
+                <strong>Fournisseur:</strong>{" "}
+                {selectedProduit.fournisseur_nom ||
+                  selectedProduit.fournisseur?.nom ||
+                  "Non défini"}
+              </div>
+
+              <div>
+                <strong>Prix Achat:</strong>{" "}
+                {formatFCFA(selectedProduit.prix_achat)}
+              </div>
+
+              <div>
+                <strong>Seuil:</strong>{" "}
+                {selectedProduit.stock_seuil || 0}
+              </div>
+
+              <div className="border rounded-lg p-4 bg-gray-50">
+
+                <h4 className="font-semibold mb-3">
+                  Mouvements du produit
+                </h4>
+
+                {loadingMouvements ? (
+
+                  <p className="text-sm text-gray-500">
+                    Chargement des mouvements...
+                  </p>
+
+                ) : mouvements.length === 0 ? (
+
+                  <p className="text-sm text-gray-500">
+                    Aucun mouvement enregistré
+                  </p>
+
+                ) : (
+
+                  <div className="max-h-60 overflow-y-auto space-y-2 text-xs">
+
+                    {mouvements.map((m) => (
+
+                      <div
+                        key={m.id}
+                        className={`p-2 rounded border ${
+                          m.type === "entree"
+                            ? "bg-green-50 border-green-200"
+                            : "bg-red-50 border-red-200"
+                        }`}
+                      >
+
+                        <div className="font-medium">
+                          {m.type === "entree" ? "Entrée" : "Sortie"} — {m.quantite}
+                        </div>
+
+                        <div className="text-gray-500">
+                          {m.source} → {m.destination}
+                        </div>
+
+                        <div className="text-gray-400">
+                          {new Date(m.date).toLocaleDateString("fr-FR")}
+                        </div>
+
+                      </div>
+
+                    ))}
+
+                  </div>
+
+                )}
+
+              </div>
+
+            </div>
+
+          </div>
+
+        )}
+
       </div>
+
+      {/* ===== PAGINATION ===== */}
+
+      {totalPages > 1 && (
+
+        <div className="flex justify-between items-center text-sm bg-white p-4 rounded-xl shadow">
+
+          <button
+            disabled={page <= 1}
+            onClick={() => handlePageChange(page - 1)}
+            className="px-4 py-2 border rounded disabled:opacity-40 hover:bg-gray-50 transition-colors"
+          >
+            ← Précédent
+          </button>
+
+          <span className="font-semibold text-[#472EAD]">
+            Page {page} / {totalPages}
+          </span>
+
+          <button
+            disabled={page >= totalPages}
+            onClick={() => handlePageChange(page + 1)}
+            className="px-4 py-2 border rounded disabled:opacity-40 hover:bg-gray-50 transition-colors"
+          >
+            Suivant →
+          </button>
+
+        </div>
+
+      )}
+
     </div>
   );
+
 }

@@ -1,24 +1,16 @@
 // ==========================================================
-// ⚙️ ComptableApp.jsx — Interface Comptable LPD (STABLE)
+// ⚙️ ComptableApp.jsx — Interface Comptable LPD (SECURE)
 // ==========================================================
 
 import React from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 
 // ================= LAYOUT =================
-
 import LayoutComptable from "./LayoutComptable.jsx";
 
-
-// ================= PAGES PRINCIPALES =================
+// ================= PAGES =================
 import DashboardComptable from "./pages/Dashboard.jsx";
 import UtilisateursComptable from "./pages/Utilisateurs.jsx";
-import FournisseursComptable from "./pages/Fournisseurs.jsx";
-import CommandesComptable from "./pages/Commandes.jsx";
-import InventaireComptable from "./pages/Inventaire.jsx";
-import RapportsComptable from "./pages/Rapports.jsx";
-import JournalActivitesComptable from "./pages/JournalActivites.jsx";
-import ClientsSpeciauxComptable from "./pages/ClientsSpeciaux.jsx";
 
 // ================= CONTRÔLE CAISSIER =================
 import JournalCaisse from "./pages/controle-caissier/JournalCaisse.jsx";
@@ -41,94 +33,89 @@ import VentesControle from "./pages/VentesControle.jsx";
 // ================= AUTH =================
 import Connexion from "../authentification/login/Connexion.jsx";
 
+
 // ==========================================================
-// 🔐 Protection des routes
+// 🔐 ROUTE PROTECTION ROBUSTE
 // ==========================================================
 function PrivateRoute({ children }) {
   const token = localStorage.getItem("token");
-  return token ? children : <Navigate to="/login" replace />;
+
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
 }
+
 
 // ==========================================================
 // 🚀 APP COMPTABLE
 // ==========================================================
 export default function ComptableApp() {
   return (
-    <BrowserRouter>
-      <Routes>
+    <Routes>
 
-        {/* ================= AUTH ================= */}
-        <Route path="/login" element={<Connexion />} />
+      {/* ================= LOGIN ================= */}
+      <Route path="/login" element={<Connexion />} />
 
-        {/* ================= ZONE COMPTABLE ================= */}
+      {/* ================= ZONE COMPTABLE PROTÉGÉE ================= */}
+      <Route
+        path="/comptable/*"
+        element={
+          <PrivateRoute>
+            <LayoutComptable />
+          </PrivateRoute>
+        }
+      >
+        {/* Redirection interne sécurisée */}
+        <Route index element={<Navigate to="dashboard" replace />} />
+
+        <Route path="dashboard" element={<DashboardComptable />} />
+        <Route path="utilisateurs" element={<UtilisateursComptable />} />
+
+        {/* ===== Contrôle caissier ===== */}
+        <Route path="controle-caissier/caisse" element={<JournalCaisse />} />
         <Route
-          path="/comptable"
-          element={
-            // <PrivateRoute>
-              <LayoutComptable />
-            // </PrivateRoute>
-          }
-        >
-          {/* Dashboard */}
-          <Route index element={<DashboardComptable />} />
-          <Route path="dashboard" element={<DashboardComptable />} />
+          path="controle-caissier/enregistrer-versement"
+          element={<EnregistrerVersement />}
+        />
+        <Route
+          path="controle-caissier/historique-versements"
+          element={<HistoriqueVersements />}
+        />
 
-          {/* Pages standards */}
-          <Route path="utilisateurs" element={<UtilisateursComptable />} />
-          <Route path="fournisseurs" element={<FournisseursComptable />} />
-          <Route path="clients-speciaux" element={<ClientsSpeciauxComptable />} />
-          <Route path="commandes" element={<CommandesComptable />} />
-          <Route path="inventaire" element={<InventaireComptable />} />
-          <Route path="rapports" element={<RapportsComptable />} />
-          <Route path="journal-activites" element={<JournalActivitesComptable />} />
+        {/* ===== Contrôle gestionnaire ===== */}
+        <Route
+          path="controle-gestionnaire/boutique"
+          element={<GestionnaireBoutique />}
+        />
+        <Route
+          path="controle-gestionnaire/depot"
+          element={<GestionnaireDepot />}
+        />
+        <Route
+          path="controle-gestionnaire/responsable"
+          element={<Responsable />}
+        />
 
-          {/* ===== Contrôle caissier ===== */}
-          <Route path="controle-caissier/caisse" element={<JournalCaisse />} />
-          <Route
-            path="controle-caissier/enregistrer-versement"
-            element={<EnregistrerVersement />}
-          />
-          <Route
-            path="controle-caissier/historique-versements"
-            element={<HistoriqueVersements />}
-          />
+        {/* ===== Inventaires ===== */}
+        <Route path="inventaire/depot" element={<InventaireDepot />} />
+        <Route path="inventaire/boutique" element={<InventaireBoutique />} />
+        <Route
+          path="inventaire/historique"
+          element={<HistoriqueInventaire />}
+        />
 
-          {/* ===== Contrôle gestionnaire ===== */}
-          <Route
-            path="controle-gestionnaire/boutique"
-            element={<GestionnaireBoutique />}
-          />
-          <Route
-            path="controle-gestionnaire/depot"
-            element={<GestionnaireDepot />}
-          />
-          <Route
-            path="controle-gestionnaire/responsable"
-            element={<Responsable />}
-          />
+        {/* ===== Ventes ===== */}
+        <Route path="controle-vendeur" element={<VentesControle />} />
 
-          {/* ===== Inventaires ===== */}
-          <Route path="inventaire/depot" element={<InventaireDepot />} />
-          <Route path="inventaire/boutique" element={<InventaireBoutique />} />
-          <Route
-            path="inventaire/historique"
-            element={<HistoriqueInventaire />}
-          />
+        {/* Fallback interne */}
+        <Route path="*" element={<Navigate to="dashboard" replace />} />
+      </Route>
 
-          {/* ===== Ventes ===== */}
-          <Route path="controle-vendeur" element={<VentesControle />} />
+      {/* Fallback global */}
+      <Route path="*" element={<Navigate to="/login" replace />} />
 
-          {/* Fallback interne */}
-          <Route
-            path="*"
-            element={<Navigate to="/comptable/dashboard" replace />}
-          /> 
-        </Route>
-
-        {/* Redirection racine */}
-        {/* <Route path="/" element={<Navigate to="/login" replace />} /> */}
-
-      </Routes>
-    </BrowserRouter>
+    </Routes>
   );
 }

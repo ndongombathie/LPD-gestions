@@ -1,216 +1,345 @@
 // ==========================================================
-// 🧾 ControleVendeur.jsx — Contrôle des ventes vendeurs
-// Comptable (Journalier / Mensuel / Impression PDF)
-// DESIGN SHADOW FINAL
+// 🧾 ControleVendeur.jsx — VERSION ENTERPRISE ULTRA STABLE
+// Durable, robuste, backend-safe
 // ==========================================================
 
-import React, { useMemo, useState } from "react";
-import { Search, Printer } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { Printer, Loader } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import DataTable from "../components/DataTable.jsx";
+import controleVenteAPI from "@/services/api/controleVente";
 
-/* 🔧 FORMAT FCFA (points comme séparateurs) */
-const formatFCFA = (value) =>
-  value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+/* ================= UTILITIES ================= */
 
-/* 🔧 DONNÉES MOCK */
-const ventesMock = [
-  {
-    id: 1,
-    vendeur: "Aïcha Fall",
-    date: "2025-01-18",
-    produit: "Cahier",
-    quantite: 3,
-    montant: 1500,
-  },
-  {
-    id: 2,
-    vendeur: "Moussa Diop",
-    date: "2025-01-18",
-    produit: "Stylo",
-    quantite: 5,
-    montant: 1000,
-  },
-  {
-    id: 3,
-    vendeur: "Aïcha Fall",
-    date: "2025-01-05",
-    produit: "Livre",
-    quantite: 1,
-    montant: 3500,
-  },
-];
+const formatFCFA = (value = 0) =>
+  Number(value || 0)
+    .toLocaleString("fr-FR")
+    .replace(/\s/g, ".") + " FCFA";
+
+const formatDateFR = (value) =>
+  value ? new Date(value).toLocaleDateString("fr-FR") : "-";
+
+/* ========================================================== */
 
 export default function ControleVendeur() {
+
+  /* ================= DATE DU JOUR PAR DÉFAUT ================= */
+
+  const today = new Date();
+
+  const todayFormatted =
+    today.getFullYear() +
+    "-" +
+    String(today.getMonth() + 1).padStart(2, "0") +
+    "-" +
+    String(today.getDate()).padStart(2, "0");
+
+  const [ventes, setVentes] = useState([]);
+  const [ventesGlobales, setVentesGlobales] = useState([]);
+
+  const [pagination, setPagination] = useState({});
+
+  const [loading, setLoading] = useState(false);
+  const [loadingGlobal, setLoadingGlobal] = useState(false);
+
   const [search, setSearch] = useState("");
-  const [mode, setMode] = useState("journalier");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-  const [mois, setMois] = useState(new Date().toISOString().slice(0, 7));
 
-  /* 🔍 FILTRAGE */
+  const [dateDebut, setDateDebut] = useState(todayFormatted);
+  const [dateFin, setDateFin] = useState(todayFormatted);
+
+  const [typeClient, setTypeClient] = useState("");
+
+  const [page, setPage] = useState(1);
+
+  /* ================= RESET PAGE ================= */
+
+  useEffect(() => {
+    setPage(1);
+  }, [dateDebut, dateFin, typeClient]);
+
+  /* ================= FETCH PAGE ================= */
+
+  useEffect(() => {
+
+    const fetchPage = async () => {
+
+      try {
+
+        setLoading(true);
+
+        const response = await controleVenteAPI.getCommandes({
+          page,
+          per_page: 15,
+          date_debut: dateDebut,
+          date_fin: dateFin,
+          type_client: typeClient || undefined
+        });
+
+        setVentes(response?.items || []);
+        setPagination(response?.pagination || {});
+
+      } catch (error) {
+
+        console.error("Erreur fetch page :", error);
+        setVentes([]);
+        setPagination({});
+
+      } finally {
+
+        setLoading(false);
+
+      }
+
+    };
+
+    fetchPage();
+
+  }, [page, dateDebut, dateFin, typeClient]);
+
+  /* ================= FETCH GLOBAL ================= */
+
+  useEffect(() => {
+
+    const fetchGlobal = async () => {
+
+      try {
+
+        setLoadingGlobal(true);
+
+        let current = 1;
+        let last = 1;
+        let all = [];
+
+        do {
+
+          const response = await controleVenteAPI.getCommandes({
+            page: current,
+            per_page: 100,
+            date_debut: dateDebut,
+            date_fin: dateFin,
+            type_client: typeClient || undefined
+          });
+
+          const items = response?.items || [];
+          const pagination = response?.pagination || {};
+
+          all = [...all, ...items];
+
+          last = pagination.lastPage || 1;
+
+          current++;
+
+        } while (current <= last && last > 0);
+
+        setVentesGlobales(all);
+
+      } catch (error) {
+
+        console.error("Erreur fetch global :", error);
+        setVentesGlobales([]);
+
+      } finally {
+
+        setLoadingGlobal(false);
+
+      }
+
+    };
+
+    fetchGlobal();
+
+  }, [dateDebut, dateFin, typeClient]);
+
+  /* ================= FILTER FRONT ================= */
+
   const ventesFiltrees = useMemo(() => {
-    return ventesMock.filter((v) => {
-      const matchNom = v.vendeur
+
+    return ventes.filter((v) =>
+      (v.vendeurNom || "")
         .toLowerCase()
-        .includes(search.toLowerCase());
+        .includes(search.toLowerCase())
+    );
 
-      const matchDate =
-        mode === "journalier"
-          ? v.date === date
-          : v.date.startsWith(mois);
+  }, [ventes, search]);
 
-      return matchNom && matchDate;
-    });
-  }, [search, date, mois, mode]);
+  /* ================= PDF ================= */
 
-  /* 📊 TOTAUX */
-  const totalVentes = ventesFiltrees.length;
-  const totalMontant = ventesFiltrees.reduce(
-    (s, v) => s + v.montant,
-    0
-  );
-
-  /* 🖨️ IMPRESSION PDF */
   const imprimerPDF = () => {
+
+    if (!ventesGlobales.length) return;
+
     const doc = new jsPDF();
 
-    doc.setFontSize(14);
-    doc.text("Contrôle des ventes vendeurs", 14, 15);
+    /* ===== HEADER ===== */
+
+    doc.setFillColor(71, 46, 173);
+    doc.rect(0, 0, 210, 35, "F");
+
+    doc.setTextColor(245, 128, 32);
+    doc.setFontSize(24);
+    doc.text("LPD", 105, 15, { align: "center" });
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(10);
+    doc.text("LIBRAIRIE PAPETERIE DARADJI", 105, 22, { align: "center" });
+
+    doc.setFontSize(12);
+    doc.text("CONTROLE GLOBAL DES VENTES", 105, 30, { align: "center" });
+
+    doc.setTextColor(0, 0, 0);
+
+    /* ===== INFOS ===== */
+
+    const now = new Date();
 
     doc.setFontSize(10);
+
     doc.text(
-      `Période : ${
-        mode === "journalier" ? `Jour ${date}` : `Mois ${mois}`
-      }`,
+      `Date impression : ${now.toLocaleDateString("fr-FR")} ${now.toLocaleTimeString("fr-FR")}`,
       14,
-      22
+      50
     );
+
+    doc.text(
+      `Période du ${formatDateFR(dateDebut)} au ${formatDateFR(dateFin)}`,
+      14,
+      57
+    );
+
+    if (typeClient) {
+
+      doc.text(
+        `Type client : ${typeClient === "special"
+          ? "Clients spéciaux"
+          : "Clients normaux"
+        }`,
+        14,
+        64
+      );
+
+    }
+
+    /* ===== TABLE ===== */
 
     autoTable(doc, {
-      startY: 28,
-      head: [["Vendeur", "Date", "Produit", "Quantité", "Montant (FCFA)"]],
-      body: ventesFiltrees.map((v) => [
-        v.vendeur,
-        v.date,
-        v.produit,
-        v.quantite,
-        formatFCFA(v.montant),
+      startY: typeClient ? 70 : 65,
+      head: [["Vendeur", "Client", "Date", "Produits", "Total", "Payé", "Reste"]],
+      body: ventesGlobales.map((v) => [
+        v.vendeurNom || "-",
+        v.clientNom || "-",
+        formatDateFR(v.date),
+        v.nombreProduits || 0,
+        formatFCFA(v.total),
+        formatFCFA(v.totalPaye),
+        formatFCFA(v.reste),
       ]),
       styles: { fontSize: 9 },
-      headStyles: { fillColor: [71, 46, 173] },
     });
 
-    const finalY = doc.lastAutoTable.finalY + 10;
-    doc.setFontSize(11);
-    doc.text(
-      `Total des ventes : ${formatFCFA(totalMontant)} FCFA`,
-      14,
-      finalY
-    );
+    doc.save("controle_global_ventes.pdf");
 
-    doc.save(
-      `ventes_${mode}_${mode === "journalier" ? date : mois}.pdf`
-    );
   };
 
+  /* ================= UI ================= */
+
   return (
-    <div className="space-y-8">
 
-      {/* ================= TITRE ================= */}
-      <div>
-        <h1 className="text-2xl font-bold text-[#472EAD]">
-          Contrôle des ventes vendeurs
-        </h1>
-        <p className="text-sm text-gray-500">
-          Suivi journalier et mensuel des ventes validées
-        </p>
-      </div>
+    <div className="flex flex-col gap-6 p-6">
 
-      {/* ================= FILTRES ================= */}
-      <div className="bg-white rounded-2xl shadow-md p-5 grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="relative">
-          <Search
-            className="absolute left-3 top-2.5 text-gray-400"
-            size={16}
-          />
-          <input
-            className="pl-9 pr-3 py-2 rounded-lg w-full text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#472EAD]/30"
-            placeholder="Nom du vendeur"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
+      <h1 className="text-2xl font-bold text-[#472EAD]">
+        Contrôle des ventes vendeurs
+      </h1>
+
+      {/* FILTRES */}
+
+      <div className="grid grid-cols-1 md:grid-cols-6 gap-4 bg-white p-4 rounded-xl shadow">
+
+        <input
+          placeholder="Recherche vendeur"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="px-3 py-2 rounded bg-gray-100 text-sm"
+        />
 
         <select
-          value={mode}
-          onChange={(e) => setMode(e.target.value)}
-          className="rounded-lg px-3 py-2 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#472EAD]/30"
+          value={typeClient}
+          onChange={(e) => setTypeClient(e.target.value)}
+          className="px-3 py-2 rounded bg-gray-100 text-sm"
         >
-          <option value="journalier">Journalier</option>
-          <option value="mensuel">Mensuel</option>
+
+          <option value="">Tous les clients</option>
+          <option value="special">Clients spéciaux</option>
+          <option value="normal">Clients normaux</option>
+
         </select>
 
-        {mode === "journalier" ? (
+        <div className="flex items-center gap-2 col-span-2">
+
           <input
             type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="rounded-lg px-3 py-2 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#472EAD]/30"
+            value={dateDebut}
+            onChange={(e) => setDateDebut(e.target.value)}
+            className="px-3 py-2 rounded bg-gray-100 text-sm flex-1"
           />
-        ) : (
+
+          <span className="text-gray-500">au</span>
+
           <input
-            type="month"
-            value={mois}
-            onChange={(e) => setMois(e.target.value)}
-            className="rounded-lg px-3 py-2 text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#472EAD]/30"
+            type="date"
+            value={dateFin}
+            onChange={(e) => setDateFin(e.target.value)}
+            className="px-3 py-2 rounded bg-gray-100 text-sm flex-1"
           />
-        )}
+
+        </div>
 
         <button
           onClick={imprimerPDF}
-          className="flex items-center justify-center gap-2 bg-[#472EAD] text-white rounded-xl px-4 py-2 shadow hover:shadow-lg transition"
+          disabled={!ventesGlobales.length || loadingGlobal}
+          className="flex items-center justify-center gap-2 bg-[#472EAD] text-white rounded px-4 py-2 disabled:opacity-50"
         >
-          <Printer size={16} /> Imprimer PDF
+
+          {loadingGlobal ? (
+            <>
+              <Loader size={16} className="animate-spin" />
+              Chargement...
+            </>
+          ) : (
+            <>
+              <Printer size={16} /> Impression Globale
+            </>
+          )}
+
         </button>
+
       </div>
 
-      {/* ================= STATS ================= */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <StatCard label="Nombre de ventes" value={totalVentes} />
-        <StatCard
-          label="Montant total"
-          value={`${formatFCFA(totalMontant)} FCFA`}
-        />
-      </div>
+      {/* TABLE */}
 
-      {/* ================= TABLE ================= */}
-      <div className="bg-white rounded-2xl shadow-md p-4">
-        <DataTable
-          data={ventesFiltrees}
-          columns={[
-            { label: "Vendeur", key: "vendeur" },
-            { label: "Date", key: "date" },
-            { label: "Produit", key: "produit" },
-            { label: "Quantité", key: "quantite" },
-            {
-              label: "Montant (FCFA)",
-              key: "montant",
-              render: (v) => formatFCFA(v),
-            },
-          ]}
-        />
-      </div>
+      {!loading && ventesFiltrees.length > 0 && (
+
+        <div className="bg-white p-4 rounded-xl shadow">
+
+          <DataTable
+            data={ventesFiltrees}
+            columns={[
+              { label: "Vendeur", key: "vendeurNom" },
+              { label: "Client", key: "clientNom" },
+              { label: "Date", key: "date", render: formatDateFR },
+              { label: "Produits", key: "nombreProduits" },
+              { label: "Total", key: "total", render: formatFCFA },
+              { label: "Payé", key: "totalPaye", render: formatFCFA },
+              { label: "Reste", key: "reste", render: formatFCFA },
+            ]}
+          />
+
+        </div>
+
+      )}
+
     </div>
-  );
-}
 
-/* ================== STAT CARD ================== */
-function StatCard({ label, value }) {
-  return (
-    <div className="bg-white rounded-2xl shadow-md p-5">
-      <p className="text-xs text-gray-500 uppercase">{label}</p>
-      <p className="text-lg font-bold mt-1">{value}</p>
-    </div>
   );
+
 }
