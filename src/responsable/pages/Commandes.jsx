@@ -24,6 +24,8 @@ import {
   Trash2,
   CheckCircle2,
   AlertCircle,
+  Package, 
+  Box,
   X,
   Receipt,
   BadgeDollarSign,
@@ -438,10 +440,22 @@ function FactureModal({ open, onClose, commande }) {
         <div className="flex flex-col sm:flex-row sm:justify-between gap-3 mb-4 text-sm">
           <div>
             <div className="text-xs text-gray-500">Client spécial</div>
-            <div className="font-semibold text-sm">{commande.clientNom}</div>
-            {commande.clientCode && (
-              <div className="text-xs text-gray-500">
-                Code : {commande.clientCode}
+
+            <div className="font-semibold text-sm text-gray-800">
+              {commande.clientPrenom && commande.clientNomSeul
+                ? `${commande.clientPrenom} ${commande.clientNomSeul}`
+                : commande.clientNom}
+            </div>
+
+            {commande.clientContact && (
+              <div className="text-xs text-gray-500 mt-0.5">
+                Contact : <span className="font-medium">{commande.clientContact}</span>
+              </div>
+            )}
+
+            {commande.clientEntreprise && (
+              <div className="text-xs text-gray-400">
+                {commande.clientEntreprise}
               </div>
             )}
           </div>
@@ -542,7 +556,7 @@ function FactureModal({ open, onClose, commande }) {
 function CommandeForm({ clientInitial, onCreate, toast }) {
   // ✅ REF pour l'input produit
   const produitInputRef = useRef(null);
-  
+  const [stockError, setStockError] = useState("");
   // ✅ CLIENT - States pour dropdown client
   const [allClients, setAllClients] = useState([]);
   const [clientsLoading, setClientsLoading] = useState(false);
@@ -584,9 +598,14 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
   const [lignes, setLignes] = useState([]);
 
   // ✅ FILTRAGE SIMPLE DES PRODUITS (comme pour les clients)
-  const filteredProduits = catalogue.filter((p) =>
-    (p.libelle || "").toLowerCase().includes(searchProduit.toLowerCase())
-  );
+  const filteredProduits = catalogue.filter((p) => {
+    const term = searchProduit.toLowerCase();
+
+    return (
+      (p.libelle || "").toLowerCase().includes(term) ||
+      (p.ref || "").toLowerCase().includes(term)
+    );
+  });
 
   // ✅ Chargement unique de tous les clients spéciaux
   const loadAllClients = async () => {
@@ -600,14 +619,32 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
         ? payload
         : payload.data || [];
 
-      const normalized = produits.map((p) => ({
-        id: p.id,
-        nom: p.nom || p.entreprise || "",
-        code:
-          p.code_client ||
-          p.code ||
-          (p.id ? `CL-${String(p.id).padStart(3, "0")}` : ""),
-      }));
+        const normalized = produits.map((p) => {
+          const prenom = p.prenom || "";
+          const nomSeul = p.nom || "";
+          const fullName =
+            prenom && nomSeul
+              ? `${prenom} ${nomSeul}`
+              : nomSeul;
+
+          return {
+            id: p.id,
+
+            // 🔥 pour affichage
+            nom: fullName,
+
+            // 🔥 pour recherche intelligente
+            prenom,
+            nomSeul,
+
+            contact: p.contact || "",
+
+            code:
+              p.code_client ||
+              p.code ||
+              (p.id ? `CL-${String(p.id).padStart(3, "0")}` : ""),
+          };
+        });
 
       setAllClients(normalized);
       setHasLoadedClients(true);
@@ -638,42 +675,45 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
             ? payload
             : payload?.data || [];
 
-const normalized = data.map((p) => {
-  const produit = p.produit ?? p; // 👈 IMPORTANT
+          const normalized = data.map((t) => {
+            const produit = t.produit ?? t;
 
-  const prixDetail = Number(produit.prix_vente_detail ?? 0);
-  const prixGros = Number(
-    produit.prix_unite_carton ??
-    produit.prix_vente_gros ??
-    0
-  );
+            const stockUnites = Number(t.quantite ?? 0);
+            const unitesParCarton = Number(produit.unite_carton ?? 1);
+            const stockCartons = Math.floor(stockUnites / unitesParCarton);
 
-  return {
-    id: produit.id,
-    ref:
-      produit.code_barre ||
-      produit.code_produit ||
-      produit.reference ||
-      produit.ref ||
-      null,
-    libelle:
-      produit.nom ||
-      produit.nom_produit ||
-      produit.libelle ||
-      produit.designation ||
-      "",
-    prixDetail,
-    prixGros,
-    prix: prixDetail || prixGros || 0,
-    prixSeuilDetail:
-      produit.prix_seuil_detail != null ? Number(produit.prix_seuil_detail) : null,
-    prixSeuilGros:
-      produit.prix_seuil_gros != null ? Number(produit.prix_seuil_gros) : null,
-    unitesParCarton: Number(produit.unite_carton ?? produit.unites_par_carton ?? 1),
-    stockGlobal: Number(produit.stock_global ?? 0),
-    nombreCartons: Number(produit.nombre_carton ?? produit.nombre_cartons ?? 0),
-  };
-});
+            const prixDetail = Number(
+              t.prix_vente_detail ??
+              produit.prix_vente_detail ??
+              0
+            );
+
+            const prixGros = Number(
+              t.prix_vente_gros ??
+              produit.prix_unite_carton ??
+              produit.prix_vente_gros ??
+              0
+            );
+
+            return {
+              id: produit.id,
+
+              // 🔥 CODE BARRE UNIQUEMENT
+              ref: produit.code ?? null,
+
+              libelle: produit.nom ?? "",
+
+              prixDetail,
+              prixGros,
+              prix: prixDetail || prixGros || 0,
+
+              unitesParCarton,
+
+              // 🔥 STOCK BOUTIQUE RÉEL
+              stockGlobal: stockUnites,
+              nombreCartons: stockCartons,
+            };
+          });
 
         setCatalogue(normalized);
         setHasLoadedProduits(true);
@@ -692,6 +732,43 @@ const normalized = data.map((p) => {
     loadAllProduits();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasLoadedProduits]);
+useEffect(() => {
+  if (!selectedProduit || !ligneQte) {
+    setStockError("");
+    return;
+  }
+
+  const qteNum = Number(ligneQte);
+
+  if (!Number.isInteger(qteNum) || qteNum < 1) {
+    setStockError("");
+    return;
+  }
+
+  const stockUnites = selectedProduit.stockGlobal ?? 0;
+  const unitsPerCarton = selectedProduit.unitesParCarton ?? 1;
+  const stockCartons = selectedProduit.nombreCartons ?? Math.floor(stockUnites / unitsPerCarton);
+
+  if (ligneMode === "detail") {
+    if (qteNum > stockUnites) {
+      setStockError(
+        `Stock insuffisant : seulement ${stockUnites} unité(s) disponible(s)`
+      );
+      return;
+    }
+  }
+
+  if (ligneMode === "gros") {
+    if (qteNum > stockCartons) {
+      setStockError(
+        `Stock insuffisant : seulement ${stockCartons} carton(s) disponible(s)`
+      );
+      return;
+    }
+  }
+
+  setStockError("");
+}, [ligneQte, ligneMode, selectedProduit]);
 
   // ✅ Rafraîchir la liste des clients (optionnel)
   const refreshClients = async () => {
@@ -700,10 +777,26 @@ const normalized = data.map((p) => {
   };
 
   // ✅ Filtrage instantané frontend clients
-  const filteredClients = allClients.filter((c) =>
-    (c.nom || "").toLowerCase().includes(searchClient.toLowerCase())
-  );
+  const filteredClients = allClients.filter((c) => {
+    const term = searchClient
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
 
+    const prenom = (c.prenom || "").toLowerCase();
+    const nom = (c.nomSeul || "").toLowerCase();
+    const full1 = `${prenom} ${nom}`;
+    const full2 = `${nom} ${prenom}`;
+    const contact = (c.contact || "").toLowerCase();
+
+    return (
+      prenom.includes(term) ||
+      nom.includes(term) ||
+      full1.includes(term) ||
+      full2.includes(term) ||
+      contact.includes(term)
+    );
+  });
   // ✅ Initialisation du client sélectionné à partir de clientInitial
   useEffect(() => {
     if (clientInitial && !selectedClient) {
@@ -775,11 +868,11 @@ const normalized = data.map((p) => {
     const qteNum = Number(ligneQte);
     const prixNum = Number(lignePrix);
 
-    if (qteNum <= 0 || prixNum <= 0) {
+    if (!Number.isInteger(qteNum) || qteNum < 1) {
       toast(
         "error",
-        "Valeurs invalides",
-        "La quantité et le prix doivent être positifs."
+        "Quantité invalide",
+        "La quantité doit être un nombre entier supérieur à 0."
       );
       return;
     }
@@ -873,11 +966,11 @@ const normalized = data.map((p) => {
     const qteNum = Number(editingQte);
     const prixNum = Number(editingPrix);
 
-    if (!qteNum || qteNum <= 0 || !prixNum || prixNum <= 0) {
+    if (!Number.isInteger(qteNum) || qteNum < 1 || !prixNum || prixNum <= 0) {
       toast(
         "error",
         "Valeurs invalides",
-        "La quantité et le prix doivent être positifs."
+        "La quantité doit être un entier supérieur à 0 et le prix positif."
       );
       return;
     }
@@ -1107,7 +1200,30 @@ const normalized = data.map((p) => {
                       }}
                       className="w-full text-left px-3 py-2 text-sm hover:bg-[#F7F5FF]"
                     >
-                      {c.nom}
+                    <div className="flex items-center gap-3 text-sm">
+                      <span className="px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded text-[10px] font-medium border border-amber-200">
+                        VIP
+                      </span>
+                      <span className="font-medium">{c.nom}</span>
+                      {c.contact && (
+                        <span className="text-gray-500 text-xs flex items-center gap-1">
+                          <svg 
+                            className="w-3 h-3" 
+                            fill="none" 
+                            stroke="currentColor" 
+                            viewBox="0 0 24 24"
+                          >
+                            <path 
+                              strokeLinecap="round" 
+                              strokeLinejoin="round" 
+                              strokeWidth={2} 
+                              d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" 
+                            />
+                          </svg>
+                          {c.contact}
+                        </span>
+                      )}
+                    </div>
                     </button>
                   ))
                 ) : (
@@ -1171,28 +1287,100 @@ const normalized = data.map((p) => {
             </div>
 
             {selectedProduit && (
-              <div className="text-[11px] text-gray-600 space-y-0.5">
-                <div>
-                  Stock :{" "}
-                  <span className="font-semibold">
-                    {selectedProduit.stockGlobal} unité(s)
-                  </span>{" "}
-                  —{" "}
-                  <span className="font-semibold">
-                    {selectedProduit.nombreCartons} carton(s)
+              <motion.div
+                initial={{ opacity: 0, y: -5 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-2 w-full rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                    Stock disponible
                   </span>
+
+                  {stockError ? (
+                    <span className="text-xs font-semibold text-rose-600">
+                      Dépassement détecté
+                    </span>
+                  ) : (
+                    <span className="text-xs text-emerald-600 font-semibold">
+                      Quantité valide
+                    </span>
+                  )}
                 </div>
-                <div>
-                  Prix ref. détail :{" "}
-                  <span className="font-semibold">
-                    {formatFCFA(selectedProduit.prixDetail || 0)}
-                  </span>{" "}
-                  | gros :{" "}
-                  <span className="font-semibold">
-                    {formatFCFA(selectedProduit.prixGros || 0)}
-                  </span>
+
+                {/* Stock chiffres */}
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <div className="text-gray-400 text-xs">Unités</div>
+                    <div className="font-bold text-lg text-gray-900">
+                      {selectedProduit.stockGlobal}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-gray-400 text-xs">Cartons</div>
+                    <div className="font-bold text-lg text-gray-900">
+                      {selectedProduit.nombreCartons}
+                    </div>
+                  </div>
                 </div>
-              </div>
+
+                {/* Barre dynamique */}
+                {ligneQte && (
+                  <div className="mt-4">
+                    {(() => {
+                      const qte = Number(ligneQte);
+                      const max =
+                        ligneMode === "gros"
+                          ? selectedProduit.nombreCartons
+                          : selectedProduit.stockGlobal;
+
+                      if (!max) return null;
+
+                      const percent = Math.min((qte / max) * 100, 100);
+
+                      return (
+                        <>
+                          <div className="flex justify-between text-xs text-gray-500 mb-1">
+                            <span>Saisi : {qte}</span>
+                            <span>Max : {max}</span>
+                          </div>
+
+                          <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                            <motion.div
+                              initial={{ width: 0 }}
+                              animate={{ width: `${percent}%` }}
+                              transition={{ duration: 0.3 }}
+                                className={
+                                  qte > max
+                                    ? "h-full bg-rose-600"
+                                    : percent >= 70
+                                    ? "h-full bg-amber-500"
+                                    : "h-full bg-emerald-500"
+                                }
+                            />
+                          </div>
+
+                          {qte > max && (
+                            <div className="mt-2 text-xs text-rose-600 font-semibold flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3" />
+                              Quantité supérieure au stock disponible
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
+                )}
+
+                {/* Info carton */}
+                {ligneMode === "gros" && selectedProduit.unitesParCarton && (
+                  <div className="mt-3 text-xs text-gray-500">
+                    1 carton = {selectedProduit.unitesParCarton} unité(s)
+                  </div>
+                )}
+              </motion.div>
             )}
           </div>
 
@@ -1204,19 +1392,60 @@ const normalized = data.map((p) => {
               </label>
 
               <div className="relative">
-                <input
-                  ref={produitInputRef}
-                  type="text"
-                  value={searchProduit}
-                  onClick={() => setIsProduitOpen(prev => !prev)}
-                  onChange={(e) => {
-                    setSearchProduit(e.target.value);
-                    setIsProduitOpen(true);
-                  }}
-                  placeholder="Rechercher un produit..."
-                  className={baseInput}
-                  disabled={produitsLoading}
-                />
+              <input
+                ref={produitInputRef}
+                type="text"
+                value={searchProduit}
+                onClick={() => setIsProduitOpen(prev => !prev)}
+                onChange={(e) => {
+                  setSearchProduit(e.target.value);
+                  setIsProduitOpen(true);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+
+                    const term = searchProduit.trim().toLowerCase();
+                    if (!term) return;
+
+                    // 🔥 Recherche EXACTE par code barre
+                    const produit = catalogue.find(
+                      (p) => (p.ref || "").toLowerCase() === term
+                    );
+
+                    if (!produit) {
+                      toast(
+                        "error",
+                        "Produit introuvable",
+                        "Aucun produit ne correspond à ce code barre."
+                      );
+                      return;
+                    }
+
+                    // 🔥 Sélection automatique
+                    setSelectedProduit(produit);
+                    setSearchProduit(produit.libelle);
+                    setLigneProduitId(produit.id);
+                    setLigneLibelle(produit.libelle);
+
+                    const prix =
+                      ligneMode === "gros"
+                        ? produit.prixGros || produit.prixDetail
+                        : produit.prixDetail || produit.prixGros;
+
+                    setLignePrix(String(prix || 0));
+                    setIsProduitOpen(false);
+
+                    // Focus quantité
+                    setTimeout(() => {
+                      qteInputRef.current?.focus();
+                    }, 50);
+                  }
+                }}
+                placeholder="Scanner ou rechercher un produit..."
+                className={baseInput}
+                disabled={produitsLoading}
+              />
 
                 <button
                   type="button"
@@ -1295,15 +1524,29 @@ const normalized = data.map((p) => {
               <label className="block text-xs text-gray-500 mb-1">
                 Quantité {ligneMode === "gros" ? "(cartons/boîtes)" : "(unités)"}
               </label>
-              <input
-                ref={qteInputRef}
-                type="number"
-                min="1"
-                value={ligneQte}
-                onChange={(e) => setLigneQte(e.target.value)}
-                className={baseInput}
-                placeholder={ligneMode === "gros" ? "Ex: 3 cartons" : "Ex: 24 unités"}
-              />
+                <input
+                  ref={qteInputRef}
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={ligneQte}
+                  onChange={(e) => {
+                    const value = e.target.value;
+
+                    // Empêche 0 et négatif immédiatement
+                    if (Number(value) < 1) {
+                      setLigneQte("");
+                      return;
+                    }
+
+                    setLigneQte(value);
+                  }}
+                  className={cls(
+                    baseInput,
+                    stockError && "border-rose-400 focus:ring-rose-200 focus:border-rose-500"
+                  )}
+                />
+
               {ligneMode === "gros" &&
                 selectedProduit &&
                 selectedProduit.unitesParCarton && (
@@ -1319,9 +1562,19 @@ const normalized = data.map((p) => {
               </label>
               <input
                 type="number"
-                min="0"
+                min="1"
+                step="1"
                 value={lignePrix}
-                onChange={(e) => setLignePrix(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+
+                  if (Number(value) <= 0) {
+                    setLignePrix("");
+                    return;
+                  }
+
+                  setLignePrix(value);
+                }}
                 className={baseInput}
                 placeholder="Ex: 12000"
               />
@@ -1329,13 +1582,33 @@ const normalized = data.map((p) => {
           </div>
 
           <div className="flex justify-end mt-4">
-            <button
-              type="button"
-              onClick={handleAddLigne}
-              className="flex items-center gap-2 px-4 py-2.5 bg-[#472EAD] text-white rounded-lg shadow-md hover:bg-[#5A3CF5] hover:shadow-lg text-xs sm:text-sm transition"
-            >
-              Ajouter à la commande
-            </button>
+          <button
+            type="button"
+            onClick={handleAddLigne}
+            disabled={
+              !!stockError ||
+              !selectedProduit ||
+              !ligneQte ||
+              !Number.isInteger(Number(ligneQte)) ||
+              Number(ligneQte) < 1 ||
+              !lignePrix ||
+              Number(lignePrix) <= 0
+            }
+            className={cls(
+              "flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs sm:text-sm transition",
+              !!stockError ||
+              !selectedProduit ||
+              !ligneQte ||
+              !Number.isInteger(Number(ligneQte)) ||
+              Number(ligneQte) < 1 ||
+              !lignePrix ||
+              Number(lignePrix) <= 0
+                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                : "bg-[#472EAD] text-white shadow-md hover:bg-[#5A3CF5] hover:shadow-lg"
+            )}
+          >
+            Ajouter à la commande
+          </button>
           </div>
         </div>
 
@@ -1395,7 +1668,8 @@ const normalized = data.map((p) => {
                         {isEditing ? (
                           <input
                             type="number"
-                            min="0"
+                            min="1"
+                            step="1"
                             value={editingPrix}
                             onChange={(e) => setEditingPrix(e.target.value)}
                             className="w-24 text-right border border-gray-300 rounded-lg px-2 py-1 text-xs focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD]"
@@ -1538,6 +1812,7 @@ function buildQrPayloadFromCommande(commande) {
 // ==========================================================
 export default function Commandes() {
   const { state } = useLocation();
+  const [highlightedId, setHighlightedId] = useState(null);
 
   const clientIdFromState = state?.clientId || null;
   const clientNameFromState = state?.clientNom || state?.client || "";
@@ -1648,12 +1923,14 @@ export default function Commandes() {
       const normalized = commandesData.map(normalizeCommande);
       setCommandes(normalized);
 
-      setPage(paginationData.current_page);
+      if (paginationData.current_page !== page) {
+        setPage(paginationData.current_page);
+      }
       setLastPage(paginationData.last_page);
       setTotal(paginationData.total);
 
       // ✅ Utilisation des stats de l'appel séparé
-      setStatsFromBackend(statsRes);
+      setStatsFromBackend(statsRes?.data || {});
 
     } catch (error) {
       logger.error("commandes.fetch", error);
@@ -1768,18 +2045,35 @@ export default function Commandes() {
 
   const handleCreateCommande = async (commandeDraft) => {
     try {
+
+      // 🔎 1️⃣ Détection automatique du type global
+      const modes = new Set(
+        commandeDraft.lignes.map(l => l.modeVente)
+      );
+
+      let typeVenteGlobal;
+
+      if (modes.size === 1) {
+        typeVenteGlobal = [...modes][0]; // "gros" ou "detail"
+      } else {
+        typeVenteGlobal = "mixte";
+      }
+
+      // 📦 2️⃣ Construction du payload
       const payload = {
         client_id: commandeDraft.clientId,
-        type_vente: "gros",
+        type_vente: typeVenteGlobal,
         tva_appliquee: commandeDraft.appliquerTVA ? true : false,
         items: commandeDraft.lignes.map((l) => ({
           produit_id: l.produitId,
           quantite: l.qte,
           prix_unitaire: l.prixUnitaire,
+          mode_vente: l.modeVente,
         })),
       };
 
       const raw = await commandesAPI.create(payload);
+
 
       const response =
         raw?.data?.data ??
@@ -1827,9 +2121,16 @@ export default function Commandes() {
         "Commande créée",
         `${normalized.clientNom || "Client"} — ${formatFCFA(normalized.totalTTC)}`
       );
-      
+
       setPage(1);
       await fetchCommandes();
+
+      // ✅ Highlight APRÈS que la liste soit rechargée
+      setHighlightedId(normalized.id);
+
+      setTimeout(() => {
+        setHighlightedId(null);
+      }, 2000);
 
     } catch (error) {
       logger.error("commandes.create", error);
@@ -1893,16 +2194,15 @@ export default function Commandes() {
   };
 
   // reset page quand filtres changent
-  useEffect(() => {
-    setPage(1);
-  }, [
-    filterStatut,
-    filterStartDate,
-    filterEndDate,
-    searchTerm,
-    clientIdFromState,
-    clientNameFromState,
-  ]);
+useEffect(() => {
+  setPage(1);
+}, [
+  filterStatut,
+  filterStartDate,
+  filterEndDate,
+  searchTerm,
+  clientIdFromState,
+]);
 
   useEffect(() => {
     if (filterStatut === "annulee") {
@@ -2150,7 +2450,7 @@ export default function Commandes() {
                 <thead className="bg-[#F7F5FF] text-[#472EAD] uppercase text-xs font-semibold">
                   <tr>
                     <th className="px-4 py-3 text-left">N° commande</th>
-                    <th className="px-4 py-3 text-left">Client</th>
+                    <th className="px-4 py-3 text-left">Client Spécial</th>
                     <th className="px-4 py-3 text-left">Date</th>
                     <th className="px-4 py-3 text-right">Total TTC</th>
                     <th className="px-4 py-3 text-right">Payé (caisse)</th>
@@ -2162,18 +2462,56 @@ export default function Commandes() {
                 <tbody>
                   {commandes.length ? (
                     commandes.map((c) => (
-                      <tr
-                        key={c.id}
-                        className="border-b border-gray-100 hover:bg-[#F9F9FF]"
-                      >
+                        <motion.tr
+                          key={c.id}
+                          initial={false}
+                          animate={
+                            highlightedId === c.id
+                              ? {
+                                  backgroundColor: "#EDE9FE",
+                                }
+                              : {
+                                  backgroundColor: "#FFFFFF",
+                                }
+                          }
+                          transition={{ duration: 0.4 }}
+                          className="border-b border-gray-100 hover:bg-[#F9F9FF]"
+                        >
                         <td className="px-4 py-3 font-medium">{c.numero}</td>
-                        <td className="px-4 py-3">{c.clientNom}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-col leading-tight">
+                            <span className="font-medium text-gray-800">
+                              {c.clientPrenom && c.clientNomSeul
+                                ? `${c.clientPrenom} ${c.clientNomSeul}`
+                                : c.clientNom || "—"}
+                            </span>
+
+                            {c.clientEntreprise && (
+                              <span className="text-[11px] text-gray-400 truncate max-w-[180px]">
+                                {c.clientEntreprise}
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="px-4 py-3">{c.dateCommande}</td>
                         <td className="px-4 py-3 text-right">
                           {formatFCFA(c.totalTTC)}
                         </td>
-                        <td className="px-4 py-3 text-right text-emerald-600">
-                          {formatFCFA(c.montantPaye)}
+                        <td className="px-4 py-3 text-right">
+                          {c.statut === "attente" ? (
+                            <div className="flex flex-col items-end">
+                              <span className="text-gray-400 text-xs">
+                                {formatFCFA(0)}
+                              </span>
+                              <span className="text-amber-600 text-xs font-semibold">
+                                À encaisser : {formatFCFA(c.totalTTC)}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-emerald-600">
+                              {formatFCFA(c.montantPaye)}
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-right text-rose-600">
                           {formatFCFA(Math.max(c.resteAPayer, 0))}
@@ -2202,7 +2540,7 @@ export default function Commandes() {
                             </button>
                           </div>
                         </td>
-                      </tr>
+                      </motion.tr>
                     ))
                   ) : (
                     <tr>
@@ -2269,6 +2607,11 @@ export default function Commandes() {
 
                 setShowTrancheModal(false);
                 setShowQrModal(true);
+                toast(
+                  "success",
+                  "Commande envoyée à la caisse",
+                  `Commande #${normalized.numero} prête pour encaissement`
+                );
                 
                 await fetchCommandes();
 

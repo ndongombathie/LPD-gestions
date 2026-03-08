@@ -1,8 +1,9 @@
 // ==========================================================
 // 💸 Decaissements.jsx — Interface Responsable (LPD Manager)
 // ✅ Architecture 100% backend : pagination, filtres, recherche, KPI
-// ✅ Debounce recherche 400ms, normalisation statuts, export aligné
+// ✅ Recherche instantanée (pas de debounce)
 // ✅ Version simplifiée avec montant unique
+// ✅ Suppression des mentions "Annulé"
 // ==========================================================
 
 import React, { useEffect, useState } from "react";
@@ -39,12 +40,20 @@ const formatFCFA = (n) =>
   );
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
+const formatDateSN = (dateString) => {
+  if (!dateString) return "-";
 
-// ✅ Normalisation des statuts pour affichage
+  return new Intl.DateTimeFormat("fr-SN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(dateString));
+};
+
+// ✅ Normalisation des statuts pour affichage - SANS ANNULÉ
 const statutLabel = (s) => {
   if (s === "en_attente") return "En attente";
-  if (s === "validé") return "Validé";
-  if (s === "refusé") return "Annulé";
+  if (s === "valide") return "Validé";
   return s;
 };
 
@@ -62,7 +71,7 @@ function DetailDecaissementModal({ open, onClose, decaissement }) {
 
   const {
     motifGlobal,
-    methodePrevue,
+    methodePaiement,
     datePrevue,
     statut,
     montantTotal,
@@ -99,11 +108,13 @@ function DetailDecaissementModal({ open, onClose, decaissement }) {
             </div>
             <div>
               <div className="text-[11px] text-gray-500 mb-0.5">Méthode prévue</div>
-              <div className="font-medium text-gray-800">{methodePrevue || "-"}</div>
+              <div className="font-medium text-gray-800">{methodePaiement || "-"}</div>
             </div>
             <div>
               <div className="text-[11px] text-gray-500 mb-0.5">Date prévue</div>
-              <div className="text-gray-800">{datePrevue}</div>
+              <div className="text-gray-800">
+                {formatDateSN(datePrevue)}
+              </div>
             </div>
             <div>
               <div className="text-[11px] text-gray-500 mb-0.5">Statut</div>
@@ -181,8 +192,7 @@ export default function Decaissements() {
   const [filterStatut, setFilterStatut] = useState("tous");
   const [filterStartDate, setFilterStartDate] = useState("");
   const [filterEndDate, setFilterEndDate] = useState("");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [searchDebounced, setSearchDebounced] = useState(""); // ✅ Debounce recherche
+  const [searchTerm, setSearchTerm] = useState(""); // ✅ Recherche directe sans debounce
 
   // ✅ Pagination backend
   const [page, setPage] = useState(1);
@@ -190,20 +200,6 @@ export default function Decaissements() {
   const [totalItems, setTotalItems] = useState(0);
   const [loadingPage, setLoadingPage] = useState(false);
   
-  // ——————————————————————————————————————————————————
-  // 🔍 Debounce recherche (1000ms)
-  // ——————————————————————————————————————————————————
-useEffect(() => {
-  
-
-  const timer = setTimeout(() => {
-    setSearchDebounced(searchTerm);
-  }, 1000);
-
-  return () => clearTimeout(timer);
-}, [searchTerm]);
-
-
   // ——————————————————————————————————————————————————
   // 📥 Chargement initial avec stats API et pagination
   // ——————————————————————————————————————————————————
@@ -215,14 +211,12 @@ useEffect(() => {
           setLoadingPage(true);
         }
 
-
-
-      const data = await decaissementsAPI.list({
+      const data = await decaissementsAPI.getAllResponsable({
         page,
         statut: filterStatut !== "tous" ? statutApi(filterStatut) : undefined,
         start_date: filterStartDate || undefined,
         end_date: filterEndDate || undefined,
-        search: searchDebounced || undefined,
+        search: searchTerm || undefined, // ✅ Recherche directe
       });
 
       // Pagination Laravel
@@ -232,11 +226,26 @@ useEffect(() => {
       setTotalItems(total);
       setTotalPages(pages <= 1 ? 1 : pages);
 
-      // Données paginées
-      setDemandes(data.data || []);
+      // 🔥 Normalisation snake_case → camelCase
+const normalized = (data.data || []).map(d => ({
+  ...d,
+  montantTotal: d.montant,
+  methodePaiement: d.methode_paiement ?? null,
+  datePrevue: d.date,
+  motifGlobal: d.motif,
+}));
+
+      setDemandes(normalized);
 
       // KPI backend
-      setStatsFromApi(data.stats || null);
+      const statsData = await decaissementsAPI.getStats({
+        statut: filterStatut !== "tous" ? statutApi(filterStatut) : undefined,
+        start_date: filterStartDate || undefined,
+        end_date: filterEndDate || undefined,
+        search: searchTerm || undefined, // ✅ Recherche directe
+      });
+
+      setStatsFromApi(statsData);
 
     } catch (e) {
       console.error("Erreur chargement décaissements", e);
@@ -246,10 +255,10 @@ useEffect(() => {
     }
   };
 
-  // ✅ Chargement quand les filtres changent
+  // ✅ Chargement quand les filtres changent (recherche instantanée)
   useEffect(() => {
     loadData();
-  }, [page, filterStatut, filterStartDate, filterEndDate, searchDebounced]);
+  }, [page, filterStatut, filterStartDate, filterEndDate, searchTerm]); // ✅ searchTerm direct
 
   // ——————————————————————————————————————————————————
   // 💾 Ajout (POST API) — VERSION SIMPLIFIÉE AVEC MONTANT UNIQUE
@@ -287,14 +296,12 @@ useEffect(() => {
     // ———————————————————————————
     // ✅ PAYLOAD FINAL SIMPLIFIÉ
     // ———————————————————————————
-    const payload = {
-      motifGlobal,
-      methodePrevue: form?.methodePrevue || "Espèces",
-      datePrevue,
-      caissier_id: form?.caissier_id,
-      montant,
-    };
-
+const payload = {
+  motif: form.motifGlobal.trim(),
+  date: form.datePrevue || todayISO(),
+  caissier_id: form.caissier_id,
+  montant: Number(form.montant),
+};
     const toastId = toast.loading("Envoi à la caisse...");
 
     try {
@@ -334,15 +341,13 @@ useEffect(() => {
   };
 
   // ——————————————————————————————————————————————————
-  // 📊 Stats depuis l'API backend (KPI globaux)
+  // 📊 Stats depuis l'API backend (KPI globaux) - SANS ANNULÉ
   // ——————————————————————————————————————————————————
   const stats = statsFromApi || {
     total: 0,
     montant_total: 0,
     valides: 0,
     montant_valides: 0,
-    annules: 0,
-    montant_annules: 0,
     attente: 0,
     montant_attente: 0,
   };
@@ -353,10 +358,10 @@ useEffect(() => {
   // ✅ Reset page quand les filtres changent
   useEffect(() => {
     setPage(1);
-  }, [filterStatut, filterStartDate, filterEndDate, searchDebounced]);
+  }, [filterStatut, filterStartDate, filterEndDate, searchTerm]); // ✅ searchTerm direct
 
   // ——————————————————————————————————————————————————
-  // 📤 Export PDF aligné avec les filtres backend
+  // 📤 Export PDF aligné avec les filtres backend - SANS ANNULÉ
   // ——————————————————————————————————————————————————
   const exportPDF = async () => {
     try {
@@ -376,7 +381,7 @@ useEffect(() => {
         return `${formatted} FCFA`;
       };
 
-      // ✅ Utilisation des stats API pour le PDF (données globales)
+      // ✅ Utilisation des stats API pour le PDF (données globales) - SANS ANNULÉ
       const totalDemandes = stats.total;
       const montantGlobal = stats.montant_total;
 
@@ -386,15 +391,12 @@ useEffect(() => {
       const nbAttente = stats.attente;
       const montantAttente = stats.montant_attente;
 
-      const nbAnnulees = stats.annules;
-      const montantAnnule = stats.montant_annules;
-
       // ✅ Récupération des données filtrées pour le tableau PDF
       const allData = await decaissementsAPI.exportAll({
         statut: filterStatut !== "tous" ? statutApi(filterStatut) : undefined,
         start_date: filterStartDate || undefined,
         end_date: filterEndDate || undefined,
-        search: searchDebounced || undefined,
+        search: searchTerm || undefined, // ✅ Recherche directe
       });
 
       doc.setFillColor(71, 46, 173);
@@ -470,13 +472,6 @@ useEffect(() => {
         { align: "right" }
       );
 
-      lineY += 5;
-      doc.text(
-        `Annulées : ${nbAnnulees} (${formatFCFAPdf(montantAnnule)})`,
-        textX,
-        lineY
-      );
-
       const startTableY = y + 24;
 
       autoTable(doc, {
@@ -484,10 +479,14 @@ useEffect(() => {
         margin: { top: startTableY, left: 14, right: 14 },
         head: [["Date", "Caissier", "Méthode", "Montant total", "Statut"]],        
         body: allData.map((d) => [
-          d.datePrevue,
+          formatDateSN(d.date_prevue ?? d.date),
           `${d.caissier?.prenom || ""} ${d.caissier?.nom || ""}`.trim() || "-",
-          d.methodePrevue,
-          formatFCFAPdf(d.montantTotal),
+          d.methode_prevue ?? d.methode_paiement,
+          formatFCFAPdf(
+            d.montant_total && d.montant_total > 0
+              ? d.montant_total
+              : d.montant
+          ),
           statutLabel(d.statut).toUpperCase(),
         ]) || [],
         styles: { fontSize: 9, cellPadding: 2, textColor: [55, 65, 81] },
@@ -505,12 +504,11 @@ useEffect(() => {
   };
 
   // ——————————————————————————————————————————————————
-  // 🏷️ Badge statut
+  // 🏷️ Badge statut - SANS ANNULÉ
   // ——————————————————————————————————————————————————
   const statutBadge = (s) =>
     ({
-      validé: "bg-emerald-100 text-emerald-700 border border-emerald-300",
-      refusé: "bg-rose-100 text-rose-700 border border-rose-300",
+      valide: "bg-emerald-100 text-emerald-700 border border-emerald-300",
       en_attente: "bg-amber-100 text-amber-700 border border-amber-300",
     }[s] || "bg-gray-100 text-gray-600 border border-gray-300");
 
@@ -539,7 +537,7 @@ useEffect(() => {
       <Toaster position="top-right" richColors />
 
       <div className="min-h-screen w-full bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white px-4 sm:px-6 lg:px-10 py-6 sm:py-8 overflow-y-auto">
-        <div className="max-w-6xl mx-auto space-y-8"> {/* Changé de space-y-7 à space-y-8 */}
+        <div className="max-w-6xl mx-auto space-y-8">
           
           {/* HEADER */}
           <motion.header
@@ -589,12 +587,12 @@ useEffect(() => {
             </div>
           </motion.header>
 
-          {/* CARTES STATS */}
+          {/* CARTES STATS - SANS ANNULÉ */}
           <motion.div
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35 }}
-            className="w-full max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-6 mb-8" 
+            className="w-full max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-6 mb-8" 
           >
             <div className="rounded-xl border border-indigo-200 bg-gradient-to-br from-indigo-50 via-slate-50 to-indigo-100 px-3 py-2.5 shadow-sm">
               <div className="text-[13px] sm:text-[15px] font-semibold text-indigo-900 mb-0.5">
@@ -608,21 +606,6 @@ useEffect(() => {
               </div>
               <div className="mt-1 text-[11px] text-gray-700">
                 {formatFCFA(stats.montant_total)}
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-rose-200 bg-gradient-to-br from-rose-50 via-rose-50 to-rose-100 px-3 py-2.5 shadow-sm">
-              <div className="text-[13px] sm:text-[15px] font-semibold text-rose-900 mb-0.5">
-                Demandes annulées
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-lg font-extrabold text-rose-700">
-                  {stats.annules}
-                </span>
-                <AlertCircle className="w-5 h-5 text-rose-600" />
-              </div>
-              <div className="mt-1 text-[11px] text-rose-800">
-                {formatFCFA(stats.montant_annules)}
               </div>
             </div>
 
@@ -658,7 +641,7 @@ useEffect(() => {
           </motion.div>
 
           {/* TABLEAU + FILTRES */}
-          <section className="relative bg-white/90 border border-[#E4E0FF] rounded-2xl shadow-[0_18px_45px_rgba(15,23,42,0.06)] overflow-x-auto mt-8"> {/* Ajout de mt-8 */}
+          <section className="relative bg-white/90 border border-[#E4E0FF] rounded-2xl shadow-[0_18px_45px_rgba(15,23,42,0.06)] overflow-x-auto mt-8">
 
           {loadingPage && (
             <div className="absolute inset-0 bg-white/60 backdrop-blur-[1px] flex items-center justify-center z-10">
@@ -672,16 +655,13 @@ useEffect(() => {
                 <div className="inline-flex rounded-full bg-[#F7F5FF] border border-[#E4E0FF] p-0.5">
                   {[
                     { id: "tous", label: "Tous" },
-                    // ✅ Correction: backend attend "en_attente" pas "en attente"
                     { id: "en_attente", label: "En attente" },
-                    { id: "validé", label: "Validés" },
-                    { id: "refusé", label: "Annulés" },
+                    { id: "valide", label: "Validés" },
                   ].map((opt) => (
                     <button
                       key={opt.id}
                       type="button"
                       onClick={() => {
-                        
                         setFilterStatut(opt.id);
                       }}
                       className={
@@ -704,7 +684,6 @@ useEffect(() => {
                     type="date"
                     value={filterStartDate}
                     onChange={(e) => {
-                      
                       setFilterStartDate(e.target.value);
                     }}
                     className="border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:border-[#472EAD] focus:ring-1 focus:ring-[#472EAD] bg-white"
@@ -720,17 +699,14 @@ useEffect(() => {
 
                 <div className="flex items-center gap-2 min-w-[230px]">
                   <div className="relative flex-1">
-                  {loadingPage ? (
-                    <RefreshCw className="w-3.5 h-3.5 text-[#472EAD] animate-spin absolute left-2 top-1/2 -translate-y-1/2" />
-                  ) : (
+                    {/* ✅ Plus de spinner, juste l'icône Search */}
                     <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2 top-1/2 -translate-y-1/2" />
-                  )}
 
                     <input
                       type="text"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      placeholder="Rechercher par motif..."
+                      placeholder="Rechercher par nom caissier ..."
                       className="pl-7 pr-6 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-[#472EAD] focus:ring-1 focus:ring-[#472EAD] bg-white text-sm" 
                     />
                     {searchTerm && (
@@ -759,7 +735,6 @@ useEffect(() => {
               <thead className="bg-[#F7F5FF] text-[#472EAD] uppercase text-xs font-semibold">
                 <tr>
                   <th className="px-4 py-3 text-left">Date</th>
-                  {/* ✅ Nouvelle colonne Caissier */}
                   <th className="px-4 py-3 text-left">Caissier</th>
                   <th className="px-4 py-3 text-left">Méthode</th>
                   <th className="px-4 py-3 text-left">Montant total</th>
@@ -774,18 +749,18 @@ useEffect(() => {
                       key={d.id}
                       className="border-t border-gray-100 hover:bg-[#F9F9FF] transition"
                     >
-                      <td className="px-4 py-2">{d.datePrevue}</td>
-                      {/* ✅ Affichage du caissier */}
+                      <td className="px-4 py-2">
+                        {formatDateSN(d.datePrevue)}
+                      </td>
                       <td className="px-4 py-2">
                         <div className="flex items-center gap-1">
                           <User className="w-3.5 h-3.5 text-gray-400" />
                           <span>{formatCaissierName(d.caissier)}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-2">{d.methodePrevue}</td>
+                      <td className="px-4 py-2">{d.methodePaiement}</td>
                       <td className="px-4 py-2 font-medium">
                         {formatFCFA(d.montantTotal)}
-                        {/* ❌ Suppression du compteur de lignes */}
                       </td>
                       <td className="px-4 py-2">
                         <span
@@ -823,7 +798,7 @@ useEffect(() => {
             </table>
 
             {/* ✅ Pagination footer corrigée */}
-            <div className="mt-6 mb-4"> {/* Ajout de mt-6 mb-4 */}
+            <div className="mt-6 mb-4">
               <Pagination
                 page={page}
                 totalPages={totalPages}

@@ -82,8 +82,17 @@ export default {
     const { default: profileAPI } = await import('./profile');
     return profileAPI;
   },
+
   gestionnaireBoutique: async () => {
     const { default: gestionnaireBoutiqueAPI } = await import('./gestionnaireBoutique');
     return gestionnaireBoutiqueAPI;
+  },
+
+  /**
+   * ✅ AJOUT — accès dynamique aux rapports
+   */
+  rapports: async () => {
+    const { default: rapportsAPI } = await import('./rapports');
+    return rapportsAPI;
   },
 };

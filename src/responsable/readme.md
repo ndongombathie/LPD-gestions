@@ -35,34 +35,31 @@
 | **PUT** | `/api/fournisseurs/{fournisseur}` | Met à jour un fournisseur |
 | **DELETE** | `/api/fournisseurs/{fournisseur}` | Supprime un fournisseur |
 
+## les endpoints pour decaissements
+GET|HEAD        api/decaissements ...........................................| liste des decaissements
+POST            api/decaissements ...........................................| ajouter un nouveau decaissement
+GET|HEAD        api/decaissements/{decaissement} ............................| obtenir les detailles d'un decaissement specifique
+PUT|PATCH       api/decaissements/{decaissement} ............................| modifier un decaissement specifique
+DELETE          api/decaissements/{decaissement} ............................| supprimer un decaissement specifique
+PUT             api/decaissements/{decaissement}/statut .....................| changer le status d'un decaissement (valider ou annuler) par defaut il est en attente
 
-GET|HEAD        api/decaissements .....................| afficher la liste des decaissements par defaut toute la liste est afficher mais il y'a des filtres par exemple on peut filtrer par motif 
-exemple 
-    {
-    "motif":"Voluptas voluptatem doloremque impedit neque iusto cumque ut ut."
-    }
+# les endpoints pour les produits
+GET             api/produits ..................................| la liste des produits
+GET|HEAD        api/produits/{produit} ........................| afficher les details d'un produit specifique
 
-    
-POST            api/decaissements .....................| creer un decaissement par exemple :
-            {
-            "motif":"pour acheter d'autres produits",
-            "libelle":"decaissement 21",
-            "montant":20000,
-            "methode_paiement":"wave",
-            "date":"2026-01-27"
-            }
+# la gestion des clients special
+GET|HEAD        api/clients | la liste des clients filtrer par client special
+POST            api/clients  | ajouter une client special
+GET|HEAD        api/clients/{client} | afficher les information detaillé d'un client
+PUT|PATCH       api/clients/{client} | modifier les informations d'un client
+DELETE          api/clients/{client} | supprimer un client
+GET|HEAD        api/clients/{client}/paiements-tranches | historique des paiements par tranche d'un client 
 
-<<<<<<< HEAD
-GET|HEAD        api/decaissements/{decaissement} .............................................. |afficher les detailles d'un decaissemnts
-PUT|PATCH       api/decaissements/{decaissement} ............................................... | modifier les infos d'un decaissement
-DELETE          api/decaissements/{decaissement} .......................................| supprimer un decaissement
-=======
 # la gestion des commandes
 POST            api/commandes  | ajouter une nouvelle commande pour un client normal
 GET|HEAD        api/commandes/{commande} | afficher les details d'une commande et le client de la commande
 PUT|PATCH       api/commandes/{commande} | modifier une commande specifique
 DELETE          api/commandes/{commande} | supprimer une commande
->>>>>>> responsable_correction
 
 # Nombre total de ventes par vendeur et Total encaissé par vendeur
 GET     api/total-ventes-par-vendeur
@@ -70,10 +67,7 @@ GET     api/total-ventes-par-vendeur
 # la liste des commndes effectuer un vendeur en cliquer sur le bouton detail voir la liste des commandes
 GET api/commandes-par-vendeur/{id}
 
-<<<<<<< HEAD
-=======
 
->>>>>>> responsable_correction
 # Nombre total de vendeurs
 GET         api/vendeurs-count
 # Nombre totaò de caissier
@@ -82,8 +76,6 @@ GET         api/caissiers-count
 # Nombre total de gestionnaire de boutique
 GET         api/gestionnaires-count
 
-<<<<<<< HEAD
-=======
 
 # •	Nombre de produits en rupture
 GET         api/nombre-produits-en-rupture
@@ -97,7 +89,6 @@ GET         api/nombre-produits-en-normaux
 
 
 
->>>>>>> responsable_correction
 # total-vente-par-jour
 GET       api/total-vente-par-jour
 
@@ -109,25 +100,11 @@ GET         api/somme-paiements-total
 # Reste total à encaisser.
 GET         api/reste-total-encaisser
 
-<<<<<<< HEAD
-# •	Nombre de produits en rupture
-GET         api/nombre-produits-en-rupture
-
-# nombere de produit en nombre-produits-sous-seuil
-GET         api/nombre-produits-sous-seuil
-
-# nombre de normaux.
-GET         api/nombre-produits-en-normaux
-=======
->>>>>>> responsable_correction
 
 # o	Total commandes
 GET         api/total-commandes-payees
  
 # o	Commandes en attente caisse
-<<<<<<< HEAD
-GET         api/commandes-en-attente-caisse
-=======
 GET         api/commandes-en-attente-caisse
 
 
@@ -149,4 +126,3 @@ GET     api/commandes-par-caissier/{id}
 POST    api/fond-caisse/{id} | attribuer une fond de caisse a un caissier en donnant sur la route id du cassier (http://127.0.0.1:8000/api/fond-caisse/019c8cb0-734c-7075-aaff-53f064488ab9) et en payload le montant ex: { "montant":20000 }
 
 
->>>>>>> responsable_correction

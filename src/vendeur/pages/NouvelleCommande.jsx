@@ -849,7 +849,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
         const prixUnitaire = parseFloat(item.prix_vente) || 0;
         
         // Utiliser le type de vente spécifique de l'article
-        const typeVenteArticle = item.type_vente || normaliserTypeVente(typeVenteGlobal);
+        const typeVenteArticle = normaliserTypeVente(item.type_vente || typeVenteGlobal);
         
         // Préparer l'objet de base
         const itemData = {
@@ -858,7 +858,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
           code_barre: item.code_barre,
           quantite: quantite,
           // ✅ CHAMP IMPORTANT: type_vente pour chaque article
-          type_vente: typeVenteArticle,
+          mode_vente: typeVenteArticle,
           type_vente_affichage: typeVenteArticle === 'detail' ? 'détail' : 'gros',
           prix_unitaire: prixUnitaire,
           prix_detail: parseFloat(item.prix_detail || 0),
@@ -959,10 +959,10 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
 
         // Résumé pour l'historique
         resume: {
-          nombre_articles_detail: itemsData.filter(i => i.type_vente === 'detail').length,
-          nombre_articles_gros: itemsData.filter(i => i.type_vente === 'gros').length,
-          total_detail: itemsData.filter(i => i.type_vente === 'detail').reduce((sum, i) => sum + (i.prix_unitaire * i.quantite), 0),
-          total_gros: itemsData.filter(i => i.type_vente === 'gros').reduce((sum, i) => sum + (i.prix_unitaire * i.quantite), 0)
+          nombre_articles_detail: itemsData.filter(i => i.mode_vente === 'detail').length,
+          nombre_articles_gros: itemsData.filter(i => i.mode_vente === 'gros').length,
+          total_detail: itemsData.filter(i => i.mode_vente === 'detail').reduce((sum, i) => sum + (i.prix_unitaire * i.quantite), 0),
+          total_gros: itemsData.filter(i => i.mode_vente === 'gros').reduce((sum, i) => sum + (i.prix_unitaire * i.quantite), 0)
         }
       };
 
@@ -1061,10 +1061,10 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
           // Statistiques pour l'affichage
           statistiques: {
             types_presents: typesDansPanier,
-            nombre_detail: itemsData.filter(i => i.type_vente === 'detail').length,
-            nombre_gros: itemsData.filter(i => i.type_vente === 'gros').length,
-            total_detail: itemsData.filter(i => i.type_vente === 'detail').reduce((sum, i) => sum + (i.prix_unitaire * i.quantite), 0),
-            total_gros: itemsData.filter(i => i.type_vente === 'gros').reduce((sum, i) => sum + (i.prix_unitaire * i.quantite), 0)
+            nombre_detail: itemsData.filter(i => i.mode_vente === 'detail').length,
+            nombre_gros: itemsData.filter(i => i.mode_vente === 'gros').length,
+            total_detail: itemsData.filter(i => i.mode_vente === 'detail').reduce((sum, i) => sum + (i.prix_unitaire * i.quantite), 0),
+            total_gros: itemsData.filter(i => i.mode_vente === 'gros').reduce((sum, i) => sum + (i.prix_unitaire * i.quantite), 0)
           },
           
           // ✅ TOTAUX
@@ -1137,8 +1137,8 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
           // Statistiques
           statistiques: {
             types_presents: typesDansPanier,
-            nombre_detail: itemsData.filter(i => i.type_vente === 'detail').length,
-            nombre_gros: itemsData.filter(i => i.type_vente === 'gros').length
+            nombre_detail: itemsData.filter(i => i.mode_vente === 'detail').length,
+            nombre_gros: itemsData.filter(i => i.mode_vente === 'gros').length
           },
           
           // ✅ TOTAUX
@@ -1162,7 +1162,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
       console.log('✅ Commande créée avec type:', nouvelleCommande.type_vente);
       console.log('📦 Types des articles:', nouvelleCommande.items.map(i => ({
         nom: i.nom,
-        type: i.type_vente
+        type: i.mode_vente
       })));
 
       // 5. Appeler le callback parent

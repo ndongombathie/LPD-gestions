@@ -4,6 +4,8 @@
 // ✅ Dropdown avec recherche frontend sur tous les caissiers
 // ✅ Click outside pour fermer le dropdown
 // ✅ Motif global trim() dans le payload
+// ✅ La méthode de paiement est définie par la caisse (supprimée du formulaire)
+// ✅ Date courante désactivée (non modifiable)
 // ==========================================================
 
 import React, { useState, useEffect } from "react";
@@ -14,7 +16,6 @@ import {
   Wallet,
   Calendar,
   FileText,
-  CreditCard,
   X,
   CheckCircle2,
   AlertCircle,
@@ -76,11 +77,10 @@ export default function DecaissementForm({
   submitting,
 }) {
   // —————————————————————————————————————
-  // 🧠 State principal simplifié
+  // 🧠 State principal simplifié (sans methodePrevue)
   // —————————————————————————————————————
   const [form, setForm] = useState({
     motifGlobal: initial?.motifGlobal || "",
-    methodePrevue: initial?.methodePrevue || "Espèces",
     datePrevue: initial?.datePrevue || new Date().toISOString().slice(0, 10),
     caissier_id: initial?.caissier_id || null,
     montant: initial?.montant || ""
@@ -156,7 +156,7 @@ export default function DecaissementForm({
   );
 
   // —————————————————————————————————————
-  // 📤 Submit simplifié avec trim sur le motif
+  // 📤 Submit simplifié avec trim sur le motif (sans methodePrevue)
   // —————————————————————————————————————
   const handleSubmit = async () => {
     if (submitting) return;
@@ -173,15 +173,13 @@ export default function DecaissementForm({
       e.montant = "Montant invalide (> 0).";
 
     setErrors(e);
-
     if (Object.keys(e).length) return;
 
     const payload = {
       motifGlobal: form.motifGlobal.trim(),
-      methodePrevue: form.methodePrevue,
       datePrevue: form.datePrevue,
       caissier_id: form.caissier_id,
-      montant: Number(form.montant.trim()),
+      montant: Number(form.montant),
     };
 
     console.log("👉 Payload décaissement simplifié:", payload);
@@ -334,38 +332,23 @@ export default function DecaissementForm({
               )}
             </div>
 
-            {/* Méthode prévue */}
-            <div>
-              <label className="block text-sm font-semibold text-[#472EAD] mb-1">
-                Méthode de paiement prévue
-              </label>
-              <div className="relative">
-                <CreditCard className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2 z-10 pointer-events-none" />
-                <select
-                  value={form.methodePrevue}
-                  onChange={(e) => updateForm("methodePrevue", e.target.value)}
-                  className="pl-9 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm bg-white/60 backdrop-blur-sm focus:ring-2 focus:ring-[#472EAD]/40 focus:border-[#472EAD] transition"
-                >
-                  <option>Espèces</option>
-                  <option>Mobile Money</option>
-                  <option>Virement</option>
-                  <option>Chèque</option>
-                </select>
+            {/* Date - désactivée (non modifiable) */}
+            <div className="sm:col-span-2">
+              <div className="flex items-center gap-2 mb-1">
+                <label className="text-sm font-semibold text-[#472EAD]">
+                  Date de demande de décaissement
+                </label>
+                <span className="text-xs text-gray-400">
+                  (Date du jour non modifiable)
+                </span>
               </div>
-            </div>
-
-            {/* Date */}
-            <div>
-              <label className="block text-sm font-semibold text-[#472EAD] mb-1">
-                Date prévue pour le décaissement
-              </label>
               <div className="relative">
                 <Calendar className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2 z-10 pointer-events-none" />
                 <input
                   type="date"
                   value={form.datePrevue}
-                  onChange={(e) => updateForm("datePrevue", e.target.value)}
-                  className="pl-9 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm bg-white/60 backdrop-blur-sm focus:ring-2 focus:ring-[#472EAD]/40 focus:border-[#472EAD] transition"
+                  disabled
+                  className="pl-9 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm bg-gray-100/60 backdrop-blur-sm cursor-not-allowed opacity-75"
                 />
               </div>
             </div>
@@ -392,6 +375,10 @@ export default function DecaissementForm({
                   {errors.montant}
                 </p>
               )}
+              {/* Information sur la méthode de paiement */}
+              <p className="text-xs text-gray-400 mt-1">
+                La méthode de paiement sera définie par la caisse lors de la validation.
+              </p>
             </div>
           </motion.div>
         </div>
