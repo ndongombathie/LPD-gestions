@@ -1,69 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { formatDateTime } from '../../utils/formatters';
+import caissierApi from '../services/caissierApi';
 
 const NotificationsDropdown = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(false);
-
-  // Données fictives de tickets en attente (similaire à CaissePage)
-  const getFakeTickets = () => [
-    {
-      id: 'ticket-1',
-      commande_id: 'commande-1',
-      numero: 'TKT-2025-000001',
-      date_ticket: new Date().toISOString(),
-      vendeur_nom: 'Amadou Diallo',
-      client_nom: 'Client A',
-      client_special: false,
-      statut: 'en_attente',
-      total_ht: 100000,
-      tva: 18000,
-      total_ttc: 118000,
-      montant_deja_paye: 0,
-      reste_du: 118000,
-      lignes: [
-        { produit: 'Produit A', quantite: 2, prix_unitaire: 50000 },
-      ],
-    },
-    {
-      id: 'ticket-2',
-      commande_id: 'commande-2',
-      numero: 'TKT-2025-000002',
-      date_ticket: new Date(Date.now() - 1800000).toISOString(),
-      vendeur_nom: 'Fatou Ba',
-      client_nom: 'Client B',
-      client_special: true,
-      statut: 'en_attente',
-      total_ht: 85000,
-      tva: 15300,
-      total_ttc: 100300,
-      montant_deja_paye: 0,
-      reste_du: 100300,
-      lignes: [
-        { produit: 'Produit B', quantite: 1, prix_unitaire: 85000 },
-      ],
-    },
-    {
-      id: 'ticket-3',
-      commande_id: 'commande-3',
-      numero: 'TKT-2025-000003',
-      date_ticket: new Date(Date.now() - 3600000).toISOString(),
-      vendeur_nom: 'Ibrahima Sall',
-      client_nom: 'Client C',
-      client_special: false,
-      statut: 'en_attente',
-      total_ht: 50000,
-      tva: 9000,
-      total_ttc: 59000,
-      montant_deja_paye: 0,
-      reste_du: 59000,
-      lignes: [
-        { produit: 'Produit C', quantite: 1, prix_unitaire: 50000 },
-      ],
-    },
-  ];
 
   useEffect(() => {
     if (isOpen) {
@@ -74,22 +17,33 @@ const NotificationsDropdown = ({ isOpen, onClose }) => {
   const loadNotifications = async () => {
     setLoading(true);
     try {
-      // Simuler un délai de chargement
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Utiliser des données fictives
-      const tickets = getFakeTickets();
-      const ticketsEnAttente = tickets.filter(t => t.statut === 'en_attente');
-      
-      const newNotifications = ticketsEnAttente.map(ticket => ({
-        id: ticket.id || ticket.commande_id,
-        type: 'ticket',
-        message: `Nouveau ticket ${ticket.numero || 'N/A'} de ${ticket.vendeur_nom || 'Vendeur'}`,
-        montant: ticket.total_ttc || 0,
-        ticket: ticket,
-        date: ticket.date_ticket || new Date().toISOString(),
-        read: false,
-      }));
+      const response = await caissierApi.getCommandesAttente();
+      const commandes = response?.data || [];
+
+      const newNotifications = (Array.isArray(commandes) ? commandes : [])
+        .slice()
+        .sort((a, b) => {
+          const da = a?.date || a?.created_at || '';
+          const db = b?.date || b?.created_at || '';
+          return String(db).localeCompare(String(da));
+        })
+        .slice(0, 10)
+        .map((commande) => {
+          const vendeurNom = commande?.vendeur
+            ? `${commande.vendeur?.prenom || ''} ${commande.vendeur?.nom || ''}`.trim()
+            : 'Vendeur';
+
+          return ({
+            id: commande.id,
+            type: 'ticket',
+            message: `Nouveau ticket CMD-${commande.id?.substring(0, 8)?.toUpperCase() || 'N/A'} de ${vendeurNom}`,
+            montant: commande.total || 0,
+            ticket: { id: commande.id },
+            date: commande.date || commande.created_at || new Date().toISOString(),
+            read: false,
+          });
+        });
+
       setNotifications(newNotifications);
     } catch (error) {
       // Erreur silencieuse - gérée par le composant
@@ -101,6 +55,7 @@ const NotificationsDropdown = ({ isOpen, onClose }) => {
 
   const handleNotificationClick = (notification) => {
     if (notification.type === 'ticket' && notification.ticket) {
+      setNotifications((prev) => prev.map((n) => (n.id === notification.id ? { ...n, read: true } : n)));
       navigate('/caissier/caisse', { state: { selectedTicketId: notification.ticket.id } });
       onClose();
     }
@@ -112,11 +67,11 @@ const NotificationsDropdown = ({ isOpen, onClose }) => {
     <>
       {isOpen && (
         <div
-          className="fixed inset-0 z-10"
+          className="fixed inset-0 z-30"
           onClick={onClose}
         />
       )}
-      <div className={`absolute right-0 mt-2 w-80 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-20 ${isOpen ? 'block' : 'hidden'}`}>
+      <div className={`absolute right-0 mt-2 w-80 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-40 ${isOpen ? 'block' : 'hidden'}`}>
         <div className="p-4 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">

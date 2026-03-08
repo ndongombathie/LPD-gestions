@@ -1,59 +1,50 @@
 import Echo from 'laravel-echo';
-import Pusher from 'pusher-js';
+//import Pusher from 'pusher-js';
 
-// Configuration de Laravel Echo pour les WebSockets
+window.Pusher = Pusher;
+
 let echoInstance = null;
-
-export const initializeEcho = () => {
-  if (echoInstance) {
-    return echoInstance;
+try {
+  const key = import.meta.env.VITE_REVERB_APP_KEY ?? '';
+  if (key) {
+    echoInstance = new Echo({
+      broadcaster: 'pusher',
+      key,
+      wsHost: import.meta.env.VITE_REVERB_HOST || '127.0.0.1',
+      wsPort: Number(import.meta.env.VITE_REVERB_PORT) || 8080,
+      cluster: 'mt1',
+      forceTLS: false,
+      encrypted: false,
+      disableStats: true,
+      enabledTransports: ['ws', 'wss'],
+      authorizer: (channel) => ({
+        authorize: (socketId, callback) => {
+          const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+          const url = (import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api').replace(/\/$/, '') + '/broadcasting/auth';
+          fetch(url, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+              Accept: 'application/json',
+            },
+            body: JSON.stringify({ socket_id: socketId, channel_name: channel.name }),
+          })
+            .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+            .then((data) => callback(null, data))
+            .catch((err) => {
+              console.error('Broadcasting auth error:', err);
+              callback(err, null);
+            });
+        },
+      }),
+    });
   }
+} catch (e) {
+  console.warn('Echo init skipped:', e?.message || e);
+}
 
-  const token = localStorage.getItem('token');
-  
-  if (!token) {
-    console.warn('No token found, Echo will not be initialized');
-    return null;
-  }
+export const echo = echoInstance;
 
-  // Configuration pour Reverb (WebSocket Laravel)
-  echoInstance = new Echo({
-    broadcaster: 'reverb',
-    key: import.meta.env.VITE_REVERB_APP_KEY || 'your-app-key',
-    wsHost: import.meta.env.VITE_REVERB_HOST || window.location.hostname,
-    wsPort: import.meta.env.VITE_REVERB_PORT || 8080,
-    wssPort: import.meta.env.VITE_REVERB_PORT || 8080,
-    forceTLS: (import.meta.env.VITE_REVERB_SCHEME || 'http') === 'https',
-    enabledTransports: ['ws', 'wss'],
-    authEndpoint: `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/broadcasting/auth`,
-    auth: {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/json',
-      },
-    },
-  });
-
-  return echoInstance;
-};
-
-export const getEcho = () => {
-  if (!echoInstance) {
-    return initializeEcho();
-  }
-  return echoInstance;
-};
-
-export const disconnectEcho = () => {
-  if (echoInstance) {
-    echoInstance.disconnect();
-    echoInstance = null;
-  }
-};
-
-// Réinitialiser Echo quand le token change
-export const reconnectEcho = () => {
-  disconnectEcho();
-  return initializeEcho();
-};
-
+export const initializeEcho = () => echoInstance;
+export const getEcho = () => echoInstance;

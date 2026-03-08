@@ -61,7 +61,7 @@ C'est lent et inefficace. Il faut une API qui retourne directement les statistiq
 **API à créer :**
 
 ```
-GET /api/dashboard/stats?date=2025-01-15
+GET /api/caissier/dashboard/stats?date=2025-01-15
 ```
 
 **Paramètres :**
@@ -156,7 +156,7 @@ C'est très lent si vous avez beaucoup de commandes.
 **API à créer :**
 
 ```
-GET /api/dashboard/ventes-par-moyen?date=2025-01-15
+GET /api/caissier/dashboard/ventes-par-moyen?date=2025-01-15
 ```
 
 **Réponse attendue :**
@@ -251,7 +251,7 @@ Pour éviter de filtrer et grouper côté frontend.
 **API à créer :**
 
 ```
-GET /api/dashboard/ventes-par-heure?date=2025-01-15
+GET /api/caissier/dashboard/ventes-par-heure?date=2025-01-15
 ```
 
 **Réponse attendue :**
@@ -352,7 +352,7 @@ Sans cette API, le fond d'ouverture sera toujours à 0. Il faut pouvoir :
 #### 4.1. Récupérer un rapport de caisse
 
 ```
-GET /api/caisses-journal/{date}
+GET /api/caissier/caisses-journal/{date}
 ```
 
 **Réponse attendue :**
@@ -374,7 +374,7 @@ GET /api/caisses-journal/{date}
 #### 4.2. Créer/Initialiser un rapport journalier
 
 ```
-POST /api/caisses-journal
+POST /api/caissier/caisses-journal
 ```
 
 **Body :**
@@ -388,7 +388,7 @@ POST /api/caisses-journal
 #### 4.3. Clôturer la caisse
 
 ```
-PUT /api/caisses-journal/{date}/cloture
+PUT /api/caissier/caisses-journal/{date}/cloture
 ```
 
 **Body :**
@@ -423,12 +423,12 @@ PUT /api/caisses-journal/{date}/cloture
 
 | API | Priorité | Description |
 |-----|----------|-------------|
-| `GET /api/dashboard/stats` | 🔴 CRITIQUE | Statistiques du dashboard (remplace tous les calculs frontend) |
-| `GET /api/caisses-journal/{date}` | 🔴 CRITIQUE | Récupérer un rapport de caisse (pour le fond d'ouverture) |
-| `POST /api/caisses-journal` | 🔴 CRITIQUE | Créer un rapport journalier |
-| `PUT /api/caisses-journal/{date}/cloture` | 🔴 CRITIQUE | Clôturer la caisse |
-| `GET /api/dashboard/ventes-par-moyen` | 🟡 OPTIONNEL | Ventes groupées par moyen de paiement |
-| `GET /api/dashboard/ventes-par-heure` | 🟡 OPTIONNEL | Ventes groupées par heure |
+| `GET /api/caissier/dashboard/stats` | 🔴 CRITIQUE | Statistiques du dashboard (remplace tous les calculs frontend) |
+| `GET /api/caissier/caisses-journal/{date}` | 🔴 CRITIQUE | Récupérer un rapport de caisse (pour le fond d'ouverture) |
+| `POST /api/caissier/caisses-journal` | 🔴 CRITIQUE | Créer un rapport journalier |
+| `PUT /api/caissier/caisses-journal/{date}/cloture` | 🔴 CRITIQUE | Clôturer la caisse |
+| `GET /api/caissier/dashboard/ventes-par-moyen` | 🟡 OPTIONNEL | Ventes groupées par moyen de paiement |
+| `GET /api/caissier/dashboard/ventes-par-heure` | 🟡 OPTIONNEL | Ventes groupées par heure |
 
 ---
 
@@ -457,8 +457,8 @@ CREATE TABLE caisses_journal (
 ## ✅ Après implémentation
 
 Une fois ces APIs créées, le frontend pourra :
-1. Appeler `GET /api/dashboard/stats` au lieu de faire tous les calculs
-2. Récupérer le fond d'ouverture réel depuis `GET /api/caisses-journal/{date-veille}`
+1. Appeler `GET /api/caissier/dashboard/stats` au lieu de faire tous les calculs
+2. Récupérer le fond d'ouverture réel depuis `GET /api/caissier/caisses-journal/{date-veille}`
 3. Afficher des statistiques précises et en temps réel
 
 **Performance :**

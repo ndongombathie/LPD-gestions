@@ -16,7 +16,7 @@ export default function AppGestionnaireBoutique() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/gestionnaire-boutique" element={<LayoutGestionnaire />}>
+        <Route path="/gestionnaire_boutique" element={<LayoutGestionnaire />}>
           <Route index element={<Dashboard />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="produits" element={<Produits />} />
@@ -28,7 +28,7 @@ export default function AppGestionnaireBoutique() {
           <Route path="rapports" element={<Rapports />} />
 
           {/* fallback */}
-          <Route path="*" element={<Navigate to="/gestionnaire/dashboard" />} />
+          <Route path="*" element={<Navigate to="/gestionnaire_boutique/dashboard" />} />
         </Route>
 
         {/* Redirect root → dashboard */}

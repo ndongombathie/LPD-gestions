@@ -16,9 +16,9 @@ export default function LayoutResponsable() {
         {/* Header (tu gardes ta logique actuelle dedans) */}
         <Header />
 
-        {/* Contenu principal (on ajoute du padding en bas pour ne pas passer sous le footer) */}
-        <main className="flex-1 overflow-y-auto bg-gradient-to-b from-white to-lpd-light px-4 sm:px-6 lg:px-8 py-4 sm:py-6 pb-20 transition-all duration-300 ease-in-out">
-          <div className="max-w-7xl mx-auto fade-in">
+        {/* Contenu principal - full width, marges réduites */}
+        <main className="flex-1 overflow-y-auto bg-gradient-to-b from-white to-lpd-light px-2 sm:px-4 md:px-6 py-3 sm:py-5 pb-20 transition-all duration-300 ease-in-out w-full">
+          <div className="w-full max-w-[1600px] mx-auto fade-in">
             <Outlet />
           </div>
         </main>
