@@ -960,17 +960,20 @@ const CaissePage = () => {
               </div>
             )}
 
-            {/* Montant à enregistrer = reste dû de la commande (non modifiable) */}
+            {/* Montant envoyé (à la caisse) = non modifiable */}
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700">
-                Montant à enregistrer (FCFA)
+                Montant envoyé (FCFA)
               </label>
-              <div className="flex items-center gap-2 rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-gray-700">
-                <span className="font-semibold tabular-nums">
-                  {formatCurrency(selectedTicket.reste_du ?? selectedTicket.total_ttc)}
-                </span>
-                <span className="text-xs text-gray-500">(montant de la commande, non modifiable)</span>
-              </div>
+              <input
+                type="text"
+                readOnly
+                disabled
+                value={formatCurrency(selectedTicket.reste_du ?? selectedTicket.total_ttc ?? selectedTicket.montant_a_encaisser ?? 0)}
+                className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2.5 text-gray-700 font-semibold tabular-nums cursor-not-allowed"
+                aria-label="Montant envoyé (non modifiable)"
+              />
+              <p className="text-xs text-gray-500">Montant envoyé à la caisse par le dépôt / responsable (non modifiable).</p>
               {(selectedTicket.reste_du && selectedTicket.reste_du < selectedTicket.total_ttc) && (
                 <p className="text-xs text-gray-600">
                   Reste dû: {formatCurrency(selectedTicket.reste_du)} (Total: {formatCurrency(selectedTicket.total_ttc)}, Déjà payé: {formatCurrency(selectedTicket.montant_deja_paye || 0)})

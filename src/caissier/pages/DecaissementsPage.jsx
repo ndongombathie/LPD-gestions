@@ -412,11 +412,16 @@ const DecaissementsPage = () => {
                 Détails du décaissement
               </h4>
               <div className="space-y-2.5 text-xs sm:text-sm">
-                <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-2">
-                  <span className="text-gray-600">Montant:</span>
-                  <span className="font-bold text-red-600">
-                    {formatCurrency(selectedDecaissement.montant)}
-                  </span>
+                <div className="space-y-1.5">
+                  <label className="block text-gray-600 font-medium">Montant envoyé (FCFA)</label>
+                  <input
+                    type="text"
+                    readOnly
+                    disabled
+                    value={formatCurrency(selectedDecaissement.montant)}
+                    className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-gray-700 font-bold tabular-nums cursor-not-allowed"
+                    aria-label="Montant envoyé (non modifiable)"
+                  />
                 </div>
                 <div className="flex flex-col sm:flex-row sm:justify-between gap-1 sm:gap-2">
                   <span className="text-gray-600">Motif:</span>
