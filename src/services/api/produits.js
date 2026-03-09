@@ -100,7 +100,7 @@ export const produitsAPI = {
   // ------------------------------------------------------------
   getProduitsEnRupture: async (params = {}) => {
     try {
-      const response = await httpClient.get('/produits_en_rupture', { params });
+      const response = await httpClient.get('/produits-ruptures', { params });
       return response.data;
     } catch (error) {
       console.error('❌ produitsAPI.getProduitsEnRupture error:', error);
