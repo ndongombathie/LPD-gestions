@@ -15,7 +15,7 @@ import {
   DollarSign,
   Save
 } from "lucide-react";
-
+import { journalResponsableAPI } from "@/services/api/JournalResponsable";
 
 const formatFCFA = (n) =>
   new Intl.NumberFormat("fr-FR", {
@@ -76,49 +76,37 @@ export default function FondOuvertureModal({
     e.preventDefault();
 
     if (!validateForm()) {
-      onToast("error", "Erreur", "Veuillez corriger les erreurs du formulaire");      return;
+      onToast("error", "Erreur", "Veuillez corriger les erreurs du formulaire");
+      return;
     }
 
     setLoading(true);
 
     try {
-      // Simulation d'un délai d'envoi
-      await new Promise(resolve => setTimeout(resolve, 800));
-
       const montantNum = parseFloat(montant);
-      
-      // Données à envoyer au backend (plus tard)
-      const fondData = {
-        caissierId: employee.id,
-        caissierName: employee.name,
-        montant: montantNum,
-        date,
-        type: "fond_ouverture",
-        statut: "validé",
-        saisiPar: "Responsable", // À remplacer par l'utilisateur connecté plus tard
-        dateSaisie: new Date().toISOString(),
-      };
 
-      // Log des données pour le développement
-      console.log("💰 Fond d'ouverture saisi :", fondData);
+      await journalResponsableAPI.attribuerFondCaisse(
+        employee.caissier?.id || employee.id,
+        montantNum
+      );
 
-      // Afficher un toast de succès avec les détails
-onToast(
-  "success",
-  "Fond d'ouverture enregistré",
-  `${employee.name} • ${formatFCFA(montantNum)}`
-);
+      onToast(
+        "success",
+        "Fond d'ouverture enregistré",
+        `${employee.caissier?.prenom || ""} ${employee.caissier?.nom || ""} • ${formatFCFA(montantNum)}`
+      );
 
-
-      // Fermer le modal
       onClose();
+
     } catch (error) {
+      console.error(error);
+
       onToast(
         "error",
         "Erreur",
+        error?.response?.data?.message ||
         "Erreur lors de l'enregistrement du fond d'ouverture"
-        );
-      console.error("Erreur fond ouverture:", error);
+      );
     } finally {
       setLoading(false);
     }
@@ -164,7 +152,9 @@ onToast(
                   </div>
                   <div>
                     <h2 className="text-lg font-semibold text-white">Fond d'ouverture</h2>
-                    <p className="text-xs text-white/80">Caisse • {employee?.name}</p>
+                    <p className="text-xs text-white/80">
+                      Caisse • {employee.caissier?.prenom || ""} {employee.caissier?.nom || ""}
+                    </p>
                   </div>
                 </div>
                 <button
@@ -186,7 +176,8 @@ onToast(
                     <DollarSign className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
                       type="text"
-                      value={montant}                      onChange={handleMontantChange}
+                      value={montant}
+                      onChange={handleMontantChange}
                       placeholder="Ex: 50000"
                       className={`w-full pl-9 pr-4 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-[#472EAD]/20 focus:border-[#472EAD] transition ${
                         errors.montant ? "border-red-300 bg-red-50" : "border-gray-300"

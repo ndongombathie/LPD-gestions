@@ -32,9 +32,9 @@ export const dashboardResponsableAPI = {
         produitsSousSeuilRes,
         produitsRuptureRes,
 
-        // 💰 Finance caisse
-        caisseStats,
-        commandesAttenteRes,
+        // 💰 Finance caisse (nouveaux endpoints)
+        totalEncaissementRes,
+        totalDecaissementRes,
 
       ] = await Promise.all([
 
@@ -49,8 +49,8 @@ export const dashboardResponsableAPI = {
         getProduitsRupture(),
 
         // 💰 Finance alignée Caisse
-        caissierApi.getDashboardStats(),
-        caissierApi.getCommandesAttente({ page: 1, per_page: 1 }),
+        httpClient.get('/caissier/caisses-journal-total-encaissement'),
+        httpClient.get('/caissier/caisses-journal-total-decaissement'),
       ]);
 
       /* ============================
@@ -88,19 +88,22 @@ export const dashboardResponsableAPI = {
          💰 FINANCE (MIROIR CAISSE)
       ============================ */
 
-      const encaisse = Number(
-        caisseStats?.totalEncaissements ??
-        caisseStats?.total_encaissements ??
+      const totalEncaissement = Number(
+        totalEncaissementRes.data?.total_encaissement ??
+        totalEncaissementRes.data ??
         0
       );
 
-      // total_amount = somme des tickets en attente
-      const totalEnAttente = Number(commandesAttenteRes?.total_amount ?? 0);
+      const totalDecaissement = Number(
+        totalDecaissementRes.data?.total_decaissement ??
+        totalDecaissementRes.data ??
+        0
+      );
 
       const finance = {
-        totalEncaissement: encaisse,
-        totalFacture: totalEnAttente,
-        resteAEncaisser: totalEnAttente,
+        totalEncaissement,
+        totalDecaissement,
+        totalFacture: totalEncaissement, // si tu veux garder la carte facturé
       };
 
       return {

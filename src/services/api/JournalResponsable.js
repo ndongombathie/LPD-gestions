@@ -55,6 +55,14 @@ export const journalResponsableAPI = {
       { params: filters }
     );
     return response.data;
-  }
+  },
+// 🔹 FOND DE CAISSE
+async attribuerFondCaisse(caissierId, montant) {
+  const response = await httpClient.post(
+    `/fond-caisse/${caissierId}`,
+    { montant }
+  );
+  return response.data;
+}
 
 };

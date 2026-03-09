@@ -373,6 +373,24 @@ export default function CaissiersPage() {
           onToast={toast}
         />
       )}
+      {/* TOASTS */}
+      <div className="fixed top-5 right-5 z-[9999] space-y-3">
+        {toasts.map((t) => (
+          <div
+            key={t.id}
+            className={`px-4 py-3 rounded-lg shadow-lg text-sm text-white ${
+              t.type === "success"
+                ? "bg-emerald-600"
+                : t.type === "error"
+                ? "bg-red-600"
+                : "bg-gray-800"
+            }`}
+          >
+            <div className="font-semibold">{t.title}</div>
+            <div>{t.message}</div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
