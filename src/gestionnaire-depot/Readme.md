@@ -63,7 +63,7 @@ GET       api/nombre-transfer-en-attente
 # nombre de transfert annuler
 GET       api/nombre-transfers-annuler
 # liste des transfert annuler 
-GET       api/liste-transfers-annuler
+GET       api/nombre-transfer-en-attente
 
 # •	Nombre de produits en rupture
 GET       api/nombre-produits-en-rupture

@@ -25,6 +25,7 @@ export { default as gestionnaireBoutiqueAPI } from './gestionnaireBoutique';
 // ⚠️ utilisateurs = EXPORT PAR DÉFAUT
 export { default as utilisateursAPI } from './utilisateurs';
 
+
 /**
  * 📦 Objet centralisé (lazy loading)
  */

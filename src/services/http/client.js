@@ -19,7 +19,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
  */
 export const httpClient = axios.create({
   baseURL: API_URL,
-  timeout: 10000, // 10 secondes timeout
+  timeout: 50000, // 10 secondes timeout
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
