@@ -29,7 +29,7 @@ export const useAllProducts = () => {
     setError(null);
     
     try {
-      console.log('📡 Début chargement des données...');
+      
       
       // Charger les produits ET les compteurs ET les listes en parallèle
       const [
@@ -81,23 +81,14 @@ export const useAllProducts = () => {
       const faibleCount = extractCount(faibleCountRes);
       const ruptureCount = extractCount(ruptureCountRes);
 
-      console.log('📊 Compteurs reçus:', {
-        total: totalProducts,
-        normal: normalCount,
-        faible: faibleCount,
-        rupture: ruptureCount
-      });
+      
 
       // Extraire les listes
       const normalList = extractListData(normalListRes);
       const faibleList = extractListData(faibleListRes);
       const ruptureList = extractListData(ruptureListRes);
 
-      console.log('📋 Listes reçues:', {
-        normal: normalList.length,
-        faible: faibleList.length,
-        rupture: ruptureList.length
-      });
+     
 
       setNormalProducts(normalList);
       setFaibleProducts(faibleList);
@@ -133,7 +124,7 @@ export const useAllProducts = () => {
           });
         }
 
-        console.log('📦 Total produits chargés:', allProducts.length);
+        
         setProducts(allProducts);
         setTotal(allProducts.length);
 
@@ -171,12 +162,12 @@ export const useAllProducts = () => {
       }
 
     } catch (err) {
-      console.error('❌ Erreur générale:', err);
+      
       setError(err.message);
     } finally {
       setLoading(false);
       setLoadingStats(false);
-      console.log('✅ Chargement terminé');
+      
     }
   }, []);
 

@@ -294,7 +294,7 @@ export default function Header() {
     try {
       await logout();
     } catch (e) {
-      console.warn('Erreur déconnexion:', e);
+      
     }
     
     sessionStorage.removeItem("user");

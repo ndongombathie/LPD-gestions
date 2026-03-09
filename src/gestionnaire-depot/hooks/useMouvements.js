@@ -92,18 +92,17 @@ export const useMouvements = () => {
         date_fin: filters.dateTo || undefined,
       };
 
-      console.log(`📡 Appel API ${filters.activeTab} avec params:`, params);
-
+      
       if (filters.activeTab === "en-attente") {
         response = await mouvementsAPI.getTransfertsEnAttente(params);
       } else if (filters.activeTab === "annulees") {
         response = await mouvementsAPI.getTransfertsAnnules(params);
-        console.log('📦 Réponse brute annulées:', response);
+        
       } else {
         response = await mouvementsAPI.getAll(params);
       }
 
-      console.log('📦 Réponse brute:', response);
+      
 
       let movementsData = [];
       let total = 0;
@@ -122,14 +121,14 @@ export const useMouvements = () => {
         }
       }
 
-      console.log('📋 Données à mapper:', movementsData);
+      
       const formatted = movementsData.map(mapMovement);
-      console.log('🎯 Mouvements formatés:', formatted);
+      
 
       setMovements(formatted);
       setTotalMovements(total);
     } catch (err) {
-      console.error('❌ Erreur fetchMovements:', err);
+      
       setErrorMovements(err.message || "Erreur lors du chargement des mouvements");
     } finally {
       setLoadingMovements(false);
@@ -141,7 +140,7 @@ export const useMouvements = () => {
     setErrorStats(null);
 
     try {
-      console.log('📊 Début chargement stats...');
+      
       
       const results = await Promise.allSettled([
         mouvementsAPI.getNbEntreesTotal(),
@@ -149,12 +148,12 @@ export const useMouvements = () => {
         mouvementsAPI.getNbTransfertsEnAttente(),
       ]);
 
-      console.log('📦 Résultats bruts des stats:', results);
+      
 
       const extractValue = (result, defaultValue = 0) => {
         if (result.status === 'fulfilled') {
           const data = result.value;
-          console.log('✅ Données reçues pour stats:', data);
+          
           
           if (typeof data === 'number') return data;
           if (data && typeof data === 'object') {
@@ -173,9 +172,9 @@ export const useMouvements = () => {
         totalValidated: extractValue(results[1]),
         totalPending: extractValue(results[2]),
       });
-      console.log('📈 Nouvelles stats:', stats);
+      
     } catch (err) {
-      console.error('Erreur inattendue dans fetchStats:', err);
+    
       setErrorStats('Erreur lors du chargement des statistiques');
     } finally {
       setLoadingStats(false);
@@ -187,7 +186,7 @@ export const useMouvements = () => {
       const response = await mouvementsAPI.createTransfer(data);
       return { success: true, data: response.data };
     } catch (err) {
-      console.error('❌ Erreur createTransfer:', err);
+      
       const errorMessage = err.response?.data?.message || err.message || 'Erreur inconnue';
       return { success: false, error: errorMessage };
     }
@@ -198,7 +197,7 @@ export const useMouvements = () => {
       const response = await mouvementsAPI.cancelTransfer(transferId);
       return { success: true, data: response.data };
     } catch (err) {
-      console.error('❌ Erreur cancelTransfer:', err);
+      
       const errorMessage = err.response?.data?.message || err.message || 'Erreur inconnue';
       return { success: false, error: errorMessage };
     }
@@ -209,7 +208,7 @@ export const useMouvements = () => {
       const response = await mouvementsAPI.diminuerStock(data);
       return { success: true, data: response.data };
     } catch (err) {
-      console.error('❌ Erreur diminuerStock:', err);
+      
       const errorMessage = err.response?.data?.message || err.message || 'Erreur inconnue';
       return { success: false, error: errorMessage };
     }

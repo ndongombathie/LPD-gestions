@@ -47,9 +47,9 @@ export const useAllFournisseurs = () => {
       });
       
       setSuppliers(allSuppliers);
-      console.log(`✅ ${allSuppliers.length} fournisseurs chargés`);
+      
     } catch (err) {
-      console.error('❌ Erreur chargement tous fournisseurs:', err);
+      
       setError(err.message || 'Erreur lors du chargement des fournisseurs');
     } finally {
       setLoading(false);

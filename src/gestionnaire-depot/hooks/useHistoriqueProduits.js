@@ -26,9 +26,9 @@ export const useHistoriqueProduits = () => {
         params.search = searchTerm.trim();
       }
       
-      console.log("📦 Fetching historique avec params:", params);
+      
       const response = await historiqueActionsAPI.getAll(params);
-      console.log("✅ Réponse historique:", response);
+      
       
       let data = [];
       let totalCount = 0;
@@ -75,7 +75,7 @@ export const useHistoriqueProduits = () => {
       setTotalPages(lastPage);
       setCurrentPage(page);
     } catch (err) {
-      console.error('❌ Erreur fetchHistorique:', err);
+      
       setError(err.message);
     } finally {
       setLoading(false);

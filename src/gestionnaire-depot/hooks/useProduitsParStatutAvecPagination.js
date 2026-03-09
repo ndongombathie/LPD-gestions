@@ -50,7 +50,7 @@ export function useProduitsParStatutAvecPagination() {
         to: response.to || 0
       });
     } catch (error) {
-      console.error(`Erreur chargement produits ${statut}:`, error);
+     
       setProduits([]);
     } finally {
       setLoading(false);

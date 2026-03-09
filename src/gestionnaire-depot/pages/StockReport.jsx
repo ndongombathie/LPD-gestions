@@ -418,7 +418,7 @@ export default function Reports() {
       document.body.removeChild(pdfContainer);
       pdf.save(`rapport-gestionnaire-${new Date().toISOString().slice(0, 10)}.pdf`);
     } catch (error) {
-      console.error("Erreur PDF:", error);
+    
       alert("Erreur lors de la génération du PDF.");
     }
   };

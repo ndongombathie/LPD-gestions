@@ -59,7 +59,7 @@ const Dashboard = () => {
         });
 
       } catch (err) {
-        console.error("❌ Erreur chargement dashboard:", err);
+      
         setError("Impossible de charger les données.");
       } finally {
         setLoading(false);

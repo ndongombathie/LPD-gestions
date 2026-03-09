@@ -13,8 +13,8 @@ export function useCategories() {
     setLoading(true);
     setError(null);
     try {
-      console.log("📦 Récupération de toutes les catégories...");
-      
+  
+    
       const firstPage = await categoriesAPI.getAll({ page: 1, per_page: 10 });
       
       let allCategories = [];
@@ -55,12 +55,12 @@ export function useCategories() {
         ...cat
       }));
       
-      console.log(`✅ ${normalized.length} catégories chargées`);
+    
       setCategories(normalized);
       setTotal(normalized.length);
       
     } catch (err) {
-      console.error("❌ Erreur fetchCategories", err);
+      
       setError(err);
     } finally {
       setLoading(false);
@@ -85,7 +85,7 @@ export function useCategories() {
       toast.success("✅ Catégorie créée avec succès !");
       return newCat;
     } catch (error) {
-      console.error("❌ Erreur addCategory:", error);
+   
       toast.error("❌ Erreur lors de la création de la catégorie");
       throw error;
     }
@@ -105,7 +105,7 @@ export function useCategories() {
       toast.success("✅ Catégorie modifiée avec succès !");
       return updated;
     } catch (error) {
-      console.error("❌ Erreur updateCategory:", error);
+      
       toast.error("❌ Erreur lors de la modification de la catégorie");
       throw error;
     }
@@ -118,7 +118,7 @@ export function useCategories() {
       setTotal(prev => prev - 1);
       toast.success("✅ Catégorie supprimée avec succès !");
     } catch (error) {
-      console.error("❌ Erreur deleteCategory:", error);
+     
       toast.error("❌ Erreur lors de la suppression de la catégorie");
       throw error;
     }

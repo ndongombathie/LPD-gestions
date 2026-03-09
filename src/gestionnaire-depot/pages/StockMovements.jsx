@@ -111,7 +111,7 @@ export default function StockMovements() {
         }));
         setProducts(formatted);
       } catch (err) {
-        console.error("❌ Erreur chargement produits:", err);
+        
         toast.error("Erreur lors du chargement des produits");
       } finally {
         setLoadingProducts(false);
@@ -221,7 +221,7 @@ export default function StockMovements() {
       quantite: qtyNum
     };
 
-    console.log("📤 Envoi transfert avec payload:", transferData);
+    
 
     const result = await createTransfer(transferData);
 

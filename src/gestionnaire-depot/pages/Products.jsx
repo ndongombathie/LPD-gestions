@@ -904,7 +904,7 @@ export default function Products() {
         setNbRupture(rupture || 0);
         setNbFaible(faible || 0);
       } catch (error) {
-        console.error('Erreur chargement compteurs:', error);
+        
       }
     };
     fetchCounts();
@@ -964,7 +964,7 @@ export default function Products() {
       toast.success("Produit supprimé avec succès !");
       setDeleteId(null);
     } catch (error) {
-      console.error("Erreur suppression", error);
+      
       toast.error("Erreur lors de la suppression du produit.");
     }
   };
@@ -1004,7 +1004,7 @@ export default function Products() {
       }
       closeProductModal();
     } catch (error) {
-      console.error("❌ Erreur:", error);
+      
       toast.error("Erreur lors de l'enregistrement du produit.");
     }
   };
@@ -1048,7 +1048,7 @@ export default function Products() {
       }
       closeAdjustModal();
     } catch (error) {
-      console.error("❌ Erreur ajustement:", error);
+      
       toast.error("Erreur lors de l'ajustement du stock.");
     }
   };
@@ -1092,7 +1092,7 @@ export default function Products() {
       }
       closeCategoryModal();
     } catch (error) {
-      console.error("❌ Erreur catégorie:", error);
+    
       toast.error("Erreur lors de l'enregistrement de la catégorie.");
     }
   };
@@ -1109,7 +1109,7 @@ export default function Products() {
       setDeleteCategoryId(null);
       toast.success("Catégorie supprimée avec succès !");
     } catch (error) {
-      console.error("❌ Erreur suppression catégorie:", error);
+    
       toast.error("Erreur lors de la suppression de la catégorie.");
     }
   };

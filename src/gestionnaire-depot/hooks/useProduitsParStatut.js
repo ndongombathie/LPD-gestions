@@ -40,7 +40,7 @@ export const useProduitsParStatut = () => {
         normal: normal || 0
       });
     } catch (error) {
-      console.error('❌ Erreur chargement compteurs:', error);
+     
     }
   }, []);
 
@@ -48,7 +48,7 @@ export const useProduitsParStatut = () => {
     setLoading(prev => ({ ...prev, rupture: true }));
     setError(prev => ({ ...prev, rupture: null }));
     try {
-      console.log("📦 Chargement des produits en rupture avec params:", params);
+     
       const response = await produitsAPI.getProduitsEnRupture(params);
       
       let data = [];
@@ -83,7 +83,7 @@ export const useProduitsParStatut = () => {
       setRuptureProducts(vraimentRupture);
       return { data: vraimentRupture, total: totalCount };
     } catch (err) {
-      console.error('❌ Erreur fetchRupture:', err);
+     
       setError(prev => ({ ...prev, rupture: err.message }));
       setRuptureProducts([]);
       return { data: [], total: 0 };
@@ -96,7 +96,7 @@ export const useProduitsParStatut = () => {
     setLoading(prev => ({ ...prev, faible: true }));
     setError(prev => ({ ...prev, faible: null }));
     try {
-      console.log("📦 Chargement des produits faibles avec params:", params);
+     
       const response = await produitsAPI.getProduitsSousSeuil(params);
       
       let data = [];
@@ -133,7 +133,7 @@ export const useProduitsParStatut = () => {
       setFaibleProducts(vraimentFaibles);
       return { data: vraimentFaibles, total: totalCount };
     } catch (err) {
-      console.error('❌ Erreur fetchFaible:', err);
+     
       setError(prev => ({ ...prev, faible: err.message }));
       setFaibleProducts([]);
       return { data: [], total: 0 };
@@ -146,7 +146,7 @@ export const useProduitsParStatut = () => {
     setLoading(prev => ({ ...prev, normal: true }));
     setError(prev => ({ ...prev, normal: null }));
     try {
-      console.log("📦 Chargement des produits normaux avec params:", params);
+    
       const response = await produitsAPI.getProduitsNormaux(params);
       
       let data = [];
@@ -181,7 +181,7 @@ export const useProduitsParStatut = () => {
       setNormalProducts(vraimentNormaux);
       return { data: vraimentNormaux, total: totalCount };
     } catch (err) {
-      console.error('❌ Erreur fetchNormal:', err);
+    
       setError(prev => ({ ...prev, normal: err.message }));
       setNormalProducts([]);
       return { data: [], total: 0 };

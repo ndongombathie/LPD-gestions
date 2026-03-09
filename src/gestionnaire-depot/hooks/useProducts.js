@@ -25,7 +25,7 @@ export function useProducts(initialPage = 1, perPage = 20, searchTerm = '', filt
         params.search = searchTerm.trim();
       }
       
-      console.log(`📦 Fetching products page ${page} avec recherche:`, params);
+      
       const result = await produitsAPI.getAll(params);
 
       if (Array.isArray(result)) {
@@ -44,7 +44,7 @@ export function useProducts(initialPage = 1, perPage = 20, searchTerm = '', filt
         setTotalPages(1);
       }
     } catch (err) {
-      console.error("❌ Erreur lors de l'appel API produits :", err);
+     
       setError(err);
       toast.error("Erreur lors du chargement des produits");
     } finally {
@@ -76,7 +76,7 @@ export function useProducts(initialPage = 1, perPage = 20, searchTerm = '', filt
       await fetchProducts(1);
       return newProduct;
     } catch (error) {
-      console.error("❌ Erreur addProduct:", error);
+      
       if (error.response?.data?.errors) {
         const errors = error.response.data.errors;
         let errorMsg = "Erreurs de validation:\n";
@@ -102,7 +102,7 @@ export function useProducts(initialPage = 1, perPage = 20, searchTerm = '', filt
       toast.success("✅ Produit modifié avec succès !");
       return updated;
     } catch (error) {
-      console.error("❌ Erreur updateProduct:", error);
+     
       if (error.response?.data?.errors) {
         const errors = error.response.data.errors;
         let errorMsg = "Erreurs de validation:\n";
@@ -132,7 +132,7 @@ export function useProducts(initialPage = 1, perPage = 20, searchTerm = '', filt
       setTotal(prev => prev - 1);
       toast.success("✅ Produit supprimé avec succès !");
     } catch (error) {
-      console.error("❌ Erreur deleteProduct:", error);
+      
       toast.error("❌ Erreur lors de la suppression");
       throw error;
     }
@@ -150,7 +150,7 @@ export function useProducts(initialPage = 1, perPage = 20, searchTerm = '', filt
       toast.success("✅ Stock réapprovisionné !");
       return result;
     } catch (error) {
-      console.error("❌ Erreur reapprovisionner:", error);
+   
       toast.error("❌ Erreur lors du réapprovisionnement");
       throw error;
     }
@@ -168,7 +168,7 @@ export function useProducts(initialPage = 1, perPage = 20, searchTerm = '', filt
       toast.success("✅ Stock diminué !");
       return result;
     } catch (error) {
-      console.error("❌ Erreur diminuerStock:", error);
+      
       toast.error("❌ Erreur lors de la diminution du stock");
       throw error;
     }
