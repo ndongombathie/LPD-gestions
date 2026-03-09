@@ -28,3 +28,11 @@ Carte Caissiers
 
     • Historique détaillé par caissier : GET api/commandes-par-caissier/{id}
     • Barre de recherche par nom et email : GET api/commandes-par-caissier/{id} sur la meme endpoint tu peux filtrer par par les informations du clients ou du vendeur {"search" : "niang"}
+
+
+
+# Total décaissements
+GET|HEAD        api/caissier/caisses-journal-total-decaissement
+
+# Total encaissements
+GET|HEAD        api/caissier/caisses-journal-total-encaissement
