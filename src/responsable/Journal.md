@@ -36,3 +36,6 @@ GET|HEAD        api/caissier/caisses-journal-total-decaissement
 
 # Total encaissements
 GET|HEAD        api/caissier/caisses-journal-total-encaissement
+
+# attribuer une fond de caisse a un caissier
+POST    api/fond-caisse/{id} | attribuer une fond de caisse a un caissier en donnant sur la route id du cassier (http://127.0.0.1:8000/api/fond-caisse/019c8cb0-734c-7075-aaff-53f064488ab9) et en payload le montant ex: { "montant":20000 }
