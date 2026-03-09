@@ -41,9 +41,8 @@ export default function VendeursPage() {
   });
   
   // Filtres de période
-  const today = new Date().toISOString().split('T')[0];
-  const [dateDebut, setDateDebut] = useState(today);
-  const [dateFin, setDateFin] = useState(today);
+const [dateDebut, setDateDebut] = useState("");
+const [dateFin, setDateFin] = useState("");
   
   // ✅ Pagination states
   const [page, setPage] = useState(1);
@@ -60,12 +59,11 @@ export default function VendeursPage() {
       try {
         setLoading(true);
 
-        const response = await journalResponsableAPI.getVendeurs({
-          page: page,
-          date_debut: dateDebut,
-          date_fin: dateFin,
-          // search est supprimé de l'appel API
-        });
+const response = await journalResponsableAPI.getVendeurs({
+  page: page,
+  ...(dateDebut && { date_debut: dateDebut }),
+  ...(dateFin && { date_fin: dateFin }),
+});
 
         const pagination = response?.total_ventes;
 
@@ -74,9 +72,9 @@ export default function VendeursPage() {
         setTotalVendeurs(pagination?.total || 0);
         
         // ✅ Récupération des stats globales
-        setStatsGlobales(response?.stats_globales || {
-          total_ventes: 0,
-          total_chiffre: 0,
+        setStatsGlobales({
+          total_ventes: pagination?.total || 0,
+          total_chiffre: response?.somme_total_encaisses || 0,
         });
 
       } catch (error) {

@@ -36,10 +36,8 @@ export default function CaissiersPage() {
   const [search, setSearch] = useState("");
   const [toasts, setToasts] = useState([]);
   
-  // Filtres de période
-  const today = new Date().toISOString().split('T')[0];
-  const [dateDebut, setDateDebut] = useState(today);
-  const [dateFin, setDateFin] = useState(today);
+  const [dateDebut, setDateDebut] = useState("");
+  const [dateFin, setDateFin] = useState("");
   
   // ✅ Pagination states
   const [page, setPage] = useState(1);
@@ -62,10 +60,10 @@ export default function CaissiersPage() {
     setTimeout(() => removeToast(id), 4000);
   }, []);
 
-  // ✅ Reset page quand les dates changent (search retiré)
+  // ✅ Reset page quand les dates changent
   useEffect(() => {
     setPage(1);
-  }, [dateDebut, dateFin]); // search retiré des dépendances
+  }, [dateDebut, dateFin]);
 
   // ✅ Chargement des caissiers avec pagination et filtres de date
   useEffect(() => {
@@ -75,14 +73,21 @@ export default function CaissiersPage() {
 
         const response = await journalResponsableAPI.getCaissiers({
           page: page,
-          date_debut: dateDebut,
-          date_fin: dateFin,
+          ...(dateDebut && { date_debut: dateDebut }),
+          ...(dateFin && { date_fin: dateFin }),
         });
 
-        // ⚠️ Le backend renvoie un paginator avec { current_page, data, last_page, total }
-        setCaissiers(response.data || []);
-        setTotalPages(response.last_page || 1);
-        // ❌ Ne plus utiliser response.total pour le nombre de caissiers
+        // ✅ Pagination
+        setCaissiers(response.journals.data || []);
+        setTotalPages(response.journals.last_page || 1);
+
+        // ✅ Stats globales venant du backend
+        setStatsGlobales(response.stats || {
+          encaissements: 0,
+          decaissements: 0,
+          solde_net: 0,
+          caissiers_count: 0
+        });
 
       } catch (error) {
         console.error(error);
@@ -94,26 +99,6 @@ export default function CaissiersPage() {
 
     loadCaissiers();
   }, [dateDebut, dateFin, page]);
-
-  // ✅ Chargement des statistiques globales synchronisées avec la période
-  useEffect(() => {
-    const loadStatsGlobales = async () => {
-      try {
-        const statsResponse = await journalResponsableAPI.getCaissiersCount({
-          date_debut: dateDebut,
-          date_fin: dateFin,
-        });
-
-        setStatsGlobales(statsResponse);
-        // ✅ Le caissiers_count vient des stats globales
-
-      } catch (error) {
-        console.error("Erreur chargement stats globales:", error);
-      }
-    };
-
-    loadStatsGlobales();
-  }, [dateDebut, dateFin]); // Recharge quand les dates changent
 
   // ✅ Recherche 100% front avec useMemo
   const filteredCaissiers = useMemo(() => {
