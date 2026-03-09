@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Card, { CardHeader } from '../../components/ui/Card';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import caissierApi from '../services/caissierApi';
-import { initializeEcho } from '../../utils/echo';
+import { echo } from '../../utils/echo';
 import { toast } from 'sonner';
 
 // Fonction pour formater le temps relatif
@@ -86,7 +86,7 @@ const DashboardPage = () => {
     // Initialiser WebSocket de manière asynchrone pour les mises à jour en temps réel
     const timeoutId = setTimeout(() => {
       try {
-        const echo = initializeEcho();
+      //  const echo = initializeEcho();
         if (echo) {
           echoRef.current = echo;
           

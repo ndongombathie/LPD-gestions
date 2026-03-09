@@ -17,7 +17,6 @@ const CaissePage = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const boutiqueId = localStorage.getItem('boutique_id');
-
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
@@ -48,6 +47,9 @@ const CaissePage = () => {
     const totalTTC = commande.total || 0;
     const totalHT = totalTTC / (1 + tauxTVA);
     const tva = totalTTC - totalHT;
+    console.log('boutiqueId:', boutiqueId);
+  
+    
 
     // Calculer le reste dû à partir des paiements
     const totalPaye = paiements.reduce((sum, p) => sum + (p.montant || 0), 0);
@@ -81,17 +83,17 @@ const CaissePage = () => {
       tva: tva,
       total_ttc: totalTTC,
       moyen_paiement: moyenPaiementDefini, // Pour les clients spéciaux, récupéré depuis les paiements
-      statut: resteDu > 0 ? (totalPaye > 0 ? 'partiellement_paye' : 'en_attente') : 'encaissé',
+      statut: resteDu > 0 ? (totalPaye > 0 ? 'partiellement_payee' : 'attente') : 'encaissé',
       client_special: isClientSpecial,
       client_nom: commande.client ? `${commande.client.prenom || ''} ${commande.client.nom || ''}`.trim() : null,
       lignes: lignes,
-      montant_deja_paye: totalPaye,
-      reste_du: resteDu,
+      montant_deja_paye: paiements[0]?.somme_payees,
+      reste_du: paiements[0]?.reste_du,
       paiements: paiements,
+      premiere_tranche:commande.premiere_tranche || null,
     };
   };
 
-  const [totalTickets, setTotalTickets] = useState(0);
   const [totalAmount, setTotalAmount] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const PAGE_SIZE = 10;
@@ -102,17 +104,19 @@ const CaissePage = () => {
       setLoading(true);
       const response = await caissierApi.getCommandesAttente({ page, per_page: PAGE_SIZE, search: search || undefined });
       const commandes = response?.data || [];
+      console.log('Commandes reçues du backend:', commandes);
       
       const ticketsTransformes = commandes.map(commande => {
         const paiements = commande.paiements || [];
         return transformCommandeToTicket(commande, paiements);
       });
+      console.log('Tickets transformés:', ticketsTransformes);
       
       setTickets(ticketsTransformes);
       setPendingCount(response?.total ?? ticketsTransformes.length);
       setTotalAmount(response?.total_amount ?? ticketsTransformes.reduce((s, t) => s + (t.total_ttc || 0), 0));
       setTotalPages(Math.max(1, response?.last_page ?? 1));
-    } catch (error) {
+    } catch {
       // Erreur silencieuse - ne pas afficher de message localhost
       toast.error('Erreur', {
         description: 'Impossible de charger les tickets en attente'
@@ -148,7 +152,7 @@ const CaissePage = () => {
     try {
       const stats = await caissierApi.getDashboardStats();
       setProcessedCount(stats.ticketsTraites || 0);
-    } catch (error) {
+    } catch  {
       // Erreur silencieuse - ne pas bloquer l'application
     }
   };
@@ -177,22 +181,23 @@ const CaissePage = () => {
   }, [boutiqueId]);
 
   // Écouter les paiements créés (temps réel)
+    
   useEffect(() => {
-    if (!boutiqueId || !echo) return;
-    const channel = echo.private(`boutique.${boutiqueId}`);
-    const listener = () => {
-      fetchTicketsSafe(currentPageRef.current, filterTextRef.current);
-    };
-    channel.listen('.paiement.cree', listener);
-    return () => {
-      try {
-        channel.stopListening('.paiement.cree');
-        echo.leave(`private-boutique.${boutiqueId}`);
-      } catch {
-        // Nettoyage silencieux
-      }
-    };
-  }, [boutiqueId]);
+      if (!boutiqueId) return;
+
+      const channel = echo.private(`boutique.${boutiqueId}`);
+
+      const listener = () => {
+          fetchTicketsSafe(currentPage, filterText.trim());
+      };
+
+      channel.listen(".paiement.cree", listener);
+
+      return () => {
+          channel.stopListening(".paiement.cree");
+          echo.leave(`boutique.${boutiqueId}`);
+      };
+  }, [boutiqueId, currentPage, filterText]);
 
   // Si on arrive depuis une notification (selectedTicketId), ouvrir directement le ticket
   const handledSelectedTicketRef = useRef(false);
@@ -268,7 +273,6 @@ const CaissePage = () => {
 
       // Appel API pour créer le paiement
       await caissierApi.creerPaiement(selectedTicket.commande_id, {
-        montant: montant,
         type_paiement: moyenPaiementFinal || 'especes'
       });
 
@@ -334,9 +338,9 @@ const CaissePage = () => {
         try {
           const obj = JSON.parse(s);
           const candidate = obj?.commande_id || obj?.commandeId || obj?.id;
-          if (typeof candidate === 'string') return candidate;
-        } catch (_e) {
-          // ignore
+          if (typeof candidate === 'string' && candidate.length > 0) return candidate;
+        } catch {
+          // Pas un JSON valide, continuer
         }
 
         // UUID dans une string (URL, texte, etc.)
@@ -564,7 +568,7 @@ const CaissePage = () => {
                       {ticket.client_special && (
                         <Badge variant="accent" className="text-xs">Client spécial</Badge>
                       )}
-                      {ticket.statut === 'partiellement_paye' ? (
+                      {ticket.statut === 'partiellement_payee' ? (
                         <Badge variant="info" className="text-xs">Partiellement payé</Badge>
                       ) : (
                         <Badge variant="warning" className="text-xs">En attente</Badge>
@@ -1050,7 +1054,7 @@ const CaissePage = () => {
                   
                   setIsCancelModalOpen(false);
                   setTicketToCancel(null);
-                } catch (error) {
+                } catch {
                   // Erreur lors de l'annulation - silencieux
                   toast.error('Erreur', {
                     description: 'Impossible d\'annuler le ticket'
