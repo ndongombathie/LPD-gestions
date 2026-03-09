@@ -2,7 +2,7 @@
 // 💰 CaissierHistoryModal.jsx — Historique des opérations financières
 // ==========================================================
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   X,
   Search,
@@ -25,7 +25,9 @@ import {
   CreditCard,
   Smartphone,
   Wallet,
+  Loader2
 } from "lucide-react";
+import { journalResponsableAPI } from "@/services/api/JournalResponsable";
 
 const formatFCFA = (n) =>
   new Intl.NumberFormat("fr-FR", {
@@ -49,6 +51,8 @@ const formatDate = (dateString) => {
 };
 
 export default function CaissierHistoryModal({ employee, isOpen, onClose }) {
+  const [operations, setOperations] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [filtreType, setFiltreType] = useState("tous");
   const [filtreDate, setFiltreDate] = useState("tous");
   const [recherche, setRecherche] = useState("");
@@ -56,152 +60,104 @@ export default function CaissierHistoryModal({ employee, isOpen, onClose }) {
   const [modalDetailOuvert, setModalDetailOuvert] = useState(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
-  // Générer des données d'opérations simulées
-  const genererOperationsSimulees = () => {
-    return [
-      {
-        id: "OP-001",
-        type: "encaissement",
-        montant: 45000,
-        mode_paiement: "espèces",
-        reference: "ENC-2024-001",
-        commande_associee: "CMD-2024-001",
-        client: "Marie Diop",
-        date: new Date().toISOString(),
-        statut: "réussi",
-        caissier: employee?.name || "Caissier",
-        details: {
-          ticket: "TKT-2025-000001",
-          vendeur: "Amadou Diallo",
-          produits: ["Bloc Note Mood diary", "Kirene"],
-          total_ht: 40000,
-          tva: 7200,
-          total_ttc: 47200
-        }
-      },
-      {
-        id: "OP-002",
-        type: "decaissement",
-        montant: 20000,
-        motif: "Frais fournisseur",
-        reference: "DEC-2024-001",
-        beneficiaire: "Fournisseur Papeterie",
-        date: new Date(Date.now() - 3600000).toISOString(),
-        statut: "validé",
-        caissier: employee?.name || "Caissier",
-        details: {
-          approuve_par: "Responsable",
-          categorie: "Dépenses opérationnelles",
-          justificatif: "Facture #FAC-2024-123"
-        }
-      },
-      {
-        id: "OP-003",
-        type: "encaissement",
-        montant: 100300,
-        mode_paiement: "carte",
-        reference: "ENC-2024-002",
-        commande_associee: "CMD-2024-002",
-        client: "Jean Dupont",
-        date: new Date(Date.now() - 7200000).toISOString(),
-        statut: "réussi",
-        caissier: employee?.name || "Caissier",
-        details: {
-          ticket: "TKT-2025-000002",
-          vendeur: "Fatou Ba",
-          produits: ["Produit B"],
-          total_ht: 85000,
-          tva: 15300,
-          total_ttc: 100300
-        }
-      },
-      {
-        id: "OP-004",
-        type: "encaissement",
-        montant: 75000,
-        mode_paiement: "mobile_money",
-        reference: "ENC-2024-003",
-        commande_associee: "CMD-2024-003",
-        client: "Aissatou Fall",
-        date: new Date(Date.now() - 10800000).toISOString(),
-        statut: "annulé",
-        caissier: employee?.name || "Caissier",
-        details: {
-          ticket: "TKT-2025-000003",
-          vendeur: "Ibrahima Sall",
-          produits: ["Cahier 200 pages"],
-          total_ht: 63559,
-          tva: 11441,
-          total_ttc: 75000,
-          raison_annulation: "Paiement échoué"
-        }
-      },
-      {
-        id: "OP-005",
-        type: "decaissement",
-        montant: 15000,
-        motif: "Achat de matériel",
-        reference: "DEC-2024-002",
-        beneficiaire: "Magasin Bureau",
-        date: new Date(Date.now() - 14400000).toISOString(),
-        statut: "en_attente",
-        caissier: employee?.name || "Caissier",
-        details: {
-          approuve_par: "En attente",
-          categorie: "Fournitures",
-          justificatif: "Devis #DEV-2024-456"
-        }
-      }
-    ];
-  };
+  // Charger l'historique réel
+  useEffect(() => {
+    if (!isOpen || !employee?.caissier?.id) return;
 
-  const operations = genererOperationsSimulees();
+    const loadHistorique = async () => {
+      try {
+        setLoading(true);
+
+        const response = await journalResponsableAPI.getHistoriqueCaissier(
+          employee.caissier.id,
+          {
+            search: recherche || undefined,
+          }
+        );
+
+        setOperations(response ?? []);
+      } catch (error) {
+        console.error("Erreur chargement historique:", error);
+        setOperations([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadHistorique();
+  }, [isOpen, employee?.id, recherche]);
 
   const operationsFiltrees = operations.filter(operation => {
-    const matchType = filtreType === "tous" || operation.type === filtreType;
+    const typeOperation = operation.type;
+    
+    const matchType = filtreType === "tous" || typeOperation === filtreType;
+    
+    // Filtre date
+    let matchDate = true;
+    if (filtreDate !== "tous") {
+      const today = new Date();
+      const opDate = new Date(operation.created_at);
+      const diffDays = Math.floor((today - opDate) / (1000 * 60 * 60 * 24));
+      
+      if (filtreDate === "aujourdhui") {
+        matchDate = diffDays === 0;
+      } else if (filtreDate === "7jours") {
+        matchDate = diffDays <= 7;
+      } else if (filtreDate === "30jours") {
+        matchDate = diffDays <= 30;
+      }
+    }
+    
+    const clientNom = operation.client ? `${operation.client.prenom || ''} ${operation.client.nom || ''}`.trim() : '';
     const matchRecherche = !recherche || 
       operation.reference?.toLowerCase().includes(recherche.toLowerCase()) ||
-      operation.client?.toLowerCase().includes(recherche.toLowerCase()) ||
-      operation.beneficiaire?.toLowerCase().includes(recherche.toLowerCase()) ||
-      operation.motif?.toLowerCase().includes(recherche.toLowerCase());
+      clientNom.toLowerCase().includes(recherche.toLowerCase()) ||
+      operation.fournisseur_nom?.toLowerCase().includes(recherche.toLowerCase()) ||
+      operation.description?.toLowerCase().includes(recherche.toLowerCase());
     
-    return matchType && matchRecherche;
+    return matchType && matchDate && matchRecherche;
   });
 
   const getStatutIcone = (statut) => {
     switch (statut) {
-      case "réussi":
-      case "validé": return <CheckCircle className="w-3 h-3 text-emerald-500" />;
-      case "en_attente": return <Clock className="w-3 h-3 text-amber-500" />;
-      case "annulé": return <XCircle className="w-3 h-3 text-red-500" />;
+      case "payee":
+      case "partiellement_payee": return <CheckCircle className="w-3 h-3 text-emerald-500" />;
+      case "en_attente":
+      case "en cours": return <Clock className="w-3 h-3 text-amber-500" />;
+      case "annulee": return <XCircle className="w-3 h-3 text-red-500" />;
       default: return <Clock className="w-3 h-3 text-gray-500" />;
     }
   };
 
   const getStatutClasse = (statut) => {
     switch (statut) {
-      case "réussi":
-      case "validé": return "bg-emerald-50 text-emerald-700 border-emerald-200";
-      case "en_attente": return "bg-amber-50 text-amber-700 border-amber-200";
-      case "annulé": return "bg-red-50 text-red-700 border-red-200";
+      case "payee":
+      case "partiellement_payee": return "bg-emerald-50 text-emerald-700 border-emerald-200";
+      case "en_attente":
+      case "en cours": return "bg-amber-50 text-amber-700 border-amber-200";
+      case "annulee": return "bg-red-50 text-red-700 border-red-200";
       default: return "bg-gray-50 text-gray-700 border-gray-200";
     }
   };
 
   const getModePaiementIcone = (mode) => {
     switch (mode) {
-      case "espèces": return <DollarSign className="w-3 h-3" />;
+      case "espèces":
+      case "especes": return <DollarSign className="w-3 h-3" />;
       case "carte": return <CreditCard className="w-3 h-3" />;
-      case "mobile_money": return <Smartphone className="w-3 h-3" />;
+      case "mobile_money":
+      case "mobile money": return <Smartphone className="w-3 h-3" />;
       default: return <Wallet className="w-3 h-3" />;
     }
   };
 
   const getModePaiementClasse = (mode) => {
     switch (mode) {
-      case "espèces": return "bg-green-50 text-green-700 border-green-200";
+      case "espèces":
+      case "especes": return "bg-green-50 text-green-700 border-green-200";
       case "carte": return "bg-blue-50 text-blue-700 border-blue-200";
-      case "mobile_money": return "bg-purple-50 text-purple-700 border-purple-200";
+      case "mobile_money":
+      case "mobile money": return "bg-purple-50 text-purple-700 border-purple-200";
       default: return "bg-gray-50 text-gray-700 border-gray-200";
     }
   };
@@ -230,20 +186,27 @@ export default function CaissierHistoryModal({ employee, isOpen, onClose }) {
 
   const stats = {
     total: operations.length,
-    encaissements: operations.filter(o => o.type === "encaissement").length,
-    decaissements: operations.filter(o => o.type === "decaissement").length,
+
+    encaissements: operations.filter(o => o.type === 'encaissement' && o.statut !== 'annulee').length,
+
+    decaissements: operations.filter(o => o.type === 'decaissement' && o.statut !== 'annulee').length,
+
     totalEncaissements: operations
-      .filter(o => o.type === "encaissement")
-      .reduce((sum, o) => sum + (o.montant || 0), 0),
+      .filter(o => o.type === 'encaissement' && o.statut !== 'annulee')
+      .reduce((sum, o) => sum + (Number(o.total) || 0), 0),
+
     totalDecaissements: operations
-      .filter(o => o.type === "decaissement")
-      .reduce((sum, o) => sum + (o.montant || 0), 0),
-    soldeNet: operations
-      .filter(o => o.type === "encaissement")
-      .reduce((sum, o) => sum + (o.montant || 0), 0) -
+      .filter(o => o.type === 'decaissement' && o.statut !== 'annulee')
+      .reduce((sum, o) => sum + (Number(o.total) || 0), 0),
+
+    soldeNet:
       operations
-        .filter(o => o.type === "decaissement")
-        .reduce((sum, o) => sum + (o.montant || 0), 0)
+        .filter(o => o.type === 'encaissement' && o.statut !== 'annulee')
+        .reduce((sum, o) => sum + (Number(o.total) || 0), 0)
+      -
+      operations
+        .filter(o => o.type === 'decaissement' && o.statut !== 'annulee')
+        .reduce((sum, o) => sum + (Number(o.total) || 0), 0),
   };
 
   return (
@@ -377,91 +340,115 @@ export default function CaissierHistoryModal({ employee, isOpen, onClose }) {
 
             {/* Liste des opérations */}
             <div className="p-4">
-              {operationsFiltrees.length === 0 ? (
+              {loading ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 text-blue-600 animate-spin mb-3" />
+                  <p className="text-sm text-gray-600">Chargement des opérations...</p>
+                </div>
+              ) : operationsFiltrees.length === 0 ? (
                 <div className="text-center py-8">
                   <div className="inline-flex p-2 bg-gray-100 rounded-full mb-2">
                     <Banknote className="w-5 h-5 text-gray-400" />
                   </div>
                   <h3 className="font-medium text-gray-700 text-sm">Aucune opération trouvée</h3>
                   <p className="text-xs text-gray-500 mt-1">
-                    Aucune opération ne correspond à vos critères
+                    {operations.length === 0 
+                      ? "Aucune opération enregistrée pour ce caissier"
+                      : "Aucune opération ne correspond à vos critères"}
                   </p>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {operationsFiltrees.map((operation) => (
-                    <div key={operation.id} className="bg-white border border-gray-200 rounded-lg p-3 hover:border-gray-300 transition-colors">
-                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                        <div className="flex-1">
-                          <div className="flex flex-wrap items-center gap-1.5 mb-2">
-                            <div className={`px-1.5 py-0.5 rounded text-xs font-medium ${operation.type === 'encaissement' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
-                              {operation.type === 'encaissement' ? 
-                                <><TrendingUp className="w-2.5 h-2.5 inline mr-1" /> Encaissement</> : 
-                                <><TrendingDown className="w-2.5 h-2.5 inline mr-1" /> Décaissement</>
-                              }
-                            </div>
-                            <div className={`px-1.5 py-0.5 rounded text-xs font-medium ${getStatutClasse(operation.statut)}`}>
-                              {getStatutIcone(operation.statut)} {operation.statut}
-                            </div>
-                            {operation.mode_paiement && (
-                              <div className={`px-1.5 py-0.5 rounded text-xs font-medium ${getModePaiementClasse(operation.mode_paiement)}`}>
-                                {getModePaiementIcone(operation.mode_paiement)} {operation.mode_paiement}
+                  {operationsFiltrees.map((operation) => {
+                    const typeOperation = operation.type || 'decaissement';
+                    const clientNom = operation.client ? `${operation.client.prenom || ''} ${operation.client.nom || ''}`.trim() : 'Non spécifié';
+                    
+                    return (
+                      <div key={operation.id} className="bg-white border border-gray-200 rounded-lg p-3 hover:border-gray-300 transition-colors">
+                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                          <div className="flex-1">
+                            <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                              {typeOperation === 'encaissement' && (
+                                <div className="bg-emerald-50 text-emerald-700 border-emerald-200 px-1.5 py-0.5 rounded text-xs font-medium">
+                                  <TrendingUp className="w-2.5 h-2.5 inline mr-1" /> Encaissement
+                                </div>
+                              )}
+
+                              {typeOperation === 'decaissement' && (
+                                <div className="bg-red-50 text-red-700 border-red-200 px-1.5 py-0.5 rounded text-xs font-medium">
+                                  <TrendingDown className="w-2.5 h-2.5 inline mr-1" /> Décaissement
+                                </div>
+                              )}
+
+                              {typeOperation === 'annulation' && (
+                                <div className="bg-yellow-50 text-yellow-700 border-yellow-200 px-1.5 py-0.5 rounded text-xs font-medium">
+                                  Annulation
+                                </div>
+                              )}
+
+                              <div className={`px-1.5 py-0.5 rounded text-xs font-medium ${getStatutClasse(operation.statut)}`}>
+                                {getStatutIcone(operation.statut)} {operation.statut}
                               </div>
-                            )}
-                          </div>
-
-                          <h3 className="font-semibold text-gray-800 text-sm mb-1">
-                            {operation.reference}
-                          </h3>
-                          
-                          <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600 mb-2">
-                            <span className="flex items-center gap-1">
-                              <Calendar className="w-3 h-3" />
-                              {formatDate(operation.date)}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              {operation.type === 'encaissement' ? 
-                                <>Client: {operation.client}</> : 
-                                <>Bénéficiaire: {operation.beneficiaire}</>
-                              }
-                            </span>
-                          </div>
-
-                          {/* Détails rapides */}
-                          <div className="mt-2">
-                            <div className="text-xs text-gray-500">
-                              {operation.type === 'encaissement' ? 
-                                <>Ticket: {operation.details?.ticket}</> : 
-                                <>Motif: {operation.motif}</>
-                              }
+                              {operation.mode_paiement && (
+                                <div className={`px-1.5 py-0.5 rounded text-xs font-medium ${getModePaiementClasse(operation.mode_paiement)}`}>
+                                  {getModePaiementIcone(operation.mode_paiement)} {operation.mode_paiement}
+                                </div>
+                              )}
                             </div>
-                          </div>
-                        </div>
 
-                        <div className="flex flex-col items-end gap-2">
-                          <div className="text-right">
-                            <div className={`text-sm font-bold ${operation.type === 'encaissement' ? 'text-emerald-600' : 'text-red-600'}`}>
-                              {formatFCFA(operation.montant || 0)}
+                            <h3 className="font-semibold text-gray-800 text-sm mb-1">
+                              {operation.reference}
+                            </h3>
+                            
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600 mb-2">
+                              <span className="flex items-center gap-1">
+                                <Calendar className="w-3 h-3" />
+                                {formatDate(operation.created_at)}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                {typeOperation === 'encaissement' ? 
+                                  <>Client: {clientNom}</> : 
+                                  <>Bénéficiaire: {operation.fournisseur_nom || 'Non spécifié'}</>
+                                }
+                              </span>
                             </div>
-                            <div className="text-xs text-gray-500">
-                              {operation.type === 'encaissement' ? 
-                                <>TTC: {formatFCFA(operation.details?.total_ttc || 0)}</> : 
-                                <>Catégorie: {operation.details?.categorie}</>
-                              }
+
+                            {/* Détails rapides */}
+                            <div className="mt-2">
+                              <div className="text-xs text-gray-500">
+                                {typeOperation === 'encaissement' ? 
+                                  <>Ticket: {operation.numero_ticket || 'Non spécifié'}</> : 
+                                  <>Motif: {operation.description || 'Non spécifié'}</>
+                                }
+                              </div>
                             </div>
                           </div>
 
-                          <button
-                            onClick={() => ouvrirDetails(operation)}
-                            className="flex items-center gap-1 px-2 py-1 text-xs text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 rounded transition-colors"
-                          >
-                            <Eye className="w-3 h-3" />
-                            Détails
-                          </button>
+                          <div className="flex flex-col items-end gap-2">
+                            <div className="text-right">
+                              <div className={`text-sm font-bold ${typeOperation === 'encaissement' ? 'text-emerald-600' : 'text-red-600'}`}>
+                                {formatFCFA(operation.total || 0)}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {typeOperation === 'encaissement' ? 
+                                  <>TTC: {formatFCFA(operation.total || 0)}</> : 
+                                  <>Catégorie: {operation.categorie || 'Général'}</>
+                                }
+                              </div>
+                            </div>
+
+                            <button
+                              onClick={() => ouvrirDetails(operation)}
+                              className="flex items-center gap-1 px-2 py-1 text-xs text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 rounded transition-colors"
+                            >
+                              <Eye className="w-3 h-3" />
+                              Détails
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -522,16 +509,13 @@ export default function CaissierHistoryModal({ employee, isOpen, onClose }) {
                   <div className="grid grid-cols-2 gap-2">
                     <div className="bg-gray-50 rounded p-2">
                       <div className="text-xs text-gray-500">Type</div>
-                      <div className={`inline-flex items-center gap-1 text-xs font-medium mt-0.5 ${operationSelectionnee.type === 'encaissement' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'} px-1.5 py-0.5 rounded`}>
-                        {operationSelectionnee.type === 'encaissement' ? 
-                          <><TrendingUp className="w-2.5 h-2.5" /> Encaissement</> : 
-                          <><TrendingDown className="w-2.5 h-2.5" /> Décaissement</>
-                        }
+                      <div className="text-xs font-medium mt-0.5">
+                        {operationSelectionnee.type}
                       </div>
                     </div>
                     <div className="bg-gray-50 rounded p-2">
                       <div className="text-xs text-gray-500">Date</div>
-                      <div className="text-xs font-medium text-gray-800 mt-0.5">{formatDate(operationSelectionnee.date)}</div>
+                      <div className="text-xs font-medium text-gray-800 mt-0.5">{formatDate(operationSelectionnee.created_at)}</div>
                     </div>
                     <div className="bg-gray-50 rounded p-2">
                       <div className="text-xs text-gray-500">Statut</div>
@@ -542,11 +526,26 @@ export default function CaissierHistoryModal({ employee, isOpen, onClose }) {
                     <div className="bg-gray-50 rounded p-2">
                       <div className="text-xs text-gray-500">Montant</div>
                       <div className={`text-xs font-bold mt-0.5 ${operationSelectionnee.type === 'encaissement' ? 'text-emerald-600' : 'text-red-600'}`}>
-                        {formatFCFA(operationSelectionnee.montant || 0)}
+                        {formatFCFA(operationSelectionnee.total || 0)}
                       </div>
                     </div>
                   </div>
                 </div>
+
+                {/* Bloc annulation */}
+                {operationSelectionnee.statut === 'annulee' && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-1">
+                      <XCircle className="w-4 h-4 text-red-600" />
+                      Annulation
+                    </h3>
+                    <div className="bg-red-50 rounded p-3 border border-red-200">
+                      <div className="text-xs text-red-700">
+                        <span className="font-medium">Raison :</span> {operationSelectionnee.raison_annulation || 'Non spécifiée'}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Détails spécifiques */}
                 <div>
@@ -560,56 +559,52 @@ export default function CaissierHistoryModal({ employee, isOpen, onClose }) {
                         <>
                           <div>
                             <div className="text-xs text-gray-500">Client</div>
-                            <div className="text-xs font-medium text-gray-800">{operationSelectionnee.client}</div>
+                            <div className="text-xs font-medium text-gray-800">
+                              {operationSelectionnee.client ? `${operationSelectionnee.client.prenom || ''} ${operationSelectionnee.client.nom || ''}`.trim() : 'Non spécifié'}
+                            </div>
                           </div>
                           <div>
                             <div className="text-xs text-gray-500">Mode paiement</div>
                             <div className={`inline-flex items-center gap-1 text-xs font-medium mt-0.5 ${getModePaiementClasse(operationSelectionnee.mode_paiement)} px-1.5 py-0.5 rounded`}>
-                              {getModePaiementIcone(operationSelectionnee.mode_paiement)} {operationSelectionnee.mode_paiement}
+                              {getModePaiementIcone(operationSelectionnee.mode_paiement)} {operationSelectionnee.mode_paiement || 'Non spécifié'}
                             </div>
                           </div>
                           <div>
                             <div className="text-xs text-gray-500">Ticket associé</div>
-                            <div className="text-xs font-medium text-gray-800">{operationSelectionnee.details?.ticket}</div>
+                            <div className="text-xs font-medium text-gray-800">{operationSelectionnee.numero_ticket || 'Non spécifié'}</div>
                           </div>
                           <div>
                             <div className="text-xs text-gray-500">Vendeur</div>
-                            <div className="text-xs font-medium text-gray-800">{operationSelectionnee.details?.vendeur}</div>
+                            <div className="text-xs font-medium text-gray-800">{operationSelectionnee.vendeur_nom || 'Non spécifié'}</div>
                           </div>
                           <div className="col-span-2">
                             <div className="text-xs text-gray-500">Produits</div>
                             <div className="text-xs font-medium text-gray-800">
-                              {operationSelectionnee.details?.produits?.join(', ') || 'Non spécifié'}
+                              {operationSelectionnee.produits?.map(p => p.nom).join(', ') || 'Non spécifié'}
                             </div>
                           </div>
-                          {operationSelectionnee.statut === 'annulé' && (
-                            <div className="col-span-2">
-                              <div className="text-xs text-gray-500">Raison annulation</div>
-                              <div className="text-xs font-medium text-red-600">{operationSelectionnee.details?.raison_annulation}</div>
-                            </div>
-                          )}
                         </>
                       ) : (
                         <>
                           <div>
                             <div className="text-xs text-gray-500">Bénéficiaire</div>
-                            <div className="text-xs font-medium text-gray-800">{operationSelectionnee.beneficiaire}</div>
+                            <div className="text-xs font-medium text-gray-800">{operationSelectionnee.fournisseur_nom || 'Non spécifié'}</div>
                           </div>
                           <div>
                             <div className="text-xs text-gray-500">Motif</div>
-                            <div className="text-xs font-medium text-gray-800">{operationSelectionnee.motif}</div>
+                            <div className="text-xs font-medium text-gray-800">{operationSelectionnee.description || 'Non spécifié'}</div>
                           </div>
                           <div>
                             <div className="text-xs text-gray-500">Catégorie</div>
-                            <div className="text-xs font-medium text-gray-800">{operationSelectionnee.details?.categorie}</div>
+                            <div className="text-xs font-medium text-gray-800">{operationSelectionnee.categorie || 'Général'}</div>
                           </div>
                           <div>
                             <div className="text-xs text-gray-500">Approuvé par</div>
-                            <div className="text-xs font-medium text-gray-800">{operationSelectionnee.details?.approuve_par}</div>
+                            <div className="text-xs font-medium text-gray-800">{operationSelectionnee.approuve_par || 'En attente'}</div>
                           </div>
                           <div className="col-span-2">
                             <div className="text-xs text-gray-500">Justificatif</div>
-                            <div className="text-xs font-medium text-gray-800">{operationSelectionnee.details?.justificatif}</div>
+                            <div className="text-xs font-medium text-gray-800">{operationSelectionnee.justificatif || 'Non fourni'}</div>
                           </div>
                         </>
                       )}
@@ -618,7 +613,7 @@ export default function CaissierHistoryModal({ employee, isOpen, onClose }) {
                 </div>
 
                 {/* Totaux pour encaissement */}
-                {operationSelectionnee.type === 'encaissement' && operationSelectionnee.details && (
+                {operationSelectionnee.type === 'encaissement' && (
                   <div>
                     <h3 className="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-1">
                       <DollarSign className="w-4 h-4 text-blue-600" />
@@ -628,16 +623,16 @@ export default function CaissierHistoryModal({ employee, isOpen, onClose }) {
                       <div className="space-y-1">
                         <div className="flex justify-between">
                           <span className="text-xs text-gray-600">Total HT</span>
-                          <span className="text-xs font-medium">{formatFCFA(operationSelectionnee.details.total_ht || 0)}</span>
+                          <span className="text-xs font-medium">{formatFCFA(operationSelectionnee.total_ht || operationSelectionnee.total * 0.847)}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-xs text-gray-600">TVA (18%)</span>
-                          <span className="text-xs font-medium">{formatFCFA(operationSelectionnee.details.tva || 0)}</span>
+                          <span className="text-xs font-medium">{formatFCFA(operationSelectionnee.tva || operationSelectionnee.total * 0.153)}</span>
                         </div>
                         <div className="flex justify-between pt-1 border-t border-gray-300">
                           <span className="text-sm font-semibold">Total TTC</span>
                           <span className="text-sm font-bold text-emerald-600">
-                            {formatFCFA(operationSelectionnee.details.total_ttc || 0)}
+                            {formatFCFA(operationSelectionnee.total || 0)}
                           </span>
                         </div>
                       </div>

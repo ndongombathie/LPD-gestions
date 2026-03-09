@@ -1,16 +1,14 @@
 // ==========================================================
-// 💰 CaissiersPage.jsx — Interface caissiers avec filtres
+// 💰 CaissiersPage.jsx — Interface caissiers avec filtres et pagination
 // ==========================================================
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Users,
   Banknote,
   TrendingUp,
   TrendingDown,
   Search,
-  CheckCircle,
-  XCircle,
   User,
   Eye,
   Wallet,
@@ -20,8 +18,8 @@ import {
 // Composants
 import CaissierHistoryModal from "../../components/roles/CaissierHistoryModal";
 import FondOuvertureModal from "../../components/roles/FondOuvertureModal";
+import Pagination from "@/responsable/components/Pagination";
 import { journalResponsableAPI } from "@/services/api/JournalResponsable";
-
 
 const formatFCFA = (n) =>
   new Intl.NumberFormat("fr-FR", {
@@ -37,67 +35,106 @@ export default function CaissiersPage() {
   const [showFondOuverture, setShowFondOuverture] = useState(false);
   const [search, setSearch] = useState("");
   const [toasts, setToasts] = useState([]);
-  const [encaissementsGlobal, setEncaissementsGlobal] = useState(0);
   
   // Filtres de période
   const today = new Date().toISOString().split('T')[0];
   const [dateDebut, setDateDebut] = useState(today);
   const [dateFin, setDateFin] = useState(today);
+  
+  // ✅ Pagination states
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  
+  // ✅ Stats globales (indépendantes de la pagination)
+  const [statsGlobales, setStatsGlobales] = useState({
+    encaissements: 0,
+    decaissements: 0,
+    solde_net: 0,
+    caissiers_count: 0
+  });
 
   const removeToast = (id) =>
     setToasts((t) => t.filter((x) => x.id !== id));
 
-  const toast = React.useCallback((type, title, message) => {
+  const toast = useCallback((type, title, message) => {
     const id = Date.now();
     setToasts((t) => [...t, { id, type, title, message }]);
     setTimeout(() => removeToast(id), 4000);
   }, []);
 
- useEffect(() => {
-  let interval;
+  // ✅ Reset page quand les dates changent (search retiré)
+  useEffect(() => {
+    setPage(1);
+  }, [dateDebut, dateFin]); // search retiré des dépendances
 
-  const loadCaissiers = async (firstLoad = false) => {
-    try {
-      if (firstLoad) setLoading(true);
+  // ✅ Chargement des caissiers avec pagination et filtres de date
+  useEffect(() => {
+    const loadCaissiers = async () => {
+      try {
+        setLoading(true);
 
-      const response = await journalResponsableAPI.getCaissiers();
+        const response = await journalResponsableAPI.getCaissiers({
+          page: page,
+          date_debut: dateDebut,
+          date_fin: dateFin,
+        });
 
-      setCaissiers(response.data || []);
-      setEncaissementsGlobal(response.encaissementsGlobal || 0);
+        // ⚠️ Le backend renvoie un paginator avec { current_page, data, last_page, total }
+        setCaissiers(response.data || []);
+        setTotalPages(response.last_page || 1);
+        // ❌ Ne plus utiliser response.total pour le nombre de caissiers
 
-      if (firstLoad) setLoading(false);
-    } catch (error) {
-      console.error(error);
-      setLoading(false);
-    }
-  };
-
-  loadCaissiers(true);
-
-  // refresh auto toutes les 30s comme vendeurs
-  interval = setInterval(() => loadCaissiers(false), 30000);
-
-  return () => clearInterval(interval);
-}, []);
-
-
-  const filteredCaissiers = caissiers.filter(caissier => {
-    if (search) {
-      const terme = search.toLowerCase();
-      if (!caissier.name?.toLowerCase().includes(terme) &&
-          !caissier.email?.toLowerCase().includes(terme)) {
-        return false;
+      } catch (error) {
+        console.error(error);
+        setCaissiers([]);
+      } finally {
+        setLoading(false);
       }
-    }
-    
-    return true;
-  });
+    };
 
+    loadCaissiers();
+  }, [dateDebut, dateFin, page]);
+
+  // ✅ Chargement des statistiques globales synchronisées avec la période
+  useEffect(() => {
+    const loadStatsGlobales = async () => {
+      try {
+        const statsResponse = await journalResponsableAPI.getCaissiersCount({
+          date_debut: dateDebut,
+          date_fin: dateFin,
+        });
+
+        setStatsGlobales(statsResponse);
+        // ✅ Le caissiers_count vient des stats globales
+
+      } catch (error) {
+        console.error("Erreur chargement stats globales:", error);
+      }
+    };
+
+    loadStatsGlobales();
+  }, [dateDebut, dateFin]); // Recharge quand les dates changent
+
+  // ✅ Recherche 100% front avec useMemo
+  const filteredCaissiers = useMemo(() => {
+    const term = search.toLowerCase();
+
+    return caissiers.filter((c) => {
+      const prenom = (c.caissier?.prenom || "").toLowerCase();
+      const nom = (c.caissier?.nom || "").toLowerCase();
+      const email = (c.caissier?.email || "").toLowerCase();
+      const fullName = `${prenom} ${nom}`;
+
+      return fullName.includes(term) || email.includes(term);
+    });
+  }, [caissiers, search]);
+
+  // ✅ Statistiques globales (indépendantes de la pagination)
   const globalStats = {
-    total: caissiers.length,
-    encaissementsTotal: caissiers.reduce((sum, v) => sum + (v.stats?.encaissementsTotal || 0), 0),
-    decaissementsTotal: caissiers.reduce((sum, v) => sum + (v.stats?.decaissementsTotal || 0), 0),
-    soldeNet: caissiers.reduce((sum, v) => sum + (v.stats?.soldeNet || 0), 0),
+    total: statsGlobales.caissiers_count || 0,
+    encaissementsTotal: statsGlobales.encaissements || 0,
+    decaissementsTotal: statsGlobales.decaissements || 0,
+    soldeNet: statsGlobales.solde_net || 0,
   };
 
   const handleViewHistory = (caissier) => {
@@ -110,13 +147,8 @@ export default function CaissiersPage() {
     setShowFondOuverture(true);
   };
 
-  const getStatusIcon = (status) => {
-    return status === "actif" ? 
-      <CheckCircle className="w-3 h-3 text-emerald-500" /> : 
-      <XCircle className="w-3 h-3 text-red-500" />;
-  };
-
-  if (loading) {
+  // ✅ Loading uniquement au premier chargement
+  if (loading && caissiers.length === 0) {
     return (
       <div className="flex items-center justify-center py-6">
         <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-gray-200">
@@ -135,7 +167,7 @@ export default function CaissiersPage() {
           <div>
             <h2 className="text-base font-bold text-gray-800">Équipe Caissiers</h2>
             <p className="text-xs text-gray-500 mt-1">
-              {globalStats.total} caissiers
+              {globalStats.total} caissier{globalStats.total > 1 ? 's' : ''} au total • {filteredCaissiers.length} affiché{filteredCaissiers.length > 1 ? 's' : ''}
             </p>
           </div>
         </div>
@@ -180,7 +212,9 @@ export default function CaissiersPage() {
               <TrendingUp className="w-3 h-3 text-emerald-600" />
               <div className="text-xs text-gray-500">Encaissements</div>
             </div>
-            <div className="text-sm font-bold text-emerald-600">{formatFCFA(encaissementsGlobal)}</div>
+            <div className="text-sm font-bold text-emerald-600">
+              {formatFCFA(globalStats.encaissementsTotal)}
+            </div>
           </div>
 
           <div className="bg-white border border-gray-200 rounded-lg p-3">
@@ -188,7 +222,9 @@ export default function CaissiersPage() {
               <TrendingDown className="w-3 h-3 text-red-600" />
               <div className="text-xs text-gray-500">Décaissements</div>
             </div>
-            <div className="text-sm font-bold text-red-600">{formatFCFA(globalStats.decaissementsTotal)}</div>
+            <div className="text-sm font-bold text-red-600">
+              {formatFCFA(globalStats.decaissementsTotal)}
+            </div>
           </div>
 
           <div className="bg-white border border-gray-200 rounded-lg p-3">
@@ -256,6 +292,13 @@ export default function CaissiersPage() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
+              {filteredCaissiers.length === 0 && (
+                <tr>
+                  <td colSpan="6" className="text-center py-6 text-sm text-gray-500">
+                    {caissiers.length === 0 ? "Aucun caissier trouvé pour cette période" : "Aucun caissier ne correspond à votre recherche"}
+                  </td>
+                </tr>
+              )}
               {filteredCaissiers.map((caissier) => (
                 <tr key={caissier.id} className="hover:bg-gray-50">
                   <td className="px-3 py-3">
@@ -264,32 +307,33 @@ export default function CaissiersPage() {
                         <User className="w-4 h-4 text-blue-600" />
                       </div>
                       <div className="ml-2">
-                        <div className="text-sm font-medium text-gray-900">{caissier.name}</div>
-                        <div className="flex items-center gap-1 mt-0.5">
-                          {getStatusIcon(caissier.status)}
-                          <span className="text-xs text-gray-500">{caissier.email}</span>
+                        <div className="text-sm font-medium text-gray-900">
+                          {caissier.caissier?.prenom} {caissier.caissier?.nom}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-0.5">
+                          {caissier.caissier?.email}
                         </div>
                       </div>
                     </div>
                   </td>
                   <td className="px-3 py-3">
                     <div className="text-sm font-semibold text-emerald-600">
-                      {formatFCFA(caissier.stats?.encaissementsTotal || 0)}
+                      {formatFCFA(caissier.total_encaissements || 0)}
                     </div>
                   </td>
                   <td className="px-3 py-3">
                     <div className="text-sm font-semibold text-red-600">
-                      {formatFCFA(caissier.stats?.decaissementsTotal || 0)}
+                      {formatFCFA(caissier.total_decaissements || 0)}
                     </div>
                   </td>
                   <td className="px-3 py-3">
-                    <div className={`text-sm font-bold ${(caissier.stats?.soldeNet || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                      {formatFCFA(caissier.stats?.soldeNet || 0)}
+                    <div className={`text-sm font-bold ${(caissier.solde_theorique || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                      {formatFCFA(caissier.solde_theorique || 0)}
                     </div>
                   </td>
                   <td className="px-3 py-3">
                     <div className="text-sm font-semibold text-gray-900">
-                      {formatFCFA(caissier.stats?.fondOuverture || 0)}
+                      {formatFCFA(caissier.fond_ouverture || 0)}
                     </div>
                   </td>
                   <td className="px-3 py-3">
@@ -317,6 +361,15 @@ export default function CaissiersPage() {
         </div>
       </div>
 
+      {/* ✅ PAGINATION BACKEND (uniquement si nécessaire) */}
+      {totalPages > 1 && (
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          onPageChange={(newPage) => setPage(newPage)}
+        />
+      )}
+
       {/* MODAL D'HISTORIQUE */}
       {showHistory && selectedCaissier && (
         <CaissierHistoryModal
@@ -335,7 +388,6 @@ export default function CaissiersPage() {
           onToast={toast}
         />
       )}
-      
     </div>
   );
 }

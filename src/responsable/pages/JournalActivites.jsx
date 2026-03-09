@@ -8,13 +8,11 @@ import { motion } from "framer-motion";
 import {
   ShoppingCart,
   Banknote,
-  Store,
 } from "lucide-react";
 
 // Import des sous-pages des rôles
 import VendeursPage from "./roles/VendeursPage.jsx";
 import CaissiersPage from "./roles/CaissiersPage.jsx";
-import GestionnairesBoutiquePage from "./roles/GestionnairesBoutiquePage.jsx";
 
 // ==========================================================
 // 🧩 Profils suivis par le journal
@@ -34,13 +32,6 @@ const ROLE_CARDS = [
     icon: Banknote,
     color: "amber",
   },
-  {
-    id: "gestionnaire_boutique",
-    label: "Gestionnaire Boutique",
-    description: "Stock et réappro",
-    icon: Store,
-    color: "blue",
-  },
 ];
 
 // ==========================================================
@@ -49,8 +40,6 @@ const ROLE_CARDS = [
 export default function JournalActivites() {
   const [activeRole, setActiveRole] = useState("vendeur");
   const [activeRolePage, setActiveRolePage] = useState("vendeur");
-
- 
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-gray-50 via-gray-50/50 to-white px-4 sm:px-6 lg:px-8 py-6 overflow-y-auto">
@@ -87,7 +76,7 @@ export default function JournalActivites() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4"
         >
           {ROLE_CARDS.map((role) => {
             const Icon = role.icon;
@@ -106,13 +95,6 @@ export default function JournalActivites() {
                 border: 'border-amber-200',
                 ring: 'ring-amber-300',
                 dot: 'bg-amber-500'
-              },
-              blue: {
-                bg: 'bg-blue-50',
-                text: 'text-blue-600',
-                border: 'border-blue-200',
-                ring: 'ring-blue-300',
-                dot: 'bg-blue-500'
               },
             };
             
@@ -171,7 +153,6 @@ export default function JournalActivites() {
           >
             {activeRolePage === "vendeur" && <VendeursPage />}
             {activeRolePage === "caissier" && <CaissiersPage />}
-            {activeRolePage === "gestionnaire_boutique" && <GestionnairesBoutiquePage />}
           </motion.div>
         )}
       </div>
