@@ -6,7 +6,7 @@ import Select from '../../components/ui/Select';
 import { formatCurrency, formatDateTime } from '../../utils/formatters';
 import { printDecaissement } from '../components/DecaissementPrint';
 import { toast } from 'sonner';
-import { getEcho } from '../../utils/echo';
+import { echo } from '../../utils/echo';
 import caissierApi from '../services/caissierApi';
 
 const DecaissementsPage = () => {
@@ -80,7 +80,7 @@ const DecaissementsPage = () => {
 
   // Initialiser WebSocket pour les mises à jour en temps réel
   useEffect(() => {
-    const echo = getEcho();
+   // const echo = getEcho();
     if (!echo) return;
     
     echoRef.current = echo;
