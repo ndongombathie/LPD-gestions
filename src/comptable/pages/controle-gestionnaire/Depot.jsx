@@ -1,65 +1,94 @@
 // ==========================================================
-// 🏭 DepotControle.jsx — VERSION TAILWIND STYLÉE
+// 🏭 DepotControle.jsx — FOND BLANC + API OPTIMISÉE
+// Optimisations :
+//   ① Un seul fetch initial (per_page=200, toutes pages en parallèle)
+//   ② Pagination côté client — plus de re-fetch au changement de page
+//   ③ Cache mouvements (Map) — pas de re-fetch si déjà chargé
+//   ④ Debounce recherche (300ms) — pas de recalcul à chaque frappe
+//   ⑤ useMemo sur filtrage/tri — recalcul uniquement si données changent
 // ==========================================================
 
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import {
   Search, Eye, X, Package, TrendingUp, TrendingDown,
-  ArrowLeft, ArrowRight, Layers, AlertCircle, Activity
+  ArrowLeft, ArrowRight, Layers, AlertCircle, Activity,
+  RefreshCw
 } from "lucide-react";
 import depotAPI from "@/services/api/depot";
 
+const PER_PAGE = 20;
+
 export default function DepotControle() {
-  const [produits, setProduits] = useState([]);
-  const [allProduits, setAllProduits] = useState([]);
-  const [pagination, setPagination] = useState(null);
-  const [filteredResults, setFilteredResults] = useState([]);
-  const [page, setPage] = useState(1);
-  const perPage = 15;
-  const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [isSearching, setIsSearching] = useState(false);
+  // ── Data
+  const [allProduits, setAllProduits]       = useState([]);       // source unique de vérité
+  const [loading, setLoading]               = useState(true);
+  const [error, setError]                   = useState(null);
+
+  // ── UI state
+  const [page, setPage]                     = useState(1);
+  const [searchInput, setSearchInput]       = useState("");        // valeur brute du champ
+  const [search, setSearch]                 = useState("");        // valeur debouncée
   const [selectedProduit, setSelectedProduit] = useState(null);
-  const [mouvements, setMouvements] = useState([]);
-  const [loadingMouvements, setLoadingMouvements] = useState(false);
 
-  /* ================= FETCH ================= */
+  // ── Mouvements avec cache
+  const [mouvements, setMouvements]         = useState([]);
+  const [loadingMvt, setLoadingMvt]         = useState(false);
+  const mvtCache                            = useRef(new Map());   // ③ cache par produit.id
 
-  const fetchPaginated = useCallback(async () => {
+  // ── Debounce ref
+  const debounceRef = useRef(null);
+
+  /* ═══════════════════════════════════════════════════════
+     ① FETCH UNIQUE — toutes pages en parallèle
+     On récupère d'abord la page 1 pour connaître lastPage,
+     puis on fetch les pages restantes en Promise.all
+  ═══════════════════════════════════════════════════════ */
+  const fetchAll = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await depotAPI.getProduitsControle({ page, per_page: perPage });
-      setProduits(res?.data || []);
-      setPagination(res?.pagination || null);
+      setError(null);
+
+      // Page 1 — donne lastPage
+      const first = await depotAPI.getProduitsControle({ page: 1, per_page: 100 });
+      const lastPage = first?.pagination?.lastPage || 1;
+      let data = first?.data || [];
+
+      // Pages restantes en parallèle
+      if (lastPage > 1) {
+        const pages = Array.from({ length: lastPage - 1 }, (_, i) => i + 2);
+        const results = await Promise.all(
+          pages.map(p => depotAPI.getProduitsControle({ page: p, per_page: 100 }))
+        );
+        results.forEach(r => { data = [...data, ...(r?.data || [])]; });
+      }
+
+      setAllProduits(data);
     } catch {
       setError("Erreur lors du chargement des produits dépôt");
     } finally {
       setLoading(false);
     }
-  }, [page]);
-
-  const fetchAllProduits = useCallback(async () => {
-    try {
-      let allData = [], currentPage = 1, lastPage = 1;
-      do {
-        const res = await depotAPI.getProduitsControle({ page: currentPage, per_page: 100 });
-        allData = [...allData, ...(res?.data || [])];
-        lastPage = res?.pagination?.lastPage || 1;
-        currentPage++;
-      } while (currentPage <= lastPage);
-      setAllProduits(allData);
-    } catch (e) { console.error(e); }
   }, []);
 
-  useEffect(() => {
-    fetchPaginated();
-    fetchAllProduits();
-  }, [fetchPaginated, fetchAllProduits]);
+  useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  /* ================= SEARCH ================= */
+  /* ═══════════════════════════════════════════════════════
+     ④ DEBOUNCE recherche — 300 ms
+  ═══════════════════════════════════════════════════════ */
+  const handleSearchChange = (e) => {
+    const val = e.target.value;
+    setSearchInput(val);
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setSearch(val);
+      setPage(1);
+    }, 300);
+  };
 
-  const globalGroupedProduits = useMemo(() => {
+  /* ═══════════════════════════════════════════════════════
+     ⑤ GROUPEMENT + FILTRE — mémoïsé
+  ═══════════════════════════════════════════════════════ */
+  const groupedProduits = useMemo(() => {
     const map = new Map();
     allProduits.forEach((p) => {
       const key = `${p.nom}-${p.categorie_id}`;
@@ -69,210 +98,233 @@ export default function DepotControle() {
     return Array.from(map.values());
   }, [allProduits]);
 
-  useEffect(() => {
-    if (search.trim()) {
-      setIsSearching(true);
-      setFilteredResults(globalGroupedProduits.filter(p =>
-        p.nom?.toLowerCase().includes(search.toLowerCase())
-      ));
-      setPage(1);
-    } else {
-      setIsSearching(false);
-      setFilteredResults([]);
-    }
-  }, [search, globalGroupedProduits]);
+  const filteredProduits = useMemo(() => {
+    if (!search.trim()) return groupedProduits;
+    const q = search.toLowerCase();
+    return groupedProduits.filter(p => p.nom?.toLowerCase().includes(q));
+  }, [search, groupedProduits]);
 
+  // ② Pagination 100% client
+  const totalPages    = Math.max(1, Math.ceil(filteredProduits.length / PER_PAGE));
   const displayedProduits = useMemo(() => {
-    if (isSearching) {
-      const start = (page - 1) * perPage;
-      return filteredResults.slice(start, start + perPage);
-    }
-    return produits;
-  }, [isSearching, filteredResults, produits, page]);
+    const start = (page - 1) * PER_PAGE;
+    return filteredProduits.slice(start, start + PER_PAGE);
+  }, [filteredProduits, page]);
 
-  const totalPages = useMemo(() => {
-    if (isSearching) return Math.ceil(filteredResults.length / perPage);
-    return pagination?.lastPage || 1;
-  }, [isSearching, filteredResults.length, pagination?.lastPage]);
-
-  /* ================= UTILS ================= */
-
-  const formatFCFA = (v = 0) =>
-    Number(v).toLocaleString("fr-FR").replace(/\s/g, ".") + " FCFA";
-
-  /* ================= MOUVEMENTS ================= */
-
+  /* ═══════════════════════════════════════════════════════
+     ③ MOUVEMENTS avec cache
+  ═══════════════════════════════════════════════════════ */
   const afficherFiche = async (produit) => {
+    setSelectedProduit(produit);
+
+    if (mvtCache.current.has(produit.id)) {
+      setMouvements(mvtCache.current.get(produit.id));
+      return;
+    }
+
     try {
-      setSelectedProduit(produit);
-      setLoadingMouvements(true);
+      setLoadingMvt(true);
       setMouvements([]);
       const res = await depotAPI.getMouvementsProduit(produit.id);
-      setMouvements(res?.data || []);
+      const data = res?.data || [];
+      mvtCache.current.set(produit.id, data);
+      setMouvements(data);
     } catch (e) {
       console.error(e);
     } finally {
-      setLoadingMouvements(false);
+      setLoadingMvt(false);
     }
   };
 
   const fermerFiche = () => { setSelectedProduit(null); setMouvements([]); };
 
-  const handlePageChange = (n) => {
-    if (n >= 1 && n <= totalPages) {
-      setPage(n);
-      if (!isSearching) fetchPaginated();
-    }
-  };
+  /* ═══════════════════════════════════════════════════════
+     UTILS
+  ═══════════════════════════════════════════════════════ */
+  const formatFCFA = (v = 0) =>
+    Number(v).toLocaleString("fr-FR").replace(/\s/g, ".") + " FCFA";
 
-  /* ================= STATS ================= */
+  const totalCartons = useMemo(
+    () => filteredProduits.reduce((a, p) => a + (p.nombre_carton || 0), 0),
+    [filteredProduits]
+  );
+  const alertCount = useMemo(
+    () => filteredProduits.filter(p => (p.nombre_carton || 0) <= (p.stock_seuil || 0)).length,
+    [filteredProduits]
+  );
 
-  const totalCartons = displayedProduits.reduce((a, p) => a + (p.nombre_carton || 0), 0);
-  const alertCount = displayedProduits.filter(p => (p.nombre_carton || 0) <= (p.stock_seuil || 0)).length;
-
-  /* ================= EARLY RETURNS ================= */
-
-  if (loading && !produits.length)
+  /* ═══════════════════════════════════════════════════════
+     EARLY RETURNS
+  ═══════════════════════════════════════════════════════ */
+  if (loading)
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="text-violet-400 flex items-center gap-3 text-sm font-medium">
-          <Activity size={18} className="animate-pulse" />
-          Chargement…
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 rounded-full border-2 border-violet-200 border-t-violet-600 animate-spin" />
+          <p className="text-sm text-slate-400 font-medium">Chargement des produits…</p>
         </div>
       </div>
     );
 
   if (error)
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <p className="text-rose-400 text-sm">{error}</p>
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-rose-500 text-sm mb-3">{error}</p>
+          <button
+            onClick={fetchAll}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 text-white text-sm font-medium hover:bg-violet-700 transition-colors"
+          >
+            <RefreshCw size={14} /> Réessayer
+          </button>
+        </div>
       </div>
     );
 
-  /* ================= RENDER ================= */
-
+  /* ═══════════════════════════════════════════════════════
+     RENDER
+  ═══════════════════════════════════════════════════════ */
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 p-6 lg:p-8">
+    <div className="min-h-screen bg-white text-slate-800 p-6 lg:p-8">
 
-      {/* BG GLOW */}
-      <div className="fixed inset-0 pointer-events-none -z-10 overflow-hidden">
-        <div className="absolute -top-32 -left-32 w-96 h-96 bg-violet-600/20 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 right-0 w-80 h-80 bg-purple-800/15 rounded-full blur-3xl" />
-      </div>
-
-      {/* HEADER */}
+      {/* ── HEADER ── */}
       <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
         <div>
-          <p className="text-xs font-semibold tracking-widest uppercase text-violet-400 mb-1">
+          <p className="text-xs font-semibold tracking-widest uppercase text-violet-500 mb-1">
             Gestionnaire · Dépôt
           </p>
-          <h1 className="text-3xl font-black text-white tracking-tight leading-none">
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight leading-none">
             Contrôle{" "}
-            <span className="bg-gradient-to-r from-violet-400 to-purple-300 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-violet-600 to-purple-500 bg-clip-text text-transparent">
               Stock
             </span>
           </h1>
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <span className="inline-flex items-center gap-1.5 bg-violet-500/10 border border-violet-500/20 text-violet-300 text-xs font-medium px-3 py-1.5 rounded-full">
-            <Layers size={12} />
-            {displayedProduits.length} produits
+          <span className="inline-flex items-center gap-1.5 bg-violet-50 border border-violet-200 text-violet-600 text-xs font-semibold px-3 py-1.5 rounded-full">
+            <Layers size={12} /> {filteredProduits.length} produits
           </span>
-          <span className="inline-flex items-center gap-1.5 bg-violet-500/10 border border-violet-500/20 text-violet-300 text-xs font-medium px-3 py-1.5 rounded-full">
-            <Package size={12} />
-            {totalCartons} cartons
+          <span className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 text-slate-500 text-xs font-semibold px-3 py-1.5 rounded-full">
+            <Package size={12} /> {totalCartons} cartons
           </span>
           {alertCount > 0 && (
-            <span className="inline-flex items-center gap-1.5 bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs font-medium px-3 py-1.5 rounded-full">
-              <AlertCircle size={12} />
-              {alertCount} alerte{alertCount > 1 ? "s" : ""}
+            <span className="inline-flex items-center gap-1.5 bg-rose-50 border border-rose-200 text-rose-500 text-xs font-semibold px-3 py-1.5 rounded-full">
+              <AlertCircle size={12} /> {alertCount} alerte{alertCount > 1 ? "s" : ""}
             </span>
           )}
+          <button
+            onClick={fetchAll}
+            title="Rafraîchir"
+            className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 text-slate-400 text-xs font-semibold px-3 py-1.5 rounded-full hover:bg-violet-50 hover:border-violet-200 hover:text-violet-500 transition-colors"
+          >
+            <RefreshCw size={12} />
+          </button>
         </div>
       </div>
 
-      {/* SEARCH */}
+      {/* ── SEARCH ── */}
       <div className="relative mb-6">
-        <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+        <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
         <input
           type="text"
           placeholder="Rechercher un produit…"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="w-full bg-white/[0.04] border border-white/10 rounded-xl pl-10 pr-4 py-3 text-sm text-slate-200 placeholder-slate-600 outline-none focus:border-violet-500/60 focus:bg-violet-500/[0.06] focus:ring-2 focus:ring-violet-500/10 transition-all"
+          value={searchInput}
+          onChange={handleSearchChange}
+          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm text-slate-800 placeholder-slate-400 outline-none focus:border-violet-400 focus:bg-white focus:ring-2 focus:ring-violet-100 transition-all"
         />
       </div>
 
-      {/* MAIN GRID */}
+      {/* ── MAIN GRID ── */}
       <div className={`grid gap-5 ${selectedProduit ? "grid-cols-1 lg:grid-cols-[1fr_360px]" : "grid-cols-1"}`}>
 
-        {/* TABLE */}
-        <div className="bg-white/[0.03] border border-white/[0.07] rounded-2xl overflow-hidden backdrop-blur-xl">
+        {/* ── TABLE ── */}
+        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-violet-500/[0.08] border-b border-violet-500/20">
-                  <th className="px-5 py-3.5 text-left text-[11px] font-bold tracking-widest uppercase text-violet-400">Produit</th>
-                  <th className="px-5 py-3.5 text-left text-[11px] font-bold tracking-widest uppercase text-violet-400">Fournisseur</th>
-                  <th className="px-5 py-3.5 text-center text-[11px] font-bold tracking-widest uppercase text-violet-400">Prix Achat</th>
-                  <th className="px-5 py-3.5 text-center text-[11px] font-bold tracking-widest uppercase text-violet-400">Cartons</th>
-                  <th className="px-5 py-3.5 text-center text-[11px] font-bold tracking-widest uppercase text-violet-400">Seuil</th>
-                  <th className="px-5 py-3.5 text-center text-[11px] font-bold tracking-widest uppercase text-violet-400">Fiche</th>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="px-5 py-3.5 text-left text-[11px] font-bold tracking-widest uppercase text-slate-400">Produit</th>
+                  <th className="px-5 py-3.5 text-left text-[11px] font-bold tracking-widest uppercase text-slate-400">Fournisseur</th>
+                  <th className="px-5 py-3.5 text-center text-[11px] font-bold tracking-widest uppercase text-slate-400">Prix Achat</th>
+                  <th className="px-5 py-3.5 text-center text-[11px] font-bold tracking-widest uppercase text-slate-400">Cartons</th>
+                  <th className="px-5 py-3.5 text-center text-[11px] font-bold tracking-widest uppercase text-slate-400">Seuil</th>
+                  <th className="px-5 py-3.5 text-center text-[11px] font-bold tracking-widest uppercase text-slate-400">Fiche</th>
                 </tr>
               </thead>
               <tbody>
                 {displayedProduits.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="py-16 text-center">
-                      <Package size={32} className="mx-auto mb-3 text-slate-700" />
-                      <p className="text-slate-600 text-sm">Aucun produit trouvé</p>
+                      <Package size={32} className="mx-auto mb-3 text-slate-300" />
+                      <p className="text-slate-400 text-sm">Aucun produit trouvé</p>
                     </td>
                   </tr>
                 ) : (
                   displayedProduits.map((p) => {
                     const belowSeuil = (p.nombre_carton || 0) <= (p.stock_seuil || 0);
+                    const isActive = selectedProduit?.id === p.id;
                     return (
-                      <tr key={p.id} className="border-b border-white/[0.04] hover:bg-violet-500/[0.05] transition-colors last:border-b-0">
-
+                      <tr
+                        key={p.id}
+                        className={`border-b border-slate-100 last:border-b-0 transition-colors ${
+                          isActive
+                            ? "bg-violet-50"
+                            : "hover:bg-slate-50"
+                        }`}
+                      >
+                        {/* Produit */}
                         <td className="px-5 py-3.5">
                           <div className="flex items-center gap-2.5">
-                            <span className="w-2 h-2 rounded-full bg-gradient-to-br from-violet-400 to-purple-500 flex-shrink-0" />
-                            <span className="font-semibold text-white">{p.nom}</span>
+                            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                              isActive
+                                ? "bg-violet-600"
+                                : "bg-gradient-to-br from-violet-400 to-purple-500"
+                            }`} />
+                            <span className="font-semibold text-slate-800">{p.nom}</span>
                           </div>
                         </td>
 
+                        {/* Fournisseur */}
                         <td className="px-5 py-3.5">
-                          <span className="inline-block bg-white/[0.05] border border-white/[0.08] rounded-md px-2.5 py-1 text-xs text-slate-400 font-medium">
+                          <span className="inline-block bg-slate-100 rounded-md px-2.5 py-1 text-xs text-slate-500 font-medium">
                             {p.fournisseur_nom || p.fournisseur?.nom || "Non défini"}
                           </span>
                         </td>
 
+                        {/* Prix */}
                         <td className="px-5 py-3.5 text-center">
-                          <span className="font-bold text-xs text-violet-300 bg-violet-500/10 px-2.5 py-1 rounded-md whitespace-nowrap">
+                          <span className="font-bold text-xs text-violet-600 bg-violet-50 px-2.5 py-1 rounded-md whitespace-nowrap border border-violet-100">
                             {formatFCFA(p.prix_achat)}
                           </span>
                         </td>
 
+                        {/* Cartons */}
                         <td className="px-5 py-3.5 text-center">
-                          <span className="font-black text-lg text-white">{p.nombre_carton}</span>
+                          <span className="font-black text-lg text-slate-800">{p.nombre_carton}</span>
                         </td>
 
+                        {/* Seuil */}
                         <td className="px-5 py-3.5 text-center">
                           <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-md border ${
                             belowSeuil
-                              ? "bg-rose-500/10 border-rose-500/20 text-rose-300"
-                              : "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
+                              ? "bg-rose-50 border-rose-200 text-rose-500"
+                              : "bg-emerald-50 border-emerald-200 text-emerald-600"
                           }`}>
                             {belowSeuil ? <TrendingDown size={11} /> : <TrendingUp size={11} />}
                             {p.stock_seuil || 0}
                           </span>
                         </td>
 
+                        {/* Fiche */}
                         <td className="px-5 py-3.5 text-center">
                           <button
                             onClick={() => afficherFiche(p)}
-                            className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white flex items-center justify-center mx-auto shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:-translate-y-px active:scale-95 transition-all"
+                            className={`w-8 h-8 rounded-lg text-white flex items-center justify-center mx-auto shadow-sm hover:-translate-y-px active:scale-95 transition-all ${
+                              isActive
+                                ? "bg-violet-700 shadow-violet-200"
+                                : "bg-gradient-to-br from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 shadow-violet-100 hover:shadow-violet-200"
+                            }`}
                           >
                             <Eye size={14} />
                           </button>
@@ -286,14 +338,14 @@ export default function DepotControle() {
           </div>
         </div>
 
-        {/* FICHE PRODUIT */}
+        {/* ── FICHE PRODUIT ── */}
         {selectedProduit && (
-          <div className="bg-white/[0.03] border border-violet-500/20 rounded-2xl overflow-hidden backdrop-blur-xl flex flex-col">
+          <div className="bg-white border border-violet-200 rounded-2xl overflow-hidden shadow-sm flex flex-col">
 
-            {/* Fiche Header */}
-            <div className="bg-gradient-to-br from-violet-600/20 to-purple-600/10 border-b border-violet-500/20 px-5 py-4 flex items-start justify-between gap-3">
+            {/* Header */}
+            <div className="bg-gradient-to-br from-violet-600 to-purple-600 px-5 py-4 flex items-start justify-between gap-3">
               <div>
-                <p className="text-[10px] font-bold tracking-widest uppercase text-violet-400 mb-1">
+                <p className="text-[10px] font-bold tracking-widest uppercase text-violet-200 mb-1">
                   Fiche Produit
                 </p>
                 <h2 className="font-black text-white text-lg leading-tight">
@@ -302,48 +354,57 @@ export default function DepotControle() {
               </div>
               <button
                 onClick={fermerFiche}
-                className="w-7 h-7 rounded-lg bg-white/[0.08] border border-white/10 text-slate-400 hover:bg-rose-500/15 hover:border-rose-500/30 hover:text-rose-300 flex items-center justify-center flex-shrink-0 transition-all mt-0.5"
+                className="w-7 h-7 rounded-lg bg-white/20 text-white/80 hover:bg-white/30 hover:text-white flex items-center justify-center flex-shrink-0 transition-all mt-0.5"
               >
                 <X size={13} />
               </button>
             </div>
 
-            {/* Fiche Body */}
+            {/* Body */}
             <div className="p-5 flex-1 overflow-y-auto">
 
               {/* KPIs */}
               <div className="grid grid-cols-2 gap-3 mb-5">
-                <div className="col-span-2 bg-white/[0.04] border border-white/[0.07] rounded-xl p-3.5">
-                  <p className="text-[10px] font-bold tracking-widest uppercase text-slate-500 mb-1">Fournisseur</p>
-                  <p className="font-semibold text-slate-200 text-sm">
+                <div className="col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-3.5">
+                  <p className="text-[10px] font-bold tracking-widest uppercase text-slate-400 mb-1">Fournisseur</p>
+                  <p className="font-semibold text-slate-700 text-sm">
                     {selectedProduit.fournisseur_nom || selectedProduit.fournisseur?.nom || "Non défini"}
                   </p>
                 </div>
-                <div className="bg-white/[0.04] border border-white/[0.07] rounded-xl p-3.5">
-                  <p className="text-[10px] font-bold tracking-widest uppercase text-slate-500 mb-1">Prix Achat</p>
-                  <p className="font-bold text-violet-300 text-xs">{formatFCFA(selectedProduit.prix_achat)}</p>
+                <div className="bg-violet-50 border border-violet-100 rounded-xl p-3.5">
+                  <p className="text-[10px] font-bold tracking-widest uppercase text-violet-400 mb-1">Prix Achat</p>
+                  <p className="font-bold text-violet-700 text-xs leading-snug">
+                    {formatFCFA(selectedProduit.prix_achat)}
+                  </p>
                 </div>
-                <div className="bg-white/[0.04] border border-white/[0.07] rounded-xl p-3.5">
-                  <p className="text-[10px] font-bold tracking-widest uppercase text-slate-500 mb-1">Seuil</p>
-                  <p className="font-black text-white text-xl">{selectedProduit.stock_seuil || 0}</p>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5">
+                  <p className="text-[10px] font-bold tracking-widest uppercase text-slate-400 mb-1">Seuil</p>
+                  <p className="font-black text-slate-800 text-2xl">{selectedProduit.stock_seuil || 0}</p>
                 </div>
               </div>
 
               {/* Mouvements */}
-              <p className="text-[10px] font-bold tracking-widest uppercase text-violet-400 mb-3">
-                Mouvements
-              </p>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-[10px] font-bold tracking-widest uppercase text-violet-500">
+                  Mouvements
+                </p>
+                {mvtCache.current.has(selectedProduit.id) && (
+                  <span className="text-[9px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                    cache
+                  </span>
+                )}
+              </div>
 
-              {loadingMouvements ? (
+              {loadingMvt ? (
                 <div className="space-y-2">
                   {[1, 2, 3].map(i => (
-                    <div key={i} className="h-16 rounded-xl bg-white/[0.04] animate-pulse" />
+                    <div key={i} className="h-16 rounded-xl bg-slate-100 animate-pulse" />
                   ))}
                 </div>
               ) : mouvements.length === 0 ? (
                 <div className="text-center py-10">
-                  <Package size={28} className="mx-auto mb-2 text-slate-700" />
-                  <p className="text-slate-600 text-xs">Aucun mouvement enregistré</p>
+                  <Activity size={28} className="mx-auto mb-2 text-slate-300" />
+                  <p className="text-slate-400 text-xs">Aucun mouvement enregistré</p>
                 </div>
               ) : (
                 <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
@@ -352,23 +413,23 @@ export default function DepotControle() {
                       key={m.id}
                       className={`flex items-start gap-3 p-3 rounded-xl border text-xs ${
                         m.type === "entree"
-                          ? "bg-emerald-500/[0.06] border-emerald-500/15"
-                          : "bg-rose-500/[0.06] border-rose-500/15"
+                          ? "bg-emerald-50 border-emerald-200"
+                          : "bg-rose-50 border-rose-200"
                       }`}
                     >
                       <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${
                         m.type === "entree"
-                          ? "bg-emerald-500/15 text-emerald-400"
-                          : "bg-rose-500/15 text-rose-400"
+                          ? "bg-emerald-100 text-emerald-600"
+                          : "bg-rose-100 text-rose-500"
                       }`}>
                         {m.type === "entree" ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className={`font-semibold mb-0.5 ${m.type === "entree" ? "text-emerald-300" : "text-rose-300"}`}>
+                        <p className={`font-semibold mb-0.5 ${m.type === "entree" ? "text-emerald-700" : "text-rose-600"}`}>
                           {m.type === "entree" ? "Entrée" : "Sortie"} — {m.quantite}
                         </p>
                         <p className="text-slate-500 truncate">{m.source} → {m.destination}</p>
-                        <p className="text-slate-600 mt-0.5">
+                        <p className="text-slate-400 mt-0.5">
                           {new Date(m.date).toLocaleDateString("fr-FR")}
                         </p>
                       </div>
@@ -381,25 +442,25 @@ export default function DepotControle() {
         )}
       </div>
 
-      {/* PAGINATION */}
+      {/* ── PAGINATION ── */}
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-3 mt-6">
           <button
             disabled={page <= 1}
-            onClick={() => handlePageChange(page - 1)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.05] border border-white/10 text-slate-400 text-sm font-medium hover:bg-violet-500/10 hover:border-violet-500/30 hover:text-violet-300 hover:-translate-y-px disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 text-sm font-medium hover:bg-violet-50 hover:border-violet-200 hover:text-violet-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
           >
             <ArrowLeft size={14} /> Précédent
           </button>
 
-          <span className="font-black text-sm text-violet-400 bg-violet-500/10 border border-violet-500/20 px-4 py-2 rounded-xl">
+          <span className="font-black text-sm text-violet-600 bg-violet-50 border border-violet-200 px-4 py-2 rounded-xl">
             {page} / {totalPages}
           </span>
 
           <button
             disabled={page >= totalPages}
-            onClick={() => handlePageChange(page + 1)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.05] border border-white/10 text-slate-400 text-sm font-medium hover:bg-violet-500/10 hover:border-violet-500/30 hover:text-violet-300 hover:-translate-y-px disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 text-sm font-medium hover:bg-violet-50 hover:border-violet-200 hover:text-violet-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
           >
             Suivant <ArrowRight size={14} />
           </button>
