@@ -181,38 +181,7 @@ const CaissePage = () => {
   }, [boutiqueId]);
 
   // Écouter les paiements créés (temps réel)
-  useEffect(() => {
-    if (!boutiqueId || !echo) return;
-    const channel = echo.private(`boutique.${boutiqueId}`);
-    const listener = () => {
-      fetchTicketsSafe(currentPageRef.current, filterTextRef.current);
-    };
-    channel.listen('.paiement.cree', listener);
-    return () => {
-      try {
-        channel.stopListening('.paiement.cree');
-        echo.leave(`private-boutique.${boutiqueId}`);
-      } catch {
-        // Nettoyage silencieux
-      }
-    };
-  }, [boutiqueId]);
-
-      const channel = echo.private(`boutique.${boutiqueId}`);
-
-      const listener = () => {
-          fetchTicketsSafe(currentPage, filterText.trim());
-      };
-
-      channel.listen(".commande.validee", listener);
-
-      return () => {
-          channel.stopListening(".commande.validee");
-          echo.leave(`boutique.${boutiqueId}`);
-      };
-  }, [boutiqueId, currentPage, filterText]);
     
-  
   useEffect(() => {
       if (!boutiqueId) return;
 
