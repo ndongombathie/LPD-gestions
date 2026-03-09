@@ -780,13 +780,14 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
           else if (createResponse.data.data && createResponse.data.data.id) {
             clientId = createResponse.data.data.id;
           }
-          
+         
         }
         else if (createResponse && createResponse.id) {
           clientId = createResponse.id;
         }
 
-      } catch (clientError) {
+      } catch  {
+          addNotification('error', 'Erreur lors de la création du client. La commande sera créée sans lier le client.');
       }
 
       const typesDansPanier = [...new Set(panier.filter(item => item).map(item => item.type_vente))];
