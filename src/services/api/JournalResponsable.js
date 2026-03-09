@@ -1,39 +1,60 @@
 // ==========================================================
-// 📘 Journal Responsable API
+// 📘 Journal Responsable API — Version Alignée Backend
 // ==========================================================
 
 import httpClient from "../http/client";
 
-const ENDPOINTS = {
-  VENDEURS: "/vendeurs",
-  CAISSIERS: "/caissiers",
-  GESTIONNAIRES: "/gestionnaires-boutique",
-};
-
-// helper safe
-const toArray = (data) => {
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data?.data)) return data.data;
-  return [];
-};
-
 export const journalResponsableAPI = {
 
-  async getVendeurs() {
-    const response = await httpClient.get(ENDPOINTS.VENDEURS);
-    return toArray(response.data);
-  },
+  // ==========================================================
+  // 🔹 VENDEURS
+  // ==========================================================
 
-    async getCaissiers() {
-    const response = await httpClient.get(ENDPOINTS.CAISSIERS);
+  async getVendeurs(params = {}) {
+    const response = await httpClient.get(
+      "/total-ventes-par-vendeur",
+      { params }
+    );
     return response.data;
-    },
-
-
-
-  async getGestionnairesBoutique() {
-    const response = await httpClient.get(ENDPOINTS.GESTIONNAIRES);
-    return toArray(response.data);
   },
+
+  async getVendeursCount() {
+    const response = await httpClient.get("/vendeurs-count");
+    return response.data;
+  },
+
+  async getCommandesParVendeur(id, filters = {}) {
+    const response = await httpClient.get(
+      `/commandes-par-vendeur/${id}`,
+      { params: filters }
+    );
+    return response.data;
+  },
+
+  // ==========================================================
+  // 🔹 CAISSIERS
+  // ==========================================================
+
+  async getCaissiers(params = {}) {
+    const response = await httpClient.get(
+      "/caissier/caisses-journals",
+      { params }
+    );
+    return response.data;
+  },
+
+  async getCaissiersCount() {
+    const response = await httpClient.get("/caissiers-count");
+    return response.data;
+  },
+
+  // ✅ Historique COMPLET (payee, annulee, partiellement_payee + paiements)
+  async getHistoriqueCaissier(id, filters = {}) {
+    const response = await httpClient.get(
+      `/commandes-par-caissier/${id}`,
+      { params: filters }
+    );
+    return response.data;
+  }
 
 };

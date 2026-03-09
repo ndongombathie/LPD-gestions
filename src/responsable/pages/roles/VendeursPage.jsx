@@ -17,8 +17,8 @@ import {
 
 // Composants
 import VendeurHistoryModal from "../../components/roles/VendeurHistoryModal";
+import Pagination from "@/responsable/components/Pagination";
 import { journalResponsableAPI } from "@/services/api/JournalResponsable";
-
 
 const formatFCFA = (n) =>
   new Intl.NumberFormat("fr-FR", {
@@ -32,53 +32,78 @@ export default function VendeursPage() {
   const [selectedVendeur, setSelectedVendeur] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
   const [search, setSearch] = useState("");
+  const [totalVendeurs, setTotalVendeurs] = useState(0);
+  
+  // ✅ Stats globales (indépendantes de la pagination)
+  const [statsGlobales, setStatsGlobales] = useState({
+    total_ventes: 0,
+    total_chiffre: 0,
+  });
   
   // Filtres de période
   const today = new Date().toISOString().split('T')[0];
   const [dateDebut, setDateDebut] = useState(today);
   const [dateFin, setDateFin] = useState(today);
+  
+  // ✅ Pagination states
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
-useEffect(() => {
-  let interval;
+  // ✅ Reset page quand les filtres de période changent (search exclu)
+  useEffect(() => {
+    setPage(1);
+  }, [dateDebut, dateFin]);
 
-  const loadVendeurs = async (firstLoad = false) => {
-    try {
-      if (firstLoad) setLoading(true);
+  // ✅ useEffect avec pagination (search exclu des dépendances)
+  useEffect(() => {
+    const loadVendeurs = async () => {
+      try {
+        setLoading(true);
 
-      const data = await journalResponsableAPI.getVendeurs();
-      setVendeurs(data);
+        const response = await journalResponsableAPI.getVendeurs({
+          page: page,
+          date_debut: dateDebut,
+          date_fin: dateFin,
+          // search est supprimé de l'appel API
+        });
 
-      if (firstLoad) setLoading(false);
-    } catch (error) {
-      toast.error("Erreur de chargement des vendeurs");
-      if (firstLoad) setLoading(false);
-    }
-  };
+        const pagination = response?.total_ventes;
 
-  loadVendeurs(true);
+        setVendeurs(pagination?.data || []);
+        setTotalPages(pagination?.last_page || 1);
+        setTotalVendeurs(pagination?.total || 0);
+        
+        // ✅ Récupération des stats globales
+        setStatsGlobales(response?.stats_globales || {
+          total_ventes: 0,
+          total_chiffre: 0,
+        });
 
-  interval = setInterval(() => loadVendeurs(false), 30000);
-
-  return () => clearInterval(interval);
-}, []);
-
-
-  const filteredVendeurs = vendeurs.filter(vendeur => {
-    if (search) {
-      const terme = search.toLowerCase();
-      if (!vendeur.name?.toLowerCase().includes(terme) &&
-          !vendeur.email?.toLowerCase().includes(terme)) {
-        return false;
+      } catch (error) {
+        toast.error("Erreur de chargement des vendeurs");
+        setVendeurs([]);
+      } finally {
+        setLoading(false);
       }
-    }
-    
-    return true;
+    };
+
+    loadVendeurs();
+  }, [dateDebut, dateFin, page]); // search retiré des dépendances
+
+  // ✅ Filtrer les vendeurs côté front
+  const filteredVendeurs = vendeurs.filter((v) => {
+    const fullName = `${v.vendeur?.prenom || ""} ${v.vendeur?.nom || ""}`.toLowerCase();
+    const email = (v.vendeur?.email || "").toLowerCase();
+    const term = search.toLowerCase();
+
+    return fullName.includes(term) || email.includes(term);
   });
 
+  // ✅ Statistiques globales (indépendantes de la pagination)
   const globalStats = {
-    total: vendeurs.length,
-    totalVentes: vendeurs.reduce((sum, v) => sum + (v.stats?.totalVentes || 0), 0),
-    totalChiffre: vendeurs.reduce((sum, v) => sum + (v.stats?.montantTotal || 0), 0),
+    total: totalVendeurs,
+    totalVentes: statsGlobales.total_ventes,
+    totalChiffre: statsGlobales.total_chiffre,
   };
 
   const handleViewHistory = (vendeur) => {
@@ -90,7 +115,7 @@ useEffect(() => {
     return <CheckCircle className="w-3 h-3 text-emerald-500" />;
   };
 
-  if (loading) {
+  if (loading && vendeurs.length === 0) {
     return (
       <div className="flex items-center justify-center py-6">
         <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-gray-200">
@@ -109,7 +134,7 @@ useEffect(() => {
           <div>
             <h2 className="text-base font-bold text-gray-800">Équipe Vendeurs</h2>
             <p className="text-xs text-gray-500 mt-1">
-              {globalStats.total} vendeurs • {globalStats.totalVentes} ventes
+              {totalVendeurs} vendeur{totalVendeurs > 1 ? 's' : ''} au total • {filteredVendeurs.length} affiché{filteredVendeurs.length > 1 ? 's' : ''} • {globalStats.totalVentes} ventes
             </p>
           </div>
         </div>
@@ -146,7 +171,7 @@ useEffect(() => {
               <Users className="w-3 h-3 text-indigo-600" />
               <div className="text-xs text-gray-500">Équipe</div>
             </div>
-            <div className="text-sm font-bold text-gray-800">{globalStats.total}</div>
+            <div className="text-sm font-bold text-gray-800">{totalVendeurs}</div>
           </div>
 
           <div className="bg-white border border-gray-200 rounded-lg p-3">
@@ -206,28 +231,39 @@ useEffect(() => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
+              {filteredVendeurs.length === 0 && (
+                <tr>
+                  <td colSpan="4" className="text-center py-6 text-sm text-gray-500">
+                    {vendeurs.length === 0 ? "Aucun vendeur trouvé pour cette période" : "Aucun vendeur ne correspond à votre recherche"}
+                  </td>
+                </tr>
+              )}
               {filteredVendeurs.map((vendeur) => (
-                <tr key={vendeur.id} className="hover:bg-gray-50">
+                <tr key={vendeur.vendeur_id} className="hover:bg-gray-50">
                   <td className="px-3 py-3">
                     <div className="flex items-center">
                       <div className="flex-shrink-0 h-8 w-8 bg-indigo-100 rounded-lg flex items-center justify-center">
                         <User className="w-4 h-4 text-indigo-600" />
                       </div>
                       <div className="ml-2">
-                        <div className="text-sm font-medium text-gray-900">{vendeur.name}</div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {vendeur.vendeur?.prenom} {vendeur.vendeur?.nom}
+                        </div>
                         <div className="flex items-center gap-1 mt-0.5">
-                          {getStatusIcon(vendeur.status)}
-                          <span className="text-xs text-gray-500">{vendeur.email}</span>
+                          {getStatusIcon(vendeur.vendeur?.role)}
+                          <span className="text-xs text-gray-500">
+                            {vendeur.vendeur?.email}
+                          </span>
                         </div>
                       </div>
                     </div>
                   </td>
                   <td className="px-3 py-3">
-                    <div className="text-sm font-semibold text-gray-900">{vendeur.stats?.totalVentes || 0}</div>
+                    <div className="text-sm font-semibold text-gray-900">{vendeur.total_ventes || 0}</div>
                   </td>
                   <td className="px-3 py-3">
                     <div className="text-sm font-semibold text-emerald-600">
-                      {formatFCFA(vendeur.stats?.montantTotal || 0)}
+                      {formatFCFA(vendeur.total_encaisses || 0)}
                     </div>
                   </td>
                   <td className="px-3 py-3">
@@ -245,6 +281,15 @@ useEffect(() => {
           </table>
         </div>
       </div>
+
+      {/* ✅ PAGINATION (uniquement si nécessaire) */}
+      {totalPages > 1 && (
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          onPageChange={(newPage) => setPage(newPage)}
+        />
+      )}
 
       {/* MODAL D'HISTORIQUE */}
       {showHistory && selectedVendeur && (
