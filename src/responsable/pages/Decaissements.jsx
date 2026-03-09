@@ -24,7 +24,7 @@ import {
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 
-import { decaissementsAPI } from '@/services/api';
+import { decaissementsAPI } from '@/responsable/services/api';
 import FormModal from "../components/FormModal";
 import DecaissementForm from "../components/DecaissementForm";
 import Pagination from "../components/Pagination";
@@ -248,7 +248,7 @@ const normalized = (data.data || []).map(d => ({
       setStatsFromApi(statsData);
 
     } catch (e) {
-      console.error("Erreur chargement décaissements", e);
+
     } finally {
       setLoading(false);
       setLoadingPage(false);
@@ -318,24 +318,33 @@ const payload = {
         loadData();
       }
 
-    } catch (e) {
-      const status = e?.response?.status;
-      const data = e?.response?.data;
+    }  catch (e) {
+  const status = e?.response?.status;
+  const data = e?.response?.data;
 
-      if (status === 422 && data?.errors) {
-        const firstField = Object.keys(data.errors)[0];
-        const firstMsg =
-          data.errors[firstField]?.[0] || "Données invalides.";
-        toast.error(firstMsg, { id: toastId });
-      } else {
-        toast.error(
-          data?.message
-            ? `Erreur (${status}) : ${data.message}`
-            : `Envoi impossible (${status || "?"}).`,
-          { id: toastId }
-        );
-      }
-    } finally {
+  if (status === 422 && data?.errors) {
+    const firstField = Object.keys(data.errors)[0];
+    const firstMsg =
+      data.errors[firstField]?.[0] || "Données invalides.";
+    toast.error(firstMsg, { id: toastId });
+
+  } 
+  // ✅ Cas solde insuffisant (400)
+  else if (status === 400) {
+      toast.error(
+        "Solde insuffisant. Le montant demandé dépasse le total encaissé aujourd’hui.",
+        { id: toastId }
+      );
+
+  } 
+  else {
+    toast.error(
+      "Une erreur est survenue lors de l’envoi de la demande.",
+      { id: toastId }
+    );
+  }
+}
+    finally {
       setSubmitting(false);
     }
   };
@@ -498,7 +507,7 @@ const payload = {
       doc.save(`Decaissements_LPD_${todayISO()}.pdf`);
       toast.success("Export PDF généré avec succès.");
     } catch (e) {
-      console.error("Erreur export PDF:", e);
+
       toast.error("Erreur lors de l'export PDF des décaissements.");
     }
   };

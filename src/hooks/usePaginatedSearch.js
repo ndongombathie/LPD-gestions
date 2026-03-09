@@ -41,7 +41,7 @@ export default function usePaginatedSearch(fetcher, delay = 1000) {
           );
         }
       } catch (e) {
-        console.error("Erreur usePaginatedSearch :", e);
+
       } finally {
         setLoading(false);
       }

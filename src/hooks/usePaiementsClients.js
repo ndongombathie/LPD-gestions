@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { commandesAPI } from "@/services/api";
+import { commandesAPI } from "@/responsable/services/api";
 import { logger } from "@/utils/logger";
 
 export function usePaiementsClients(toast) {

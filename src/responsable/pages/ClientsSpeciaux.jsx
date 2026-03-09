@@ -30,7 +30,7 @@ import Pagination from "../components/Pagination.jsx";
 import { useClientsSpeciaux } from "@/hooks/useClientsSpeciaux";
 import { usePaiementsClients } from "@/hooks/usePaiementsClients";
 import NouvelleTrancheModal from "../components/NouvelleTrancheModal.jsx";
-import { commandesAPI } from '@/services/api';
+import { commandesAPI } from '@/responsable/services/api';
 import { normalizeCommande } from "@/utils/normalizeCommande";
 
 const cls = (...a) => a.filter(Boolean).join(" ");
@@ -149,7 +149,7 @@ function ClientForm({ initial, onSubmit, onCancel, submitting }) {
 
   const handleSubmit = (ev) => {
     ev.preventDefault();
-    console.log("CLIENT UPDATE FORM:", initial);
+
 
     if (validate()) onSubmit({
       ...form,
@@ -612,7 +612,7 @@ export default function ClientsSpeciaux() {
 });
       
     } catch (e) {
-      console.error("Erreur stats commandes", e);
+
     }
   };
 

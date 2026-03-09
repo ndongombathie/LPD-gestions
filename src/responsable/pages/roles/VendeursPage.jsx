@@ -18,7 +18,7 @@ import {
 // Composants
 import VendeurHistoryModal from "../../components/roles/VendeurHistoryModal";
 import Pagination from "@/responsable/components/Pagination";
-import { journalResponsableAPI } from "@/services/api/JournalResponsable";
+import { journalResponsableAPI } from "@/responsable/services/api/JournalResponsable";
 
 const formatFCFA = (n) =>
   new Intl.NumberFormat("fr-FR", {

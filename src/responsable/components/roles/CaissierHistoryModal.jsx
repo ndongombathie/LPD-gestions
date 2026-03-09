@@ -27,7 +27,7 @@ import {
   Wallet,
   Loader2
 } from "lucide-react";
-import { journalResponsableAPI } from "@/services/api/JournalResponsable";
+import { journalResponsableAPI } from "@/responsable/services/api/JournalResponsable";
 
 const formatFCFA = (n) =>
   new Intl.NumberFormat("fr-FR", {
@@ -77,7 +77,7 @@ export default function CaissierHistoryModal({ employee, isOpen, onClose }) {
 
         setOperations(response ?? []);
       } catch (error) {
-        console.error("Erreur chargement historique:", error);
+
         setOperations([]);
       } finally {
         setLoading(false);

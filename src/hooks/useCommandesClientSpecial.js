@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import toast from "react-hot-toast";
-import { commandesAPI } from "@/services/api";
+import { commandesAPI } from "@/responsable/services/api";
 import { normalizeCommande } from "@/utils/normalizeCommande";
 import { logger } from "@/utils/logger";
 

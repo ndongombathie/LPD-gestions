@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { clientsAPI, commandesAPI } from "@/services/api";
+import { clientsAPI, commandesAPI } from "@/responsable/services/api";
 import { logger } from "@/utils/logger";
 import { normalizeCommande } from "@/utils/normalizeCommande";
 import { useMemo } from "react";

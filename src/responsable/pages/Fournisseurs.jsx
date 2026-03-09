@@ -23,7 +23,7 @@ import {
 import FormModal from "../components/FormModal.jsx";
 import DataTable from "../components/DataTable.jsx";
 import Pagination from "../components/Pagination.jsx";
-import { fournisseursAPI } from '@/services/api';
+import { fournisseursAPI } from '@/responsable/services/api';
 
 
 const cls = (...a) => a.filter(Boolean).join(" ");

@@ -160,6 +160,52 @@ const alertStyles = {
 };
 
 // ==========================================================
+// 🌀 Mini Loader LPD (Top Right)
+// ==========================================================
+
+const LPDLoader = ({ visible }) => {
+  if (!visible) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.8, y: -10 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.8 }}
+      transition={{ duration: 0.3 }}
+      className="fixed top-20 right-8 z-50"
+    >
+      <div className="relative w-14 h-14">
+        {/* Cercle animé externe */}
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{
+            repeat: Infinity,
+            duration: 3,
+            ease: "linear",
+          }}
+          className="absolute inset-0 rounded-full border-2 border-t-[#F58020] border-r-transparent border-b-[#472EAD] border-l-transparent"
+        />
+
+        {/* Cercle interne */}
+        <motion.div
+          animate={{ scale: [1, 1.05, 1] }}
+          transition={{
+            repeat: Infinity,
+            duration: 1.8,
+            ease: "easeInOut",
+          }}
+          className="absolute inset-2 rounded-full bg-[#472EAD] flex items-center justify-center shadow-lg"
+        >
+          <span className="text-[11px] font-black text-[#F58020] tracking-wider">
+            LPD
+          </span>
+        </motion.div>
+      </div>
+    </motion.div>
+  );
+};
+
+// ==========================================================
 // 🏢 COMPOSANT PRINCIPAL
 // ==========================================================
 
@@ -208,6 +254,11 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen w-full bg-[#F8FAFC]" style={{ fontFamily: "'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
+      {/* Mini loader LPD en haut à droite */}
+      <AnimatePresence>
+        <LPDLoader visible={loading} />
+      </AnimatePresence>
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <AnimatePresence mode="wait">
           {showWelcomeLoading ? (
@@ -431,7 +482,11 @@ export default function Dashboard() {
                             <div className="mt-2 w-full bg-emerald-100 rounded-full h-1.5">
                               <div 
                                 className="bg-emerald-600 h-1.5 rounded-full" 
-                                style={{ width: `${(finance.totalEncaissement / finance.totalFacture) * 100}%` }}
+                                style={{
+                                    width: finance?.totalFacture
+                                      ? `${(finance.totalEncaissement / finance.totalFacture) * 100}%`
+                                      : "0%"
+                                  }}
                               />
                             </div>
                           )}

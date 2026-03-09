@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import toast from "react-hot-toast";
-import { paiementsAPI } from "@/services/api/paiements";
+import { paiementsAPI } from "@/responsable/services/api/paiements";
 
 export function useHistoriqueEncaissementsClient({
   clientId,

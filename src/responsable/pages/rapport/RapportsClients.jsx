@@ -26,7 +26,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
 // Import des services API
-import rapportsAPI from '@/services/api/rapports';
+import rapportsAPI from '@/responsable/services/api/rapports';
 
 // ==========================================================
 // 🧮 Helpers
@@ -254,7 +254,6 @@ export default function RapportsClients({
         }
         
       } catch (error) {
-        console.error("Erreur chargement logs clients spéciaux:", error);
         toast.error("Erreur lors du chargement du rapport clients spéciaux");
       } finally {
         setLoading(false);
@@ -467,7 +466,6 @@ export default function RapportsClients({
       doc.save(fileName);
       toast.success("Journal d'audit exporté en PDF avec succès.");
     } catch (error) {
-      console.error("Erreur lors de l'export PDF:", error);
       toast.error("Erreur lors de l'export du PDF");
     }
   };

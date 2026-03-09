@@ -3,7 +3,7 @@
 // ==========================================================
 
 import { useEffect, useRef, useState } from "react";
-import { dashboardResponsableAPI } from "@/services/api/dashboardResponsable";
+import { dashboardResponsableAPI } from "@/responsable/services/api/dashboardResponsable";
 
 const createSignature = (data) => JSON.stringify(data);
 
@@ -40,14 +40,17 @@ export default function useDashboardResponsable() {
           return;
         }
 
-        lastSignatureRef.current = newSignature;
-        setData(response);
+      lastSignatureRef.current = newSignature;
+      setData(response);
+
+      if (!isRefresh) {
+        setLoading(false);
+      }
 
       } catch (e) {
-        console.error("Erreur dashboard hook:", e);
+
         setError(e);
       } finally {
-        setLoading(false);
         setIsRefreshing(false);
       }
     };

@@ -15,7 +15,7 @@ import {
   DollarSign,
   Save
 } from "lucide-react";
-import { journalResponsableAPI } from "@/services/api/JournalResponsable";
+import { journalResponsableAPI } from "@/responsable/services/api/JournalResponsable";
 
 const formatFCFA = (n) =>
   new Intl.NumberFormat("fr-FR", {
@@ -99,7 +99,7 @@ export default function FondOuvertureModal({
       onClose();
 
     } catch (error) {
-      console.error(error);
+
 
       onToast(
         "error",

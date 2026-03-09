@@ -39,9 +39,9 @@ import "jspdf-autotable";
 import { toast } from "sonner";
 
 import ChartBox from "../components/ChartBox";
-import { stockAPI } from "@/services/api/stock";
-import { produitsAPI } from "@/services/api/produits";
-import { commandesAPI } from "@/services/api/commandes";
+import { stockAPI } from "@/responsable/services/api/stock";
+import { produitsAPI } from "@/responsable/services/api/produits";
+import { commandesAPI } from "@/responsable/services/api/commandes";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
@@ -118,7 +118,6 @@ export default function Inventaire() {
       const response = await stockAPI.getAll(params);
       setInventaireData(response.data || response || []);
     } catch (error) {
-      console.error('❌ Erreur lors du chargement des données d\'inventaire:', error);
       toast.error('Erreur lors du chargement des données d\'inventaire');
       setInventaireData([]);
     } finally {
@@ -137,7 +136,6 @@ export default function Inventaire() {
       });
       setProduitsData(response.data || response || []);
     } catch (error) {
-      console.error('❌ Erreur lors du chargement des produits:', error);
       toast.error('Erreur lors du chargement des produits');
     } finally {
       setLoadingProduits(false);
@@ -396,7 +394,6 @@ export default function Inventaire() {
       doc.save(`Inventaire_Colobane_${dateDebut}_au_${dateFin}.pdf`);
       toast.success("Export PDF inventaire généré avec succès.");
     } catch (error) {
-      console.error('❌ Erreur lors de la génération du PDF:', error);
       toast.error("Erreur lors de la génération du PDF");
     } finally {
       setGeneratingPDF(false);
@@ -442,7 +439,6 @@ export default function Inventaire() {
 
           ajustementsReussis++;
         } catch (error) {
-          console.error(`❌ Erreur ajustement produit ${ligne.id}:`, error);
           ajustementsEchoues++;
         }
       }
@@ -459,7 +455,6 @@ export default function Inventaire() {
       }
 
     } catch (error) {
-      console.error('❌ Erreur lors de la génération des ajustements:', error);
       toast.error("Erreur lors de la génération des ajustements");
     } finally {
       setGeneratingAdjustments(false);

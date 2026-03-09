@@ -19,7 +19,7 @@ import {
 import CaissierHistoryModal from "../../components/roles/CaissierHistoryModal";
 import FondOuvertureModal from "../../components/roles/FondOuvertureModal";
 import Pagination from "@/responsable/components/Pagination";
-import { journalResponsableAPI } from "@/services/api/JournalResponsable";
+import { journalResponsableAPI } from "@/responsable/services/api/JournalResponsable";
 
 const formatFCFA = (n) =>
   new Intl.NumberFormat("fr-FR", {
@@ -90,7 +90,6 @@ export default function CaissiersPage() {
         });
 
       } catch (error) {
-        console.error(error);
         setCaissiers([]);
       } finally {
         setLoading(false);
