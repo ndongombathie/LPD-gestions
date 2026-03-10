@@ -6,6 +6,7 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { Search, AlertTriangle, CheckCircle } from "lucide-react";
 import boutiqueAPI from "@/services/api/boutique";
+import useDebouncedValue from "@/hooks/useDebouncedValue";
 
 const PER_PAGE = 25;
 
@@ -22,7 +23,6 @@ const getEtat = (quantite, seuil) => {
 
 export default function Boutique() {
   const [rows, setRows] = useState([]);
-  const [allRows, setAllRows] = useState([]);
   const [pagination, setPagination] = useState(null);
 
   const [page, setPage] = useState(1);
@@ -30,6 +30,7 @@ export default function Boutique() {
   const [error, setError] = useState(null);
 
   const [searchTerm, setSearchTerm] = useState("");
+  const debouncedSearchTerm = useDebouncedValue(searchTerm, 500);
   
   // État pour la fiche sélectionnée
   const [selectedProduit, setSelectedProduit] = useState(null);
@@ -42,6 +43,7 @@ export default function Boutique() {
       const res = await boutiqueAPI.getProduitsControle({
         page,
         per_page: PER_PAGE,
+        search: debouncedSearchTerm,
       });
 
       setRows(res.data ?? []);
@@ -51,40 +53,11 @@ export default function Boutique() {
     } finally {
       setLoading(false);
     }
-  }, [page]);
-
-  /* ================= FETCH GLOBAL COMPLET (TOUTES LES PAGES) ================= */
-  const fetchAll = useCallback(async () => {
-    try {
-      let currentPage = 1;
-      let lastPage = 1;
-      let allData = [];
-
-      do {
-        const res = await boutiqueAPI.getProduitsControle({
-          page: currentPage,
-          per_page: PER_PAGE,
-        });
-
-        allData = [...allData, ...(res.data ?? [])];
-        lastPage = res.pagination?.lastPage ?? 1;
-        currentPage++;
-
-      } while (currentPage <= lastPage);
-
-      setAllRows(allData);
-      return allData;
-
-    } catch (error) {
-      console.error("Erreur fetch global boutique :", error);
-      return [];
-    }
-  }, []);
+  }, [page, debouncedSearchTerm]);
 
   useEffect(() => {
     fetchPaginated();
-    fetchAll();
-  }, [fetchPaginated, fetchAll]);
+  }, [fetchPaginated]);
 
   /* ================= NORMALISATION + REGROUPEMENT ================= */
   const normalizeAndGroup = (data) => {
@@ -133,18 +106,11 @@ export default function Boutique() {
   };
 
   const pageData = useMemo(() => normalizeAndGroup(rows), [rows]);
-  const globalData = useMemo(() => normalizeAndGroup(allRows), [allRows]);
 
   /* ================= RECHERCHE GLOBALE ================= */
-  const filteredData = useMemo(() => {
-    if (!searchTerm.trim()) return pageData;
+  // Désormais gérée par l'API, pageData contient déjà les bons résultats
+  const filteredData = pageData;
 
-    const q = searchTerm.toLowerCase();
-    return globalData.filter((p) =>
-      p.nom.toLowerCase().includes(q) || 
-      p.categorie_nom.toLowerCase().includes(q)
-    );
-  }, [searchTerm, pageData, globalData]);
 
   // Fonction pour afficher la fiche produit
   const afficherFiche = (produit) => {
@@ -352,7 +318,7 @@ export default function Boutique() {
       </div>
 
       {/* PAGINATION */}
-      {!searchTerm && pagination && (
+      {pagination && pagination.lastPage > 1 && (
         <div className="flex justify-between items-center text-sm bg-white rounded-2xl shadow-md p-4">
           <button
             disabled={page === 1}
