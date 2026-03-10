@@ -47,6 +47,50 @@ import Pagination from "@/responsable/components/Pagination";
 import { normalizeCommande } from "@/utils/normalizeCommande";
 import NouvelleTrancheModal from "@/responsable/components/NouvelleTrancheModal";
 
+// ==========================================================
+// 🌀 Mini Loader LPD (Top Right) - AJOUTÉ
+// ==========================================================
+const LPDLoader = ({ visible }) => {
+  if (!visible) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.8, y: -10 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.8 }}
+      transition={{ duration: 0.3 }}
+      className="fixed top-20 right-8 z-50"
+    >
+      <div className="relative w-14 h-14">
+        {/* Cercle animé externe */}
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{
+            repeat: Infinity,
+            duration: 3,
+            ease: "linear",
+          }}
+          className="absolute inset-0 rounded-full border-2 border-t-[#F58020] border-r-transparent border-b-[#472EAD] border-l-transparent"
+        />
+
+        {/* Cercle interne */}
+        <motion.div
+          animate={{ scale: [1, 1.05, 1] }}
+          transition={{
+            repeat: Infinity,
+            duration: 1.8,
+            ease: "easeInOut",
+          }}
+          className="absolute inset-2 rounded-full bg-[#472EAD] flex items-center justify-center shadow-lg"
+        >
+          <span className="text-[11px] font-black text-[#F58020] tracking-wider">
+            LPD
+          </span>
+        </motion.div>
+      </div>
+    </motion.div>
+  );
+};
 
 // === Utils ===
 const formatFCFA = (n) =>
@@ -1817,7 +1861,7 @@ export default function Commandes() {
   const clientIdFromState = state?.clientId || null;
   const clientNameFromState = state?.clientNom || state?.client || "";
 
-  const [loading, setLoading] = useState(true);
+  const [isFetching, setIsFetching] = useState(true); // ← UN SEUL ÉTAT POUR LE CHARGEMENT PRINCIPAL
   const [loadingPage, setLoadingPage] = useState(false);
   const [isFirstLoad, setIsFirstLoad] = useState(true);
   const [commandes, setCommandes] = useState([]);
@@ -1880,12 +1924,15 @@ export default function Commandes() {
       const isSearchChange = previousSearchRef.current !== searchTerm;
 
       // ✅ Loader UNIQUEMENT pour :
-      // - Premier chargement : full screen
+      // - Premier chargement : loader principal (en haut à droite)
       // - Pagination, statut, période : loader tableau
       // - Recherche : PAS de loader
       if (isFirstLoad) {
-        setLoading(true);
-      } else if (!isSearchChange) {
+        setIsFetching(true);
+      } 
+      // ✅ Activer le loader de tableau pour TOUT sauf recherche
+      // Cela inclut: changement de page, changement de statut, changement de période
+      else if (!isSearchChange) {
         setLoadingPage(true);
       }
 
@@ -1940,7 +1987,7 @@ export default function Commandes() {
         "Impossible de charger les commandes clients spéciaux."
       );
     } finally {
-      setLoading(false);
+      setIsFetching(false);
       setLoadingPage(false);
       setIsFirstLoad(false);
       
@@ -2226,20 +2273,13 @@ useEffect(() => {
     clientIdFromState,
   ]);
 
-  if (loading)
-    return (
-      <div className="flex items-center justify-center h-[60vh]">
-        <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-gray-200 shadow-sm">
-          <Loader2 className="w-5 h-5 text-[#472EAD] animate-spin" />
-          <span className="text-xs font-medium text-[#472EAD]">
-            Chargement des commandes...
-          </span>
-        </div>
-      </div>
-    );
-
   return (
     <>
+      {/* 🌀 Loader LPD subtil en haut à droite - POUR LE PREMIER CHARGEMENT */}
+      <AnimatePresence>
+        <LPDLoader visible={isFetching} />
+      </AnimatePresence>
+
       <div className="w-full h-full bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white px-3 sm:px-4 lg:px-6 py-4 sm:py-5 overflow-y-auto">
         <div className="max-w-6xl mx-auto space-y-8">
           
