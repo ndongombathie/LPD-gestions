@@ -7,11 +7,10 @@
 // ==========================================================
 
 import React, { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion"; // ← AJOUT AnimatePresence
 import {
   FileDown,
   PlusCircle,
-  RefreshCw,
   Eye,
   X,
   Search,
@@ -30,6 +29,50 @@ import DecaissementForm from "../components/DecaissementForm";
 import Pagination from "../components/Pagination";
 import { Toaster, toast } from "sonner";
 
+// ==========================================================
+// 🌀 Mini Loader LPD (Top Right) - AJOUTÉ
+// ==========================================================
+const LPDLoader = ({ visible }) => {
+  if (!visible) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.8, y: -10 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.8 }}
+      transition={{ duration: 0.3 }}
+      className="fixed top-20 right-8 z-50"
+    >
+      <div className="relative w-14 h-14">
+        {/* Cercle animé externe */}
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{
+            repeat: Infinity,
+            duration: 3,
+            ease: "linear",
+          }}
+          className="absolute inset-0 rounded-full border-2 border-t-[#F58020] border-r-transparent border-b-[#472EAD] border-l-transparent"
+        />
+
+        {/* Cercle interne */}
+        <motion.div
+          animate={{ scale: [1, 1.05, 1] }}
+          transition={{
+            repeat: Infinity,
+            duration: 1.8,
+            ease: "easeInOut",
+          }}
+          className="absolute inset-2 rounded-full bg-[#472EAD] flex items-center justify-center shadow-lg"
+        >
+          <span className="text-[11px] font-black text-[#F58020] tracking-wider">
+            LPD
+          </span>
+        </motion.div>
+      </div>
+    </motion.div>
+  );
+};
 
 // ——————————————————————————————————————————————————
 // 🔧 Helpers
@@ -177,7 +220,7 @@ function DetailDecaissementModal({ open, onClose, decaissement }) {
 // 💰 Composant principal
 // ——————————————————————————————————————————————————
 export default function Decaissements() {
-  const [loading, setLoading] = useState(true);
+  const [isFetching, setIsFetching] = useState(true); // ← UN SEUL ÉTAT POUR TOUS LES CHARGEMENTS
   const [openModal, setOpenModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -198,18 +241,13 @@ export default function Decaissements() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
-  const [loadingPage, setLoadingPage] = useState(false);
   
   // ——————————————————————————————————————————————————
   // 📥 Chargement initial avec stats API et pagination
   // ——————————————————————————————————————————————————
   const loadData = async () => {
     try {
-        if (demandes.length === 0) {
-          setLoading(true);
-        } else {
-          setLoadingPage(true);
-        }
+      setIsFetching(true); // ← ACTIVE LE LOADER
 
       const data = await decaissementsAPI.getAllResponsable({
         page,
@@ -227,13 +265,13 @@ export default function Decaissements() {
       setTotalPages(pages <= 1 ? 1 : pages);
 
       // 🔥 Normalisation snake_case → camelCase
-const normalized = (data.data || []).map(d => ({
-  ...d,
-  montantTotal: d.montant,
-  methodePaiement: d.methode_paiement ?? null,
-  datePrevue: d.date,
-  motifGlobal: d.motif,
-}));
+      const normalized = (data.data || []).map(d => ({
+        ...d,
+        montantTotal: d.montant,
+        methodePaiement: d.methode_paiement ?? null,
+        datePrevue: d.date,
+        motifGlobal: d.motif,
+      }));
 
       setDemandes(normalized);
 
@@ -248,10 +286,9 @@ const normalized = (data.data || []).map(d => ({
       setStatsFromApi(statsData);
 
     } catch (e) {
-
+      toast.error("Erreur lors du chargement des données");
     } finally {
-      setLoading(false);
-      setLoadingPage(false);
+      setIsFetching(false); // ← DÉSACTIVE LE LOADER
     }
   };
 
@@ -296,12 +333,12 @@ const normalized = (data.data || []).map(d => ({
     // ———————————————————————————
     // ✅ PAYLOAD FINAL SIMPLIFIÉ
     // ———————————————————————————
-const payload = {
-  motif: form.motifGlobal.trim(),
-  date: form.datePrevue || todayISO(),
-  caissier_id: form.caissier_id,
-  montant: Number(form.montant),
-};
+    const payload = {
+      motif: form.motifGlobal.trim(),
+      date: form.datePrevue || todayISO(),
+      caissier_id: form.caissier_id,
+      montant: Number(form.montant),
+    };
     const toastId = toast.loading("Envoi à la caisse...");
 
     try {
@@ -318,33 +355,29 @@ const payload = {
         loadData();
       }
 
-    }  catch (e) {
-  const status = e?.response?.status;
-  const data = e?.response?.data;
+    } catch (e) {
+      const status = e?.response?.status;
+      const data = e?.response?.data;
 
-  if (status === 422 && data?.errors) {
-    const firstField = Object.keys(data.errors)[0];
-    const firstMsg =
-      data.errors[firstField]?.[0] || "Données invalides.";
-    toast.error(firstMsg, { id: toastId });
-
-  } 
-  // ✅ Cas solde insuffisant (400)
-  else if (status === 400) {
-      toast.error(
-        "Solde insuffisant. Le montant demandé dépasse le total encaissé aujourd’hui.",
-        { id: toastId }
-      );
-
-  } 
-  else {
-    toast.error(
-      "Une erreur est survenue lors de l’envoi de la demande.",
-      { id: toastId }
-    );
-  }
-}
-    finally {
+      if (status === 422 && data?.errors) {
+        const firstField = Object.keys(data.errors)[0];
+        const firstMsg =
+          data.errors[firstField]?.[0] || "Données invalides.";
+        toast.error(firstMsg, { id: toastId });
+      } 
+      // ✅ Cas solde insuffisant (400)
+      else if (status === 400) {
+        toast.error(
+          "Solde insuffisant. Le montant demandé dépasse le total encaissé aujourd’hui.",
+          { id: toastId }
+        );
+      } else {
+        toast.error(
+          "Une erreur est survenue lors de l’envoi de la demande.",
+          { id: toastId }
+        );
+      }
+    } finally {
       setSubmitting(false);
     }
   };
@@ -507,7 +540,6 @@ const payload = {
       doc.save(`Decaissements_LPD_${todayISO()}.pdf`);
       toast.success("Export PDF généré avec succès.");
     } catch (e) {
-
       toast.error("Erreur lors de l'export PDF des décaissements.");
     }
   };
@@ -527,25 +559,18 @@ const payload = {
     return `${caissier.prenom || ''} ${caissier.nom || ''}`.trim() || "-";
   };
 
-  // Loader
-  if (loading && demandes.length === 0)
-    return (
-      <div className="flex items-center justify-center min-h-[70vh] bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white">
-        <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-white/80 border border-[#E4E0FF] shadow-sm">
-          <RefreshCw className="w-5 h-5 text-[#472EAD] animate-spin" />
-          <span className="text-sm font-medium text-[#472EAD]">
-            Chargement des décaissements...
-          </span>
-        </div>
-      </div>
-    );
-
   return (
     <>
       {/* ✅ Nécessaire pour afficher les toast Sonner */}
       <Toaster position="top-right" richColors />
 
       <div className="min-h-screen w-full bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white px-4 sm:px-6 lg:px-10 py-6 sm:py-8 overflow-y-auto">
+        
+        {/* 🌀 Loader LPD subtil en haut à droite - POUR TOUS LES CHARGEMENTS */}
+        <AnimatePresence>
+          <LPDLoader visible={isFetching} />
+        </AnimatePresence>
+
         <div className="max-w-6xl mx-auto space-y-8">
           
           {/* HEADER */}
@@ -652,11 +677,7 @@ const payload = {
           {/* TABLEAU + FILTRES */}
           <section className="relative bg-white/90 border border-[#E4E0FF] rounded-2xl shadow-[0_18px_45px_rgba(15,23,42,0.06)] overflow-x-auto mt-8">
 
-          {loadingPage && (
-            <div className="absolute inset-0 bg-white/60 backdrop-blur-[1px] flex items-center justify-center z-10">
-              <RefreshCw className="w-5 h-5 text-[#472EAD] animate-spin" />
-            </div>
-          )}
+            {/* ✅ SUPPRESSION DU LOADER OVERLAY - maintenant géré par le loader LPD en haut à droite */}
 
             <div className="px-4 pt-4 pb-3 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
               <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -814,7 +835,6 @@ const payload = {
                 onPageChange={(p) => {
                   if (p < 1 || p > totalPages) return;
                   if (p === page) return;
-                  if (loadingPage) return;
                   setPage(p);
                 }}
               />

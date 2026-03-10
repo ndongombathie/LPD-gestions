@@ -17,6 +17,7 @@ import {
   Eye,
   EyeOff,
   Camera,
+  Menu, // ← AJOUTÉ
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import useAuth from "../hooks/useAuth";
@@ -374,7 +375,7 @@ function ProfileModal({ open, onClose, user, onUpdate, addToast }) {
 // 🧠 HEADER PRINCIPAL (connecté au backend !)
 // ==========================================================
 
-export default function Header() {
+export default function Header({ onMenuClick, isMobile }) { // ← PROPS AJOUTÉES
   const navigate = useNavigate();
   const menuRef = useRef();
   const { user: authUser, logout, changePassword } = useAuth();
@@ -452,6 +453,17 @@ export default function Header() {
           <div className="max-w-7xl mx-auto h-full px-4 flex items-center justify-between">
             {/* LOGO & TITRE */}
             <div className="flex items-center gap-3">
+              {/* Bouton menu pour mobile */}
+              {isMobile && (
+                <button
+                  onClick={onMenuClick}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors md:hidden"
+                  aria-label="Menu"
+                >
+                  <Menu size={20} className="text-[#472EAD]" />
+                </button>
+              )}
+
               <div className="flex items-center">
                 <span className="text-[#472EAD] font-extrabold text-xl">LP</span>
                 <span className="text-[#F58020] font-extrabold text-xl">D</span>
