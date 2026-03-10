@@ -4,11 +4,20 @@ import { httpClient } from '../../services/http/client';
 export const caissierApi = {
   // ==================== DASHBOARD ====================
   
+  /** Date du jour en local (YYYY-MM-DD) pour éviter les décalages timezone */
+  getDateLocal(date = null) {
+    const d = date ? new Date(date) : new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  },
+
   /**
    * Récupère les statistiques du jour
    */
   async getDashboardStats(date = null) {
-      const today = date || new Date().toISOString().split('T')[0];
+      const today = date || this.getDateLocal();
       const response = await httpClient.get('/caissier/dashboard/stats', { params: { date: today } });
       const data = response.data || {};
 
@@ -27,7 +36,7 @@ export const caissierApi = {
    */
   async getVentesParMoyen(date = null) {
     try {
-      const today = date || new Date().toISOString().split('T')[0];
+      const today = date || this.getDateLocal();
       const response = await httpClient.get('/caissier/dashboard/ventes-par-moyen', { params: { date: today } });
       return response.data?.ventes || [];
     } catch {
@@ -41,7 +50,7 @@ export const caissierApi = {
    */
   async getVentesParHeure(date = null) {
     try {
-      const today = date || new Date().toISOString().split('T')[0];
+      const today = date || this.getDateLocal();
       const response = await httpClient.get('/caissier/dashboard/ventes-par-heure', { params: { date: today } });
       return response.data?.ventes || [];
     } catch {

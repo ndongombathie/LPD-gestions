@@ -41,7 +41,7 @@ import jsPDF from "jspdf";
 import { QRCodeCanvas as QRCode } from "qrcode.react";
 import "jspdf-autotable";
 import { useLocation } from "react-router-dom";
-import { commandesAPI, produitsAPI, clientsAPI } from '@/services/api';
+import { commandesAPI, produitsAPI, clientsAPI } from '@/responsable/services/api';
 import { logger } from "@/utils/logger";
 import Pagination from "@/responsable/components/Pagination";
 import { normalizeCommande } from "@/utils/normalizeCommande";

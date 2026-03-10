@@ -1,7 +1,3 @@
-// ==========================================================
-// 🧠 Header.jsx — LPD Manager (Vendeur)
-// ==========================================================
-
 import React, { useState, useMemo, useEffect } from "react";
 import {
   ChevronDown,
@@ -12,12 +8,12 @@ import {
   AlertCircle,
   CheckCircle,
   User,
+  Menu,
 } from "lucide-react";
 import useAuth from "../hooks/useAuth";
-import { commandesAPI } from "../services/api/commandes"; // API des commandes
-import profileAPI from "../services/api/profile"; // API du profil utilisateur
+import { commandesAPI } from "../services/api/commandes";
+import profileAPI from "../services/api/profile";
 
-// ================= Utils =================
 const getDisplayName = (user) => {
   if (!user) return "Utilisateur";
   
@@ -55,15 +51,13 @@ const getInitials = (name = "") => {
     .slice(0, 2) || "U";
 };
 
-// ================= Password Validation =================
 const validatePassword = (password) => {
   const errors = [];
   if (password.length < 6) errors.push("6 caractères minimum");
   return errors;
 };
 
-// ================= Password Modal =================
-function PasswordModal({ open, onClose }) {
+function PasswordModal({ open, onClose, onSuccess }) {
   const [oldPwd, setOldPwd] = useState("");
   const [newPwd, setNewPwd] = useState("");
   const [confirmPwd, setConfirmPwd] = useState("");
@@ -72,10 +66,8 @@ function PasswordModal({ open, onClose }) {
   const [success, setSuccess] = useState("");
   const [validationErrors, setValidationErrors] = useState([]);
 
-  // ✅ CORRECTION: Hook appelé au niveau supérieur
   const { changePassword } = useAuth();
 
-  // Validation en temps réel
   const handleNewPasswordChange = (value) => {
     setNewPwd(value);
     if (value) {
@@ -87,11 +79,9 @@ function PasswordModal({ open, onClose }) {
   };
 
   const validateForm = () => {
-    // Réinitialiser les messages
     setError("");
     setSuccess("");
 
-    // Validation basique
     if (!oldPwd.trim()) {
       setError("L'ancien mot de passe est requis");
       return false;
@@ -133,23 +123,21 @@ function PasswordModal({ open, onClose }) {
     try {
       await changePassword(oldPwd, newPwd, confirmPwd);
       
-      // Succès
       setSuccess("Mot de passe changé avec succès !");
       
-      // Réinitialiser le formulaire
       setOldPwd("");
       setNewPwd("");
       setConfirmPwd("");
       setValidationErrors([]);
       
-      // Fermer automatiquement après 2 secondes
+      if (onSuccess) onSuccess();
+      
       setTimeout(() => {
         onClose();
         setSuccess("");
       }, 2000);
       
     } catch (err) {
-      // Gestion des erreurs spécifiques
       if (err.response?.status === 401) {
         setError("L'ancien mot de passe est incorrect");
       } else if (err.response?.status === 400) {
@@ -168,18 +156,12 @@ function PasswordModal({ open, onClose }) {
       } else {
         setError("Erreur lors du changement de mot de passe. Veuillez réessayer.");
       }
-      
-      // Log en développement seulement
-      if (process.env.NODE_ENV === 'development') {
-        console.error("Erreur changement mot de passe:", err);
-      }
     } finally {
       setLoading(false);
     }
   };
 
   const handleClose = () => {
-    // Réinitialiser tout à la fermeture
     setOldPwd("");
     setNewPwd("");
     setConfirmPwd("");
@@ -193,7 +175,7 @@ function PasswordModal({ open, onClose }) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[200] bg-black/40 flex items-center justify-center">
+    <div className="fixed inset-0 z-[200] bg-black/40 flex items-center justify-center p-4">
       <div className="bg-white w-[95%] sm:w-[420px] rounded-2xl shadow-2xl p-5">
         <div className="flex justify-between items-center border-b pb-3 mb-4">
           <h2 className="text-lg font-semibold text-[#472EAD] flex items-center gap-2">
@@ -209,7 +191,6 @@ function PasswordModal({ open, onClose }) {
         </div>
 
         <form onSubmit={submit} className="space-y-3">
-          {/* Ancien mot de passe */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Ancien mot de passe *
@@ -225,7 +206,6 @@ function PasswordModal({ open, onClose }) {
             />
           </div>
 
-          {/* Nouveau mot de passe */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Nouveau mot de passe *
@@ -244,7 +224,6 @@ function PasswordModal({ open, onClose }) {
               required
             />
             
-            {/* Indicateur de validation simple */}
             {newPwd && validationErrors.length > 0 && (
               <p className="mt-1 text-sm text-red-600 flex items-center gap-1">
                 <AlertCircle size={12} /> Minimum 6 caractères requis
@@ -252,7 +231,6 @@ function PasswordModal({ open, onClose }) {
             )}
           </div>
 
-          {/* Confirmation */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Confirmer le mot de passe *
@@ -277,7 +255,6 @@ function PasswordModal({ open, onClose }) {
             )}
           </div>
 
-          {/* Messages d'erreur/succès */}
           {error && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
               <p className="text-red-700 text-sm flex items-center gap-2">
@@ -296,7 +273,6 @@ function PasswordModal({ open, onClose }) {
             </div>
           )}
 
-          {/* Actions */}
           <div className="flex justify-end gap-3 pt-2">
             <button
               type="button"
@@ -327,123 +303,68 @@ function PasswordModal({ open, onClose }) {
   );
 }
 
-// ================= HEADER =================
-export default function Header({ user, onLogout }) {
+export default function Header({ 
+  user, 
+  onLogout, 
+  onMenuClick, 
+  sidebarOpen,
+  sectionActive,
+  setSectionActive 
+}) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [pwdOpen, setPwdOpen] = useState(false);
-  const [loading, setLoading] = useState({
-    stats: false,
-    profile: false
-  });
-  const [ventesDuJour, setVentesDuJour] = useState(0);
+  const [loading, setLoading] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
 
-  // ✅ CORRECTION: Hooks appelés au niveau supérieur du composant
   const { logout } = useAuth();
 
-  // Fonction pour vérifier si une date est aujourd'hui
-  const estAujourdhui = (dateString) => {
-    try {
-      const aujourdhui = new Date();
-      const dateCommande = new Date(dateString);
-      return (
-        dateCommande.getDate() === aujourdhui.getDate() &&
-        dateCommande.getMonth() === aujourdhui.getMonth() &&
-        dateCommande.getFullYear() === aujourdhui.getFullYear()
-      );
-    } catch {
-      return false;
-    }
-  };
-
-  // Fonction pour vérifier si une commande est complétée
-  const estCompletee = (statut) => {
-    const statutsComplete = ['complétée', 'completed', 'payee', 'paid', 'delivered', 'livree', 'validée'];
-    const statutLower = String(statut || '').toLowerCase().trim();
-    return statutsComplete.includes(statutLower);
-  };
-
-  // Récupérer les commandes et calculer les ventes du jour
-  const fetchVentesDuJour = async () => {
-    try {
-      setLoading(prev => ({ ...prev, stats: true }));
-      
-      console.log("Chargement des commandes pour le header...");
-      
-      // Récupérer les commandes récentes
-      const response = await commandesAPI.getAll({
-        perPage: 100,
-        page: 1,
-        sort: 'desc',
-        orderBy: 'date'
-      });
-      
-      // Gestion des différents formats de réponse
-      let commandesData = [];
-      if (response.data && Array.isArray(response.data)) {
-        commandesData = response.data;
-      } else if (Array.isArray(response)) {
-        commandesData = response;
-      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
-        commandesData = response.data.data;
-      }
-      
-      if (commandesData && commandesData.length > 0) {
-        // Filtrer les commandes d'aujourd'hui
-        const commandesAujourdhui = commandesData.filter(cmd => {
-          const date = cmd.date || cmd.created_at;
-          return estAujourdhui(date);
-        });
-        
-        // Calculer les ventes du jour (uniquement les commandes complétées)
-        const ventes = commandesAujourdhui
-          .filter(cmd => estCompletee(cmd.statut || cmd.status))
-          .reduce((sum, cmd) => {
-            return sum + (cmd.total_ttc || cmd.total || 0);
-          }, 0);
-        
-        setVentesDuJour(ventes);
-        console.log(`Ventes du jour: ${ventes} FCFA`);
-      }
-      
-    } catch (error) {
-      console.error("Erreur chargement des commandes:", error);
-      setVentesDuJour(0);
-    } finally {
-      setLoading(prev => ({ ...prev, stats: false }));
-    }
-  };
-
-  // Récupérer le profil utilisateur via API profileAPI
   const fetchUserProfile = async () => {
     try {
-      setLoading(prev => ({ ...prev, profile: true }));
+      setLoading(true);
       const profile = await profileAPI.getProfile();
-      console.log("Profil utilisateur récupéré:", profile);
       setUserProfile(profile);
+      
+      if (profile) {
+        const currentUser = localStorage.getItem('user');
+        if (currentUser) {
+          const userData = JSON.parse(currentUser);
+          const updatedUser = {
+            ...userData,
+            prenom: profile.prenom || userData.prenom,
+            nom: profile.nom || userData.nom,
+            email: profile.email || userData.email,
+            telephone: profile.telephone || userData.telephone,
+            boutique_nom: profile.boutique_nom || userData.boutique_nom,
+          };
+          localStorage.setItem('user', JSON.stringify(updatedUser));
+        }
+      }
     } catch (error) {
-      console.error("Erreur chargement du profil:", error);
       setUserProfile(user);
     } finally {
-      setLoading(prev => ({ ...prev, profile: false }));
+      setLoading(false);
     }
   };
 
-  // Charger les données au montage et périodiquement
   useEffect(() => {
-    fetchVentesDuJour();
     fetchUserProfile();
-    
-    // Rafraîchir les ventes toutes les minutes
-    const interval = setInterval(fetchVentesDuJour, 60000);
-    
-    return () => clearInterval(interval);
   }, []);
 
-  const formatMoney = (v) =>
-    new Intl.NumberFormat("fr-FR").format(v || 0) + " FCFA";
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === 'user') {
+        const updatedUser = e.newValue ? JSON.parse(e.newValue) : null;
+        setUserProfile(updatedUser);
+      }
+    };
 
-  // Récupérer le nom complet (priorité au profil API, fallback user local)
+    window.addEventListener('storage', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
+
   const displayName = useMemo(() => {
     const userData = userProfile || user;
     return getDisplayName(userData);
@@ -451,34 +372,43 @@ export default function Header({ user, onLogout }) {
 
   const initials = useMemo(() => getInitials(displayName), [displayName]);
 
-  // ✅ CORRECTION: Utilisation correcte de logout (plus d'appel à useAuth() ici)
   const handleLogout = async () => {
     if (window.confirm("Voulez-vous vous déconnecter ?")) {
       try {
-        await logout(); // ← Utilisation directe de la fonction logout
+        await logout();
         if (onLogout) onLogout();
       } catch (error) {
-        console.error("Erreur déconnexion:", error);
       }
     }
     setMenuOpen(false);
   };
 
+  const handlePasswordChangeSuccess = () => {
+    fetchUserProfile();
+  };
+
   return (
     <>
-      <header className="fixed top-0 left-64 right-0 z-20 bg-white">
+      <header className="fixed top-0 left-0 lg:left-64 right-0 z-20 bg-white transition-all duration-300">
         <div className="h-[6px] bg-gradient-to-r from-[#472EAD] to-[#F58020]" />
 
         <div className="h-16 border-b shadow-sm">
           <div className="h-full px-4 flex items-center justify-between">
-            {/* LOGO */}
             <div className="flex items-center gap-3">
+              <button
+                onClick={onMenuClick}
+                className="lg:hidden p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                aria-label="Menu"
+              >
+                <Menu size={24} className="text-[#472EAD]" />
+              </button>
+
               <div className="flex items-center">
                 <span className="text-[#472EAD] font-extrabold text-xl">LP</span>
                 <span className="text-[#F58020] font-extrabold text-xl">D</span>
               </div>
 
-              <div>
+              <div className="hidden sm:block">
                 <h1 className="text-base font-semibold text-[#472EAD]">
                   LPD Manager
                   <span className="text-gray-500 font-normal text-sm">
@@ -491,26 +421,11 @@ export default function Header({ user, onLogout }) {
               </div>
             </div>
 
-            {/* ACTIONS */}
             <div className="flex items-center gap-4">
-              <div className="hidden sm:flex flex-col text-right">
-                <span className="text-xs text-gray-500 flex items-center gap-1 justify-end">
-                  <Banknote size={12} /> Ventes du jour
-                </span>
-                <div className="flex items-center gap-2 justify-end">
-                  <span className="font-semibold text-emerald-600">
-                    {formatMoney(ventesDuJour)}
-                  </span>
-                  {loading.stats && (
-                    <div className="w-3 h-3 border border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-                  )}
-                </div>
-              </div>
-
               <div className="relative">
                 <button
                   onClick={() => setMenuOpen((v) => !v)}
-                  className="flex items-center gap-3 pl-2 pr-4 py-1.5 rounded-full border hover:bg-gray-50 transition-colors"
+                  className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-full border hover:bg-gray-50 transition-colors"
                   aria-expanded={menuOpen}
                   aria-label="Menu utilisateur"
                 >
@@ -520,7 +435,7 @@ export default function Header({ user, onLogout }) {
                   >
                     {initials}
                   </div>
-                  <div className="flex flex-col items-start">
+                  <div className="hidden md:flex flex-col items-start">
                     <span className="text-sm font-medium text-gray-900 leading-tight">
                       {displayName}
                     </span>
@@ -583,7 +498,8 @@ export default function Header({ user, onLogout }) {
 
       <PasswordModal 
         open={pwdOpen} 
-        onClose={() => setPwdOpen(false)} 
+        onClose={() => setPwdOpen(false)}
+        onSuccess={handlePasswordChangeSuccess}
       />
     </>
   );

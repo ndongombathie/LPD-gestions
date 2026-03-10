@@ -410,7 +410,7 @@ export default function CaissierLayout() {
             <div className="h-[6px] w-full bg-gradient-to-r from-[#472EAD] via-[#472EAD] to-[#F58020]" />
 
             <div className="bg-white h-16 shadow-sm border-b">
-              <div className="max-w-7xl mx-auto h-full px-3 sm:px-4 lg:px-6 flex items-center justify-between">
+              <div className="w-full max-w-[1600px] mx-auto h-full px-2 sm:px-4 md:px-6 flex items-center justify-between">
                 {/* LOGO & TITRE */}
                 <div className="flex items-center gap-3">
                   <div className="flex items-center">
@@ -494,9 +494,9 @@ export default function CaissierLayout() {
             </div>
           </header>
 
-          {/* Contenu principal */}
-          <main className="flex-1 overflow-y-auto bg-gradient-to-b from-white to-lpd-light px-3 sm:px-4 lg:px-6 xl:px-8 py-4 sm:py-6 pb-20 transition-all duration-300 ease-in-out relative z-0">
-            <div className="max-w-7xl mx-auto relative z-10 fade-in">
+          {/* Contenu principal - full width, marges réduites sur petits écrans */}
+          <main className="flex-1 overflow-y-auto bg-gradient-to-b from-white to-lpd-light px-2 sm:px-4 md:px-6 py-3 sm:py-5 pb-20 transition-all duration-300 ease-in-out relative z-0 w-full">
+            <div className="w-full max-w-[1600px] mx-auto relative z-10 fade-in">
               <Outlet />
             </div>
           </main>

@@ -1,36 +1,33 @@
 /**
  * 🌐 API Index - Point d'entrée unique pour tous les APIs
- * 
+ *
  * Usage:
- * import { authAPI, commandesAPI, clientsAPI, ... } from '@/services/api';
- * 
+ * import { authAPI, commandesAPI, clientsAPI } from '@/services/api';
+ *
  * ou
- * 
+ *
  * import apiClient from '@/services/api';
- * const commandes = await apiClient.commandes.getAll();
+ * const utilisateurs = await (await apiClient.utilisateurs()).getAll();
  */
 
+// ===== EXPORTS NOMMÉS =====
 export { authAPI, tokenManager, userManager } from './auth';
 export { commandesAPI } from './commandes';
 export { clientsAPI } from './clients';
 export { produitsAPI } from './produits';
 export { fournisseursAPI } from './fournisseurs';
-export { utilisateursAPI } from './utilisateurs';
 export { decaissementsAPI } from './decaissements';
 export { stockAPI } from './stock';
 export { paiementsAPI } from './paiements';
 export { default as profileAPI } from './profile';
 export { default as gestionnaireBoutiqueAPI } from './gestionnaireBoutique';
 
-/**
- * ✅ AJOUT — API RAPPORTS (Audit Logs)
- */
-export { default as rapportsAPI } from './rapports';
-
+// ⚠️ utilisateurs = EXPORT PAR DÉFAUT
+export { default as utilisateursAPI } from './utilisateurs';
 
 
 /**
- * Objet centralisé pour accès facile
+ * 📦 Objet centralisé (lazy loading)
  */
 export default {
   auth: async () => {
@@ -59,7 +56,7 @@ export default {
   },
 
   utilisateurs: async () => {
-    const { utilisateursAPI } = await import('./utilisateurs');
+    const { default: utilisateursAPI } = await import('./utilisateurs');
     return utilisateursAPI;
   },
 
@@ -82,17 +79,8 @@ export default {
     const { default: profileAPI } = await import('./profile');
     return profileAPI;
   },
-
   gestionnaireBoutique: async () => {
     const { default: gestionnaireBoutiqueAPI } = await import('./gestionnaireBoutique');
     return gestionnaireBoutiqueAPI;
-  },
-
-  /**
-   * ✅ AJOUT — accès dynamique aux rapports
-   */
-  rapports: async () => {
-    const { default: rapportsAPI } = await import('./rapports');
-    return rapportsAPI;
   },
 };

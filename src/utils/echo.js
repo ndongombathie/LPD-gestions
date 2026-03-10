@@ -47,3 +47,4 @@ export const echo = new Echo({
         };
     },
 });
+export const boutiqueId = localStorage.getItem('boutique_id');

@@ -26,7 +26,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
 // Import des services API
-import { rapportsAPI } from '@/services/api';
+import { rapportsAPI } from '@/responsable/services/api';
 
 // ==========================================================
 // 🧮 Helpers

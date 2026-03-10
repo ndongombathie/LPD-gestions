@@ -15,194 +15,195 @@ const VendeurInterface = () => {
   const [produits, setProduits] = useState([]);
   const [historiqueCommandes, setHistoriqueCommandes] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
-  const [loadingProduits, setLoadingProduits] = useState(true);
-
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const navigate = useNavigate();
   const { logout } = useAuth();
 
-  /* =========================
-     CHARGEMENT INITIAL
-  ========================== */
   useEffect(() => {
-    chargerDonneesUtilisateur();
     chargerProduitsDepuisStock();
     chargerHistoriqueCommandes();
+    chargerDonneesUtilisateur();
   }, []);
 
-  /* =========================
-     UTILISATEUR
-  ========================== */
-  const chargerDonneesUtilisateur = () => {
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth > 1024) {
+        setSidebarOpen(false);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    if (window.innerWidth <= 1024) {
+      setSidebarOpen(false);
+    }
+  }, [sectionActive]);
+
+  const chargerDonneesUtilisateur = async () => {
     try {
       const userStr = localStorage.getItem('user');
+      
+      if (userStr) {
+        const apiUser = JSON.parse(userStr);
+        
+        const mappedUser = {
+          id: apiUser.id,
+          prenom: apiUser.prenom || '',
+          nom: apiUser.nom || '',
+          name: `${apiUser.prenom || ''} ${apiUser.nom || ''}`.trim(),
+          email: apiUser.email || '',
+          role: apiUser.role || 'vendeur',
+          telephone: apiUser.telephone || '',
+          adresse: apiUser.adresse || '',
+          numero_cni: apiUser.numero_cni || '',
+          boutique_id: apiUser.boutique_id || '',
+          store: apiUser.boutique_id || 'Boutique Principale',
+          photo: apiUser.photo || null,
+          is_online: apiUser.is_online || false,
+          last_seen_at: apiUser.last_seen_at,
+          created_at: apiUser.created_at,
+        };
+        
+        setCurrentUser(mappedUser);
+        return;
+      }
 
-      if (!userStr) return;
-
-      const apiUser = JSON.parse(userStr);
-
-      const mappedUser = {
-        id: apiUser.id,
-        prenom: apiUser.prenom || '',
-        nom: apiUser.nom || '',
-        name: `${apiUser.prenom || ''} ${apiUser.nom || ''}`.trim(),
-        email: apiUser.email || '',
-        role: apiUser.role || 'vendeur',
-        telephone: apiUser.telephone || '',
-        adresse: apiUser.adresse || '',
-        boutique_id: apiUser.boutique_id,
-        store: apiUser.boutique?.nom || 'Boutique',
-        photo: apiUser.photo || null,
+      const defaultUser = {
+        id: null,
+        name: "Utilisateur",
+        prenom: "Utilisateur",
+        nom: "",
+        email: "user@lpd.com",
+        role: "vendeur",
+        store: "Boutique",
+        telephone: "",
+        photo: null,
       };
-
-      setCurrentUser(mappedUser);
+      setCurrentUser(defaultUser);
+      
     } catch (error) {
-      console.error('❌ Erreur chargement utilisateur', error);
+      setCurrentUser({
+        id: null,
+        name: "Utilisateur",
+        prenom: "Utilisateur",
+        nom: "",
+        email: "user@lpd.com",
+        role: "vendeur",
+        store: "Boutique",
+        telephone: "",
+        photo: null,
+      });
     }
   };
 
   const handleUpdateUser = (updatedUser) => {
-    setCurrentUser(updatedUser);
-
-    const userStr = localStorage.getItem('user');
-    if (!userStr) return;
-
-    const apiUser = JSON.parse(userStr);
-
-    localStorage.setItem(
-      'user',
-      JSON.stringify({
-        ...apiUser,
-        prenom: updatedUser.prenom,
-        nom: updatedUser.nom,
-        email: updatedUser.email,
-        telephone: updatedUser.telephone,
-        adresse: updatedUser.adresse,
-        photo: updatedUser.photo,
-      })
-    );
+    try {
+      setCurrentUser(updatedUser);
+      
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const apiUser = JSON.parse(userStr);
+        
+        const updatedApiUser = {
+          ...apiUser,
+          prenom: updatedUser.prenom || updatedUser.name?.split(' ')[0] || apiUser.prenom,
+          nom: updatedUser.nom || updatedUser.name?.split(' ').slice(1).join(' ') || apiUser.nom,
+          email: updatedUser.email || apiUser.email,
+          telephone: updatedUser.telephone || apiUser.telephone,
+          adresse: updatedUser.adresse || apiUser.adresse,
+          photo: updatedUser.photo !== undefined ? updatedUser.photo : apiUser.photo,
+        };
+        
+        localStorage.setItem('user', JSON.stringify(updatedApiUser));
+      }
+      
+    } catch (error) {
+    }
   };
 
-  /* =========================
-     PRODUITS (API LARAVEL)
-  ========================== */
   const chargerProduitsDepuisStock = async () => {
     try {
-      setLoadingProduits(true);
-
-      const token = localStorage.getItem('token');
-
-      const response = await fetch('http://localhost:8000/api/produits', {
-        headers: {
-          Accept: 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Erreur chargement produits');
-      }
-
-      const data = await response.json();
-      setProduits(data.data || data);
+      setProduits([]);
     } catch (error) {
-      console.error('❌ Erreur chargement produits:', error);
-    } finally {
-      setLoadingProduits(false);
     }
   };
 
-  /* =========================
-     HISTORIQUE COMMANDES
-  ========================== */
   const chargerHistoriqueCommandes = async () => {
     try {
-      const token = localStorage.getItem('token');
-
-      const response = await fetch('http://localhost:8000/api/commandes', {
-        headers: {
-          Accept: 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) return;
-
-      const data = await response.json();
-      setHistoriqueCommandes(data.data || data);
+      setHistoriqueCommandes([]);
     } catch (error) {
-      console.error('❌ Erreur historique commandes', error);
     }
   };
 
-  /* =========================
-     COMMANDE VALIDÉE
-  ========================== */
-  const gererCommandeValidee = (nouvelleCommande) => {
-    setHistoriqueCommandes((prev) => [nouvelleCommande, ...prev]);
-    setPanier([]);
-    alert(`✅ Commande ${nouvelleCommande.numero_commande} envoyée au caissier`);
-  };
-
-  /* =========================
-     DÉCONNEXION
-  ========================== */
-  const handleLogout = async () => {
-    if (!window.confirm('Voulez-vous vous déconnecter ?')) return;
-
+  const gererCommandeValidee = async (nouvelleCommande) => {
     try {
-      await logout();
+      setHistoriqueCommandes(prev => [nouvelleCommande, ...prev]);
+      setPanier([]);
     } catch (error) {
-      console.error(error);
     }
-
-    setPanier([]);
-    navigate('/login');
   };
 
-  /* =========================
-     RENDER
-  ========================== */
+  const handleLogout = async () => {
+    if (window.confirm('Êtes-vous sûr de vouloir vous déconnecter ?')) {
+      try {
+        await logout();
+      } catch (error) {
+      }
+      setPanier([]);
+      navigate('/login');
+    }
+  };
+
+  const toggleSidebar = () => {
+    setSidebarOpen(!sidebarOpen);
+  };
+
+  const closeSidebar = () => {
+    setSidebarOpen(false);
+  };
+
   return (
     <div className="vendeur-interface">
-      {currentUser && (
-        <Sidebar
-          sectionActive={sectionActive}
-          setSectionActive={setSectionActive}
-          user={currentUser}
-        />
-      )}
+      {sidebarOpen && <div className="sidebar-overlay" onClick={closeSidebar}></div>}
+      
+      <Sidebar
+        sectionActive={sectionActive}
+        setSectionActive={setSectionActive}
+        user={currentUser}
+        isOpen={sidebarOpen}
+        onClose={closeSidebar}
+      />
 
       <div className="main-content">
         <Header
+          user={currentUser}
+          onLogout={handleLogout}
+          onMenuClick={toggleSidebar}
+          sidebarOpen={sidebarOpen}
           sectionActive={sectionActive}
           setSectionActive={setSectionActive}
-          onLogout={handleLogout}
-          user={currentUser}
-          commandes={historiqueCommandes}
-          onUpdateUser={handleUpdateUser}
         />
 
         <main className="vendeur-contenu-principal">
           {sectionActive === 'tableau-de-bord' && (
-            <TableauDeBord
+            <TableauDeBord 
               user={currentUser}
               commandes={historiqueCommandes}
               produits={produits}
             />
           )}
-
+          
           {sectionActive === 'nouvelle-commande' && (
-            loadingProduits ? (
-              <p className="loading">⏳ Chargement des produits...</p>
-            ) : (
-              <NouvelleCommande
-                panier={panier}
-                setPanier={setPanier}
-                produits={produits}
-                onCommandeValidee={gererCommandeValidee}
-                user={currentUser}
-              />
-            )
+            <NouvelleCommande
+              panier={panier}
+              setPanier={setPanier}
+              produits={produits}
+              onCommandeValidee={gererCommandeValidee}
+              user={currentUser}
+            />
           )}
 
           {sectionActive === 'historique-commandes' && (

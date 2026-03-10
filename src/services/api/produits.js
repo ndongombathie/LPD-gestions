@@ -1,74 +1,172 @@
-/**
- * 🛒 Produits API
- */
+// src/services/api/produits.js
 import httpClient from '../http/client';
 
-const ENDPOINTS = {
-  GET_ALL: '/produits',
-  GET_BY_ID: '/produits/:id',
-  CREATE: '/produits',
-  UPDATE: '/produits/:id',
-  DELETE: '/produits/:id',
-  GET_ALL_FULL: '/produits-disponibles-boutique',
-};
+const BASE = '/produits';
+const STOCKS_BASE = '/stocks';
 
 export const produitsAPI = {
+  // ------------------------------------------------------------
+  // CRUD PRODUIT
+  // ------------------------------------------------------------
   getAll: async (params = {}) => {
-    try {
-      const response = await httpClient.get(ENDPOINTS.GET_ALL, { params });
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erreur getAll produits:', error.message);
-      throw error;
-    }
+    const response = await httpClient.get(BASE, { params });
+    return response.data;
   },
 
   getById: async (id) => {
-    try {
-      const response = await httpClient.get(ENDPOINTS.GET_BY_ID.replace(':id', id));
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erreur getById produit:', error.message);
-      throw error;
-    }
+    const response = await httpClient.get(`${BASE}/${id}`);
+    return response.data;
   },
 
   create: async (data) => {
-    try {
-      const response = await httpClient.post(ENDPOINTS.CREATE, data);
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erreur create produit:', error.response?.data || error.message);
-      throw error;
-    }
+    const payload = {
+      nom: data.nom,
+      code: data.code || '',
+      categorie_id: data.categorie_id,
+      fournisseur_id: data.fournisseur_id || null,
+      nombre_carton: parseInt(data.nombre_carton || 0),
+      unite_carton: String(data.unite_carton || "1"),
+      prix_unite_carton: parseFloat(data.prix_unite_carton || 0),
+      stock_seuil: parseInt(data.stock_seuil || 5),
+      stock_ideal: parseInt(data.stock_ideal || 20),
+    };
+    const response = await httpClient.post(BASE, payload);
+    return response.data;
   },
 
   update: async (id, data) => {
+    const existing = await produitsAPI.getById(id);
+    
+    const payload = {
+      nom: existing.nom,
+      code: existing.code || existing.code_barre || '',
+      categorie_id: existing.categorie_id,
+      fournisseur_id: existing.fournisseur_id,
+      nombre_carton: existing.nombre_carton,
+      unite_carton: String(existing.unite_carton),
+      prix_unite_carton: existing.prix_unite_carton,
+      stock_seuil: existing.stock_seuil,
+      stock_ideal: existing.stock_ideal,
+      ...data,
+    };
+
+    Object.keys(payload).forEach(key => {
+      if (payload[key] === undefined) delete payload[key];
+    });
+
+    const response = await httpClient.put(`${BASE}/${id}`, payload);
+    return response.data;
+  },
+
+  delete: async (id) => {
+    const response = await httpClient.delete(`${BASE}/${id}`);
+    return response.data;
+  },
+
+  // ------------------------------------------------------------
+  // ACTIONS SUR LE STOCK
+  // ------------------------------------------------------------
+  async reapprovisionner(produitId, quantite) {
     try {
-      const response = await httpClient.put(ENDPOINTS.UPDATE.replace(':id', id), data);
+      const response = await httpClient.post(`${STOCKS_BASE}/reapprovisionner`, {
+        produit_id: produitId,
+        quantite: parseInt(quantite),
+      });
       return response.data;
     } catch (error) {
-      console.error('❌ Erreur update produit:', error.response?.data || error.message);
+      console.warn('⚠️ Route /reapprovisionner échouée, fallback update', error);
+      const produit = await this.getById(produitId);
+      const nouveauStock = parseInt(produit.nombre_carton || 0) + parseInt(quantite);
+      return await this.update(produitId, { nombre_carton: nouveauStock });
+    }
+  },
+
+  async diminuerStock(produitId, quantite) {
+    try {
+      const response = await httpClient.put(`${BASE}/${produitId}/reduire-stock`, {
+        quantite: parseInt(quantite),
+      });
+      return response.data;
+    } catch (error) {
+      console.warn('⚠️ Route /reduire-stock échouée, fallback update', error);
+      const produit = await this.getById(produitId);
+      const nouveauStock = Math.max(0, parseInt(produit.nombre_carton || 0) - parseInt(quantite));
+      return await this.update(produitId, { nombre_carton: nouveauStock });
+    }
+  },
+
+  // ------------------------------------------------------------
+  // ENDPOINTS POUR LES LISTES
+  // ------------------------------------------------------------
+  getProduitsEnRupture: async (params = {}) => {
+    try {
+      const response = await httpClient.get('/produits-ruptures', { params });
+      return response.data;
+    } catch (error) {
+      console.error('❌ produitsAPI.getProduitsEnRupture error:', error);
       throw error;
     }
   },
 
-  delete: async (id) => {
+  getProduitsSousSeuil: async (params = {}) => {
     try {
-      const response = await httpClient.delete(ENDPOINTS.DELETE.replace(':id', id));
+      const response = await httpClient.get('/produits-sous-seuil', { params });
       return response.data;
     } catch (error) {
-      console.error('❌ Erreur delete produit:', error.response?.data || error.message);
+      console.error('❌ produitsAPI.getProduitsSousSeuil error:', error);
       throw error;
     }
   },
-  // ✅ Liste complète SANS pagination (pour la barre recherche commande)
-  getAllProduits: async () => {
+
+  getProduitsNormaux: async (params = {}) => {
     try {
-      const response = await httpClient.get(ENDPOINTS.GET_ALL_FULL);
+      const response = await httpClient.get('/produits-en-normaux', { params });
       return response.data;
     } catch (error) {
-      console.error('❌ Erreur getAllProduits:', error.message);
+      console.error('❌ produitsAPI.getProduitsNormaux error:', error);
+      throw error;
+    }
+  },
+
+  // ------------------------------------------------------------
+  // ENDPOINTS POUR LES COMPTEURS (NOUVEAUX)
+  // ------------------------------------------------------------
+  getNbProduits: async () => {
+    try {
+      const response = await httpClient.get('/nombre-produits');
+      return response.data;
+    } catch (error) {
+      console.error('❌ produitsAPI.getNbProduits error:', error);
+      throw error;
+    }
+  },
+
+  getNbProduitsNormaux: async () => {
+    try {
+      const response = await httpClient.get('/nombre-produits-en-normaux');
+      return response.data;
+    } catch (error) {
+      console.error('❌ produitsAPI.getNbProduitsNormaux error:', error);
+      throw error;
+    }
+  },
+
+  getNbProduitsSousSeuil: async () => {
+    try {
+      const response = await httpClient.get('/nombre-produits-sous-seuil');
+      return response.data;
+    } catch (error) {
+      console.error('❌ produitsAPI.getNbProduitsSousSeuil error:', error);
+      throw error;
+    }
+  },
+
+  getNbProduitsEnRupture: async () => {
+    try {
+      const response = await httpClient.get('/nombre-produits-en-rupture');
+      return response.data;
+    } catch (error) {
+      console.error('❌ produitsAPI.getNbProduitsEnRupture error:', error);
       throw error;
     }
   },

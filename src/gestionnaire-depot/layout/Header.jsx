@@ -1,8 +1,6 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import {
-  Bell,
   ChevronDown,
-  LayoutGrid,
   LogOut,
   Key,
   X,
@@ -12,61 +10,6 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import useAuth from "../../hooks/useAuth";
-
-/* ==========================================================
-   CURRENT USER (depuis sessionStorage ou API)
-========================================================== */
-const getCurrentUser = () => {
-  try {
-    const u = sessionStorage.getItem("user");
-    return u ? JSON.parse(u) : null;
-  } catch {
-    return null;
-  }
-};
-
-/* ==========================================================
-   VALIDATION UTILISATEUR
-========================================================== */
-const validateUser = (user) => {
-  if (!user) return null;
-  
-  const requiredFields = ['id', 'prenom', 'nom', 'role'];
-  const missingFields = requiredFields.filter(field => !user[field]);
-  
-  if (missingFields.length > 0) {
-    console.warn(`Utilisateur invalide : champs manquants ${missingFields.join(', ')}`);
-    return null;
-  }
-  
-  return user;
-};
-
-/* ==========================================================
-   RACCOURCIS AVEC VOS VRAIES ROUTES
-========================================================== */
-const RACCOURCIS = [
-  { 
-    name: "Produits", 
-    path: "/depot/products",
-    available: true
-  },
-  { 
-    name: "Mouvements", 
-    path: "/depot/movementStock",
-    available: true
-  },
-  { 
-    name: "Fournisseurs", 
-    path: "/depot/suppliers",
-    available: true
-  },
-  { 
-    name: "Rapports", 
-    path: "/depot/rapports",
-    available: true
-  },
-];
 
 /* ==========================================================
    MODAL CHANGEMENT MOT DE PASSE
@@ -273,7 +216,7 @@ function Toasts({ toasts, remove }) {
                 : "bg-rose-50 border-rose-200 text-rose-800"
             }`}
           >
-            {t.type === "success" ? <CheckCircle2 /> : <AlertCircle />}
+            {t.type === "success" ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
             <div className="flex-1">
               <p className="text-sm font-semibold">{t.title}</p>
               <p className="text-xs">{t.message}</p>
@@ -292,28 +235,51 @@ function Toasts({ toasts, remove }) {
    HEADER
 ========================================================== */
 export default function Header() {
-  const menuRef = useRef(null);
   const navigate = useNavigate();
   const { user: authUser, logout, changePassword } = useAuth();
 
   const [showMenu, setShowMenu] = useState(false);
-  const [showQuick, setShowQuick] = useState(false);
-  const [showNotif, setShowNotif] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [toasts, setToasts] = useState([]);
-  
-  const [user, setUser] = useState(() => validateUser(authUser || getCurrentUser()));
+  const [user, setUser] = useState(null);
 
   useEffect(() => {
     if (authUser) {
-      const validatedUser = validateUser(authUser);
-      setUser(validatedUser);
-      
-      if (validatedUser) {
-        sessionStorage.setItem("user", JSON.stringify(validatedUser));
+      setUser(authUser);
+      sessionStorage.setItem("user", JSON.stringify(authUser));
+    } else {
+      try {
+        const storedUser = sessionStorage.getItem("user");
+        if (storedUser) {
+          setUser(JSON.parse(storedUser));
+        }
+      } catch {
+        setUser(null);
       }
     }
   }, [authUser]);
+
+  // Fermer le menu quand on clique ailleurs
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (!e.target.closest('.menu-container')) {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
+
+  // Fermer avec Echap
+  useEffect(() => {
+    const handleEsc = (e) => {
+      if (e.key === 'Escape') {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener('keydown', handleEsc);
+    return () => document.removeEventListener('keydown', handleEsc);
+  }, []);
 
   const addToast = (type, title, message) => {
     const id = Date.now();
@@ -324,27 +290,13 @@ export default function Header() {
   const removeToast = (id) =>
     setToasts((prev) => prev.filter((t) => t.id !== id));
 
-  const handleNavigate = (path, available) => {
-    if (!available) {
-      addToast("error", "Page non disponible", "Cette page n'est pas encore implémentée");
-      setShowQuick(false);
-      return;
-    }
-    navigate(path);
-    setShowQuick(false);
-  };
-
-  // =============================================
-  // CORRECTION : DÉCONNEXION QUI FONCTIONNE
-  // =============================================
   const handleLogout = async () => {
     try {
       await logout();
     } catch (e) {
-      console.warn('Erreur déconnexion:', e);
+      
     }
     
-    // Nettoyage complet
     sessionStorage.removeItem("user");
     sessionStorage.removeItem("token");
     localStorage.removeItem("user");
@@ -353,7 +305,6 @@ export default function Header() {
     addToast("success", "Déconnexion", "Vous avez été déconnecté avec succès");
     setShowMenu(false);
     
-    // Redirection qui fonctionne toujours
     window.location.href = "/";
   };
 
@@ -366,21 +317,19 @@ export default function Header() {
     );
   };
 
-  useEffect(() => {
-    const handler = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) {
-        setShowMenu(false);
-        setShowNotif(false);
-        setShowQuick(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  const toggleMenu = (e) => {
+    e.stopPropagation();
+    setShowMenu(!showMenu);
+  };
+
+  // Initiales de l'utilisateur
+  const userInitials = user?.prenom?.[0] && user?.nom?.[0] 
+    ? `${user.prenom[0]}${user.nom[0]}` 
+    : "??";
 
   return (
     <>
-      <header ref={menuRef} className="sticky top-0 z-20 bg-white">
+      <header className="sticky top-0 z-20 bg-white">
         <div className="h-[6px] bg-gradient-to-r from-[#472EAD] to-[#F58020]" />
 
         <div className="h-16 border-b shadow-sm px-6 flex items-center justify-between">
@@ -407,91 +356,14 @@ export default function Header() {
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="relative">
+            {/* Menu utilisateur */}
+            <div className="relative menu-container">
               <button
-                onClick={() => {
-                  setShowQuick(!showQuick);
-                  setShowMenu(false);
-                  setShowNotif(false);
-                }}
-                className="p-2 rounded-lg hover:bg-gray-100"
-              >
-                <LayoutGrid className="text-[#472EAD]" />
-              </button>
-              
-              {showQuick && (
-                <div className="absolute right-0 mt-2 w-64 bg-white border rounded-xl shadow-lg z-30 p-2 text-sm">
-                  <p className="text-xs text-gray-500 px-3 py-2 mb-1 border-b">
-                    Navigation rapide
-                  </p>
-                  <ul className="max-h-80 overflow-y-auto">
-                    {RACCOURCIS.map((item) => (
-                      <li key={item.path}>
-                        <button
-                          onClick={() => handleNavigate(item.path, item.available)}
-                          className={`w-full text-left px-3 py-3 rounded-lg transition-colors flex items-center gap-3 ${
-                            item.available
-                              ? "hover:bg-[#F7F5FF] hover:text-[#472EAD] text-gray-700"
-                              : "text-gray-400 cursor-not-allowed"
-                          }`}
-                          disabled={!item.available}
-                        >
-                          <div className={`w-2 h-2 rounded-full ${
-                            item.available ? "bg-[#472EAD]" : "bg-gray-300"
-                          }`} />
-                          <span className="font-medium text-sm">{item.name}</span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="px-3 pt-2 mt-2 border-t text-xs text-gray-500">
-                    <p>Appuyez sur <span className="font-bold">Esc</span> pour fermer</p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="relative">
-              <button
-                onClick={() => {
-                  setShowNotif(!showNotif);
-                  setShowMenu(false);
-                  setShowQuick(false);
-                }}
-                className="p-2 rounded-lg hover:bg-gray-100"
-              >
-                <Bell className="text-[#472EAD]" />
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] px-1.5 rounded-full">
-                  2
-                </span>
-              </button>
-
-              {showNotif && (
-                <div className="absolute right-0 mt-2 w-72 bg-white border rounded-lg shadow-lg z-30 p-3 text-xs">
-                  <p className="font-semibold mb-2">Notifications</p>
-                  <ul className="space-y-2">
-                    <li className="bg-[#F7F5FF] p-2 rounded">
-                      Stock faible sur <strong>Cahier A4</strong>
-                    </li>
-                    <li className="p-2 rounded hover:bg-gray-50">
-                      Nouveau mouvement enregistré
-                    </li>
-                  </ul>
-                </div>
-              )}
-            </div>
-
-            <div className="relative">
-              <button
-                onClick={() => {
-                  setShowMenu(!showMenu);
-                  setShowNotif(false);
-                  setShowQuick(false);
-                }}
+                onClick={toggleMenu}
                 className="flex items-center gap-2 px-2 py-1.5 rounded-full border hover:bg-gray-50"
               >
                 <div className="w-8 h-8 rounded-full bg-[#472EAD] text-white flex items-center justify-center font-bold">
-                  {(user?.prenom?.[0] || '')}{(user?.nom?.[0] || '')}
+                  {userInitials}
                 </div>
 
                 <div className="hidden sm:flex flex-col text-left">

@@ -82,7 +82,6 @@ GET     api/commandes-payees
 
 # Enregistrer inventaire de depot
 GET    api/enregistrer-inventaire-depot | en donnant les deux intevalle de dates
-
 # Enregistrer inventaire de boutique
 GET    api/enregistrer-inventaire-boutique | en donnant les deux intevalle de dates
 
@@ -113,3 +112,5 @@ GET       api/nombre-versement-total
 GET       api/somme-versement-total
 # la somme total des encaissements
 GET       api/somme-paiements-total
+# les clients en dettes
+GET       api/clients-dette

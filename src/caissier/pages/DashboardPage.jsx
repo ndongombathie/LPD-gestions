@@ -44,20 +44,27 @@ const DashboardPage = () => {
   // Fonction pour charger les données (avec protection contre les appels multiples)
   const loadingRef = useRef(false);
   const loadData = async () => {
-    if (loadingRef.current) return; // Éviter les appels simultanés
+    if (loadingRef.current) return;
     try {
       loadingRef.current = true;
       setLoading(true);
-      
-      // Charger toutes les données en parallèle
-      const [statsData, ventesMoyen, ventesHeure, activite] = await Promise.all([
-        caissierApi.getDashboardStats(),
-        caissierApi.getVentesParMoyen(),
-        caissierApi.getVentesParHeure(),
+
+      const dateJour = caissierApi.getDateLocal();
+
+      const [statsData, ventesMoyen, ventesHeure, activite, commandesAttente] = await Promise.all([
+        caissierApi.getDashboardStats(dateJour),
+        caissierApi.getVentesParMoyen(dateJour),
+        caissierApi.getVentesParHeure(dateJour),
         caissierApi.getActiviteRecente(6),
+        caissierApi.getCommandesAttente({ per_page: 1 }),
       ]);
-      
-      setStats(statsData);
+
+      // Utiliser le total des commandes en attente (montant_a_encaisser > 0) pour cohérence avec la page Caisse
+      const ticketsEnAttente = commandesAttente?.total ?? statsData.ticketsEnAttente;
+      setStats({
+        ...statsData,
+        ticketsEnAttente,
+      });
       setVentesParMoyen(ventesMoyen);
       setVentesParHeure(ventesHeure);
       setActiviteRecente(Array.isArray(activite) ? activite.slice(0, 4) : []);
@@ -229,12 +236,16 @@ const DashboardPage = () => {
 
       {/* Graphiques */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-4">
-        {/* Graphique en barres - Ventes par heure */}
+        {/* Graphique en barres - Ventes par heure (backend: tranches 08h-10h à 18h-20h) */}
         <Card>
           <CardHeader title="Ventes par période de la journée" />
           <div className="mt-6">
             <div className="space-y-4">
-              {ventesParHeure.map((vente, index) => (
+              {(Array.isArray(ventesParHeure) && ventesParHeure.length > 0 ? ventesParHeure : [
+                { heure: '08h-10h', montant: 0 }, { heure: '10h-12h', montant: 0 },
+                { heure: '12h-14h', montant: 0 }, { heure: '14h-16h', montant: 0 },
+                { heure: '16h-18h', montant: 0 }, { heure: '18h-20h', montant: 0 },
+              ]).map((vente, index) => (
                 <div key={index}>
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-sm font-medium text-gray-700">
