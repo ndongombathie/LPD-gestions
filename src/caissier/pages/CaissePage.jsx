@@ -937,7 +937,7 @@ const CaissePage = () => {
                   className="w-full"
                 />
                 {(() => {
-                  const resteDu = selectedTicket.reste_du || 0;
+                  const resteDu = selectedTicket.montant_a_encaisser || 0;
                   
                   const donne = parseFloat(paymentData.montantDonneEspeces) || 0;
                   const monnaieARendre = Math.max(0, donne - resteDu);
