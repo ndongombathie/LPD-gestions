@@ -787,7 +787,7 @@ const CaissePage = () => {
               disabled={
                 isProcessingPayment ||
                 (paymentData.moyenPaiement === 'especes' &&
-                  (parseFloat(paymentData.montantDonneEspeces) || 0) < (selectedTicket?.montant_a_encaisser || 0))
+                  (parseFloat(paymentData.montantDonneEspeces) || 0) != (selectedTicket?.montant_a_encaisser || 0))
               }
               className="bg-[#472EAD] hover:bg-[#3d2888] text-white font-semibold shadow-md hover:shadow-lg w-full py-3 disabled:opacity-50 disabled:cursor-not-allowed"
             >
