@@ -54,7 +54,7 @@ const CaissePage = () => {
 
     // Calculer le reste dû à partir des paiements
     const totalPaye = paiements.reduce((sum, p) => sum + (p.montant || 0), 0);
-    const resteDu = totalTTC - totalPaye;
+    const resteDu = paiements[0]?.reste_du || 0;
 
     // Pour les clients spéciaux, récupérer le moyen de paiement depuis le premier paiement en attente
     // (créé par le responsable)
@@ -82,15 +82,16 @@ const CaissePage = () => {
       vendeur_nom: commande.vendeur ? `${commande.vendeur.prenom || ''} ${commande.vendeur.nom || ''}`.trim() : 'N/A',
       total_ht: totalHT,
       tva: tva,
-      total_ttc: totalTTC,
+      total_ttc: commande.total || 0,
       moyen_paiement: moyenPaiementDefini, // Pour les clients spéciaux, récupéré depuis les paiements
       statut: resteDu > 0 ? (totalPaye > 0 ? 'partiellement_payee' : 'attente') : 'encaissé',
       client_special: isClientSpecial,
       client_nom: commande.client ? `${commande.client.prenom || ''} ${commande.client.nom || ''}`.trim() : null,
       lignes: lignes,
       montant_deja_paye: paiements[0]?.somme_payees,
-      reste_du: paiements[0]?.reste_du,
+      reste_du: paiements[0]?.reste_du || 0,
       paiements: paiements,
+      montant_a_encaisser: commande.montant_a_encaisser || totalTTC, // Par défaut, le montant à payer est le total TTC, mais pour les paiements partiels, c'est le reste dû
       premiere_tranche:commande.premiere_tranche || null,
     };
   };
@@ -247,9 +248,9 @@ const CaissePage = () => {
     // En espèces : le montant donné doit être au moins égal au montant à payer
     if (paymentData.moyenPaiement === 'especes') {
       const donne = parseFloat(paymentData.montantDonneEspeces) || 0;
-      if (donne < resteDu) {
+      if (donne < selectedTicket.montant_a_encaisser) {
         toast.error('Erreur', {
-          description: `Le montant donné (${formatCurrency(donne)}) est inférieur au montant à payer (${formatCurrency(resteDu)}). Le client doit donner au moins ${formatCurrency(resteDu)}.`,
+          description: `Le montant donné (${formatCurrency(donne)}) est inférieur au montant à payer (${formatCurrency(selectedTicket.montant_a_encaisser)}). Le client doit donner au moins ${formatCurrency(selectedTicket.montant_a_encaisser)}.`,
         });
         return;
       }
@@ -274,7 +275,7 @@ const CaissePage = () => {
       
       await caissierApi.creerPaiement(selectedTicket.commande_id, {
         type_paiement: moyenPaiementFinal || 'especes',
-        montant: montant,
+        montant: selectedTicket.montant_a_encaisser || 0,
       });
 
       toast.success('Encaissement réussi', {
@@ -786,7 +787,7 @@ const CaissePage = () => {
               disabled={
                 isProcessingPayment ||
                 (paymentData.moyenPaiement === 'especes' &&
-                  (parseFloat(paymentData.montantDonneEspeces) || 0) < (selectedTicket?.reste_du ?? selectedTicket?.total_ttc ?? 0))
+                  (parseFloat(paymentData.montantDonneEspeces) || 0) < (selectedTicket?.montant_a_encaisser || 0))
               }
               className="bg-[#472EAD] hover:bg-[#3d2888] text-white font-semibold shadow-md hover:shadow-lg w-full py-3 disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -930,13 +931,14 @@ const CaissePage = () => {
                   type="number"
                   min="0"
                   step="1"
-                  value={paymentData.montantDonneEspeces}
+                  value={paymentData.montant_a_encaisser}
                   onChange={(e) => setPaymentData(prev => ({ ...prev, montantDonneEspeces: e.target.value }))}
                   placeholder="Ex: 15000"
                   className="w-full"
                 />
                 {(() => {
-                  const resteDu = selectedTicket.reste_du || selectedTicket.total_ttc;
+                  const resteDu = selectedTicket.reste_du || 0;
+                  
                   const donne = parseFloat(paymentData.montantDonneEspeces) || 0;
                   const monnaieARendre = Math.max(0, donne - resteDu);
                   const insuffisant = donne > 0 && donne < resteDu;
@@ -974,7 +976,7 @@ const CaissePage = () => {
                 type="text"
                 readOnly
                 disabled
-                value={formatCurrency(selectedTicket.reste_du ?? selectedTicket.total_ttc ?? selectedTicket.montant_a_encaisser ?? 0)}
+                value={formatCurrency(selectedTicket.montant_a_encaisser ?? 0)}
                 className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2.5 text-gray-700 font-semibold tabular-nums cursor-not-allowed"
                 aria-label="Montant envoyé (non modifiable)"
               />
@@ -1120,7 +1122,7 @@ const CaissePage = () => {
                 )}
                 <div className="flex justify-between">
                   <span className="text-gray-600">Total TTC:</span>
-                  <span className="font-bold text-[#472EAD]">{formatCurrency(ticketToCancel.total_ttc)}</span>
+                  <span className="font-bold text-[#472EAD]">{formatCurrency(ticketToCancel.montant_a_encaisser)}</span>
                 </div>
               </div>
             </div>
