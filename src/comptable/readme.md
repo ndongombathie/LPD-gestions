@@ -82,10 +82,6 @@ GET     api/commandes-payees
 
 # Enregistrer inventaire de depot
 GET    api/enregistrer-inventaire-depot | en donnant les deux intevalle de dates
-<<<<<<< HEAD
-=======
-
->>>>>>> f83e7906cf899822f21244d8886d0df11899253e
 # Enregistrer inventaire de boutique
 GET    api/enregistrer-inventaire-boutique | en donnant les deux intevalle de dates
 
@@ -93,11 +89,7 @@ GET    api/enregistrer-inventaire-boutique | en donnant les deux intevalle de da
 GET   api/historique-inventaires   | afficher historiques des inventaires
 
 # les mouvement de stock pour un produit donnee pour le deopt
-<<<<<<< HEAD
-GET api/mouvements-stock/{id} | afficher les mouvement de stock d'un produit donnee dans le depot.
-=======
 GET api/mouvements-stock/{produit_id} | afficher les mouvement de stock d'un produit donnee dans le deopt.
->>>>>>> f83e7906cf899822f21244d8886d0df11899253e
 
 # les mouvement de stock pour un produit donnee pour le boutique
 GET api/mouvement-stock-boutique/{id} | afficher les mouvement de stock d'un produit donnee dans le boutique.

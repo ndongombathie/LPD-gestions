@@ -1,6 +1,18 @@
 // ==========================================================
 // 🛒 Commandes.jsx — Interface Responsable (LPD Manager)
-// Branché sur l’API Laravel (clients, produits, commandes)
+// Branché sur l'API Laravel (clients, produits, commandes)
+// ✅ Corrections : annulation UI, stats dette, message "aucune commande"
+// ✅ Correction stats : mêmes filtres que la table
+// ✅ CORRECTION CRITIQUE : Normalisation API unique avec unwrapApi()
+// ✅ RECHERCHE PRODUITS DYNAMIQUE : recherche backend comme pour les clients
+// ✅ CORRECTIONS APPLIQUÉES :
+//   - Suppression reset période dans handleChangeStatut
+//   - Suppression debounce recherche
+//   - Recherche instantanée
+//   - Validation période
+//   - Optimisation loader pagination
+//   - Loader tableau pour : pagination, statut, période
+//   - Pas de loader pour la recherche
 // ==========================================================
 
 import React, { useEffect, useMemo, useState, useRef } from "react";
@@ -12,21 +24,29 @@ import {
   Trash2,
   CheckCircle2,
   AlertCircle,
+  Package, 
+  Box,
   X,
   Receipt,
   BadgeDollarSign,
   Eye,
   Search,
   Loader2,
-  Pencil, // 👈 ajouter ceci
-  Check, // 👈 et ceci
-  XCircle, // 👈 et ceci
+  Pencil,
+  Check,
+  XCircle,
+  Info,
 } from "lucide-react";
 import jsPDF from "jspdf";
 import { QRCodeCanvas as QRCode } from "qrcode.react";
 import "jspdf-autotable";
 import { useLocation } from "react-router-dom";
-import { commandesAPI, produitsAPI, clientsAPI } from '@/services/api';
+import { commandesAPI, produitsAPI, clientsAPI } from '@/responsable/services/api';
+import { logger } from "@/utils/logger";
+import Pagination from "@/responsable/components/Pagination";
+import { normalizeCommande } from "@/utils/normalizeCommande";
+import NouvelleTrancheModal from "@/responsable/components/NouvelleTrancheModal";
+
 
 // === Utils ===
 const formatFCFA = (n) =>
@@ -39,7 +59,50 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
 const cls = (...a) => a.filter(Boolean).join(" ");
 
 // ==========================================================
-// ✅ Toasts Premium
+// 🔧 FONCTION DE NORMALISATION UNIFIÉE POUR LES RÉPONSES API
+// ==========================================================
+function unwrapApi(res) {
+  if (!res) return { data: [], total: 0, current_page: 1, last_page: 1 };
+
+  // Axios response
+  if (res.data !== undefined) {
+    // Laravel pagination
+    if (res.data.data !== undefined) return res.data;
+
+    // API already unwrapped but paginated
+    if (Array.isArray(res.data) && res.total !== undefined) {
+      return {
+        data: res.data,
+        total: res.total,
+        current_page: res.current_page || 1,
+        last_page: res.last_page || 1,
+      };
+    }
+
+    // Raw array
+    if (Array.isArray(res.data)) {
+      return {
+        data: res.data,
+        total: res.data.length,
+        current_page: 1,
+        last_page: 1,
+      };
+    }
+
+    return res.data;
+  }
+
+  // Already unwrapped
+  return {
+    data: [],
+    total: 0,
+    current_page: 1,
+    last_page: 1,
+  };
+}
+
+// ==========================================================
+// ✅ Toasts Premium (avec support INFO)
 // ==========================================================
 function Toasts({ toasts, remove }) {
   return (
@@ -55,12 +118,16 @@ function Toasts({ toasts, remove }) {
               "min-w-[280px] max-w-[360px] rounded-xl border shadow-lg px-4 py-3 flex items-start gap-3 backdrop-blur-sm",
               t.type === "success"
                 ? "bg-emerald-50/95 border-emerald-200 text-emerald-800"
+                : t.type === "info"
+                ? "bg-blue-50/95 border-blue-200 text-blue-800"
                 : "bg-rose-50/95 border-rose-200 text-rose-800"
             )}
           >
             <div className="pt-0.5">
               {t.type === "success" ? (
                 <CheckCircle2 className="w-5 h-5" />
+              ) : t.type === "info" ? (
+                <Info className="w-5 h-5" />
               ) : (
                 <AlertCircle className="w-5 h-5" />
               )}
@@ -80,123 +147,6 @@ function Toasts({ toasts, remove }) {
           </motion.div>
         ))}
       </AnimatePresence>
-    </div>
-  );
-}
-
-// ==========================================================
-// 🔎 Modal de recherche (Clients / Produits)
-// ==========================================================
-function SearchModal({
-  open,
-  title,
-  items,
-  onClose,
-  onSelect,
-  getLabel,
-  getSubLabel,
-}) {
-  const [query, setQuery] = useState("");
-
-  useEffect(() => {
-    if (open) setQuery("");
-  }, [open]);
-
-  if (!open) return null;
-
-  const lower = query.toLowerCase();
-  const filtered = items.filter((item) => {
-    const label = (getLabel(item) || "").toLowerCase();
-    const sub = (getSubLabel?.(item) || "").toLowerCase();
-    return label.includes(lower) || sub.includes(lower);
-  });
-
-  return (
-    <div className="fixed inset-0 z-[130] bg-black/40 backdrop-blur-sm flex items-center justify-center px-3">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.97, y: 10 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]"
-      >
-        {/* Header */}
-        <div className="px-4 py-3 border-b flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-[#472EAD] flex items-center gap-2">
-            <Search className="w-4 h-4" />
-            {title}
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-800 rounded-full p-1 hover:bg-gray-50"
-          >
-            <X size={16} />
-          </button>
-        </div>
-
-        {/* Barre de recherche */}
-        <div className="px-4 py-3 border-b">
-          <div className="relative">
-            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              autoFocus
-              type="text"
-              placeholder="Rechercher..."
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-xl bg-white shadow-sm focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD] placeholder:text-gray-400"
-            />
-          </div>
-          <div className="mt-1 text-[11px] text-gray-500">
-            Résultats :{" "}
-            <span className="font-semibold">{filtered.length}</span>
-          </div>
-        </div>
-
-        {/* Liste des résultats */}
-        <div className="flex-1 overflow-auto">
-          {filtered.length ? (
-            <ul className="divide-y divide-gray-100">
-              {filtered.map((item) => (
-                <li
-                  key={item.id}
-                  className="px-4 py-3 hover:bg-[#F7F5FF] cursor-pointer flex justify-between items-center"
-                  onClick={() => {
-                    onSelect(item);
-                    onClose();
-                  }}
-                >
-                  <div>
-                    <div className="text-sm font-medium text-gray-800">
-                      {getLabel(item)}
-                    </div>
-                    {getSubLabel && (
-                      <div className="text-[11px] text-gray-500">
-                        {getSubLabel(item)}
-                      </div>
-                    )}
-                  </div>
-                  <span className="text-[11px] px-2 py-1 rounded-full bg-[#F7F5FF] text-[#472EAD] border border-[#E4E0FF]">
-                    Sélectionner
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="h-full flex items-center justify-center text-xs text-gray-400 py-8">
-              Aucun résultat trouvé. Affinez votre recherche.
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="px-4 py-2 border-t text-right">
-          <button
-            onClick={onClose}
-            className="text-xs px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50"
-          >
-            Fermer
-          </button>
-        </div>
-      </motion.div>
     </div>
   );
 }
@@ -238,7 +188,7 @@ function QrCommandeModal({ open, onClose, commande, qrPayload }) {
       doc.rect(0, 0, pageWidth, headerHeight, "F");
 
       // --- Logo "ellipse" + LPD ---
-      const logoEllipseY = 10; // un peu en haut du header
+      const logoEllipseY = 10;
       doc.setFillColor(71, 46, 173);
       doc.setDrawColor(255, 255, 255);
       doc.ellipse(centerX, logoEllipseY, 16, 10, "F");
@@ -260,7 +210,6 @@ function QrCommandeModal({ open, onClose, commande, qrPayload }) {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8);
       doc.setTextColor(229, 231, 235);
-      // 🔹 ICI : on enlève "Ticket commande" et on garde uniquement la réf
       const title2 = `#${commande.numero}`;
       doc.text(title2, centerX, 28.5, { align: "center" });
 
@@ -303,7 +252,6 @@ function QrCommandeModal({ open, onClose, commande, qrPayload }) {
 
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9);
-      // 💡 Montant TTC volontairement retiré du ticket
       doc.text(`Date : ${commande.dateCommande}`, leftX, infoStartY + 5);
 
       // ================= TEXTE D'AIDE BAS DE TICKET =================
@@ -323,7 +271,7 @@ function QrCommandeModal({ open, onClose, commande, qrPayload }) {
       // ================= SAUVEGARDE =================
       doc.save(`Ticket_commande_${commande.numero}.pdf`);
     } catch (e) {
-      console.error(e);
+      logger.error("commande.qr.print", e);
       window.print();
     }
   };
@@ -412,6 +360,11 @@ function QrCommandeModal({ open, onClose, commande, qrPayload }) {
                   {formatFCFA(commande.totalTTC)}
                 </span>
               </div>
+              {commande.montantTranche && (
+                <div className="text-[11px] text-[#472EAD] font-semibold">
+                  Montant à encaisser : {formatFCFA(commande.montantTranche)}
+                </div>
+              )}
               <div className="text-[11px] text-gray-400">
                 Date : {commande.dateCommande}
               </div>
@@ -420,9 +373,8 @@ function QrCommandeModal({ open, onClose, commande, qrPayload }) {
 
           {/* Texte d'aide */}
           <div className="bg-[#F9FAFF] border border-[#E4E0FF] rounded-xl px-3 py-2 text-[11px] text-gray-600">
-            Le code embarque un résumé complet de la commande (client, date,
-            lignes, montants…). Le module caisse le lit et retrouve la commande
-            même si la liste est très longue.
+            Le QR contient le numéro de commande. 
+            La caisse recharge automatiquement les informations depuis le système.
           </div>
 
           {/* Boutons */}
@@ -488,10 +440,22 @@ function FactureModal({ open, onClose, commande }) {
         <div className="flex flex-col sm:flex-row sm:justify-between gap-3 mb-4 text-sm">
           <div>
             <div className="text-xs text-gray-500">Client spécial</div>
-            <div className="font-semibold text-sm">{commande.clientNom}</div>
-            {commande.clientCode && (
-              <div className="text-xs text-gray-500">
-                Code : {commande.clientCode}
+
+            <div className="font-semibold text-sm text-gray-800">
+              {commande.clientPrenom && commande.clientNomSeul
+                ? `${commande.clientPrenom} ${commande.clientNomSeul}`
+                : commande.clientNom}
+            </div>
+
+            {commande.clientContact && (
+              <div className="text-xs text-gray-500 mt-0.5">
+                Contact : <span className="font-medium">{commande.clientContact}</span>
+              </div>
+            )}
+
+            {commande.clientEntreprise && (
+              <div className="text-xs text-gray-400">
+                {commande.clientEntreprise}
               </div>
             )}
           </div>
@@ -587,163 +551,275 @@ function FactureModal({ open, onClose, commande }) {
 }
 
 // ======================================================================
-// 🧩 Formulaire Commande (multi-lignes produits + branché sur API refs)
+// 🧩 Formulaire Commande (multi-lignes produits + dropdown client instantané)
 // ======================================================================
 function CommandeForm({ clientInitial, onCreate, toast }) {
-  // Clients spéciaux & catalogue produits depuis l’API
-  const [clients, setClients] = useState([]);
+  // ✅ REF pour l'input produit
+  const produitInputRef = useRef(null);
+  const [stockError, setStockError] = useState("");
+  // ✅ CLIENT - States pour dropdown client
+  const [allClients, setAllClients] = useState([]);
+  const [clientsLoading, setClientsLoading] = useState(false);
+  const [isClientOpen, setIsClientOpen] = useState(false);
+  const [searchClient, setSearchClient] = useState("");
+  const [hasLoadedClients, setHasLoadedClients] = useState(false);
+ 
+  // ✅ CLIENT - State dédié pour le client sélectionné
+  const [selectedClient, setSelectedClient] = useState(null);
+  
+  // ✅ PRODUIT - Chargement unique
   const [catalogue, setCatalogue] = useState([]);
-  const [loadingRefs, setLoadingRefs] = useState(true);
+  const [produitsLoading, setProduitsLoading] = useState(false);
+  const [hasLoadedProduits, setHasLoadedProduits] = useState(false);
 
-  const [clientId, setClientId] = useState(clientInitial || "");
+  // ✅ PRODUIT - States pour dropdown produit (comme le client)
+  const [isProduitOpen, setIsProduitOpen] = useState(false);
+  const [searchProduit, setSearchProduit] = useState("");
+  const [selectedProduit, setSelectedProduit] = useState(null);
+
   const [dateCommande] = useState(todayISO());
 
   // TVA activée ou non
-  const [applyTVA, setApplyTVA] = useState(true);
+  const [applyTVA, setApplyTVA] = useState(false);
 
-  // Modals de recherche
-  const [openClientSearch, setOpenClientSearch] = useState(false);
-  const [openProduitSearch, setOpenProduitSearch] = useState(false);
+  // ✅ OPTIONNEL : spinner sur le bouton d'envoi
+  const [submitting, setSubmitting] = useState(false);
 
   // Champ de saisie "ligne en cours"
   const [ligneProduitId, setLigneProduitId] = useState("");
-  const [ligneLibelle, setLigneLibelle] = useState(""); // champ unique: libellé OU code-barres
+  const [ligneLibelle, setLigneLibelle] = useState("");
   const [ligneQte, setLigneQte] = useState("");
   const [lignePrix, setLignePrix] = useState("");
-  const [ligneMode, setLigneMode] = useState("gros"); // "detail" | "gros" (défaut : gros)
+  const [ligneMode, setLigneMode] = useState("gros");
 
   const qteInputRef = useRef(null);
 
   // Lignes de la commande
   const [lignes, setLignes] = useState([]);
 
-  const produitSelectionne = useMemo(
-    () =>
-      catalogue.find((p) => String(p.id) === String(ligneProduitId)) || null,
-    [catalogue, ligneProduitId]
-  );
+  // ✅ FILTRAGE SIMPLE DES PRODUITS (comme pour les clients)
+  const filteredProduits = catalogue.filter((p) => {
+    const term = searchProduit.toLowerCase();
 
-  // 🔎 Liste des produits qui matchent le champ unique (nom / ref / code-barres)
-  const produitsFiltres = useMemo(() => {
-    const q = (ligneLibelle || "").trim().toLowerCase();
-    if (!q) return [];
+    return (
+      (p.libelle || "").toLowerCase().includes(term) ||
+      (p.ref || "").toLowerCase().includes(term)
+    );
+  });
 
-    const isNumeric = /^\d+$/.test(q);
+  // ✅ Chargement unique de tous les clients spéciaux
+  const loadAllClients = async () => {
+    if (hasLoadedClients || clientsLoading) return;
 
-    return catalogue.filter((p) => {
-      const lib = (p.libelle || "").toLowerCase();
-      const refStr = (p.ref || "").toString().toLowerCase();
-      const codeStr = (p.codeBarre || "").toString().toLowerCase();
+    try {
+      setClientsLoading(true);
+      const res = await clientsAPI.getAllSpeciaux();
+      const payload = unwrapApi(res);
+      const produits = Array.isArray(payload)
+        ? payload
+        : payload.data || [];
 
-      if (isNumeric) {
-        // Recherche plutôt sur code-barres / ref
-        return (
-          codeStr.includes(q) ||
-          refStr.includes(q) ||
-          lib.includes(q) // par sécurité
-        );
-      }
-
-      // Recherche texte sur libellé / ref
-      return lib.includes(q) || refStr.includes(q);
-    });
-  }, [ligneLibelle, catalogue]);
-
-  // 🔗 Charger clients spéciaux + produits
-  useEffect(() => {
-    const loadRefs = async () => {
-      try {
-        setLoadingRefs(true);
-
-        const [clientsRes, produitsRes] = await Promise.all([
-          axios.get("/clients", { params: { type_client: "special" } }),
-          axios.get("/produits"),
-        ]);
-
-        const clientsPayload = Array.isArray(clientsRes.data?.data)
-          ? clientsRes.data.data
-          : clientsRes.data;
-
-        const produitsPayload = Array.isArray(produitsRes.data?.data)
-          ? produitsRes.data.data
-          : produitsRes.data;
-
-        const normalizedClients = (clientsPayload || []).map((c) => ({
-          id: c.id,
-          nom: c.nom || c.razon_social || "",
-          code:
-            c.code_client ||
-            c.code ||
-            (c.id ? `CL-${String(c.id).padStart(3, "0")}` : ""),
-        }));
-
-        const normalizedProduits = (produitsPayload || []).map((p) => {
-          const prixDetail = Number(
-            p.prix_basique_detail ??
-              p.prix_vente ??
-              p.prix_unitaire ??
-              p.prix ??
-              0
-          );
-          const prixGros = Number(
-            p.prix_basique_gros ??
-              p.prix_gros ??
-              p.prix_unitaire ??
-              p.prix ??
-              0
-          );
+        const normalized = produits.map((p) => {
+          const prenom = p.prenom || "";
+          const nomSeul = p.nom || "";
+          const fullName =
+            prenom && nomSeul
+              ? `${prenom} ${nomSeul}`
+              : nomSeul;
 
           return {
             id: p.id,
-            ref:
-              p.code_barre ||
-              p.code_produit ||
-              p.reference ||
-              p.ref ||
-              null,
-            codeBarre:
-              p.code_barre || p.code_produit || p.code || p.barcode || null,
-            libelle:
-              p.nom ||
-              p.nom_produit ||
-              p.libelle ||
-              p.designation ||
-              "",
-            prixDetail,
-            prixGros,
-            prix: prixDetail || prixGros || 0,
-            prixSeuilDetail:
-              p.prix_seuil_detail != null ? Number(p.prix_seuil_detail) : null,
-            prixSeuilGros:
-              p.prix_seuil_gros != null ? Number(p.prix_seuil_gros) : null,
-            unitesParCarton: Number(p.unites_par_carton ?? 1),
-            stockGlobal: Number(p.stock_global ?? 0),
-            nombreCartons: Number(p.nombre_cartons ?? 0),
+
+            // 🔥 pour affichage
+            nom: fullName,
+
+            // 🔥 pour recherche intelligente
+            prenom,
+            nomSeul,
+
+            contact: p.contact || "",
+
+            code:
+              p.code_client ||
+              p.code ||
+              (p.id ? `CL-${String(p.id).padStart(3, "0")}` : ""),
           };
         });
 
-        setClients(normalizedClients);
-        setCatalogue(normalizedProduits);
+      setAllClients(normalized);
+      setHasLoadedClients(true);
+    } catch (e) {
+      logger.error("clients.load.all", e);
+      toast(
+        "error",
+        "Erreur de chargement",
+        "Impossible de charger la liste des clients."
+      );
+    } finally {
+      setClientsLoading(false);
+    }
+  };
+
+  // ✅ Chargement unique de tous les produits
+  useEffect(() => {
+    const loadAllProduits = async () => {
+      if (hasLoadedProduits) return;
+
+      try {
+        setProduitsLoading(true);
+
+          const res = await produitsAPI.getAllProduits();
+          const payload = unwrapApi(res);
+
+          const data = Array.isArray(payload)
+            ? payload
+            : payload?.data || [];
+
+          const normalized = data.map((t) => {
+            const produit = t.produit ?? t;
+
+            const stockUnites = Number(t.quantite ?? 0);
+            const unitesParCarton = Number(produit.unite_carton ?? 1);
+            const stockCartons = Math.floor(stockUnites / unitesParCarton);
+
+            const prixDetail = Number(
+              t.prix_vente_detail ??
+              produit.prix_vente_detail ??
+              0
+            );
+
+            const prixGros = Number(
+              t.prix_vente_gros ??
+              produit.prix_unite_carton ??
+              produit.prix_vente_gros ??
+              0
+            );
+
+            return {
+              id: produit.id,
+
+              // 🔥 CODE BARRE UNIQUEMENT
+              ref: produit.code ?? null,
+
+              libelle: produit.nom ?? "",
+
+              prixDetail,
+              prixGros,
+              prix: prixDetail || prixGros || 0,
+
+              unitesParCarton,
+
+              // 🔥 STOCK BOUTIQUE RÉEL
+              stockGlobal: stockUnites,
+              nombreCartons: stockCartons,
+            };
+          });
+
+        setCatalogue(normalized);
+        setHasLoadedProduits(true);
       } catch (error) {
-        console.error("Erreur chargement références:", error);
+        logger.error("produits.load.all", error);
         toast(
           "error",
           "Erreur de chargement",
-          "Impossible de charger les clients ou les produits."
+          "Impossible de charger le catalogue produits."
         );
       } finally {
-        setLoadingRefs(false);
+        setProduitsLoading(false);
       }
     };
 
-    loadRefs();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    loadAllProduits();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasLoadedProduits]);
+useEffect(() => {
+  if (!selectedProduit || !ligneQte) {
+    setStockError("");
+    return;
+  }
 
-  const clientActuel = useMemo(
-    () => clients.find((c) => String(c.id) === String(clientId)) || null,
-    [clientId, clients]
-  );
+  const qteNum = Number(ligneQte);
+
+  if (!Number.isInteger(qteNum) || qteNum < 1) {
+    setStockError("");
+    return;
+  }
+
+  const stockUnites = selectedProduit.stockGlobal ?? 0;
+  const unitsPerCarton = selectedProduit.unitesParCarton ?? 1;
+  const stockCartons = selectedProduit.nombreCartons ?? Math.floor(stockUnites / unitsPerCarton);
+
+  if (ligneMode === "detail") {
+    if (qteNum > stockUnites) {
+      setStockError(
+        `Stock insuffisant : seulement ${stockUnites} unité(s) disponible(s)`
+      );
+      return;
+    }
+  }
+
+  if (ligneMode === "gros") {
+    if (qteNum > stockCartons) {
+      setStockError(
+        `Stock insuffisant : seulement ${stockCartons} carton(s) disponible(s)`
+      );
+      return;
+    }
+  }
+
+  setStockError("");
+}, [ligneQte, ligneMode, selectedProduit]);
+
+  // ✅ Rafraîchir la liste des clients (optionnel)
+  const refreshClients = async () => {
+    setHasLoadedClients(false);
+    await loadAllClients();
+  };
+
+  // ✅ Filtrage instantané frontend clients
+  const filteredClients = allClients.filter((c) => {
+    const term = searchClient
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+
+    const prenom = (c.prenom || "").toLowerCase();
+    const nom = (c.nomSeul || "").toLowerCase();
+    const full1 = `${prenom} ${nom}`;
+    const full2 = `${nom} ${prenom}`;
+    const contact = (c.contact || "").toLowerCase();
+
+    return (
+      prenom.includes(term) ||
+      nom.includes(term) ||
+      full1.includes(term) ||
+      full2.includes(term) ||
+      contact.includes(term)
+    );
+  });
+  // ✅ Initialisation du client sélectionné à partir de clientInitial
+  useEffect(() => {
+    if (clientInitial && !selectedClient) {
+      const fetchInitialClient = async () => {
+        try {
+          const res = await clientsAPI.getById(clientInitial);
+          if (res?.data) {
+            const client = {
+              id: res.data.id,
+              nom: res.data.nom || res.data.entreprise || "",
+              code: res.data.code_client || res.data.code || "",
+            };
+            setSelectedClient(client);
+            setSearchClient(client.nom);
+          }
+        } catch (e) {
+          logger.error("client.fetch.initial", e);
+        }
+      };
+      
+      fetchInitialClient();
+    }
+  }, [clientInitial, selectedClient]);
 
   const totalHT = useMemo(
     () => lignes.reduce((sum, l) => sum + Number(l.totalHT || 0), 0),
@@ -758,6 +834,8 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
   const resetLigne = () => {
     setLigneProduitId("");
     setLigneLibelle("");
+    setSelectedProduit(null);
+    setSearchProduit("");
     setLigneQte("");
     setLignePrix("");
   };
@@ -767,7 +845,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
 
   const handleChangeMode = (mode) => {
     setLigneMode(mode);
-    const p = produitSelectionne;
+    const p = selectedProduit;
     if (!p) return;
 
     if (mode === "detail" && p.prixDetail) {
@@ -777,98 +855,12 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
     }
   };
 
-  // 🧩 Appliquer la sélection d’un produit (peu importe la source : scan / saisie / modal)
-  const applyProduitSelection = (p) => {
-    if (!p) return;
-
-    setLigneProduitId(p.id);
-    setLigneLibelle(p.libelle || "");
-
-    const prixPropose =
-      ligneMode === "gros"
-        ? p.prixGros || p.prixDetail || p.prix || 0
-        : p.prixDetail || p.prixGros || p.prix || 0;
-
-    setLignePrix(String(prixPropose || 0));
-
-    // Focus sur la quantité pour enchaîner vite
-    if (qteInputRef.current) {
-      qteInputRef.current.focus();
-    }
-  };
-
-  // ✅ Champ unique : saisie libellé / code-barres / scan
-  const handleProduitInputChange = (e) => {
-    const value = e.target.value;
-    setLigneLibelle(value);
-
-    // Tant qu’on tape, on considère qu’on n’a pas encore confirmé le produit
-    // (permet aussi le cas "produit hors catalogue")
-    setLigneProduitId("");
-
-    const trimmed = value.trim();
-    if (!trimmed) return;
-
-    const isNumeric = /^\d+$/.test(trimmed);
-
-    // Cas "code-barres" saisi ou scanné
-    if (isNumeric && trimmed.length >= 6) {
-      const exact = catalogue.find((p) => {
-        const code = (p.codeBarre || "").toString().trim();
-        const ref = (p.ref || "").toString().trim();
-        return code === trimmed || ref === trimmed;
-      });
-
-      if (exact) {
-        applyProduitSelection(exact);
-      }
-    }
-  };
-
-  const handleProduitInputKeyDown = (e) => {
-    if (e.key !== "Enter" && e.key !== "NumpadEnter") return;
-
-    e.preventDefault();
-    const q = (ligneLibelle || "").trim();
-    if (!q) return;
-
-    const isNumeric = /^\d+$/.test(q);
-
-    if (isNumeric) {
-      // Essayer d’abord un match exact sur code-barres / ref
-      const exact = catalogue.find((p) => {
-        const code = (p.codeBarre || "").toString().trim();
-        const ref = (p.ref || "").toString().trim();
-        return code === q || ref === q;
-      });
-
-      if (exact) {
-        applyProduitSelection(exact);
-        return;
-      }
-    }
-
-    // Sinon, utiliser les produits filtrés (par nom / ref)
-    if (produitsFiltres.length === 1) {
-      applyProduitSelection(produitsFiltres[0]);
-    } else if (produitsFiltres.length > 1) {
-      // On prend le premier pour aller vite (comportement "autocomplete")
-      applyProduitSelection(produitsFiltres[0]);
-    } else {
-      toast(
-        "error",
-        "Produit introuvable",
-        "Aucun produit ne correspond à cette recherche."
-      );
-    }
-  };
-
   const handleAddLigne = () => {
-    if (!ligneLibelle.trim() || !ligneQte || !lignePrix) {
+    if (!selectedProduit || !ligneQte || !lignePrix) {
       toast(
         "error",
         "Ligne incomplète",
-        "Veuillez renseigner produit, quantité et prix."
+        "Veuillez sélectionner un produit, renseigner quantité et prix."
       );
       return;
     }
@@ -876,16 +868,16 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
     const qteNum = Number(ligneQte);
     const prixNum = Number(lignePrix);
 
-    if (qteNum <= 0 || prixNum <= 0) {
+    if (!Number.isInteger(qteNum) || qteNum < 1) {
       toast(
         "error",
-        "Valeurs invalides",
-        "La quantité et le prix doivent être positifs."
+        "Quantité invalide",
+        "La quantité doit être un nombre entier supérieur à 0."
       );
       return;
     }
 
-    const p = produitSelectionne;
+    const p = selectedProduit;
     if (p) {
       const unitsPerCarton = p.unitesParCarton || 1;
       const stockGlobal = p.stockGlobal ?? null;
@@ -893,7 +885,6 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
         p.nombreCartons ??
         (stockGlobal != null ? Math.floor(stockGlobal / unitsPerCarton) : null);
 
-      // Détail : stock en unités
       if (ligneMode === "detail" && stockGlobal != null) {
         if (qteNum > stockGlobal) {
           toast(
@@ -905,7 +896,6 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
         }
       }
 
-      // Gros : stock en cartons
       if (ligneMode === "gros" && nbCartons != null) {
         if (qteNum > nbCartons) {
           toast(
@@ -918,39 +908,39 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
       }
     }
 
-    const unitsPerCarton = produitSelectionne?.unitesParCarton || 1;
+    const unitsPerCarton = selectedProduit?.unitesParCarton || 1;
     const quantiteUnites = ligneMode === "gros" ? qteNum * unitsPerCarton : qteNum;
 
     const totalHTLigne = qteNum * prixNum;
     const totalTTCLigne = applyTVA ? totalHTLigne * 1.18 : totalHTLigne;
 
-    const ref = produitSelectionne?.ref || null;
+    const ref = selectedProduit?.ref || null;
 
     const nouvelle = {
       id: Date.now(),
-      produitId: ligneProduitId || null,
-      libelle: ligneLibelle.trim(),
+      produitId: selectedProduit.id,
+      libelle: selectedProduit.libelle,
       ref,
       qte: qteNum,
       prixUnitaire: prixNum,
       totalHT: totalHTLigne,
       totalTTC: totalTTCLigne,
-      modeVente: ligneMode, // "detail" | "gros"
+      modeVente: ligneMode,
       quantiteUnites,
     };
 
     setLignes((prev) => [...prev, nouvelle]);
     resetLigne();
+    
+    if (produitInputRef.current) {
+      produitInputRef.current.focus();
+    }
   };
 
   const handleRemoveLigne = (id) =>
     setLignes((prev) => prev.filter((l) => l.id !== id));
 
-  const handleSelectProduitFromModal = (p) => {
-    applyProduitSelection(p);
-  };
-
-  // 🔧 Édition d'une ligne (qte + prix uniquement)
+  // 🔧 Édition d'une ligne
   const [editingId, setEditingId] = useState(null);
   const [editingQte, setEditingQte] = useState("");
   const [editingPrix, setEditingPrix] = useState("");
@@ -976,16 +966,15 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
     const qteNum = Number(editingQte);
     const prixNum = Number(editingPrix);
 
-    if (!qteNum || qteNum <= 0 || !prixNum || prixNum <= 0) {
+    if (!Number.isInteger(qteNum) || qteNum < 1 || !prixNum || prixNum <= 0) {
       toast(
         "error",
         "Valeurs invalides",
-        "La quantité et le prix doivent être positifs."
+        "La quantité doit être un entier supérieur à 0 et le prix positif."
       );
       return;
     }
 
-    // 🔍 Retrouver le produit pour refaire les vérifications de stock
     const produit = catalogue.find((p) => String(p.id) === String(ligne.produitId));
 
     if (produit) {
@@ -1045,11 +1034,11 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
     setEditingPrix("");
   };
 
-  // ✅ Soumission du formulaire : on construit un brouillon et on délègue au parent
-  const handleSubmit = (e) => {
+  // ✅ Soumission du formulaire
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!clientActuel) {
+    if (!selectedClient) {
       toast(
         "error",
         "Client manquant",
@@ -1067,37 +1056,61 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
       return;
     }
 
-    const commandeDraft = {
-      clientId,
-      clientNom: clientActuel.nom,
-      clientCode: clientActuel.code,
-      dateCommande,
-      appliquerTVA: applyTVA,
-      totalHT,
-      totalTVA,
-      totalTTC,
-      lignes,
-    };
+    setSubmitting(true);
 
-    onCreate(commandeDraft);
+    try {
+      const commandeDraft = {
+        clientId: selectedClient.id,
+        clientNom: selectedClient.nom,
+        clientCode: selectedClient.code,
+        dateCommande,
+        appliquerTVA: applyTVA,
+        totalHT,
+        totalTVA,
+        totalTTC,
+        lignes,
+      };
 
-    // Option : reset formulaire
-    setLignes([]);
-    setLigneProduitId("");
-    setLigneLibelle("");
-    setLigneQte("");
-    setLignePrix("");
-    setLigneMode("gros");
+      await onCreate(commandeDraft);
+
+      refreshClients();
+
+      setLignes([]);
+      setLigneProduitId("");
+      setLigneLibelle("");
+      setLigneQte("");
+      setLignePrix("");
+      setLigneMode("gros");
+      setSelectedClient(null);
+      setSearchClient("");
+      setSelectedProduit(null);
+      setSearchProduit("");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const shouldShowSuggestions =
-    ligneLibelle &&
-    produitsFiltres.length > 0 &&
-    !(
-      produitSelectionne &&
-      ligneLibelle.trim().toLowerCase() ===
-        (produitSelectionne.libelle || "").toLowerCase()
-    );
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (!e.target.closest(".client-combobox")) {
+        setIsClientOpen(false);
+      }
+    };
+
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (!e.target.closest(".produit-combobox")) {
+        setIsProduitOpen(false);
+      }
+    };
+
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, []);
 
   return (
     <>
@@ -1106,12 +1119,12 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35 }}
-        className="bg-white/95 border border-[#E4E0FF] rounded-2xl shadow-[0_12px_30px_rgba(15,23,42,0.06)] px-3 sm:px-4 py-3 sm:py-4 space-y-4"
+        className="bg-white/95 border border-[#E4E0FF] rounded-2xl shadow-[0_12px_30px_rgba(15,23,42,0.06)] px-3 sm:px-4 py-4 sm:py-5 space-y-5 mt-6"
       >
         <h2 className="text-lg font-semibold text-[#472EAD] mb-1 flex items-center gap-2">
           <PlusCircle size={18} /> Nouvelle commande client spécial
         </h2>
-        <p className="text-xs text-gray-500 mb-2">
+        <p className="text-xs text-gray-500 mb-3">
           Préparez la commande en gros ici. Elle sera ensuite{" "}
           <span className="font-semibold text-[#472EAD]">envoyée à la caisse</span>{" "}
           pour encaissement (acomptes / soldes).
@@ -1119,36 +1132,116 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
 
         {/* Ligne client + date */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="sm:col-span-2">
+          {/* BLOC CLIENT */}
+          <div className="sm:col-span-2 relative client-combobox">
             <label className="block text-xs text-gray-500 mb-1">
               Client spécial
             </label>
-            <button
-              type="button"
-              onClick={() => setOpenClientSearch(true)}
-              className={cls(
-                "w-full px-3 py-2 text-sm rounded-xl flex items-center justify-between border bg-white shadow-sm",
-                clientActuel
-                  ? "border-gray-300"
-                  : "border-dashed border-gray-300 bg-gray-50 text-gray-500"
+
+            <div className="relative">
+              <input
+                type="text"
+                value={searchClient}
+                onClick={() => {
+                  setIsClientOpen(prev => !prev);
+                  loadAllClients();
+                }}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setSearchClient(value);
+                  
+                  if (!value) {
+                    setSelectedClient(null);
+                  }
+                  
+                  setIsClientOpen(true);
+                }}
+                placeholder="Rechercher un client spécial..."
+                className={baseInput}
+              />
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsClientOpen((prev) => !prev);
+                  loadAllClients();
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <svg
+                  className={`w-4 h-4 transition-transform ${
+                    isClientOpen ? "rotate-180" : ""
+                  }`}
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                >
+                  <path d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {clientsLoading && (
+                <Loader2 className="w-4 h-4 animate-spin absolute right-9 top-1/2 -translate-y-1/2 text-[#472EAD]" />
               )}
-              disabled={loadingRefs}
-            >
-              <span>
-                {loadingRefs
-                  ? "Chargement des clients..."
-                  : clientActuel
-                  ? clientActuel.nom
-                  : "Rechercher un client spécial..."}
-              </span>
-              <Search className="w-4 h-4 text-gray-400" />
-            </button>
-            {clientActuel && (
+            </div>
+
+            {isClientOpen && (
+              <div className="absolute z-50 mt-1 w-full border border-gray-200 rounded-xl bg-white shadow-lg max-h-60 overflow-y-auto">
+                {filteredClients.length > 0 ? (
+                  filteredClients.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedClient(c);
+                        setSearchClient(c.nom);
+                        setIsClientOpen(false);
+                      }}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-[#F7F5FF]"
+                    >
+                    <div className="flex items-center gap-3 text-sm">
+                      <span className="px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded text-[10px] font-medium border border-amber-200">
+                        VIP
+                      </span>
+                      <span className="font-medium">{c.nom}</span>
+                      {c.contact && (
+                        <span className="text-gray-500 text-xs flex items-center gap-1">
+                          <svg 
+                            className="w-3 h-3" 
+                            fill="none" 
+                            stroke="currentColor" 
+                            viewBox="0 0 24 24"
+                          >
+                            <path 
+                              strokeLinecap="round" 
+                              strokeLinejoin="round" 
+                              strokeWidth={2} 
+                              d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" 
+                            />
+                          </svg>
+                          {c.contact}
+                        </span>
+                      )}
+                    </div>
+                    </button>
+                  ))
+                ) : (
+                  <div className="px-3 py-2 text-sm text-gray-500">
+                    Aucun client trouvé
+                  </div>
+                )}
+              </div>
+            )}
+
+            {selectedClient && (
               <div className="mt-1 text-[11px] text-gray-500">
-                Code client : <span className="font-semibold">{clientActuel.code}</span>
+                Code client :{" "}
+                <span className="font-semibold">{selectedClient.code}</span>
               </div>
             )}
           </div>
+
           <div>
             <label className="block text-xs text-gray-500 mb-1">Date</label>
             <div className="px-3 py-2 rounded-xl text-sm bg-gray-50 border border-gray-200">
@@ -1158,7 +1251,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
         </div>
 
         {/* Saisie ligne produit */}
-        <div className="border border-[#E4E0FF] rounded-xl p-4 bg-[#F9FAFF] space-y-3">
+        <div className="border border-[#E4E0FF] rounded-xl p-4 bg-[#F9FAFF] space-y-3 mt-4">
           {/* Mode de vente */}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -1193,110 +1286,272 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
               </div>
             </div>
 
-            {produitSelectionne && (
-              <div className="text-[11px] text-gray-600 space-y-0.5">
-                <div>
-                  Stock :{" "}
-                  <span className="font-semibold">
-                    {produitSelectionne.stockGlobal} unité(s)
-                  </span>{" "}
-                  —{" "}
-                  <span className="font-semibold">
-                    {produitSelectionne.nombreCartons} carton(s)
+            {selectedProduit && (
+              <motion.div
+                initial={{ opacity: 0, y: -5 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-2 w-full rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                    Stock disponible
                   </span>
+
+                  {stockError ? (
+                    <span className="text-xs font-semibold text-rose-600">
+                      Dépassement détecté
+                    </span>
+                  ) : (
+                    <span className="text-xs text-emerald-600 font-semibold">
+                      Quantité valide
+                    </span>
+                  )}
                 </div>
-                <div>
-                  Prix ref. détail :{" "}
-                  <span className="font-semibold">
-                    {formatFCFA(produitSelectionne.prixDetail || 0)}
-                  </span>{" "}
-                  | gros :{" "}
-                  <span className="font-semibold">
-                    {formatFCFA(produitSelectionne.prixGros || 0)}
-                  </span>
+
+                {/* Stock chiffres */}
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <div className="text-gray-400 text-xs">Unités</div>
+                    <div className="font-bold text-lg text-gray-900">
+                      {selectedProduit.stockGlobal}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-gray-400 text-xs">Cartons</div>
+                    <div className="font-bold text-lg text-gray-900">
+                      {selectedProduit.nombreCartons}
+                    </div>
+                  </div>
                 </div>
-              </div>
+
+                {/* Barre dynamique */}
+                {ligneQte && (
+                  <div className="mt-4">
+                    {(() => {
+                      const qte = Number(ligneQte);
+                      const max =
+                        ligneMode === "gros"
+                          ? selectedProduit.nombreCartons
+                          : selectedProduit.stockGlobal;
+
+                      if (!max) return null;
+
+                      const percent = Math.min((qte / max) * 100, 100);
+
+                      return (
+                        <>
+                          <div className="flex justify-between text-xs text-gray-500 mb-1">
+                            <span>Saisi : {qte}</span>
+                            <span>Max : {max}</span>
+                          </div>
+
+                          <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                            <motion.div
+                              initial={{ width: 0 }}
+                              animate={{ width: `${percent}%` }}
+                              transition={{ duration: 0.3 }}
+                                className={
+                                  qte > max
+                                    ? "h-full bg-rose-600"
+                                    : percent >= 70
+                                    ? "h-full bg-amber-500"
+                                    : "h-full bg-emerald-500"
+                                }
+                            />
+                          </div>
+
+                          {qte > max && (
+                            <div className="mt-2 text-xs text-rose-600 font-semibold flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3" />
+                              Quantité supérieure au stock disponible
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
+                )}
+
+                {/* Info carton */}
+                {ligneMode === "gros" && selectedProduit.unitesParCarton && (
+                  <div className="mt-3 text-xs text-gray-500">
+                    1 carton = {selectedProduit.unitesParCarton} unité(s)
+                  </div>
+                )}
+              </motion.div>
             )}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-start mt-2">
-            <div className="sm:col-span-2">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-start mt-3">
+            {/* BLOC PRODUIT */}
+            <div className="sm:col-span-2 relative produit-combobox">
               <label className="block text-xs text-gray-500 mb-1">
-                Produit (nom, référence ou code-barres)
+                Produit
               </label>
 
               <div className="relative">
-                <input
-                  type="text"
-                  value={ligneLibelle}
-                  onChange={handleProduitInputChange}
-                  onKeyDown={handleProduitInputKeyDown}
-                  placeholder="Tapez le libellé, scannez ou saisissez un code-barres..."
-                  className={cls(baseInput, "pr-9")}
-                  disabled={loadingRefs}
-                />
+              <input
+                ref={produitInputRef}
+                type="text"
+                value={searchProduit}
+                onClick={() => setIsProduitOpen(prev => !prev)}
+                onChange={(e) => {
+                  setSearchProduit(e.target.value);
+                  setIsProduitOpen(true);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+
+                    const term = searchProduit.trim().toLowerCase();
+                    if (!term) return;
+
+                    // 🔥 Recherche EXACTE par code barre
+                    const produit = catalogue.find(
+                      (p) => (p.ref || "").toLowerCase() === term
+                    );
+
+                    if (!produit) {
+                      toast(
+                        "error",
+                        "Produit introuvable",
+                        "Aucun produit ne correspond à ce code barre."
+                      );
+                      return;
+                    }
+
+                    // 🔥 Sélection automatique
+                    setSelectedProduit(produit);
+                    setSearchProduit(produit.libelle);
+                    setLigneProduitId(produit.id);
+                    setLigneLibelle(produit.libelle);
+
+                    const prix =
+                      ligneMode === "gros"
+                        ? produit.prixGros || produit.prixDetail
+                        : produit.prixDetail || produit.prixGros;
+
+                    setLignePrix(String(prix || 0));
+                    setIsProduitOpen(false);
+
+                    // Focus quantité
+                    setTimeout(() => {
+                      qteInputRef.current?.focus();
+                    }, 50);
+                  }
+                }}
+                placeholder="Scanner ou rechercher un produit..."
+                className={baseInput}
+                disabled={produitsLoading}
+              />
+
                 <button
                   type="button"
-                  onClick={() => setOpenProduitSearch(true)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-gray-100 text-gray-500"
-                  title="Ouvrir le catalogue"
+                  onClick={() => setIsProduitOpen(prev => !prev)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                 >
-                  <Search className="w-4 h-4" />
+                  <svg
+                    className={`w-4 h-4 transition-transform ${
+                      isProduitOpen ? "rotate-180" : ""
+                    }`}
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M19 9l-7 7-7-7" />
+                  </svg>
                 </button>
+
+                {produitsLoading && (
+                  <Loader2 className="w-4 h-4 animate-spin absolute right-9 top-1/2 -translate-y-1/2 text-[#472EAD]" />
+                )}
               </div>
 
-              {shouldShowSuggestions && (
-                <div className="mt-1 max-h-44 overflow-auto rounded-xl border border-gray-200 bg-white shadow-lg text-xs z-20 relative">
-                  {produitsFiltres.slice(0, 10).map((p) => (
-                    <button
-                      type="button"
-                      key={p.id}
-                      onClick={() => applyProduitSelection(p)}
-                      className="w-full px-3 py-2 flex items-center justify-between hover:bg-[#F7F5FF]"
-                    >
-                      <div className="text-left">
-                        <div className="font-medium text-gray-800">{p.libelle}</div>
-                        <div className="text-[10px] text-gray-500">
-                          {(p.ref || "—") +
-                            " • Détail: " +
-                            formatFCFA(p.prixDetail) +
-                            " • Gros: " +
-                            (p.prixGros ? formatFCFA(p.prixGros) : "--")}
-                        </div>
-                      </div>
-                      <span className="text-[10px] px-2 py-1 rounded-full bg-[#F7F5FF] text-[#472EAD] border border-[#E4E0FF]">
-                        Choisir
-                      </span>
-                    </button>
-                  ))}
+              {isProduitOpen && (
+                <div className="absolute z-50 mt-1 w-full border border-gray-200 rounded-xl bg-white shadow-lg max-h-60 overflow-y-auto">
+                  {filteredProduits.length > 0 ? (
+                    filteredProduits.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedProduit(p);
+                          setSearchProduit(p.libelle);
+                          setLigneProduitId(p.id);
+                          setLigneLibelle(p.libelle);
+
+                          const prix =
+                            ligneMode === "gros"
+                              ? p.prixGros || p.prixDetail
+                              : p.prixDetail || p.prixGros;
+
+                          setLignePrix(String(prix || 0));
+                          setIsProduitOpen(false);
+                          
+                          if (qteInputRef.current) {
+                            qteInputRef.current.focus();
+                          }
+                        }}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-[#F7F5FF]"
+                      >
+                        {p.libelle}
+                        {p.ref && (
+                          <span className="ml-2 text-[10px] text-gray-500">
+                            ({p.ref})
+                          </span>
+                        )}
+                      </button>
+                    ))
+                  ) : (
+                    <div className="px-3 py-2 text-sm text-gray-500">
+                      Aucun produit trouvé
+                    </div>
+                  )}
                 </div>
               )}
 
-              <p className="mt-1 text-[10px] text-gray-500">
-                Placez le curseur dans ce champ puis{" "}
-                <span className="font-semibold">scannez le code-barres</span> ou
-                tapez directement le libellé / les chiffres du code.
-              </p>
+              {selectedProduit && (
+                <div className="mt-1 text-[10px] text-gray-500">
+                  Réf : {selectedProduit.ref || "—"}
+                </div>
+              )}
             </div>
 
             <div>
               <label className="block text-xs text-gray-500 mb-1">
                 Quantité {ligneMode === "gros" ? "(cartons/boîtes)" : "(unités)"}
               </label>
-              <input
-                ref={qteInputRef}
-                type="number"
-                min="1"
-                value={ligneQte}
-                onChange={(e) => setLigneQte(e.target.value)}
-                className={baseInput}
-                placeholder={ligneMode === "gros" ? "Ex: 3 cartons" : "Ex: 24 unités"}
-              />
+                <input
+                  ref={qteInputRef}
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={ligneQte}
+                  onChange={(e) => {
+                    const value = e.target.value;
+
+                    // Empêche 0 et négatif immédiatement
+                    if (Number(value) < 1) {
+                      setLigneQte("");
+                      return;
+                    }
+
+                    setLigneQte(value);
+                  }}
+                  className={cls(
+                    baseInput,
+                    stockError && "border-rose-400 focus:ring-rose-200 focus:border-rose-500"
+                  )}
+                />
+
               {ligneMode === "gros" &&
-                produitSelectionne &&
-                produitSelectionne.unitesParCarton && (
+                selectedProduit &&
+                selectedProduit.unitesParCarton && (
                   <div className="mt-1 text-[10px] text-gray-500">
-                    1 carton = {produitSelectionne.unitesParCarton} unité(s)
+                    1 carton = {selectedProduit.unitesParCarton} unité(s)
                   </div>
                 )}
             </div>
@@ -1307,9 +1562,19 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
               </label>
               <input
                 type="number"
-                min="0"
+                min="1"
+                step="1"
                 value={lignePrix}
-                onChange={(e) => setLignePrix(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+
+                  if (Number(value) <= 0) {
+                    setLignePrix("");
+                    return;
+                  }
+
+                  setLignePrix(value);
+                }}
                 className={baseInput}
                 placeholder="Ex: 12000"
               />
@@ -1317,18 +1582,38 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
           </div>
 
           <div className="flex justify-end mt-4">
-            <button
-              type="button"
-              onClick={handleAddLigne}
-              className="flex items-center gap-2 px-4 py-2.5 bg-[#472EAD] text-white rounded-lg shadow-md hover:bg-[#5A3CF5] hover:shadow-lg text-xs sm:text-sm transition"
-            >
-              Ajouter à la commande
-            </button>
+          <button
+            type="button"
+            onClick={handleAddLigne}
+            disabled={
+              !!stockError ||
+              !selectedProduit ||
+              !ligneQte ||
+              !Number.isInteger(Number(ligneQte)) ||
+              Number(ligneQte) < 1 ||
+              !lignePrix ||
+              Number(lignePrix) <= 0
+            }
+            className={cls(
+              "flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs sm:text-sm transition",
+              !!stockError ||
+              !selectedProduit ||
+              !ligneQte ||
+              !Number.isInteger(Number(ligneQte)) ||
+              Number(ligneQte) < 1 ||
+              !lignePrix ||
+              Number(lignePrix) <= 0
+                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                : "bg-[#472EAD] text-white shadow-md hover:bg-[#5A3CF5] hover:shadow-lg"
+            )}
+          >
+            Ajouter à la commande
+          </button>
           </div>
         </div>
 
         {/* Tableau des lignes de la commande */}
-        <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+        <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white mt-4">
           <table className="min-w-full text-xs">
             <thead className="bg-[#F7F5FF] text-[#472EAD] uppercase text-[11px] font-semibold">
               <tr>
@@ -1365,7 +1650,6 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
                           : "Détail (unités)"}
                       </td>
 
-                      {/* Qté éditable */}
                       <td className="px-3 py-2 text-right">
                         {isEditing ? (
                           <input
@@ -1380,12 +1664,12 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
                         )}
                       </td>
 
-                      {/* PU (libre) éditable */}
                       <td className="px-3 py-2 text-right">
                         {isEditing ? (
                           <input
                             type="number"
-                            min="0"
+                            min="1"
+                            step="1"
                             value={editingPrix}
                             onChange={(e) => setEditingPrix(e.target.value)}
                             className="w-24 text-right border border-gray-300 rounded-lg px-2 py-1 text-xs focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD]"
@@ -1398,7 +1682,6 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
                       <td className="px-3 py-2 text-right">{formatFCFA(l.totalHT)}</td>
                       <td className="px-3 py-2 text-right">{formatFCFA(l.totalTTC)}</td>
 
-                      {/* Actions */}
                       <td className="px-3 py-2 text-center">
                         {isEditing ? (
                           <div className="flex items-center justify-center gap-1.5">
@@ -1455,7 +1738,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
         </div>
 
         {/* Totaux + bouton envoyer à la caisse */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mt-6">
           <div className="flex flex-col gap-2 text-xs text-gray-500">
             <span>
               Cette commande sera envoyée à la{" "}
@@ -1492,246 +1775,36 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
 
             <button
               type="submit"
-              className="px-5 py-2 rounded-lg bg-gradient-to-r from-[#472EAD] to-[#6A4DF5] text-white text-sm font-semibold hover:opacity-95 shadow-sm transition disabled:opacity-60 disabled:cursor-not-allowed"
-              disabled={!clientActuel || !lignes.length}
+              disabled={!selectedClient || !lignes.length || submitting}
+              className={cls(
+                "px-5 py-2 rounded-lg bg-gradient-to-r from-[#472EAD] to-[#6A4DF5] text-white text-sm font-semibold hover:opacity-95 shadow-sm transition disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2",
+                submitting && "opacity-80"
+              )}
             >
-              Envoyer à la caisse
+              {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
+              {submitting ? "Création en cours..." : "Créer commande "}
             </button>
           </div>
         </div>
       </motion.form>
-
-      {/* MODALS DE RECHERCHE */}
-      <SearchModal
-        open={openClientSearch}
-        onClose={() => setOpenClientSearch(false)}
-        title="Rechercher un client spécial"
-        items={clients}
-        onSelect={(client) => setClientId(client.id)}
-        getLabel={(c) => c.nom}
-        getSubLabel={(c) => c.code}
-      />
-
-      <SearchModal
-        open={openProduitSearch}
-        onClose={() => setOpenProduitSearch(false)}
-        title="Rechercher un produit"
-        items={catalogue}
-        onSelect={handleSelectProduitFromModal}
-        getLabel={(p) => p.libelle}
-        getSubLabel={(p) =>
-          `${p.ref || "—"} • Détail: ${formatFCFA(p.prixDetail)} • Gros: ${
-            p.prixGros ? formatFCFA(p.prixGros) : "--"
-          }`
-        }
-      />
     </>
   );
 }
 
 // ======================================================================
-// 🔐 Construction du payload QR (Option 2 : toutes les infos dans le code)
+// 🔐 Construction du payload QR
 // ======================================================================
 function buildQrPayloadFromCommande(commande) {
   if (!commande) return "";
 
-  const payload = {
-    type: "commande_client_special",
-    version: 1,
-    id: commande.id,
-    numero: commande.numero,
-    dateCommande: commande.dateCommande,
-    client: {
-      id: commande.clientId,
-      nom: commande.clientNom,
-      code: commande.clientCode,
-    },
-    montant: {
-      totalHT: commande.totalHT,
-      totalTVA: commande.totalTVA,
-      totalTTC: commande.totalTTC,
-      montantPaye: commande.montantPaye,
-      resteAPayer: commande.resteAPayer,
-    },
-    statut: {
-      code: commande.statut,
-      label: commande.statutLabel,
-    },
-    lignes: (commande.lignes || []).map((l) => ({
-      id: l.id,
-      produitId: l.produitId,
-      libelle: l.libelle,
-      ref: l.ref,
-      modeVente: l.modeVente,
-      qte: l.qte,
-      prixUnitaire: l.prixUnitaire,
-      totalHT: l.totalHT,
-      totalTTC: l.totalTTC,
-    })),
-  };
-
-  // Résumé humain lisible (ce que voit une app de scan basique)
-  const resumeHumain = [
-    `LPD_CMD#${commande.numero}`,
-    `Client: ${commande.clientNom || "Client spécial"}`,
-    `TTC: ${commande.totalTTC} XOF`,
-    `Date: ${commande.dateCommande}`,
-  ].join("\n");
-
-  const jsonPart = JSON.stringify(payload);
-
-  // Le module caisse lira ce qui est après "JSON::"
-  return `${resumeHumain}\n\nJSON::${jsonPart}`;
-}
-
-// ======================================================================
-// 🔧 Helper : normaliser une commande provenant du backend
-// ======================================================================
-function normalizeCommande(cmd) {
-  // 1) Normaliser les infos client
-  const client =
-    cmd.client ||
-    cmd.client_special ||
-    cmd.clientSpecial ||
-    cmd.client_speciale ||
-    cmd.client_speciale_detail ||
-    {};
-
-  let clientNom =
-    cmd.client_nom ||
-    cmd.nom_client ||
-    cmd.nom_client_special ||
-    cmd.client_name ||
-    cmd.customer_name ||
-    client.nom ||
-    client.nom_client ||
-    client.nom_client_special ||
-    client.raison_sociale ||
-    client.raisonSociale ||
-    client.name ||
-    client.libelle ||
-    client.intitule ||
+  const numero =
+    commande.numero ??
+    commande.numero_commande ??
+    commande.reference ??
+    commande.id ??
     "";
 
-  if (!clientNom && client && typeof client === "object") {
-    const firstStringValue = Object.values(client).find(
-      (v) => typeof v === "string" && v.trim() !== ""
-    );
-    if (firstStringValue) clientNom = firstStringValue;
-  }
-
-  const clientCode =
-    cmd.client_code ||
-    cmd.code_client ||
-    client.code_client ||
-    client.codeClient ||
-    client.code ||
-    cmd.code ||
-    undefined;
-
-  // 2) Normaliser les lignes
-  const lignesSource =
-    cmd.lignes || cmd.ligne_commandes || cmd.details || cmd.items || [];
-
-  const lignes = (lignesSource || []).map((l) => {
-    const qte = Number(l.quantite || l.qte || l.qty || 0);
-    const pu = Number(l.prix_unitaire || l.prix || l.price || 0);
-    const modeVente = l.mode_vente || l.modeVente || l.mode || "detail";
-
-    const totalHTLigne = Number(l.total_ht || l.totalHT || (qte && pu ? qte * pu : 0));
-    const totalTTCLigne = Number(
-      l.total_ttc || l.totalTTC || l.total || totalHTLigne * 1.18 || 0
-    );
-
-    const quantiteUnites = Number(
-      l.quantite_unites ||
-        l.quantiteUnites ||
-        (modeVente === "gros" ? qte * (l.unites_par_carton || 1) : qte)
-    );
-
-    return {
-      id: l.id,
-      produitId: l.produit_id || l.produitId || null,
-      libelle: l.libelle || l.nom_produit || l.designation || l.nom || "",
-      ref: l.ref || l.code_produit || l.reference || l.code || null,
-      qte,
-      prixUnitaire: pu,
-      totalHT: totalHTLigne,
-      totalTTC: totalTTCLigne,
-      modeVente,
-      quantiteUnites,
-    };
-  });
-
-  // 3) Totaux
-  let totalHT = Number(cmd.total_ht ?? cmd.totalHT ?? cmd.montant_ht ?? 0);
-  let totalTTC = Number(cmd.total_ttc ?? cmd.totalTTC ?? cmd.montant_total ?? cmd.total ?? 0);
-
-  if ((!totalHT || Number.isNaN(totalHT)) && lignes.length) {
-    totalHT = lignes.reduce(
-      (s, l) => s + (Number(l.totalHT) || l.qte * l.prixUnitaire || 0),
-      0
-    );
-  }
-
-  if ((!totalTTC || Number.isNaN(totalTTC)) && lignes.length) {
-    totalTTC = lignes.reduce(
-      (s, l) => s + (Number(l.totalTTC) || Number(l.totalHT) || 0),
-      0
-    );
-  }
-
-  let totalTVA = Number(cmd.total_tva ?? cmd.totalTVA ?? cmd.montant_tva ?? (totalTTC - totalHT));
-  if (Number.isNaN(totalTVA)) {
-    totalTVA = totalTTC - totalHT;
-  }
-
-  // 4) Paiements
-  const montantPaye = Number(cmd.montant_paye || cmd.montantPaye || cmd.total_paye || 0);
-  const resteAPayer = Number(
-    cmd.reste_a_payer ||
-      cmd.resteAPayer ||
-      cmd.montant_restant ||
-      totalTTC - montantPaye
-  );
-
-  // 5) Statut
-  const statut = cmd.statut || "en_attente_caisse";
-  const statutLabelMap = {
-    en_attente_caisse: "En attente caisse",
-    partiellement_payee: "Partiellement payée",
-    soldee: "Soldée",
-    annulee: "Annulée",
-  };
-  const statutLabel = cmd.statut_label || cmd.statutLabel || statutLabelMap[statut] || statut;
-
-  return {
-    id: cmd.id,
-    numero: cmd.numero || cmd.reference || cmd.code || `CMD-${cmd.id}`,
-    clientId: cmd.client_id || cmd.clientId || client.id || null,
-    clientNom,
-    clientCode,
-    dateCommande:
-      cmd.date_commande ||
-      cmd.dateCommande ||
-      (cmd.created_at ? String(cmd.created_at).slice(0, 10) : todayISO()),
-    lignes,
-    totalHT,
-    totalTVA,
-    totalTTC,
-    tauxTVA: totalHT ? totalTVA / totalHT : 0.18,
-    paiements: (cmd.paiements || []).map((p) => ({
-      id: p.id,
-      date: p.date_paiement || p.date || null,
-      montant: Number(p.montant || p.montant_paye || 0),
-      mode: p.mode_paiement || p.mode || "",
-      commentaire: p.commentaire || "",
-    })),
-    montantPaye,
-    resteAPayer,
-    statut,
-    statutLabel,
-  };
+  return numero ? String(numero) : "";
 }
 
 // ==========================================================
@@ -1739,31 +1812,43 @@ function normalizeCommande(cmd) {
 // ==========================================================
 export default function Commandes() {
   const { state } = useLocation();
+  const [highlightedId, setHighlightedId] = useState(null);
 
-  // Quand on vient depuis ClientsSpeciaux :
-  // navigate("/responsable/commandes", { state: { clientId, clientNom } })
   const clientIdFromState = state?.clientId || null;
   const clientNameFromState = state?.clientNom || state?.client || "";
 
   const [loading, setLoading] = useState(true);
+  const [loadingPage, setLoadingPage] = useState(false);
+  const [isFirstLoad, setIsFirstLoad] = useState(true);
   const [commandes, setCommandes] = useState([]);
   const [toasts, setToasts] = useState([]);
   const [selectedCommande, setSelectedCommande] = useState(null);
   const [openFacture, setOpenFacture] = useState(false);
+  const [searchInput, setSearchInput] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [showTrancheModal, setShowTrancheModal] = useState(false);
 
-  // ✅ AJOUT (avisage) : filtres + période + pagination (Option A)
   const [filterStatut, setFilterStatut] = useState("tous");
   const [filterStartDate, setFilterStartDate] = useState("");
-  const [filterEndDate, setFilterEndDate] = useState("");
-  const [pageSize, setPageSize] = useState(10);
+  const [filterEndDate, setFilterEndDate] = useState(todayISO());
   const [page, setPage] = useState(1);
+  const [lastPage, setLastPage] = useState(1);
+  const [total, setTotal] = useState(0);
 
-  // map id client -> nom client pour compléter ce que le backend n’envoie pas
   const [clientsMap, setClientsMap] = useState({});
-  // Pour le QR code de la dernière commande créée
   const [lastCreatedCommande, setLastCreatedCommande] = useState(null);
   const [showQrModal, setShowQrModal] = useState(false);
+  
+  const handleTrancheSuccess = () => {
+    setShowTrancheModal(false);
+    setShowQrModal(true);
+  };
+
+  const [statsFromBackend, setStatsFromBackend] = useState(null);
+  
+  // ✅ Refs pour détecter les changements
+  const previousPageRef = useRef(1);
+  const previousSearchRef = useRef("");
 
   const qrPayload = useMemo(
     () =>
@@ -1776,20 +1861,79 @@ export default function Commandes() {
     setToasts((t) => [...t, { id, type, title, message }]);
     setTimeout(() => removeToast(id), 4000);
   };
+  
   const removeToast = (id) => setToasts((t) => t.filter((x) => x.id !== id));
 
   // 🔗 Chargement des commandes depuis le backend
   const fetchCommandes = async () => {
+    if (filterStartDate && filterEndDate && filterStartDate > filterEndDate) {
+      toast(
+        "error",
+        "Période invalide",
+        "La date de début doit être avant la date de fin."
+      );
+      return;
+    }
+
     try {
-      setLoading(true);
+      // ✅ Détection si c'est un changement de recherche
+      const isSearchChange = previousSearchRef.current !== searchTerm;
 
-      const res = await axios.get("/commandes");
-      const payload = Array.isArray(res.data?.data) ? res.data.data : res.data;
+      // ✅ Loader UNIQUEMENT pour :
+      // - Premier chargement : full screen
+      // - Pagination, statut, période : loader tableau
+      // - Recherche : PAS de loader
+      if (isFirstLoad) {
+        setLoading(true);
+      } else if (!isSearchChange) {
+        setLoadingPage(true);
+      }
 
-      const normalized = (payload || []).map(normalizeCommande);
+      // ✅ Paramètres envoyés à Laravel - Utilisation directe de filterStatut
+      const params = {
+        type_client: "special",
+        page,
+        ...(filterStatut !== "tous" && { statut: filterStatut }),
+        ...(filterStartDate && { start_date: filterStartDate }),
+        ...(filterEndDate && { end_date: filterEndDate }),
+        ...(searchTerm && { search: searchTerm }),
+        ...(clientIdFromState && { client_id: clientIdFromState }),
+      };
+
+      const res = await commandesAPI.getAll(params);
+      
+      // ✅ Appel séparé pour les statistiques avec les mêmes filtres de date
+      const statsRes = await commandesAPI.getStatsSpecial({
+        ...(filterStatut !== "tous" && { statut: filterStatut }),
+        ...(filterStartDate && { start_date: filterStartDate }),
+        ...(filterEndDate && { end_date: filterEndDate }),
+        ...(searchTerm && { search: searchTerm }),
+        ...(clientIdFromState && { client_id: clientIdFromState }),
+      });
+
+      const payload = unwrapApi(res);
+      const commandesData = payload.data || [];
+
+      const paginationData = {
+        current_page: Number(payload.current_page || 1),
+        last_page: Number(payload.last_page || 1),
+        total: Number(payload.total || commandesData.length || 0),
+      };
+
+      const normalized = commandesData.map(normalizeCommande);
       setCommandes(normalized);
+
+      if (paginationData.current_page !== page) {
+        setPage(paginationData.current_page);
+      }
+      setLastPage(paginationData.last_page);
+      setTotal(paginationData.total);
+
+      // ✅ Utilisation des stats de l'appel séparé
+      setStatsFromBackend(statsRes?.data || {});
+
     } catch (error) {
-      console.error("Erreur chargement commandes :", error);
+      logger.error("commandes.fetch", error);
       toast(
         "error",
         "Erreur de chargement",
@@ -1797,26 +1941,24 @@ export default function Commandes() {
       );
     } finally {
       setLoading(false);
+      setLoadingPage(false);
+      setIsFirstLoad(false);
+      
+      // ✅ Mise à jour des refs
+      previousPageRef.current = page;
+      previousSearchRef.current = searchTerm;
     }
   };
-
-  useEffect(() => {
-    fetchCommandes();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // 🔗 Chargement des clients spéciaux pour retrouver les noms
   useEffect(() => {
     const fetchClients = async () => {
       try {
-        const res = await axios.get("/clients", {
-          params: { type_client: "special" },
-        });
-
-        const clientsPayload = Array.isArray(res.data?.data) ? res.data.data : res.data;
+        const res = await clientsAPI.getAll({ type_client: "special" });
+        const clientsPayload = unwrapApi(res);
 
         const map = {};
-        (clientsPayload || []).forEach((c) => {
+        (clientsPayload.data || []).forEach((c) => {
           const nom =
             c.nom ||
             c.nom_client ||
@@ -1831,14 +1973,14 @@ export default function Commandes() {
 
         setClientsMap(map);
       } catch (error) {
-        console.error("Erreur chargement clients spéciaux :", error);
+        logger.error("clients.fetch.special", error);
       }
     };
 
     fetchClients();
   }, []);
 
-  // Compléter les commandes sans nom dès qu’on a la map des clients
+  // Compléter les commandes sans nom
   useEffect(() => {
     if (!clientsMap || !Object.keys(clientsMap).length) return;
 
@@ -1855,127 +1997,27 @@ export default function Commandes() {
     );
   }, [clientsMap]);
 
-  // Stats globales
-  const statsGlobales = useMemo(() => {
-    // On ne compte que les commandes non annulées
-    const actives = commandes.filter((c) => c.statut !== "annulee");
-
-    const nb = actives.length;
-    const totalTTC = actives.reduce((s, c) => s + (c.totalTTC || 0), 0);
-    const totalPaye = actives.reduce((s, c) => s + (c.montantPaye || 0), 0);
-    const detteTotale = actives.reduce(
-      (s, c) => s + Math.max(c.resteAPayer || 0, 0),
-      0
-    );
-
-    return { nbCommandes: nb, totalTTC, totalPaye, detteTotale };
-  }, [commandes]);
-
-  // ✅ handleCreateCommande : envoi à la caisse
-  const handleCreateCommande = async (commandeDraft) => {
-    try {
-      const payload = {
-        client_id: commandeDraft.clientId,
-        date_commande: commandeDraft.dateCommande,
-        total_ht: commandeDraft.totalHT,
-        total_tva: commandeDraft.totalTVA,
-        total_ttc: commandeDraft.totalTTC,
-        appliquer_tva: commandeDraft.appliquerTVA ? 1 : 0,
-        statut: "en_attente_caisse",
-        lignes: commandeDraft.lignes.map((l) => ({
-          produit_id: l.produitId,
-          libelle: l.libelle,
-          quantite: l.qte,
-          quantite_unites: l.quantiteUnites,
-          mode_vente: l.modeVente,
-          prix_unitaire: l.prixUnitaire,
-          total_ht: l.totalHT,
-          total_ttc: l.totalTTC,
-        })),
-      };
-
-      const res = await axios.post("/commandes", payload);
-
-      let raw = res.data;
-      if (Array.isArray(res.data?.data)) {
-        raw = res.data.data[0];
-      } else if (res.data?.data && typeof res.data.data === "object") {
-        raw = res.data.data;
-      }
-
-      let normalized;
-
-      if (raw && !Array.isArray(raw)) {
-        normalized = normalizeCommande(raw);
-
-        if (!normalized.clientNom && commandeDraft.clientNom) {
-          normalized = {
-            ...normalized,
-            clientId: commandeDraft.clientId,
-            clientNom: commandeDraft.clientNom,
-            clientCode: commandeDraft.clientCode,
-          };
-        }
-      } else {
-        normalized = commandeDraft;
-      }
-
-      setCommandes((prev) => [normalized, ...prev]);
-
-      // ✅ Mémoriser la dernière commande créée pour le QR
-      setLastCreatedCommande(normalized);
-      setShowQrModal(true);
-
-      toast(
-        "success",
-        "Commande envoyée à la caisse",
-        `${normalized.clientNom || "Client"} — ${formatFCFA(normalized.totalTTC)}`
-      );
-    } catch (error) {
-      console.error("Erreur création commande :", error);
-      if (error.response?.status === 422 && error.response.data?.errors) {
-        const firstError =
-          Object.values(error.response.data.errors)[0]?.[0] ||
-          "Vérifiez les champs obligatoires.";
-        toast("error", "Création impossible", firstError);
-      } else {
-        toast(
-          "error",
-          "Erreur",
-          error.response?.data?.message ||
-            "Impossible de créer cette commande pour le moment."
-        );
-      }
-    }
-  };
-
-  const badgeStatut = (statut) => {
-    switch (statut) {
-      case "en_attente_caisse":
-        return "bg-gray-100 text-gray-700 border border-gray-300";
-      case "partiellement_payee":
-        return "bg-amber-100 text-amber-700 border border-amber-300";
-      case "soldee":
-        return "bg-emerald-100 text-emerald-700 border border-emerald-300";
-      case "annulee":
-        return "bg-rose-100 text-rose-700 border-rose-300 border";
-      default:
-        return "bg-gray-100 text-gray-700 border border-gray-300";
-    }
+  // ✅ Agrégation des stats globales
+  const statsGlobales = {
+    nbCommandes: Number(statsFromBackend?.nb ?? 0),
+    nbAnnulees: Number(statsFromBackend?.annulees ?? 0),
+    totalTTC: Number(statsFromBackend?.totalTTC ?? 0),
+    totalPaye: Number(statsFromBackend?.totalPaye ?? 0),
+    detteTotale: Number(statsFromBackend?.dette ?? 0),
   };
 
   const handleAnnuler = async (commande) => {
-    if (commande.montantPaye > 0) {
+    if (commande.statut === "soldee" || commande.statut === "annulee") {
       toast(
         "error",
         "Annulation impossible",
-        "Cette commande a déjà des paiements enregistrés en caisse."
+        `Une commande ${commande.statut === "soldee" ? "soldée" : "déjà annulée"} ne peut plus être modifiée.`
       );
       return;
     }
 
     try {
-      await axios.post(`/commandes/${commande.id}/annuler`);
+      await commandesAPI.cancel(commande.id);
 
       setCommandes((prev) =>
         prev.map((c) =>
@@ -1990,14 +2032,143 @@ export default function Commandes() {
         "Commande annulée",
         `Commande #${commande.numero} pour ${commande.clientNom}`
       );
+      
     } catch (error) {
-      console.error("Erreur annulation commande :", error);
+      logger.error("commandes.cancel", error);
       toast(
         "error",
         "Erreur",
         "Impossible d'annuler cette commande pour le moment."
       );
     }
+  };
+
+  const handleCreateCommande = async (commandeDraft) => {
+    try {
+
+      // 🔎 1️⃣ Détection automatique du type global
+      const modes = new Set(
+        commandeDraft.lignes.map(l => l.modeVente)
+      );
+
+      let typeVenteGlobal;
+
+      if (modes.size === 1) {
+        typeVenteGlobal = [...modes][0]; // "gros" ou "detail"
+      } else {
+        typeVenteGlobal = "mixte";
+      }
+
+      // 📦 2️⃣ Construction du payload
+      const payload = {
+        client_id: commandeDraft.clientId,
+        type_vente: typeVenteGlobal,
+        tva_appliquee: commandeDraft.appliquerTVA ? true : false,
+        items: commandeDraft.lignes.map((l) => ({
+          produit_id: l.produitId,
+          quantite: l.qte,
+          prix_unitaire: l.prixUnitaire,
+          mode_vente: l.modeVente,
+        })),
+      };
+
+      const raw = await commandesAPI.create(payload);
+
+
+      const response =
+        raw?.data?.data ??
+        raw?.data ??
+        raw;
+
+      let normalized;
+
+      if (response && typeof response === "object") {
+        normalized = normalizeCommande(response);
+
+        if (!normalized.clientNom && commandeDraft.clientNom) {
+          normalized = {
+            ...normalized,
+            clientId: commandeDraft.clientId,
+            clientNom: commandeDraft.clientNom,
+            clientCode: commandeDraft.clientCode,
+          };
+        }
+      } else {
+        normalized = {
+          ...commandeDraft,
+          id: Date.now(),
+          numero: `CMD-TEMP-${Date.now()}`,
+        };
+      }
+
+      setLastCreatedCommande({
+        ...normalized,
+        totalTTC:
+          normalized.totalTTC !== undefined && normalized.totalTTC !== null
+            ? Number(normalized.totalTTC)
+            : Number(commandeDraft.totalTTC || 0),
+
+        resteAPayer:
+          normalized.totalTTC !== undefined && normalized.totalTTC !== null
+            ? Number(normalized.totalTTC)
+            : Number(commandeDraft.totalTTC || 0),
+        montantPaye: 0,
+      });
+      setShowTrancheModal(true);
+
+      toast(
+        "success",
+        "Commande créée",
+        `${normalized.clientNom || "Client"} — ${formatFCFA(normalized.totalTTC)}`
+      );
+
+      setPage(1);
+      await fetchCommandes();
+
+      // ✅ Highlight APRÈS que la liste soit rechargée
+      setHighlightedId(normalized.id);
+
+      setTimeout(() => {
+        setHighlightedId(null);
+      }, 2000);
+
+    } catch (error) {
+      logger.error("commandes.create", error);
+      
+      if (error.response?.status === 422 && error.response.data?.errors) {
+        const firstError = Object.values(error.response.data.errors)[0]?.[0] || 
+                          "Vérifiez les champs obligatoires.";
+        toast("error", "Création impossible", firstError);
+      } else {
+        toast(
+          "error",
+          "Erreur",
+          error.response?.data?.message || 
+          "Impossible de créer cette commande pour le moment."
+        );
+      }
+    }
+  };
+
+  const badgeStatut = (statut) => {
+    switch (statut) {
+      case "attente":
+        return "bg-gray-100 text-gray-700 border border-gray-300";
+      case "partiellement_payee":
+        return "bg-amber-100 text-amber-700 border border-amber-300";
+      case "payee":
+        return "bg-emerald-100 text-emerald-700 border border-emerald-300";
+      case "annulee":
+        return "bg-rose-100 text-rose-700 border-rose-300 border";
+      default:
+        return "bg-gray-100 text-gray-700 border border-gray-300";
+    }
+  };
+
+  // ✅ CORRECTION : plus de reset de période ici
+  const handleChangeStatut = (s) => {
+    setFilterStatut(s);
+    setPage(1);
   };
 
   const exportPDF = () => {
@@ -2022,84 +2193,38 @@ export default function Commandes() {
     toast("success", "Export PDF", "Fichier téléchargé avec succès.");
   };
 
-  // ✅ AVISAGE (exact logique Decaissements) : filtres + recherche + pagination
-  const commandesFiltrees = useMemo(() => {
-    let list = commandes;
+  // reset page quand filtres changent
+useEffect(() => {
+  setPage(1);
+}, [
+  filterStatut,
+  filterStartDate,
+  filterEndDate,
+  searchTerm,
+  clientIdFromState,
+]);
 
-    // 1) filtre "contexte client" (inchangé)
-    if (clientIdFromState) {
-      list = list.filter((c) => String(c.clientId) === String(clientIdFromState));
-    } else if (clientNameFromState) {
-      list = list.filter((c) => c.clientNom === clientNameFromState);
-    }
-
-    // 2) filtre statut
-    if (filterStatut !== "tous") {
-      list = list.filter((c) => c.statut === filterStatut);
-    }
-
-    // 3) filtre période (sur dateCommande)
-    list = list.filter((c) => {
-      const dateStr = String(c.dateCommande || "");
-      if (filterStartDate && dateStr < filterStartDate) return false;
-      if (filterEndDate && dateStr > filterEndDate) return false;
-      return true;
-    });
-
-    // 4) recherche (numero + client + statut + lignes)
-    const q = (searchTerm || "").trim().toLowerCase();
-    if (q) {
-      list = list.filter((c) => {
-        const numero = String(c.numero || "").toLowerCase();
-        const clientNom = String(c.clientNom || "").toLowerCase();
-        const statutLabel = String(c.statutLabel || "").toLowerCase();
-        const lignesText = (c.lignes || [])
-          .map((l) => `${l.libelle || ""} ${l.ref || ""}`)
-          .join(" ")
-          .toLowerCase();
-
-        return `${numero} ${clientNom} ${statutLabel} ${lignesText}`.includes(q);
-      });
-    }
-
-    return list;
-  }, [
-    commandes,
-    clientIdFromState,
-    clientNameFromState,
-    filterStatut,
-    filterStartDate,
-    filterEndDate,
-    searchTerm,
-  ]);
-
-  // reset page quand filtres/recherche/changement contexte changent
   useEffect(() => {
-    setPage(1);
+    if (filterStatut === "annulee") {
+      toast(
+        "info",
+        "Commandes annulées",
+        "Ces commandes ne sont plus actives. Elles sont affichées uniquement pour la traçabilité."
+      );
+    }
+  }, [filterStatut]);
+
+  useEffect(() => {
+    fetchCommandes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
+    page,
     filterStatut,
     filterStartDate,
     filterEndDate,
     searchTerm,
     clientIdFromState,
-    clientNameFromState,
-    pageSize,
   ]);
-
-  const totalFiltered = commandesFiltrees.length;
-  const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize));
-  const safePage = Math.min(page, totalPages);
-
-  const startIndex = (safePage - 1) * pageSize;
-  const endIndex = startIndex + pageSize;
-
-  const commandesPage = useMemo(
-    () => commandesFiltrees.slice(startIndex, endIndex),
-    [commandesFiltrees, startIndex, endIndex]
-  );
-
-  const rangeFrom = totalFiltered ? startIndex + 1 : 0;
-  const rangeTo = Math.min(endIndex, totalFiltered);
 
   if (loading)
     return (
@@ -2116,7 +2241,8 @@ export default function Commandes() {
   return (
     <>
       <div className="w-full h-full bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white px-3 sm:px-4 lg:px-6 py-4 sm:py-5 overflow-y-auto">
-        <div className="max-w-6xl mx-auto space-y-5">
+        <div className="max-w-6xl mx-auto space-y-8">
+          
           {/* HEADER */}
           <motion.header
             initial={{ opacity: 0, y: -8 }}
@@ -2143,20 +2269,9 @@ export default function Commandes() {
                 </p>
               </div>
               <p className="text-[11px] text-gray-400">
-                {statsGlobales.nbCommandes} commande
-                {statsGlobales.nbCommandes > 1 && "s"} enregistrée
-                {statsGlobales.nbCommandes > 1 && "s"}.
+                {statsGlobales.nbCommandes} commande{statsGlobales.nbCommandes > 1 ? "s" : ""} ({statsGlobales.nbAnnulees} annulée{statsGlobales.nbAnnulees > 1 ? "s" : ""})
+                enregistrée{statsGlobales.nbCommandes > 1 ? "s" : ""}.
               </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-              <button
-                onClick={fetchCommandes}
-                className="flex items-center gap-2 px-4 py-2.5 bg-[#472EAD] text-white rounded-lg shadow-md hover:bg-[#5A3CF5] hover:shadow-lg text-xs sm:text-sm transition"
-              >
-                <RefreshCw size={16} />
-                Actualiser
-              </button>
             </div>
           </motion.header>
 
@@ -2164,9 +2279,8 @@ export default function Commandes() {
           <motion.div
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
-            className="w-full max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3"
+            className="w-full max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-6 mb-8"
           >
-            {/* Nombre de commandes */}
             <div className="rounded-xl border border-yellow-400 bg-gradient-to-br from-yellow-50 via-amber-50 to-yellow-100 px-3 py-2.5 shadow-sm">
               <div className="text-[15px] font-semibold text-yellow-800 mb-0.5">
                 Nombre de commandes
@@ -2179,7 +2293,6 @@ export default function Commandes() {
               </div>
             </div>
 
-            {/* Total TTC global */}
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
               <div className="text-[15px] text-gray-500 mb-0.5">
                 Total TTC global
@@ -2191,7 +2304,6 @@ export default function Commandes() {
               </div>
             </div>
 
-            {/* Montant payé (caisse) */}
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
               <div className="text-[15px] text-gray-500 mb-0.5">
                 Montant payé (caisse)
@@ -2204,10 +2316,9 @@ export default function Commandes() {
               </div>
             </div>
 
-            {/* Dette globale */}
             <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5">
               <div className="text-[15px] text-gray-500 mb-0.5">
-                Dette globale
+                Dette globale (reste)
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm sm:text-lg font-extrabold text-rose-700">
@@ -2225,9 +2336,10 @@ export default function Commandes() {
             toast={toast}
           />
 
-          {/* TABLE DES COMMANDES + FILTRES/RECHERCHE/LIMITE/PAGINATION */}
-          <section className="bg-white/95 border border-[#E4E0FF] rounded-2xl shadow-[0_12px_30px_rgba(15,23,42,0.06)] px-3 sm:px-4 py-3 sm:py-4 space-y-3">
-            {/* FILTRES + RECHERCHE + LIMITE (avisage) */}
+          {/* TABLE DES COMMANDES + FILTRES/RECHERCHE/PAGINATION */}
+          <section className="bg-white/95 border border-[#E4E0FF] rounded-2xl shadow-[0_12px_30px_rgba(15,23,42,0.06)] px-3 sm:px-4 py-4 sm:py-5 space-y-4 mt-8">
+            
+            {/* FILTRES + RECHERCHE */}
             <div className="flex flex-col gap-3">
               <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
                 {/* Filtre statut (pills) */}
@@ -2236,15 +2348,15 @@ export default function Commandes() {
                   <div className="inline-flex rounded-full bg-[#F7F5FF] border border-[#E4E0FF] p-0.5">
                     {[
                       { id: "tous", label: "Tous" },
-                      { id: "en_attente_caisse", label: "En attente" },
-                      { id: "partiellement_payee", label: "Partiel" },
-                      { id: "soldee", label: "Soldées" },
+                      { id: "attente", label: "En attentes" },
+                      { id: "partiellement_payee", label: "Partiellement payées" },
+                      { id: "payee", label: "Totalement payées" },
                       { id: "annulee", label: "Annulées" },
                     ].map((opt) => (
                       <button
                         key={opt.id}
                         type="button"
-                        onClick={() => setFilterStatut(opt.id)}
+                        onClick={() => handleChangeStatut(opt.id)}
                         className={cls(
                           "px-3 py-1 rounded-full transition",
                           filterStatut === opt.id
@@ -2258,7 +2370,7 @@ export default function Commandes() {
                   </div>
                 </div>
 
-                {/* Période + limite */}
+                {/* Période */}
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3 text-xs">
                   <div className="flex items-center gap-1">
                     <span className="text-gray-500 font-medium">Période :</span>
@@ -2276,38 +2388,32 @@ export default function Commandes() {
                       className="border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:border-[#472EAD] focus:ring-1 focus:ring-[#472EAD] bg-white"
                     />
                   </div>
-
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-500 font-medium">Lignes :</span>
-                    <select
-                      value={pageSize}
-                      onChange={(e) => setPageSize(Number(e.target.value))}
-                      className="border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none focus:border-[#472EAD] focus:ring-1 focus:ring-[#472EAD]"
-                    >
-                      {[10, 20, 50, 100].map((n) => (
-                        <option key={n} value={n}>
-                          {n} / page
-                        </option>
-                      ))}
-                    </select>
-                  </div>
                 </div>
               </div>
 
-              {/* RECHERCHE */}
-              <div className="relative">
+              {/* ✅ RECHERCHE INSTANTANÉE (plus de debounce) */}
+              <div className="relative mb-4">
                 <Search className="absolute left-3 top-2.5 text-gray-400 w-4 h-4" />
                 <input
                   type="text"
-                  placeholder="Rechercher une commande (numéro, client, statut, ligne produit...)"
-                  value={searchTerm || ""}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-10 py-2 border border-gray-300 rounded-xl text-sm bg-white shadow-sm focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD] placeholder:text-gray-400"
+                  placeholder="Rechercher une commande (numéro commande ou nom client)"
+                  value={searchInput}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setSearchInput(value);
+                    setSearchTerm(value.trim());
+                    setPage(1);
+                  }}
+                  className="w-full pl-9 pr-10 py-2.5 border border-gray-300 rounded-xl text-sm bg-white shadow-sm focus:ring-2 focus:ring-[#472EAD]/30 focus:border-[#472EAD] placeholder:text-gray-400"
                 />
                 {searchTerm ? (
                   <button
                     type="button"
-                    onClick={() => setSearchTerm("")}
+                    onClick={() => {
+                      setSearchInput("");
+                      setSearchTerm("");
+                      setPage(1);
+                    }}
                     className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
                     title="Effacer"
                   >
@@ -2319,24 +2425,32 @@ export default function Commandes() {
               {/* Résumé affichage */}
               <div className="flex items-center justify-between text-[11px] text-gray-500">
                 <span>
-                  Affichage : <span className="font-semibold">{rangeFrom}</span>–
-                  <span className="font-semibold">{rangeTo}</span> sur{" "}
-                  <span className="font-semibold">{totalFiltered}</span>
+                  Affichage :{" "}
+                  <span className="font-semibold">{commandes.length}</span> sur{" "}
+                  <span className="font-semibold">{total}</span>
                 </span>
                 <span>
-                  Page <span className="font-semibold">{safePage}</span> /{" "}
-                  <span className="font-semibold">{totalPages}</span>
+                  Page <span className="font-semibold">{page}</span> /{" "}
+                  <span className="font-semibold">{lastPage}</span>
                 </span>
               </div>
             </div>
 
-            {/* TABLEAU */}
-            <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+            {/* TABLEAU AVEC LOADER DE SURCOUCHE */}
+            <div className="relative overflow-x-auto rounded-xl border border-gray-200 bg-white mt-2">
+              {loadingPage && (
+                <div className="absolute inset-0 bg-white/70 backdrop-blur-sm flex items-center justify-center z-10">
+                  <div className="flex items-center gap-2 text-[#472EAD] text-sm font-medium">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Chargement...
+                  </div>
+                </div>
+              )}
               <table className="min-w-full text-sm">
                 <thead className="bg-[#F7F5FF] text-[#472EAD] uppercase text-xs font-semibold">
                   <tr>
                     <th className="px-4 py-3 text-left">N° commande</th>
-                    <th className="px-4 py-3 text-left">Client</th>
+                    <th className="px-4 py-3 text-left">Client Spécial</th>
                     <th className="px-4 py-3 text-left">Date</th>
                     <th className="px-4 py-3 text-right">Total TTC</th>
                     <th className="px-4 py-3 text-right">Payé (caisse)</th>
@@ -2346,20 +2460,58 @@ export default function Commandes() {
                   </tr>
                 </thead>
                 <tbody>
-                  {commandesPage.length ? (
-                    commandesPage.map((c) => (
-                      <tr
-                        key={c.id}
-                        className="border-b border-gray-100 hover:bg-[#F9F9FF]"
-                      >
+                  {commandes.length ? (
+                    commandes.map((c) => (
+                        <motion.tr
+                          key={c.id}
+                          initial={false}
+                          animate={
+                            highlightedId === c.id
+                              ? {
+                                  backgroundColor: "#EDE9FE",
+                                }
+                              : {
+                                  backgroundColor: "#FFFFFF",
+                                }
+                          }
+                          transition={{ duration: 0.4 }}
+                          className="border-b border-gray-100 hover:bg-[#F9F9FF]"
+                        >
                         <td className="px-4 py-3 font-medium">{c.numero}</td>
-                        <td className="px-4 py-3">{c.clientNom}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-col leading-tight">
+                            <span className="font-medium text-gray-800">
+                              {c.clientPrenom && c.clientNomSeul
+                                ? `${c.clientPrenom} ${c.clientNomSeul}`
+                                : c.clientNom || "—"}
+                            </span>
+
+                            {c.clientEntreprise && (
+                              <span className="text-[11px] text-gray-400 truncate max-w-[180px]">
+                                {c.clientEntreprise}
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="px-4 py-3">{c.dateCommande}</td>
                         <td className="px-4 py-3 text-right">
                           {formatFCFA(c.totalTTC)}
                         </td>
-                        <td className="px-4 py-3 text-right text-emerald-600">
-                          {formatFCFA(c.montantPaye)}
+                        <td className="px-4 py-3 text-right">
+                          {c.statut === "attente" ? (
+                            <div className="flex flex-col items-end">
+                              <span className="text-gray-400 text-xs">
+                                {formatFCFA(0)}
+                              </span>
+                              <span className="text-amber-600 text-xs font-semibold">
+                                À encaisser : {formatFCFA(c.totalTTC)}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-emerald-600">
+                              {formatFCFA(c.montantPaye)}
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-right text-rose-600">
                           {formatFCFA(Math.max(c.resteAPayer, 0))}
@@ -2388,12 +2540,12 @@ export default function Commandes() {
                             </button>
                           </div>
                         </td>
-                      </tr>
+                      </motion.tr>
                     ))
                   ) : (
                     <tr>
                       <td colSpan={8} className="text-center text-gray-400 py-6 text-sm">
-                        {commandes.length
+                        {total > 0
                           ? "Aucune commande ne correspond aux filtres."
                           : "Aucune commande enregistrée."}
                       </td>
@@ -2403,40 +2555,17 @@ export default function Commandes() {
               </table>
             </div>
 
-            {/* Pagination */}
-            <div className="flex items-center justify-between pt-2">
-              <button
-                type="button"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={safePage <= 1}
-                className={cls(
-                  "px-3 py-1.5 rounded-lg border text-xs",
-                  safePage <= 1
-                    ? "border-gray-200 text-gray-300 cursor-not-allowed bg-gray-50"
-                    : "border-gray-300 text-gray-700 bg-white hover:bg-gray-50"
-                )}
-              >
-                ← Précédent
-              </button>
-
-              <div className="text-[11px] text-gray-500">
-                Page <span className="font-semibold">{safePage}</span> /{" "}
-                <span className="font-semibold">{totalPages}</span>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={safePage >= totalPages}
-                className={cls(
-                  "px-3 py-1.5 rounded-lg border text-xs",
-                  safePage >= totalPages
-                    ? "border-gray-200 text-gray-300 cursor-not-allowed bg-gray-50"
-                    : "border-gray-300 text-gray-700 bg-white hover:bg-gray-50"
-                )}
-              >
-                Suivant →
-              </button>
+            {/* PAGINATION */}
+            <div className="mt-6">
+              <Pagination
+                page={page}
+                totalPages={lastPage}
+                onPageChange={(p) => {
+                  if (p >= 1 && p <= lastPage) {
+                    setPage(p);
+                  }
+                }}
+              />
             </div>
           </section>
 
@@ -2447,12 +2576,51 @@ export default function Commandes() {
             commande={selectedCommande}
           />
 
-          {/* MODAL QR CODE COMMANDE (après création) */}
+          {/* MODAL QR CODE COMMANDE */}
           <QrCommandeModal
             open={showQrModal}
             onClose={() => setShowQrModal(false)}
             commande={lastCreatedCommande}
             qrPayload={qrPayload}
+          />
+          
+          <NouvelleTrancheModal
+            open={showTrancheModal}
+            onClose={() => setShowTrancheModal(false)}
+            lockedCommande={lastCreatedCommande}
+            toast={toast}
+            onSubmit={async (commande, paiement, done) => {
+              try {
+                  await commandesAPI.sendTranche(commande.id, {
+                    montant: paiement,
+                  });
+
+                const fresh = await commandesAPI.getById(commande.id);
+                const normalized = normalizeCommande(
+                  fresh?.data?.data ?? fresh?.data ?? fresh
+                );
+
+                setLastCreatedCommande({
+                  ...normalized,
+                  montantTranche: paiement,
+                });
+
+                setShowTrancheModal(false);
+                setShowQrModal(true);
+                toast(
+                  "success",
+                  "Commande envoyée à la caisse",
+                  `Commande #${normalized.numero} prête pour encaissement`
+                );
+                
+                await fetchCommandes();
+
+                done();
+              } catch (e) {
+                done();
+                toast("error", "Erreur paiement", "Impossible d'enregistrer la tranche.");
+              }
+            }}
           />
 
           {/* TOASTS */}
