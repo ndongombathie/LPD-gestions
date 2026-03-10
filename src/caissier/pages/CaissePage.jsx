@@ -76,7 +76,7 @@ const CaissePage = () => {
     return {
       id: commande.id,
       commande_id: commande.id,
-      numero: `CMD-${commande.id.substring(0, 8).toUpperCase()}`,
+      numero: commande.numero,
       date_ticket: commande.date || commande.created_at,
       vendeur_nom: commande.vendeur ? `${commande.vendeur.prenom || ''} ${commande.vendeur.nom || ''}`.trim() : 'N/A',
       total_ht: totalHT,
@@ -168,6 +168,7 @@ const CaissePage = () => {
     const channel = echo.private(`boutique.${boutiqueId}`);
     const listener = () => {
       fetchTicketsSafe(currentPageRef.current, filterTextRef.current);
+      fetchDashboardStats();
     };
     channel.listen('.commande.validee', listener);
     return () => {
@@ -181,18 +182,14 @@ const CaissePage = () => {
   }, [boutiqueId]);
 
   // Écouter les paiements créés (temps réel)
-    
   useEffect(() => {
       if (!boutiqueId) return;
-
       const channel = echo.private(`boutique.${boutiqueId}`);
-
       const listener = () => {
           fetchTicketsSafe(currentPage, filterText.trim());
+          fetchDashboardStats();
       };
-
       channel.listen(".paiement.cree", listener);
-
       return () => {
           channel.stopListening(".paiement.cree");
           echo.leave(`boutique.${boutiqueId}`);

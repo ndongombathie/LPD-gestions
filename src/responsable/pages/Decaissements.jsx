@@ -1,16 +1,16 @@
 // ==========================================================
 // 💸 Decaissements.jsx — Interface Responsable (LPD Manager)
-// ✅ Fix : soumission fiable + debug utile + modal robuste
-// - KPI + export PDF + modal création + modal détail
-// ✅ Option A : Pagination locale (limite l'affichage sans toucher au backend)
+// ✅ Architecture 100% backend : pagination, filtres, recherche, KPI
+// ✅ Recherche instantanée (pas de debounce)
+// ✅ Version simplifiée avec montant unique
+// ✅ Suppression des mentions "Annulé"
 // ==========================================================
 
-import React, { useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
+import React, { useEffect, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion"; // ← AJOUT AnimatePresence
 import {
   FileDown,
   PlusCircle,
-  RefreshCw,
   Eye,
   X,
   Search,
@@ -18,16 +18,61 @@ import {
   CheckCircle2,
   AlertCircle,
   Clock3,
-  ChevronLeft,
-  ChevronRight,
+  User,
 } from "lucide-react";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 
-import { decaissementsAPI } from '@/services/api';
+import { decaissementsAPI } from '@/responsable/services/api';
 import FormModal from "../components/FormModal";
 import DecaissementForm from "../components/DecaissementForm";
+import Pagination from "../components/Pagination";
 import { Toaster, toast } from "sonner";
+
+// ==========================================================
+// 🌀 Mini Loader LPD (Top Right) - AJOUTÉ
+// ==========================================================
+const LPDLoader = ({ visible }) => {
+  if (!visible) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.8, y: -10 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.8 }}
+      transition={{ duration: 0.3 }}
+      className="fixed top-20 right-8 z-50"
+    >
+      <div className="relative w-14 h-14">
+        {/* Cercle animé externe */}
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{
+            repeat: Infinity,
+            duration: 3,
+            ease: "linear",
+          }}
+          className="absolute inset-0 rounded-full border-2 border-t-[#F58020] border-r-transparent border-b-[#472EAD] border-l-transparent"
+        />
+
+        {/* Cercle interne */}
+        <motion.div
+          animate={{ scale: [1, 1.05, 1] }}
+          transition={{
+            repeat: Infinity,
+            duration: 1.8,
+            ease: "easeInOut",
+          }}
+          className="absolute inset-2 rounded-full bg-[#472EAD] flex items-center justify-center shadow-lg"
+        >
+          <span className="text-[11px] font-black text-[#F58020] tracking-wider">
+            LPD
+          </span>
+        </motion.div>
+      </div>
+    </motion.div>
+  );
+};
 
 // ——————————————————————————————————————————————————
 // 🔧 Helpers
@@ -38,7 +83,28 @@ const formatFCFA = (n) =>
   );
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
-const statutLabel = (s) => (s === "refusé" ? "annulé" : String(s || ""));
+const formatDateSN = (dateString) => {
+  if (!dateString) return "-";
+
+  return new Intl.DateTimeFormat("fr-SN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(dateString));
+};
+
+// ✅ Normalisation des statuts pour affichage - SANS ANNULÉ
+const statutLabel = (s) => {
+  if (s === "en_attente") return "En attente";
+  if (s === "valide") return "Validé";
+  return s;
+};
+
+// ✅ Normalisation pour l'API (backend attend "en_attente")
+const statutApi = (s) => {
+  if (s === "en attente") return "en_attente";
+  return s;
+};
 
 // ——————————————————————————————————————————————————
 // 🧾 Modal de détail décaissement
@@ -48,12 +114,17 @@ function DetailDecaissementModal({ open, onClose, decaissement }) {
 
   const {
     motifGlobal,
-    methodePrevue,
+    methodePaiement,
     datePrevue,
     statut,
-    lignes,
     montantTotal,
+    caissier,
   } = decaissement;
+
+  // ✅ Formatage du nom du caissier
+  const caissierName = caissier 
+    ? `${caissier.prenom || ''} ${caissier.nom || ''}`.trim() 
+    : "-";
 
   return (
     <div className="fixed inset-0 z-[120] bg-black/40 flex items-center justify-center px-3">
@@ -80,11 +151,13 @@ function DetailDecaissementModal({ open, onClose, decaissement }) {
             </div>
             <div>
               <div className="text-[11px] text-gray-500 mb-0.5">Méthode prévue</div>
-              <div className="font-medium text-gray-800">{methodePrevue || "-"}</div>
+              <div className="font-medium text-gray-800">{methodePaiement || "-"}</div>
             </div>
             <div>
               <div className="text-[11px] text-gray-500 mb-0.5">Date prévue</div>
-              <div className="text-gray-800">{datePrevue}</div>
+              <div className="text-gray-800">
+                {formatDateSN(datePrevue)}
+              </div>
             </div>
             <div>
               <div className="text-[11px] text-gray-500 mb-0.5">Statut</div>
@@ -92,38 +165,28 @@ function DetailDecaissementModal({ open, onClose, decaissement }) {
                 {statutLabel(statut).toUpperCase()}
               </span>
             </div>
+            {/* ✅ Ajout du caissier dans la modal */}
+            <div className="sm:col-span-2">
+              <div className="text-[11px] text-gray-500 mb-0.5 flex items-center gap-1">
+                <User className="w-3 h-3" /> Caissier responsable
+              </div>
+              <div className="font-medium text-gray-800">{caissierName}</div>
+            </div>
           </div>
 
           <div className="border rounded-xl overflow-hidden">
             <table className="w-full text-xs">
               <thead className="bg-[#F7F5FF] text-[#472EAD]">
                 <tr>
-                  <th className="px-3 py-2 text-left">Libellé</th>
                   <th className="px-3 py-2 text-right">Montant</th>
                 </tr>
               </thead>
               <tbody>
-                {lignes && lignes.length ? (
-                  lignes.map((l, idx) => (
-                    <tr
-                      key={idx}
-                      className="border-t border-gray-100 hover:bg-[#F9F9FF]"
-                    >
-                      <td className="px-3 py-2 text-xs sm:text-[13px]">
-                        {l.libelle}
-                      </td>
-                      <td className="px-3 py-2 text-right font-medium">
-                        {formatFCFA(l.montant)}
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={2} className="px-3 py-3 text-center text-gray-400">
-                      Aucune ligne détaillée.
-                    </td>
-                  </tr>
-                )}
+                <tr className="border-t border-gray-100">
+                  <td className="px-3 py-2 text-right font-medium">
+                    {formatFCFA(montantTotal)}
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -157,7 +220,7 @@ function DetailDecaissementModal({ open, onClose, decaissement }) {
 // 💰 Composant principal
 // ——————————————————————————————————————————————————
 export default function Decaissements() {
-  const [loading, setLoading] = useState(true);
+  const [isFetching, setIsFetching] = useState(true); // ← UN SEUL ÉTAT POUR TOUS LES CHARGEMENTS
   const [openModal, setOpenModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -165,105 +228,152 @@ export default function Decaissements() {
   const [selected, setSelected] = useState(null);
   const [openDetail, setOpenDetail] = useState(false);
 
-  // valeurs techniques : "en attente" | "validé" | "refusé"
+  // ✅ État pour les stats venant de l'API
+  const [statsFromApi, setStatsFromApi] = useState(null);
+
+  // ✅ États de filtre
   const [filterStatut, setFilterStatut] = useState("tous");
   const [filterStartDate, setFilterStartDate] = useState("");
   const [filterEndDate, setFilterEndDate] = useState("");
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState(""); // ✅ Recherche directe sans debounce
 
-  // ✅ Pagination locale (Option A)
-  const [pageSize, setPageSize] = useState(10);
+  // ✅ Pagination backend
   const [page, setPage] = useState(1);
-
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  
   // ——————————————————————————————————————————————————
-  // 📥 Chargement initial
+  // 📥 Chargement initial avec stats API et pagination
   // ——————————————————————————————————————————————————
   const loadData = async () => {
     try {
-      setLoading(true);
-      const { data } = await instance.get("/decaissements");
-      setDemandes(data || []);
+      setIsFetching(true); // ← ACTIVE LE LOADER
+
+      const data = await decaissementsAPI.getAllResponsable({
+        page,
+        statut: filterStatut !== "tous" ? statutApi(filterStatut) : undefined,
+        start_date: filterStartDate || undefined,
+        end_date: filterEndDate || undefined,
+        search: searchTerm || undefined, // ✅ Recherche directe
+      });
+
+      // Pagination Laravel
+      const total = data.total || 0;
+      const pages = data.last_page || 1;
+
+      setTotalItems(total);
+      setTotalPages(pages <= 1 ? 1 : pages);
+
+      // 🔥 Normalisation snake_case → camelCase
+      const normalized = (data.data || []).map(d => ({
+        ...d,
+        montantTotal: d.montant,
+        methodePaiement: d.methode_paiement ?? null,
+        datePrevue: d.date,
+        motifGlobal: d.motif,
+      }));
+
+      setDemandes(normalized);
+
+      // KPI backend
+      const statsData = await decaissementsAPI.getStats({
+        statut: filterStatut !== "tous" ? statutApi(filterStatut) : undefined,
+        start_date: filterStartDate || undefined,
+        end_date: filterEndDate || undefined,
+        search: searchTerm || undefined, // ✅ Recherche directe
+      });
+
+      setStatsFromApi(statsData);
+
     } catch (e) {
-      console.error("Erreur chargement décaissements:", e);
-      toast.error("Impossible de charger les décaissements.");
+      toast.error("Erreur lors du chargement des données");
     } finally {
-      setLoading(false);
+      setIsFetching(false); // ← DÉSACTIVE LE LOADER
     }
   };
 
+  // ✅ Chargement quand les filtres changent (recherche instantanée)
   useEffect(() => {
     loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [page, filterStatut, filterStartDate, filterEndDate, searchTerm]); // ✅ searchTerm direct
 
   // ——————————————————————————————————————————————————
-  // 💾 Ajout (POST API) — en camelCase pour matcher le backend
+  // 💾 Ajout (POST API) — VERSION SIMPLIFIÉE AVEC MONTANT UNIQUE
   // ——————————————————————————————————————————————————
   const handleAdd = async (form) => {
     if (submitting) return;
 
-    const lignesPayload = (form?.lignes || []).map((l) => ({
-      libelle: String(l?.libelle || "").trim(),
-      montant: Number(l?.montant || 0),
-    }));
+    // ———————————————————————————
+    // ✅ VALIDATION FRONT (AVANT API)
+    // ———————————————————————————
+    const motifGlobal = String(form?.motifGlobal || "").trim();
+    if (!motifGlobal || motifGlobal.length < 3) {
+      toast.error("Le motif global est obligatoire (au moins 3 caractères).");
+      return;
+    }
 
+    if (!form?.caissier_id) {
+      toast.error("Veuillez sélectionner un caissier.");
+      return;
+    }
+    
+    const datePrevue = form?.datePrevue || todayISO();
+    if (!datePrevue) {
+      toast.error("La date prévue est obligatoire.");
+      return;
+    }
+
+    // ✅ Validation du montant unique
+    const montant = Number(form?.montant || 0);
+    if (!montant || montant <= 0) {
+      toast.error("Le montant doit être supérieur à 0.");
+      return;
+    }
+
+    // ———————————————————————————
+    // ✅ PAYLOAD FINAL SIMPLIFIÉ
+    // ———————————————————————————
     const payload = {
-      motifGlobal: String(form?.motifGlobal || "").trim(),
-      methodePrevue: form?.methodePrevue || "Espèces",
-      datePrevue: form?.datePrevue || todayISO(),
-      lignes: lignesPayload,
+      motif: form.motifGlobal.trim(),
+      date: form.datePrevue || todayISO(),
+      caissier_id: form.caissier_id,
+      montant: Number(form.montant),
     };
-
-    console.log("✅ POST /decaissements payload =>", payload);
-
     const toastId = toast.loading("Envoi à la caisse...");
 
     try {
       setSubmitting(true);
 
-      const { data } = await instance.post("/decaissements", payload, {
-        headers: { "Content-Type": "application/json" },
-      });
+      await decaissementsAPI.create(payload);
 
-      console.log("✅ POST /decaissements response =>", data);
-
-      const d = data.decaissement || data;
-
-      const normalised = {
-        ...d,
-        motifGlobal: d.motifGlobal ?? payload.motifGlobal,
-        methodePrevue: d.methodePrevue ?? payload.methodePrevue,
-        datePrevue: d.datePrevue ?? payload.datePrevue,
-        montantTotal: Number(d.montantTotal ?? 0),
-        lignes: d.lignes ?? lignesPayload,
-      };
-
-      setDemandes((prev) => [normalised, ...prev]);
       setOpenModal(false);
       toast.success("Demande envoyée à la caisse ✅", { id: toastId });
 
-      // ✅ Option A : on revient à la 1ère page (visuel)
-      setPage(1);
-    } catch (e) {
-      console.error("❌ Erreur POST /decaissements:", e);
+      if (page !== 1) {
+        setPage(1);
+      } else {
+        loadData();
+      }
 
+    } catch (e) {
       const status = e?.response?.status;
       const data = e?.response?.data;
 
       if (status === 422 && data?.errors) {
         const firstField = Object.keys(data.errors)[0];
-        const firstMsg = data.errors[firstField]?.[0] || "Données invalides.";
+        const firstMsg =
+          data.errors[firstField]?.[0] || "Données invalides.";
         toast.error(firstMsg, { id: toastId });
-      } else {
-        const apiMsg =
-          data?.message ||
-          data?.error ||
-          (typeof data === "string" ? data : null);
-
+      } 
+      // ✅ Cas solde insuffisant (400)
+      else if (status === 400) {
         toast.error(
-          apiMsg
-            ? `Erreur (${status}) : ${apiMsg}`
-            : `Envoi impossible (${status || "?"}).`,
+          "Solde insuffisant. Le montant demandé dépasse le total encaissé aujourd’hui.",
+          { id: toastId }
+        );
+      } else {
+        toast.error(
+          "Une erreur est survenue lors de l’envoi de la demande.",
           { id: toastId }
         );
       }
@@ -273,92 +383,29 @@ export default function Decaissements() {
   };
 
   // ——————————————————————————————————————————————————
-  // 📊 Stats
+  // 📊 Stats depuis l'API backend (KPI globaux) - SANS ANNULÉ
   // ——————————————————————————————————————————————————
-  const stats = useMemo(() => {
-    const nbTotal = demandes.length;
-    const montantTotal = demandes.reduce(
-      (sum, d) => sum + Number(d.montantTotal || 0),
-      0
-    );
-
-    const valides = demandes.filter((d) => d.statut === "validé");
-    const annules = demandes.filter((d) => d.statut === "refusé");
-    const enAttente = demandes.filter((d) => d.statut === "en attente");
-
-    return {
-      nbTotal,
-      montantTotal,
-      nbValidees: valides.length,
-      montantValide: valides.reduce((sum, d) => sum + Number(d.montantTotal || 0), 0),
-      nbAnnulees: annules.length,
-      montantAnnule: annules.reduce((sum, d) => sum + Number(d.montantTotal || 0), 0),
-      nbEnAttente: enAttente.length,
-      montantEnAttente: enAttente.reduce((sum, d) => sum + Number(d.montantTotal || 0), 0),
-    };
-  }, [demandes]);
+  const stats = statsFromApi || {
+    total: 0,
+    montant_total: 0,
+    valides: 0,
+    montant_valides: 0,
+    attente: 0,
+    montant_attente: 0,
+  };
 
   // ——————————————————————————————————————————————————
   // 🔎 Filtres + recherche
   // ——————————————————————————————————————————————————
-  const filteredDemandes = useMemo(() => {
-    return demandes.filter((d) => {
-      if (!d) return false;
-
-      if (filterStatut !== "tous" && d.statut !== filterStatut) return false;
-
-      const dateStr = String(d.datePrevue || "");
-      if (filterStartDate && dateStr < filterStartDate) return false;
-      if (filterEndDate && dateStr > filterEndDate) return false;
-
-      const term = searchTerm.trim().toLowerCase();
-      if (term) {
-        const motif = (d.motifGlobal || "").toLowerCase();
-        const lignesText = (d.lignes || [])
-          .map((l) => l.libelle || "")
-          .join(" ")
-          .toLowerCase();
-        if (!`${motif} ${lignesText}`.includes(term)) return false;
-      }
-
-      return true;
-    });
-  }, [demandes, filterStatut, filterStartDate, filterEndDate, searchTerm]);
-
   // ✅ Reset page quand les filtres changent
   useEffect(() => {
     setPage(1);
-  }, [filterStatut, filterStartDate, filterEndDate, searchTerm]);
-
-  // ✅ Pagination calculs
-  const totalPages = useMemo(() => {
-    const n = Math.ceil((filteredDemandes?.length || 0) / Number(pageSize || 10));
-    return Math.max(1, n);
-  }, [filteredDemandes, pageSize]);
-
-  // Si page actuelle dépasse totalPages (quand on filtre), on la corrige
-  useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
-
-  const paginatedDemandes = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    const end = start + pageSize;
-    return (filteredDemandes || []).slice(start, end);
-  }, [filteredDemandes, page, pageSize]);
-
-  const pageInfo = useMemo(() => {
-    const total = filteredDemandes.length;
-    if (!total) return { from: 0, to: 0, total: 0 };
-    const from = (page - 1) * pageSize + 1;
-    const to = Math.min(page * pageSize, total);
-    return { from, to, total };
-  }, [filteredDemandes.length, page, pageSize]);
+  }, [filterStatut, filterStartDate, filterEndDate, searchTerm]); // ✅ searchTerm direct
 
   // ——————————————————————————————————————————————————
-  // 📤 Export PDF
+  // 📤 Export PDF aligné avec les filtres backend - SANS ANNULÉ
   // ——————————————————————————————————————————————————
-  const exportPDF = () => {
+  const exportPDF = async () => {
     try {
       const doc = new jsPDF("p", "mm", "a4");
       const pageWidth = doc.internal.pageSize.getWidth();
@@ -376,19 +423,23 @@ export default function Decaissements() {
         return `${formatted} FCFA`;
       };
 
-      const totalDemandes = stats.nbTotal ?? demandes.length;
-      const montantGlobal =
-        stats.montantTotal ??
-        demandes.reduce((sum, d) => sum + Number(d.montantTotal || 0), 0);
+      // ✅ Utilisation des stats API pour le PDF (données globales) - SANS ANNULÉ
+      const totalDemandes = stats.total;
+      const montantGlobal = stats.montant_total;
 
-      const nbValid = stats.nbValidees ?? 0;
-      const montantValide = stats.montantValide ?? 0;
+      const nbValid = stats.valides;
+      const montantValide = stats.montant_valides;
 
-      const nbAttente = stats.nbEnAttente ?? 0;
-      const montantAttente = stats.montantEnAttente ?? 0;
+      const nbAttente = stats.attente;
+      const montantAttente = stats.montant_attente;
 
-      const nbAnnulees = stats.nbAnnulees ?? 0;
-      const montantAnnule = stats.montantAnnule ?? 0;
+      // ✅ Récupération des données filtrées pour le tableau PDF
+      const allData = await decaissementsAPI.exportAll({
+        statut: filterStatut !== "tous" ? statutApi(filterStatut) : undefined,
+        start_date: filterStartDate || undefined,
+        end_date: filterEndDate || undefined,
+        search: searchTerm || undefined, // ✅ Recherche directe
+      });
 
       doc.setFillColor(71, 46, 173);
       doc.rect(0, 0, pageWidth, 28, "F");
@@ -463,26 +514,23 @@ export default function Decaissements() {
         { align: "right" }
       );
 
-      lineY += 5;
-      doc.text(
-        `Annulées : ${nbAnnulees} (${formatFCFAPdf(montantAnnule)})`,
-        textX,
-        lineY
-      );
-
       const startTableY = y + 24;
 
       autoTable(doc, {
         startY: startTableY,
         margin: { top: startTableY, left: 14, right: 14 },
-        head: [["Date", "Montant total", "Motif global", "Méthode", "Statut"]],
-        body: demandes.map((d) => [
-          d.datePrevue,
-          formatFCFAPdf(d.montantTotal),
-          d.motifGlobal,
-          d.methodePrevue,
+        head: [["Date", "Caissier", "Méthode", "Montant total", "Statut"]],        
+        body: allData.map((d) => [
+          formatDateSN(d.date_prevue ?? d.date),
+          `${d.caissier?.prenom || ""} ${d.caissier?.nom || ""}`.trim() || "-",
+          d.methode_prevue ?? d.methode_paiement,
+          formatFCFAPdf(
+            d.montant_total && d.montant_total > 0
+              ? d.montant_total
+              : d.montant
+          ),
           statutLabel(d.statut).toUpperCase(),
-        ]),
+        ]) || [],
         styles: { fontSize: 9, cellPadding: 2, textColor: [55, 65, 81] },
         headStyles: { fillColor: [71, 46, 173], textColor: 255, fontStyle: "bold" },
         alternateRowStyles: { fillColor: [247, 245, 255] },
@@ -492,33 +540,24 @@ export default function Decaissements() {
       doc.save(`Decaissements_LPD_${todayISO()}.pdf`);
       toast.success("Export PDF généré avec succès.");
     } catch (e) {
-      console.error("Erreur export PDF décaissements :", e);
-      toast.error("Erreur lors de l’export PDF des décaissements.");
+      toast.error("Erreur lors de l'export PDF des décaissements.");
     }
   };
 
   // ——————————————————————————————————————————————————
-  // 🏷️ Badge statut
+  // 🏷️ Badge statut - SANS ANNULÉ
   // ——————————————————————————————————————————————————
   const statutBadge = (s) =>
     ({
-      validé: "bg-emerald-100 text-emerald-700 border border-emerald-300",
-      refusé: "bg-rose-100 text-rose-700 border border-rose-300",
-      "en attente": "bg-amber-100 text-amber-700 border border-amber-300",
+      valide: "bg-emerald-100 text-emerald-700 border border-emerald-300",
+      en_attente: "bg-amber-100 text-amber-700 border border-amber-300",
     }[s] || "bg-gray-100 text-gray-600 border border-gray-300");
 
-  // Loader
-  if (loading)
-    return (
-      <div className="flex items-center justify-center min-h-[70vh] bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white">
-        <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-white/80 border border-[#E4E0FF] shadow-sm">
-          <RefreshCw className="w-5 h-5 text-[#472EAD] animate-spin" />
-          <span className="text-sm font-medium text-[#472EAD]">
-            Chargement des décaissements...
-          </span>
-        </div>
-      </div>
-    );
+  // ✅ Formatage du nom du caissier pour le tableau
+  const formatCaissierName = (caissier) => {
+    if (!caissier) return "-";
+    return `${caissier.prenom || ''} ${caissier.nom || ''}`.trim() || "-";
+  };
 
   return (
     <>
@@ -526,7 +565,14 @@ export default function Decaissements() {
       <Toaster position="top-right" richColors />
 
       <div className="min-h-screen w-full bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white px-4 sm:px-6 lg:px-10 py-6 sm:py-8 overflow-y-auto">
-        <div className="max-w-6xl mx-auto space-y-7">
+        
+        {/* 🌀 Loader LPD subtil en haut à droite - POUR TOUS LES CHARGEMENTS */}
+        <AnimatePresence>
+          <LPDLoader visible={isFetching} />
+        </AnimatePresence>
+
+        <div className="max-w-6xl mx-auto space-y-8">
+          
           {/* HEADER */}
           <motion.header
             initial={{ opacity: 0, y: -10 }}
@@ -546,13 +592,14 @@ export default function Decaissements() {
                   Décaissements &amp; suivi budgétaire
                 </h1>
                 <p className="mt-1 text-sm text-gray-500">
-                  Gérez vos sorties d’argent, suivez leur statut et exportez vos
+                  Gérez vos sorties d'argent, suivez leur statut et exportez vos
                   rapports en un clic.
                 </p>
               </div>
+              {/* ✅ Compteur total corrigé */}
               <p className="text-[11px] text-gray-400">
-                Vue consolidée au {todayISO()} • {demandes.length} demande
-                {demandes.length > 1 && "s"}
+                Vue consolidée au {todayISO()} • {totalItems} demande
+                {totalItems > 1 && "s"}
               </p>
             </div>
 
@@ -574,12 +621,12 @@ export default function Decaissements() {
             </div>
           </motion.header>
 
-          {/* CARTES STATS */}
+          {/* CARTES STATS - SANS ANNULÉ */}
           <motion.div
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35 }}
-            className="w-full max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3"
+            className="w-full max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-6 mb-8" 
           >
             <div className="rounded-xl border border-indigo-200 bg-gradient-to-br from-indigo-50 via-slate-50 to-indigo-100 px-3 py-2.5 shadow-sm">
               <div className="text-[13px] sm:text-[15px] font-semibold text-indigo-900 mb-0.5">
@@ -587,27 +634,12 @@ export default function Decaissements() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-lg font-extrabold text-indigo-800">
-                  {stats.nbTotal}
+                  {stats.total}
                 </span>
                 <BadgeDollarSign className="w-5 h-5 text-indigo-700" />
               </div>
               <div className="mt-1 text-[11px] text-gray-700">
-                {formatFCFA(stats.montantTotal)}
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-rose-200 bg-gradient-to-br from-rose-50 via-rose-50 to-rose-100 px-3 py-2.5 shadow-sm">
-              <div className="text-[13px] sm:text-[15px] font-semibold text-rose-900 mb-0.5">
-                Demandes annulées
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-lg font-extrabold text-rose-700">
-                  {stats.nbAnnulees}
-                </span>
-                <AlertCircle className="w-5 h-5 text-rose-600" />
-              </div>
-              <div className="mt-1 text-[11px] text-rose-800">
-                {formatFCFA(stats.montantAnnule)}
+                {formatFCFA(stats.montant_total)}
               </div>
             </div>
 
@@ -617,12 +649,12 @@ export default function Decaissements() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-lg font-extrabold text-emerald-700">
-                  {stats.nbValidees}
+                  {stats.valides}
                 </span>
                 <CheckCircle2 className="w-5 h-5 text-emerald-600" />
               </div>
               <div className="mt-1 text-[11px] text-emerald-800">
-                {formatFCFA(stats.montantValide)}
+                {formatFCFA(stats.montant_valides)}
               </div>
             </div>
 
@@ -632,32 +664,36 @@ export default function Decaissements() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-lg font-extrabold text-amber-700">
-                  {stats.nbEnAttente}
+                  {stats.attente}
                 </span>
                 <Clock3 className="w-5 h-5 text-amber-600" />
               </div>
               <div className="mt-1 text-[11px] text-amber-800">
-                {formatFCFA(stats.montantEnAttente)}
+                {formatFCFA(stats.montant_attente)}
               </div>
             </div>
           </motion.div>
 
           {/* TABLEAU + FILTRES */}
-          <section className="bg-white/90 border border-[#E4E0FF] rounded-2xl shadow-[0_18px_45px_rgba(15,23,42,0.06)] overflow-x-auto">
+          <section className="relative bg-white/90 border border-[#E4E0FF] rounded-2xl shadow-[0_18px_45px_rgba(15,23,42,0.06)] overflow-x-auto mt-8">
+
+            {/* ✅ SUPPRESSION DU LOADER OVERLAY - maintenant géré par le loader LPD en haut à droite */}
+
             <div className="px-4 pt-4 pb-3 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
               <div className="flex flex-wrap items-center gap-2 text-xs">
                 <span className="text-gray-500 font-medium">Filtrer par statut :</span>
                 <div className="inline-flex rounded-full bg-[#F7F5FF] border border-[#E4E0FF] p-0.5">
                   {[
                     { id: "tous", label: "Tous" },
-                    { id: "en attente", label: "En attente" },
-                    { id: "validé", label: "Validés" },
-                    { id: "refusé", label: "Annulés" },
+                    { id: "en_attente", label: "En attente" },
+                    { id: "valide", label: "Validés" },
                   ].map((opt) => (
                     <button
                       key={opt.id}
                       type="button"
-                      onClick={() => setFilterStatut(opt.id)}
+                      onClick={() => {
+                        setFilterStatut(opt.id);
+                      }}
                       className={
                         "px-3 py-1 rounded-full transition " +
                         (filterStatut === opt.id
@@ -669,24 +705,6 @@ export default function Decaissements() {
                     </button>
                   ))}
                 </div>
-
-                {/* ✅ Page size */}
-                <div className="ml-0 lg:ml-3 inline-flex items-center gap-2">
-                  <span className="text-gray-500 font-medium">Afficher :</span>
-                  <select
-                    value={pageSize}
-                    onChange={(e) => {
-                      setPageSize(Number(e.target.value));
-                      setPage(1);
-                    }}
-                    className="border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:border-[#472EAD] focus:ring-1 focus:ring-[#472EAD] bg-white"
-                  >
-                    <option value={10}>10</option>
-                    <option value={20}>20</option>
-                    <option value={50}>50</option>
-                  </select>
-                  <span className="text-gray-400">lignes</span>
-                </div>
               </div>
 
               <div className="flex flex-col sm:flex-row sm:items-center gap-3 text-xs">
@@ -695,7 +713,9 @@ export default function Decaissements() {
                   <input
                     type="date"
                     value={filterStartDate}
-                    onChange={(e) => setFilterStartDate(e.target.value)}
+                    onChange={(e) => {
+                      setFilterStartDate(e.target.value);
+                    }}
                     className="border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:border-[#472EAD] focus:ring-1 focus:ring-[#472EAD] bg-white"
                   />
                   <span className="text-gray-400">→</span>
@@ -709,13 +729,15 @@ export default function Decaissements() {
 
                 <div className="flex items-center gap-2 min-w-[230px]">
                   <div className="relative flex-1">
+                    {/* ✅ Plus de spinner, juste l'icône Search */}
                     <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2 top-1/2 -translate-y-1/2" />
+
                     <input
                       type="text"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      placeholder="Motif global ou libellé..."
-                      className="pl-7 pr-6 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:border-[#472EAD] focus:ring-1 focus:ring-[#472EAD] bg-white"
+                      placeholder="Rechercher par nom caissier ..."
+                      className="pl-7 pr-6 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-[#472EAD] focus:ring-1 focus:ring-[#472EAD] bg-white text-sm" 
                     />
                     {searchTerm && (
                       <button
@@ -731,11 +753,19 @@ export default function Decaissements() {
               </div>
             </div>
 
+            {/* Résumé affichage */}
+            <div className="px-4 mb-3 text-[11px] text-gray-500">
+              <span>
+                Affichage : <span className="font-semibold">{demandes.length}</span> sur{" "}
+                <span className="font-semibold">{totalItems}</span>
+              </span>
+            </div>
+
             <table className="min-w-full text-sm">
               <thead className="bg-[#F7F5FF] text-[#472EAD] uppercase text-xs font-semibold">
                 <tr>
                   <th className="px-4 py-3 text-left">Date</th>
-                  <th className="px-4 py-3 text-left">Motif global</th>
+                  <th className="px-4 py-3 text-left">Caissier</th>
                   <th className="px-4 py-3 text-left">Méthode</th>
                   <th className="px-4 py-3 text-left">Montant total</th>
                   <th className="px-4 py-3 text-left">Statut</th>
@@ -743,15 +773,22 @@ export default function Decaissements() {
                 </tr>
               </thead>
               <tbody>
-                {paginatedDemandes.length ? (
-                  paginatedDemandes.map((d) => (
+                {demandes.length ? (
+                  demandes.map((d) => (
                     <tr
                       key={d.id}
                       className="border-t border-gray-100 hover:bg-[#F9F9FF] transition"
                     >
-                      <td className="px-4 py-2">{d.datePrevue}</td>
-                      <td className="px-4 py-2">{d.motifGlobal}</td>
-                      <td className="px-4 py-2">{d.methodePrevue}</td>
+                      <td className="px-4 py-2">
+                        {formatDateSN(d.datePrevue)}
+                      </td>
+                      <td className="px-4 py-2">
+                        <div className="flex items-center gap-1">
+                          <User className="w-3.5 h-3.5 text-gray-400" />
+                          <span>{formatCaissierName(d.caissier)}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-2">{d.methodePaiement}</td>
                       <td className="px-4 py-2 font-medium">
                         {formatFCFA(d.montantTotal)}
                       </td>
@@ -781,7 +818,7 @@ export default function Decaissements() {
                 ) : (
                   <tr>
                     <td colSpan="6" className="text-center text-gray-400 py-6 text-sm">
-                      {demandes.length
+                      {searchTerm || filterStatut !== "tous" || filterStartDate || filterEndDate
                         ? "Aucun décaissement ne correspond aux filtres."
                         : "Aucun décaissement trouvé."}
                     </td>
@@ -790,47 +827,19 @@ export default function Decaissements() {
               </tbody>
             </table>
 
-            {/* ✅ Pagination footer */}
-            <div className="px-4 py-3 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs">
-              <div className="text-gray-500">
-                Affichage{" "}
-                <span className="font-semibold text-gray-700">
-                  {pageInfo.from}-{pageInfo.to}
-                </span>{" "}
-                sur{" "}
-                <span className="font-semibold text-gray-700">
-                  {pageInfo.total}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2 justify-end">
-                <button
-                  type="button"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page <= 1}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                  Précédent
-                </button>
-
-                <span className="text-gray-600">
-                  Page{" "}
-                  <span className="font-semibold text-gray-800">{page}</span> /{" "}
-                  <span className="font-semibold text-gray-800">{totalPages}</span>
-                </span>
-
-                <button
-                  type="button"
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page >= totalPages}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Suivant
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
+            {/* ✅ Pagination footer corrigée */}
+            <div className="mt-6 mb-4">
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                onPageChange={(p) => {
+                  if (p < 1 || p > totalPages) return;
+                  if (p === page) return;
+                  setPage(p);
+                }}
+              />
             </div>
+
           </section>
 
           {/* MODALE CRÉATION */}
