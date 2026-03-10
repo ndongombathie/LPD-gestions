@@ -12,6 +12,7 @@ import QRScanner from '../components/QRScanner';
 import caissierApi from '../services/caissierApi';
 import { toast } from 'sonner';
 import { echo } from '../../utils/echo';
+import { m } from 'framer-motion';
 
 const CaissePage = () => {
   const location = useLocation();
@@ -269,8 +270,11 @@ const CaissePage = () => {
       };
 
       // Appel API pour créer le paiement
+      console.log(montant);
+      
       await caissierApi.creerPaiement(selectedTicket.commande_id, {
-        type_paiement: moyenPaiementFinal || 'especes'
+        type_paiement: moyenPaiementFinal || 'especes',
+        montant: montant,
       });
 
       toast.success('Encaissement réussi', {
