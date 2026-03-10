@@ -13,10 +13,11 @@ import {
   Clock,
   Banknote,
   Wallet,
+  X, // ← AJOUTÉ
 } from "lucide-react";
 import { motion } from "framer-motion";
 
-export default function Sidebar() {
+export default function Sidebar({ onClose, isMobile }) { // ← PROPS AJOUTÉES
   const location = useLocation();
 
   const menuItems = [
@@ -32,8 +33,18 @@ export default function Sidebar() {
   ];
 
   return (
-    // ⬇⬇⬇ ICI : hidden sur mobile, flex à partir de md
-    <aside className="hidden md:flex fixed left-0 top-0 h-screen w-64 bg-white border-r border-gray-200 shadow-md flex-col z-40">
+    <aside className="h-full w-64 bg-white border-r border-gray-200 shadow-md flex-col z-40 flex">
+      {/* Bouton fermer pour mobile */}
+      {isMobile && (
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 z-50 p-2 hover:bg-gray-100 rounded-lg md:hidden"
+          aria-label="Fermer le menu"
+        >
+          <X size={20} className="text-[#472EAD]" />
+        </button>
+      )}
+
       {/* === Logo LPD === */}
       <div className="h-20 flex flex-col items-center justify-center border-b border-gray-200 bg-gradient-to-r from-[#472EAD] to-[#4e33c9] text-white shadow-md">
         <div className="flex flex-col items-center justify-center -mt-1">
@@ -91,6 +102,9 @@ export default function Sidebar() {
                         : "text-gray-700 hover:bg-[#F7F5FF] hover:text-[#472EAD]"
                     }`
                   }
+                  onClick={() => {
+                    if (isMobile && onClose) onClose(); // ← FERME LA SIDEBAR APRES CLIC SUR MOBILE
+                  }}
                 >
                   <motion.div
                     whileHover={{ scale: 1.1 }}

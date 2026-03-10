@@ -5,7 +5,7 @@
 // ==========================================================
 
 import React, { useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion"; // ← AJOUT AnimatePresence
 import {
   Search,
   RefreshCw,
@@ -27,6 +27,51 @@ import autoTable from "jspdf-autotable";
 
 // Import des services API
 import rapportsAPI from '@/responsable/services/api/rapports';
+
+// ==========================================================
+// 🌀 Mini Loader LPD (Top Right) - AJOUTÉ
+// ==========================================================
+const LPDLoader = ({ visible }) => {
+  if (!visible) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.8, y: -10 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.8 }}
+      transition={{ duration: 0.3 }}
+      className="fixed top-20 right-8 z-50"
+    >
+      <div className="relative w-14 h-14">
+        {/* Cercle animé externe */}
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{
+            repeat: Infinity,
+            duration: 3,
+            ease: "linear",
+          }}
+          className="absolute inset-0 rounded-full border-2 border-t-[#F58020] border-r-transparent border-b-[#472EAD] border-l-transparent"
+        />
+
+        {/* Cercle interne */}
+        <motion.div
+          animate={{ scale: [1, 1.05, 1] }}
+          transition={{
+            repeat: Infinity,
+            duration: 1.8,
+            ease: "easeInOut",
+          }}
+          className="absolute inset-2 rounded-full bg-[#472EAD] flex items-center justify-center shadow-lg"
+        >
+          <span className="text-[11px] font-black text-[#F58020] tracking-wider">
+            LPD
+          </span>
+        </motion.div>
+      </div>
+    </motion.div>
+  );
+};
 
 // ==========================================================
 // 🧮 Helpers
@@ -168,7 +213,7 @@ export default function RapportsClients({
   onRechercheChange 
 }) {
   // États
-  const [loading, setLoading] = useState(true);
+  const [isFetching, setIsFetching] = useState(true); // ← UN SEUL ÉTAT POUR LE CHARGEMENT
   const [logs, setLogs] = useState([]);
   const [stats, setStats] = useState({
     total: 0,
@@ -197,7 +242,7 @@ export default function RapportsClients({
   useEffect(() => {
     const loadData = async () => {
       try {
-        setLoading(true);
+        setIsFetching(true); // ← ACTIVE LE LOADER
         
         // Charger les logs d'audit des clients spéciaux sans pagination ni recherche
         const response = await rapportsAPI.getLogsClients({
@@ -256,7 +301,7 @@ export default function RapportsClients({
       } catch (error) {
         toast.error("Erreur lors du chargement du rapport clients spéciaux");
       } finally {
-        setLoading(false);
+        setIsFetching(false); // ← DÉSACTIVE LE LOADER
       }
     };
 
@@ -479,550 +524,544 @@ export default function RapportsClients({
     if (currentPage < totalPages) setCurrentPage(currentPage + 1);
   };
 
-  // Loader plein écran
-  if (loading)
-    return (
-      <div className="flex items-center justify-center min-h-[70vh] bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white">
-        <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-white/80 border border-[#E4E0FF] shadow-sm">
-          <RefreshCw className="w-5 h-5 text-[#472EAD] animate-spin" />
-          <span className="text-sm font-medium text-[#472EAD]">
-            Chargement du rapport clients spéciaux ...
-          </span>
-        </div>
-      </div>
-    );
-
   return (
-    <div className="space-y-6">
-      {/* STATISTIQUES DU MODULE */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm"
-      >
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600">
-              <FileEdit className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="font-semibold text-gray-800">Module : Clients spéciaux</h2>
-              <p className="text-sm text-gray-500">Journal d'audit des actions du responsable</p>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-3">
-            <button
-              onClick={exportPDF}
-              className="inline-flex items-center gap-2 bg-[#472EAD] text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-[#5A3CF5] shadow-md transition"
-            >
-              <FileText className="w-4 h-4" />
-              Exporter journal Clients spéciaux
-            </button>
-          </div>
-        </div>
+    <>
+      {/* 🌀 Loader LPD subtil en haut à droite - POUR TOUS LES CHARGEMENTS */}
+      <AnimatePresence>
+        <LPDLoader visible={isFetching} />
+      </AnimatePresence>
 
-        {/* CARTES DE STATISTIQUES AMÉLIORÉES */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {/* Total actions */}
-          <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition-shadow duration-200">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Total actions</p>
-                <p className="text-2xl font-bold text-gray-800">{stats.total}</p>
-              </div>
-              <div className="p-3 bg-gray-100 rounded-xl">
-                <FileEdit className="w-5 h-5 text-gray-600" />
-              </div>
-            </div>
-            <div className="flex items-center text-xs text-gray-500">
-              <div className="flex-1 border-t border-gray-200 pt-3">
-                <span>Actions enregistrées</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Créations */}
-          <div className="bg-gradient-to-br from-emerald-50/50 to-white rounded-xl border border-emerald-100 p-5 shadow-sm hover:shadow-md transition-shadow duration-200">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
-                  Créations
-                </p>
-                <p className="text-2xl font-bold text-emerald-700">{stats.creations}</p>
-              </div>
-              <div className="p-3 bg-emerald-100 rounded-xl">
-                <Plus className="w-5 h-5 text-emerald-600" />
-              </div>
-            </div>
-            <div className="flex items-center text-xs text-gray-500">
-              <div className="flex-1 border-t border-emerald-100 pt-3">
-                <span className="text-emerald-600 font-medium">
-                  {stats.total > 0 ? Math.round((stats.creations / stats.total) * 100) : 0}% du total
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Modifications */}
-          <div className="bg-gradient-to-br from-blue-50/50 to-white rounded-xl border border-blue-100 p-5 shadow-sm hover:shadow-md transition-shadow duration-200">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
-                  Modifications
-                </p>
-                <p className="text-2xl font-bold text-blue-700">{stats.modifications}</p>
-              </div>
-              <div className="p-3 bg-blue-100 rounded-xl">
-                <FileEdit className="w-5 h-5 text-blue-600" />
-              </div>
-            </div>
-            <div className="flex items-center text-xs text-gray-500">
-              <div className="flex-1 border-t border-blue-100 pt-3">
-                <span className="text-blue-600 font-medium">
-                  {stats.total > 0 ? Math.round((stats.modifications / stats.total) * 100) : 0}% du total
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Suppressions */}
-          <div className="bg-gradient-to-br from-rose-50/50 to-white rounded-xl border border-rose-100 p-5 shadow-sm hover:shadow-md transition-shadow duration-200">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
-                  Suppressions
-                </p>
-                <p className="text-2xl font-bold text-rose-700">{stats.suppressions}</p>
-              </div>
-              <div className="p-3 bg-rose-100 rounded-xl">
-                <Trash2 className="w-5 h-5 text-rose-600" />
-              </div>
-            </div>
-            <div className="flex items-center text-xs text-gray-500">
-              <div className="flex-1 border-t border-rose-100 pt-3">
-                <span className="text-rose-600 font-medium">
-                  {stats.total > 0 ? Math.round((stats.suppressions / stats.total) * 100) : 0}% du total
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* FILTRES SPÉCIFIQUES AU MODULE */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-4">
-            {/* Filtre par type d'action */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-2">
-                Type d'action
-              </label>
-              <div className="inline-flex rounded-xl bg-[#F7F5FF] border border-[#E4E0FF] p-1">
-                {actionsTypes.map((opt) => {
-                  const isActive = filterAction === opt.id;
-                  const color = getActionColor(opt.id);
-                  return (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => {
-                        setFilterAction(opt.id);
-                        setCurrentPage(1);
-                      }}
-                      className={`px-4 py-2 rounded-lg text-sm transition-all duration-200 ${
-                        isActive
-                          ? `${color.bg} ${color.text} font-semibold shadow-sm`
-                          : "text-gray-600 hover:text-gray-800 hover:bg-white/50"
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Période personnalisée */}
-            <div className="flex items-end gap-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-2">
-                  Date début
-                </label>
-                <input
-                  type="date"
-                  value={dateDebut}
-                  onChange={(e) => onDateDebutChange(e.target.value)}
-                  className="border border-gray-300 rounded-lg px-4 py-2.5 text-sm bg-white hover:border-gray-400 focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 transition"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-2">
-                  Date fin
-                </label>
-                <input
-                  type="date"
-                  value={dateFin}
-                  onChange={(e) => onDateFinChange(e.target.value)}
-                  className="border border-gray-300 rounded-lg px-4 py-2.5 text-sm bg-white hover:border-gray-400 focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 transition"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Barre de recherche */}
-        <div className="mt-5">
-          <div className="relative max-w-md">
-            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <input
-              type="text"
-              value={recherche}
-              onChange={(e) => {
-                onRechercheChange(e.target.value);
-                // currentPage reset géré par le useEffect
-              }}
-              placeholder="Rechercher par nom du client..."
-              className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl text-sm bg-white/80 shadow-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 transition"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* TABLEAU DU JOURNAL D'AUDIT */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-        {/* EN-TÊTE TABLEAU */}
-        <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
-          <div className="flex items-center justify-between">
+      <div className="space-y-6">
+        {/* STATISTIQUES DU MODULE */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm"
+        >
+          <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
-              <h3 className="font-semibold text-gray-800">Journal d'activité des clients spéciaux</h3>
-              <span className="bg-[#472EAD] text-white text-xs font-medium px-3 py-1.5 rounded-full">
-                {logsFiltres.length} action{logsFiltres.length > 1 ? 's' : ''} trouvée{logsFiltres.length > 1 ? 's' : ''}
-              </span>
+              <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600">
+                <FileEdit className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="font-semibold text-gray-800">Module : Clients spéciaux</h2>
+                <p className="text-sm text-gray-500">Journal d'audit des actions du responsable</p>
+              </div>
             </div>
-            <div className="text-sm text-gray-500">
-              Trié par : <span className="font-medium text-gray-700">Date (plus récent)</span>
-            </div>
-          </div>
-        </div>
-
-        {/* TABLEAU */}
-        <div className="overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Date
-                </th>
-                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Type d'action
-                </th>
-                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Client
-                </th>
-                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Utilisateur
-                </th>
-                <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Détails
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {paginatedLogs.length ? (
-                paginatedLogs.map((log) => {
-                  const color = getActionColor(log.action);
-                  return (
-                    <tr key={log.id} className="hover:bg-gray-50/50 transition-colors duration-150">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <div className="p-2 bg-gray-100 rounded-lg">
-                            <Calendar className="w-4 h-4 text-gray-500" />
-                          </div>
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">
-                              {formatDateOnly(log.date)}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              {formatDateHeure(log.date).split(' ')[1]}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg ${color.bg}`}>
-                          <div className={`w-2 h-2 rounded-full ${color.badge}`}></div>
-                          <span className={`text-sm font-medium ${color.text}`}>
-                            {formatActionLabel(log.action)}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-semibold text-gray-900">
-                          {log.client || "-"}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <div className="p-2 bg-indigo-100 rounded-lg">
-                            <User className="w-4 h-4 text-indigo-600" />
-                          </div>
-                          <span className="text-sm font-medium text-gray-700">{log.utilisateur}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <button
-                          onClick={() => openDetailsModal(log)}
-                          className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-all duration-200 hover:shadow-sm"
-                        >
-                          <Eye className="w-4 h-4" />
-                          Voir détails
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td colSpan={5} className="px-6 py-16 text-center">
-                    <div className="flex flex-col items-center justify-center text-gray-400">
-                      <FileEdit className="w-16 h-16 mb-4 opacity-30" />
-                      <p className="text-base font-medium text-gray-500 mb-2">
-                        Aucune action enregistrée avec les filtres actuels
-                      </p>
-                      <p className="text-sm text-gray-400">
-                        Essayez de modifier les filtres ou la période
-                      </p>
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* PAGINATION */}
-        {logsFiltres.length > 0 && totalPages > 1 && (
-          <div className="flex items-center justify-between px-6 py-4 bg-white border-t border-gray-200">
-            <div className="flex items-center gap-4">
-              <p className="text-sm text-gray-700">
-                Page <span className="font-semibold text-gray-900">{currentPage}</span> sur{" "}
-                <span className="font-semibold text-gray-900">{totalPages}</span>
-              </p>
-              <p className="text-sm text-gray-500">
-                {paginatedLogs.length} action{paginatedLogs.length > 1 ? 's' : ''} affichée{paginatedLogs.length > 1 ? 's' : ''} sur {logsFiltres.length}
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <button 
-                onClick={handlePrevPage}
-                disabled={currentPage === 1}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+            
+            <div className="flex items-center gap-3">
+              <button
+                onClick={exportPDF}
+                className="inline-flex items-center gap-2 bg-[#472EAD] text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-[#5A3CF5] shadow-md transition"
               >
-                <ChevronLeft className="w-4 h-4" />
-                Précédent
-              </button>
-              <button 
-                onClick={handleNextPage}
-                disabled={currentPage === totalPages}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-              >
-                Suivant
-                <ChevronRight className="w-4 h-4" />
+                <FileText className="w-4 h-4" />
+                Exporter journal Clients spéciaux
               </button>
             </div>
           </div>
-        )}
-      </div>
 
-      {/* MODAL DE DÉTAILS */}
-      {showDetailsModal && selectedLog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            className="bg-white rounded-xl border border-gray-200 w-full max-w-3xl max-h-[90vh] overflow-hidden shadow-2xl"
-          >
-            {/* Header modal */}
-            <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className={`p-3 rounded-xl ${getActionColor(selectedLog.action).bg}`}>
-                    <div className={`${getActionColor(selectedLog.action).text}`}>
-                      {getActionColor(selectedLog.action).icon}
-                    </div>
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-800">Détails de l'action</h3>
-                    <p className="text-sm text-gray-500">
-                      {selectedLog.client} • {formatDateHeure(selectedLog.date)}
-                    </p>
-                  </div>
+          {/* CARTES DE STATISTIQUES AMÉLIORÉES */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {/* Total actions */}
+            <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition-shadow duration-200">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Total actions</p>
+                  <p className="text-2xl font-bold text-gray-800">{stats.total}</p>
                 </div>
-                <button
-                  onClick={() => setShowDetailsModal(false)}
-                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition"
+                <div className="p-3 bg-gray-100 rounded-xl">
+                  <FileEdit className="w-5 h-5 text-gray-600" />
+                </div>
+              </div>
+              <div className="flex items-center text-xs text-gray-500">
+                <div className="flex-1 border-t border-gray-200 pt-3">
+                  <span>Actions enregistrées</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Créations */}
+            <div className="bg-gradient-to-br from-emerald-50/50 to-white rounded-xl border border-emerald-100 p-5 shadow-sm hover:shadow-md transition-shadow duration-200">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
+                    Créations
+                  </p>
+                  <p className="text-2xl font-bold text-emerald-700">{stats.creations}</p>
+                </div>
+                <div className="p-3 bg-emerald-100 rounded-xl">
+                  <Plus className="w-5 h-5 text-emerald-600" />
+                </div>
+              </div>
+              <div className="flex items-center text-xs text-gray-500">
+                <div className="flex-1 border-t border-emerald-100 pt-3">
+                  <span className="text-emerald-600 font-medium">
+                    {stats.total > 0 ? Math.round((stats.creations / stats.total) * 100) : 0}% du total
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Modifications */}
+            <div className="bg-gradient-to-br from-blue-50/50 to-white rounded-xl border border-blue-100 p-5 shadow-sm hover:shadow-md transition-shadow duration-200">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
+                    Modifications
+                  </p>
+                  <p className="text-2xl font-bold text-blue-700">{stats.modifications}</p>
+                </div>
+                <div className="p-3 bg-blue-100 rounded-xl">
+                  <FileEdit className="w-5 h-5 text-blue-600" />
+                </div>
+              </div>
+              <div className="flex items-center text-xs text-gray-500">
+                <div className="flex-1 border-t border-blue-100 pt-3">
+                  <span className="text-blue-600 font-medium">
+                    {stats.total > 0 ? Math.round((stats.modifications / stats.total) * 100) : 0}% du total
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Suppressions */}
+            <div className="bg-gradient-to-br from-rose-50/50 to-white rounded-xl border border-rose-100 p-5 shadow-sm hover:shadow-md transition-shadow duration-200">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
+                    Suppressions
+                  </p>
+                  <p className="text-2xl font-bold text-rose-700">{stats.suppressions}</p>
+                </div>
+                <div className="p-3 bg-rose-100 rounded-xl">
+                  <Trash2 className="w-5 h-5 text-rose-600" />
+                </div>
+              </div>
+              <div className="flex items-center text-xs text-gray-500">
+                <div className="flex-1 border-t border-rose-100 pt-3">
+                  <span className="text-rose-600 font-medium">
+                    {stats.total > 0 ? Math.round((stats.suppressions / stats.total) * 100) : 0}% du total
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* FILTRES SPÉCIFIQUES AU MODULE */}
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-4">
+              {/* Filtre par type d'action */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-2">
+                  Type d'action
+                </label>
+                <div className="inline-flex rounded-xl bg-[#F7F5FF] border border-[#E4E0FF] p-1">
+                  {actionsTypes.map((opt) => {
+                    const isActive = filterAction === opt.id;
+                    const color = getActionColor(opt.id);
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => {
+                          setFilterAction(opt.id);
+                          setCurrentPage(1);
+                        }}
+                        className={`px-4 py-2 rounded-lg text-sm transition-all duration-200 ${
+                          isActive
+                            ? `${color.bg} ${color.text} font-semibold shadow-sm`
+                            : "text-gray-600 hover:text-gray-800 hover:bg-white/50"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Période personnalisée */}
+              <div className="flex items-end gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-2">
+                    Date début
+                  </label>
+                  <input
+                    type="date"
+                    value={dateDebut}
+                    onChange={(e) => onDateDebutChange(e.target.value)}
+                    className="border border-gray-300 rounded-lg px-4 py-2.5 text-sm bg-white hover:border-gray-400 focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 transition"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-2">
+                    Date fin
+                  </label>
+                  <input
+                    type="date"
+                    value={dateFin}
+                    onChange={(e) => onDateFinChange(e.target.value)}
+                    className="border border-gray-300 rounded-lg px-4 py-2.5 text-sm bg-white hover:border-gray-400 focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 transition"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Barre de recherche */}
+          <div className="mt-5">
+            <div className="relative max-w-md">
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
+                value={recherche}
+                onChange={(e) => {
+                  onRechercheChange(e.target.value);
+                  // currentPage reset géré par le useEffect
+                }}
+                placeholder="Rechercher par nom du client..."
+                className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl text-sm bg-white/80 shadow-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 transition"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* TABLEAU DU JOURNAL D'AUDIT */}
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+          {/* EN-TÊTE TABLEAU */}
+          <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <h3 className="font-semibold text-gray-800">Journal d'activité des clients spéciaux</h3>
+                <span className="bg-[#472EAD] text-white text-xs font-medium px-3 py-1.5 rounded-full">
+                  {logsFiltres.length} action{logsFiltres.length > 1 ? 's' : ''} trouvée{logsFiltres.length > 1 ? 's' : ''}
+                </span>
+              </div>
+              <div className="text-sm text-gray-500">
+                Trié par : <span className="font-medium text-gray-700">Date (plus récent)</span>
+              </div>
+            </div>
+          </div>
+
+          {/* TABLEAU */}
+          <div className="overflow-hidden">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    Date
+                  </th>
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    Type d'action
+                  </th>
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    Client
+                  </th>
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    Utilisateur
+                  </th>
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    Détails
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {paginatedLogs.length ? (
+                  paginatedLogs.map((log) => {
+                    const color = getActionColor(log.action);
+                    return (
+                      <tr key={log.id} className="hover:bg-gray-50/50 transition-colors duration-150">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <div className="p-2 bg-gray-100 rounded-lg">
+                              <Calendar className="w-4 h-4 text-gray-500" />
+                            </div>
+                            <div>
+                              <div className="text-sm font-medium text-gray-900">
+                                {formatDateOnly(log.date)}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {formatDateHeure(log.date).split(' ')[1]}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg ${color.bg}`}>
+                            <div className={`w-2 h-2 rounded-full ${color.badge}`}></div>
+                            <span className={`text-sm font-medium ${color.text}`}>
+                              {formatActionLabel(log.action)}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-semibold text-gray-900">
+                            {log.client || "-"}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <div className="p-2 bg-indigo-100 rounded-lg">
+                              <User className="w-4 h-4 text-indigo-600" />
+                            </div>
+                            <span className="text-sm font-medium text-gray-700">{log.utilisateur}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <button
+                            onClick={() => openDetailsModal(log)}
+                            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-all duration-200 hover:shadow-sm"
+                          >
+                            <Eye className="w-4 h-4" />
+                            Voir détails
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-16 text-center">
+                      <div className="flex flex-col items-center justify-center text-gray-400">
+                        <FileEdit className="w-16 h-16 mb-4 opacity-30" />
+                        <p className="text-base font-medium text-gray-500 mb-2">
+                          Aucune action enregistrée avec les filtres actuels
+                        </p>
+                        <p className="text-sm text-gray-400">
+                          Essayez de modifier les filtres ou la période
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* PAGINATION */}
+          {logsFiltres.length > 0 && totalPages > 1 && (
+            <div className="flex items-center justify-between px-6 py-4 bg-white border-t border-gray-200">
+              <div className="flex items-center gap-4">
+                <p className="text-sm text-gray-700">
+                  Page <span className="font-semibold text-gray-900">{currentPage}</span> sur{" "}
+                  <span className="font-semibold text-gray-900">{totalPages}</span>
+                </p>
+                <p className="text-sm text-gray-500">
+                  {paginatedLogs.length} action{paginatedLogs.length > 1 ? 's' : ''} affichée{paginatedLogs.length > 1 ? 's' : ''} sur {logsFiltres.length}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button 
+                  onClick={handlePrevPage}
+                  disabled={currentPage === 1}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  <ChevronLeft className="w-4 h-4" />
+                  Précédent
+                </button>
+                <button 
+                  onClick={handleNextPage}
+                  disabled={currentPage === totalPages}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                >
+                  Suivant
+                  <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
             </div>
+          )}
+        </div>
 
-            {/* Contenu modal */}
-            <div className="p-6 overflow-y-auto max-h-[60vh]">
-              <div className="space-y-6">
-                {/* Informations générales */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <p className="text-xs font-medium text-gray-500">Type d'action</p>
-                    <div className="inline-block">
-                      <span className={`px-3 py-1.5 rounded-full text-sm font-medium ${getActionColor(selectedLog.action).bg} ${getActionColor(selectedLog.action).text}`}>
-                        {formatActionLabel(selectedLog.action)}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-xs font-medium text-gray-500">Client</p>
-                    <p className="text-sm font-medium text-gray-800">{selectedLog.client}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-xs font-medium text-gray-500">Utilisateur</p>
-                    <p className="text-sm font-medium text-gray-800">{selectedLog.utilisateur}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-xs font-medium text-gray-500">Date et heure</p>
-                    <p className="text-sm font-medium text-gray-800">{formatDateHeure(selectedLog.date)}</p>
-                  </div>
-                </div>
-
-                {/* Détails spécifiques selon le type d'action */}
-                <div className="space-y-4">
-                  <h4 className="text-sm font-semibold text-gray-700 border-b pb-2">Détails de l'action</h4>
-                  
-                  {selectedLog.action?.toLowerCase().includes('modification') && (
-                    <div className="space-y-4">
-                      <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-4">
-                        <p className="text-xs font-medium text-blue-600 mb-3 flex items-center gap-2">
-                          <FileEdit className="w-3 h-3" />
-                          Modifications effectuées
-                        </p>
-                        <div className="space-y-4">
-                          {Object.keys(selectedLog.avant || {}).map((key) => (
-                            <div key={key} className="text-sm">
-                              <div className="font-medium text-gray-700 mb-2">
-                                {formatFieldName(key)} :
-                              </div>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-white p-3 rounded border">
-                                <div className="space-y-1">
-                                  <div className="text-xs text-gray-500 flex items-center gap-1">
-                                    <span>Avant</span>
-                                  </div>
-                                  <div className="font-medium text-gray-600">
-                                    {formatFieldValue(key, selectedLog.avant?.[key])}
-                                  </div>
-                                </div>
-                                <div className="space-y-1">
-                                  <div className="text-xs text-blue-500 flex items-center gap-1">
-                                    <span>Après</span>
-                                    <ArrowRight className="w-3 h-3" />
-                                  </div>
-                                  <div className="font-medium text-blue-700">
-                                    {formatFieldValue(key, selectedLog.apres?.[key])}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                          {Object.keys(selectedLog.avant || {}).length === 0 && (
-                            <div className="text-center py-4 text-gray-400 text-sm">
-                              Aucun détail de modification disponible
-                            </div>
-                          )}
-                        </div>
+        {/* MODAL DE DÉTAILS */}
+        {showDetailsModal && selectedLog && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-xl border border-gray-200 w-full max-w-3xl max-h-[90vh] overflow-hidden shadow-2xl"
+            >
+              {/* Header modal */}
+              <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-3 rounded-xl ${getActionColor(selectedLog.action).bg}`}>
+                      <div className={`${getActionColor(selectedLog.action).text}`}>
+                        {getActionColor(selectedLog.action).icon}
                       </div>
                     </div>
-                  )}
-
-                  {selectedLog.action?.toLowerCase().includes('creation') && (
-                    <div className="space-y-4">
-                      <div className="bg-emerald-50/50 border border-emerald-100 rounded-lg p-4">
-                        <p className="text-xs font-medium text-emerald-600 mb-3 flex items-center gap-2">
-                          <Plus className="w-3 h-3" />
-                          Informations créées
-                        </p>
-                        <div className="space-y-3">
-                          {Object.keys(selectedLog.apres || {}).map((key) => (
-                            <div key={key} className="flex justify-between items-center text-sm py-2 border-b border-emerald-100 last:border-0">
-                              <span className="font-medium text-gray-700">{formatFieldName(key)}</span>
-                              <span className="text-gray-800 font-medium ml-2 text-right">
-                                {formatFieldValue(key, selectedLog.apres?.[key])}
-                              </span>
-                            </div>
-                          ))}
-                          {Object.keys(selectedLog.apres || {}).length === 0 && (
-                            <div className="text-center py-2 text-gray-400 text-sm">
-                              Aucune information de création disponible
-                            </div>
-                          )}
-                        </div>
-                      </div>
+                    <div>
+                      <h3 className="font-semibold text-gray-800">Détails de l'action</h3>
+                      <p className="text-sm text-gray-500">
+                        {selectedLog.client} • {formatDateHeure(selectedLog.date)}
+                      </p>
                     </div>
-                  )}
-
-                  {selectedLog.action?.toLowerCase().includes('suppression') && (
-                    <div className="space-y-4">
-                      <div className="bg-rose-50/50 border border-rose-100 rounded-lg p-4">
-                        <p className="text-xs font-medium text-rose-600 mb-3 flex items-center gap-2">
-                          <Trash2 className="w-3 h-3" />
-                          Informations supprimées
-                        </p>
-                        <div className="space-y-3">
-                          {Object.keys(selectedLog.avant || {}).map((key) => (
-                            <div key={key} className="flex justify-between items-center text-sm py-2 border-b border-rose-100 last:border-0">
-                              <span className="font-medium text-gray-700">{formatFieldName(key)}</span>
-                              <span className="text-gray-800 font-medium ml-2 text-right">
-                                {formatFieldValue(key, selectedLog.avant?.[key])}
-                              </span>
-                            </div>
-                          ))}
-                          {Object.keys(selectedLog.avant || {}).length === 0 && (
-                            <div className="text-center py-2 text-gray-400 text-sm">
-                              Aucune information de suppression disponible
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Commentaire général */}
-                  {selectedLog.details && (
-                    <div className="bg-gray-50 border border-gray-100 rounded-lg p-4">
-                      <p className="text-xs font-medium text-gray-600 mb-2">Description de l'action</p>
-                      <p className="text-sm text-gray-700">{selectedLog.details}</p>
-                    </div>
-                  )}
+                  </div>
+                  <button
+                    onClick={() => setShowDetailsModal(false)}
+                    className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
                 </div>
               </div>
-            </div>
 
-            {/* Footer modal */}
-            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-end">
-              <button
-                onClick={() => setShowDetailsModal(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition"
-              >
-                Fermer
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
-    </div>
+              {/* Contenu modal */}
+              <div className="p-6 overflow-y-auto max-h-[60vh]">
+                <div className="space-y-6">
+                  {/* Informations générales */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-gray-500">Type d'action</p>
+                      <div className="inline-block">
+                        <span className={`px-3 py-1.5 rounded-full text-sm font-medium ${getActionColor(selectedLog.action).bg} ${getActionColor(selectedLog.action).text}`}>
+                          {formatActionLabel(selectedLog.action)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-gray-500">Client</p>
+                      <p className="text-sm font-medium text-gray-800">{selectedLog.client}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-gray-500">Utilisateur</p>
+                      <p className="text-sm font-medium text-gray-800">{selectedLog.utilisateur}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-gray-500">Date et heure</p>
+                      <p className="text-sm font-medium text-gray-800">{formatDateHeure(selectedLog.date)}</p>
+                    </div>
+                  </div>
+
+                  {/* Détails spécifiques selon le type d'action */}
+                  <div className="space-y-4">
+                    <h4 className="text-sm font-semibold text-gray-700 border-b pb-2">Détails de l'action</h4>
+                    
+                    {selectedLog.action?.toLowerCase().includes('modification') && (
+                      <div className="space-y-4">
+                        <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-4">
+                          <p className="text-xs font-medium text-blue-600 mb-3 flex items-center gap-2">
+                            <FileEdit className="w-3 h-3" />
+                            Modifications effectuées
+                          </p>
+                          <div className="space-y-4">
+                            {Object.keys(selectedLog.avant || {}).map((key) => (
+                              <div key={key} className="text-sm">
+                                <div className="font-medium text-gray-700 mb-2">
+                                  {formatFieldName(key)} :
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-white p-3 rounded border">
+                                  <div className="space-y-1">
+                                    <div className="text-xs text-gray-500 flex items-center gap-1">
+                                      <span>Avant</span>
+                                    </div>
+                                    <div className="font-medium text-gray-600">
+                                      {formatFieldValue(key, selectedLog.avant?.[key])}
+                                    </div>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <div className="text-xs text-blue-500 flex items-center gap-1">
+                                      <span>Après</span>
+                                      <ArrowRight className="w-3 h-3" />
+                                    </div>
+                                    <div className="font-medium text-blue-700">
+                                      {formatFieldValue(key, selectedLog.apres?.[key])}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                            {Object.keys(selectedLog.avant || {}).length === 0 && (
+                              <div className="text-center py-4 text-gray-400 text-sm">
+                                Aucun détail de modification disponible
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedLog.action?.toLowerCase().includes('creation') && (
+                      <div className="space-y-4">
+                        <div className="bg-emerald-50/50 border border-emerald-100 rounded-lg p-4">
+                          <p className="text-xs font-medium text-emerald-600 mb-3 flex items-center gap-2">
+                            <Plus className="w-3 h-3" />
+                            Informations créées
+                          </p>
+                          <div className="space-y-3">
+                            {Object.keys(selectedLog.apres || {}).map((key) => (
+                              <div key={key} className="flex justify-between items-center text-sm py-2 border-b border-emerald-100 last:border-0">
+                                <span className="font-medium text-gray-700">{formatFieldName(key)}</span>
+                                <span className="text-gray-800 font-medium ml-2 text-right">
+                                  {formatFieldValue(key, selectedLog.apres?.[key])}
+                                </span>
+                              </div>
+                            ))}
+                            {Object.keys(selectedLog.apres || {}).length === 0 && (
+                              <div className="text-center py-2 text-gray-400 text-sm">
+                                Aucune information de création disponible
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedLog.action?.toLowerCase().includes('suppression') && (
+                      <div className="space-y-4">
+                        <div className="bg-rose-50/50 border border-rose-100 rounded-lg p-4">
+                          <p className="text-xs font-medium text-rose-600 mb-3 flex items-center gap-2">
+                            <Trash2 className="w-3 h-3" />
+                            Informations supprimées
+                          </p>
+                          <div className="space-y-3">
+                            {Object.keys(selectedLog.avant || {}).map((key) => (
+                              <div key={key} className="flex justify-between items-center text-sm py-2 border-b border-rose-100 last:border-0">
+                                <span className="font-medium text-gray-700">{formatFieldName(key)}</span>
+                                <span className="text-gray-800 font-medium ml-2 text-right">
+                                  {formatFieldValue(key, selectedLog.avant?.[key])}
+                                </span>
+                              </div>
+                            ))}
+                            {Object.keys(selectedLog.avant || {}).length === 0 && (
+                              <div className="text-center py-2 text-gray-400 text-sm">
+                                Aucune information de suppression disponible
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Commentaire général */}
+                    {selectedLog.details && (
+                      <div className="bg-gray-50 border border-gray-100 rounded-lg p-4">
+                        <p className="text-xs font-medium text-gray-600 mb-2">Description de l'action</p>
+                        <p className="text-sm text-gray-700">{selectedLog.details}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer modal */}
+              <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-end">
+                <button
+                  onClick={() => setShowDetailsModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition"
+                >
+                  Fermer
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
