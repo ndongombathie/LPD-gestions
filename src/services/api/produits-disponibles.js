@@ -8,7 +8,6 @@ const ENDPOINTS = {
 };
 
 const normalizeResponse = (response) => {
-  
   if (!response) {
     return [];
   }
@@ -35,7 +34,6 @@ const hasValidTransfer = (transferItem) => {
 };
 
 const formatProduit = (transferItem) => {
-  
   if (!transferItem.produit) {
     return null;
   }
@@ -121,7 +119,6 @@ export const produitsDisponiblesAPI = {
         lastPage: response.data.last_page,
         total: response.data.total
       };
-
     } catch (error) {
       throw error;
     }
@@ -135,17 +132,46 @@ export const produitsDisponiblesAPI = {
         `${ENDPOINTS.BY_BARCODE}${encodeURIComponent(codeBarre)}`
       );
 
-      const transferts = normalizeResponse(response.data);
-      
-      const transfertValide = transferts.find(hasValidTransfer);
-      
-      if (transfertValide) {
-        const produitFormate = formatProduit(transfertValide);
-        return produitFormate;
+      if (!response.data) {
+        return null;
+      }
+
+      if (response.data.status !== 'valide') {
+        return null;
+      }
+
+      const produitFormatPanier = {
+        id: response.data.produit_id,
+        nom: 'Produit',
+        code_barre: codeBarre,
+        
+        prix_vente_detail: response.data.prix_vente_detail || 0,
+        prix_vente_gros: response.data.prix_vente_gros || 0,
+        prix_seuil_detail: response.data.prix_seuil_detail || 0,
+        prix_seuil_gros: response.data.prix_seuil_gros || 0,
+        
+        stock_global: response.data.quantite || 0,
+        stock: response.data.quantite || 0,
+        
+        unite_carton: 1,
+        prix_unite_carton: response.data.prix_vente_gros || 0,
+        
+        prix: response.data.prix_vente_detail || 0,
+        prix_detail: response.data.prix_vente_detail || 0,
+        prix_gros: response.data.prix_vente_gros || 0,
+        prix_seuil: response.data.prix_seuil_detail || 0,
+        
+        transfer_id: response.data.id,
+        transfer_quantite: response.data.quantite,
+        transfer_status: response.data.status,
+      };
+
+      return produitFormatPanier;
+    } catch (error) {
+      if (error.response?.status === 404) {
+        return null;
       }
       
-      return null;
-    } catch (error) {
       return null;
     }
   },

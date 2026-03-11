@@ -975,7 +975,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
           <thead>
             <tr className="bg-gray-50 border-b border-gray-200">
               <th className="py-2 px-3 text-left font-medium text-gray-700">Produit</th>
-              <th className="py-2 px-3 text-left font-medium text-gray-700">Type</th>
               <th className="py-2 px-3 text-left font-medium text-gray-700">Qté</th>
               <th className="py-2 px-3 text-left font-medium text-gray-700">Prix unit.</th>
               <th className="py-2 px-3 text-left font-medium text-gray-700">Sous-total</th>
@@ -991,15 +990,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
                 <tr key={index} className="hover:bg-gray-50">
                   <td className="py-2 px-3">
                     <div className="font-medium text-gray-900">{produit.nom}</div>
-                  </td>
-                  <td className="py-2 px-3">
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${
-                      produit.type_vente === 'gros' 
-                        ? 'bg-purple-100 text-purple-800 border-purple-200' 
-                        : 'bg-blue-100 text-blue-800 border-blue-200'
-                    }`}>
-                      {produit.type_vente === 'gros' ? 'Gros' : 'Détail'}
-                    </span>
                   </td>
                   <td className="py-2 px-3 text-gray-900">{quantite}</td>
                   <td className="py-2 px-3 text-gray-900">{formaterMontant(prixVente)}</td>
