@@ -11,8 +11,6 @@ import {
   ArrowDownCircle,
   History,
   FileText,
-  Bell,
-  LayoutGrid,
   ChevronDown,
   LogOut,
   Key,
@@ -20,11 +18,10 @@ import {
   Eye,
   EyeOff,
 } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
+import { Toaster } from 'sonner'
 import useAuth from '../../hooks/useAuth'
 import profileAPI from '@/services/api/profile'
-import NotificationsDropdown from '../components/NotificationsDropdown'
-import ShortcutsMenu from '../components/ShortcutsMenu'
 
 // ==========================================================
 // 🔧 Utils
@@ -268,22 +265,20 @@ export default function CaissierLayout() {
       try {
         const data = await profileAPI.getProfile()
         setUser(data)
-        localStorage.setItem("lpd_current_user", JSON.stringify(data))
+        sessionStorage.setItem("lpd_current_user", JSON.stringify(data))
       } catch (err) {
-        console.error("Erreur profil :", err)
+        // Erreur silencieuse - redirection gérée par ProtectedRoute
         navigate("/login")
       }
     }
     loadUser()
   }, [navigate])
 
-  // Fermer menus au clic extérieur
+  // Fermer menu au clic extérieur
   useEffect(() => {
     const handler = (e) => {
       if (menuRef.current && !menuRef.current.contains(e.target)) {
         setShowMenu(false)
-        setShowNotif(false)
-        setShowQuick(false)
       }
     }
     document.addEventListener("mousedown", handler)
@@ -295,12 +290,12 @@ export default function CaissierLayout() {
   const handleLogout = async () => {
     try {
       await logout();
-    } catch (err) {
-      console.error('Logout error:', err);
+    } catch (_err) {
+      // Erreur silencieuse - continuer avec le nettoyage local
     }
 
-    localStorage.removeItem("token")
-    localStorage.removeItem("lpd_current_user")
+    sessionStorage.removeItem("token")
+    sessionStorage.removeItem("lpd_current_user")
 
     navigate("/login")
   }
@@ -415,7 +410,7 @@ export default function CaissierLayout() {
             <div className="h-[6px] w-full bg-gradient-to-r from-[#472EAD] via-[#472EAD] to-[#F58020]" />
 
             <div className="bg-white h-16 shadow-sm border-b">
-              <div className="max-w-7xl mx-auto h-full px-3 sm:px-4 lg:px-6 flex items-center justify-between">
+              <div className="w-full max-w-[1600px] mx-auto h-full px-2 sm:px-4 md:px-6 flex items-center justify-between">
                 {/* LOGO & TITRE */}
                 <div className="flex items-center gap-3">
                   <div className="flex items-center">
@@ -438,83 +433,10 @@ export default function CaissierLayout() {
 
                 {/* ACTIONS */}
                 <div className="flex items-center gap-3 sm:gap-4">
-                  {/* RACCOURCIS */}
-                  <div className="relative">
-                    <button
-                      onClick={() => {
-                        setShowQuick((v) => !v)
-                        setShowNotif(false)
-                        setShowMenu(false)
-                      }}
-                      className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 rounded-lg border border-gray-200 text-xs sm:text-sm text-gray-700 hover:bg-[#F7F5FF] hover:text-[#472EAD] transition"
-                    >
-                      <LayoutGrid size={18} className="text-[#472EAD]" />
-                      <span className="hidden sm:inline">Raccourcis</span>
-                    </button>
-
-                    {showQuick && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.18 }}
-                        className="absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-lg shadow-lg p-2 z-30"
-                      >
-                        <p className="text-xs font-semibold text-gray-500 px-2 py-1">
-                          Accès rapide
-                        </p>
-                        <ul className="text-sm text-gray-700">
-                          {menuItems.map((item) => {
-                            const Icon = item.icon
-                            return (
-                              <li
-                                key={item.path}
-                                onClick={() => {
-                                  navigate(item.path)
-                                  setShowQuick(false)
-                                }}
-                                className="flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer hover:bg-[#F7F5FF]"
-                              >
-                                <Icon size={16} className="text-[#472EAD]" />
-                                <span>{item.name}</span>
-                              </li>
-                            )
-                          })}
-                        </ul>
-                      </motion.div>
-                    )}
-                  </div>
-
-                  {/* NOTIFS */}
-                  <div className="relative">
-                    <button
-                      onClick={() => {
-                        setShowNotif((v) => !v)
-                        setShowQuick(false)
-                        setShowMenu(false)
-                      }}
-                      className="p-2 rounded-lg hover:bg-gray-100 relative"
-                    >
-                      <Bell className="w-5 h-5 text-[#472EAD]" />
-                    </button>
-
-                    {showNotif && (
-                      <div className="absolute right-0 mt-2 w-80 bg-white border rounded-xl shadow-lg p-3 z-40">
-                        <NotificationsDropdown
-                          isOpen={showNotif}
-                          onClose={() => setShowNotif(false)}
-                        />
-                      </div>
-                    )}
-                  </div>
-
                   {/* PROFIL */}
                   <div className="relative">
-                    <button
-                      onClick={() => {
-                        setShowMenu((v) => !v)
-                        setShowNotif(false)
-                        setShowQuick(false)
-                      }}
+<button
+                        onClick={() => setShowMenu((v) => !v)}
                       className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-full border bg-white hover:bg-gray-50"
                     >
                       <div className="w-8 h-8 rounded-full bg-[#472EAD] text-white flex items-center justify-center overflow-hidden">
@@ -572,38 +494,38 @@ export default function CaissierLayout() {
             </div>
           </header>
 
-          {/* Contenu principal */}
-          <main className="flex-1 overflow-y-auto bg-gradient-to-b from-white to-lpd-light px-3 sm:px-4 lg:px-6 xl:px-8 py-4 sm:py-6 transition-all duration-300 ease-in-out relative z-0">
-            <div className="max-w-7xl mx-auto relative z-10 fade-in">
+          {/* Contenu principal - full width, marges réduites sur petits écrans */}
+          <main className="flex-1 overflow-y-auto bg-gradient-to-b from-white to-lpd-light px-2 sm:px-4 md:px-6 py-3 sm:py-5 pb-20 transition-all duration-300 ease-in-out relative z-0 w-full">
+            <div className="w-full max-w-[1600px] mx-auto relative z-10 fade-in">
               <Outlet />
-              
-              {/* Footer intégré dans le contenu */}
-              <footer className="mt-8 pt-6 border-t border-lpd-border/80 bg-transparent">
-                <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] sm:text-xs text-gray-500">
-                  <div className="flex items-center gap-1.5">
-                    <span className="h-1.5 w-1.5 rounded-full bg-lpd-accent" />
-                    <span>
-                      © {new Date().getFullYear()}{" "}
-                      <span className="font-semibold text-lpd-header">
-                        SSD Consulting
-                      </span>
-                      {" · "}
-                      <span className="text-gray-400">Tous droits réservés.</span>
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2 text-[11px] sm:text-xs">
-                    <span className="hidden sm:inline-block h-3 w-px bg-gray-200" />
-                    <span className="text-gray-400">LPD Manager</span>
-                    <span className="text-gray-300">•</span>
-                    <span>Interface Caissier</span>
-                    <span className="text-gray-300">•</span>
-                    <span className="font-semibold text-lpd-accent">v1.0.0</span>
-                  </div>
-                </div>
-              </footer>
             </div>
           </main>
+
+          {/* Footer fixe en bas */}
+          <footer className="fixed bottom-0 left-0 right-0 bg-white border-t border-lpd-border/80 z-40 shadow-sm">
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] sm:text-xs text-gray-500">
+              <div className="flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-lpd-accent" />
+                <span>
+                  © {new Date().getFullYear()}{" "}
+                  <span className="font-semibold text-lpd-header">
+                    SSD Consulting
+                  </span>
+                  {" · "}
+                  <span className="text-gray-400">Tous droits réservés.</span>
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2 text-[11px] sm:text-xs">
+                <span className="hidden sm:inline-block h-3 w-px bg-gray-200" />
+                <span className="text-gray-400">LPD Manager</span>
+                <span className="text-gray-300">•</span>
+                <span>Interface Caissier</span>
+                <span className="text-gray-300">•</span>
+                <span className="font-semibold text-lpd-accent">v1.0.0</span>
+              </div>
+            </div>
+          </footer>
         </div>
       </div>
 
@@ -615,6 +537,7 @@ export default function CaissierLayout() {
       />
 
       <Toasts toasts={toasts} remove={removeToast} />
+      <Toaster position="top-right" richColors />
     </>
   )
 }

@@ -4,164 +4,121 @@ import Button from '../../components/ui/Button';
 const QRScanner = ({ onScan, onClose }) => {
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState('');
+  const [scanSuccess, setScanSuccess] = useState(false);
+  const [statusMessage, setStatusMessage] = useState('');
   const scannerRef = useRef(null);
-  const qrCodeDetectorRef = useRef(null);
+  const html5QrCodeRef = useRef(null);
+  const scanCooldownRef = useRef(false);
+  const readerIdRef = useRef('qr-reader-scanner');
 
   useEffect(() => {
     return () => {
-      // Nettoyer à la fermeture
       stopScanning();
     };
   }, []);
 
-  const startScanning = async () => {
-    try {
-      setError('');
-      setIsScanning(true);
-
-      // Vérifier si l'API BarcodeDetector est disponible (Chrome/Edge)
-      if ('BarcodeDetector' in window) {
-        await startNativeBarcodeDetection();
-      } else {
-        // Fallback: utiliser html5-qrcode si disponible
-        await startHtml5QRCode();
-      }
-    } catch (err) {
-      console.error('Erreur d\'accès à la caméra:', err);
-      setError('Impossible d\'accéder à la caméra. Vérifiez les permissions ou installez html5-qrcode: npm install html5-qrcode');
-      setIsScanning(false);
-    }
-  };
-
-  const startNativeBarcodeDetection = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { 
-          facingMode: 'environment', // Caméra arrière de préférence
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        }
-      });
-
-      const video = document.createElement('video');
-      video.srcObject = stream;
-      video.setAttribute('playsinline', 'true');
-      video.setAttribute('autoplay', 'true');
-      video.setAttribute('muted', 'true');
-      video.style.width = '100%';
-      video.style.height = '100%';
-      video.style.objectFit = 'cover';
-      video.style.display = 'block';
-      
-      // Masquer le conteneur html5-qrcode
-      const qrReader = document.getElementById('qr-reader');
-      if (qrReader) {
-        qrReader.style.display = 'none';
-      }
-      
-      if (scannerRef.current) {
-        scannerRef.current.innerHTML = '';
-        scannerRef.current.appendChild(video);
-        scannerRef.current.style.display = 'block';
-      }
-
-      await video.play();
-
-      const barcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
-      qrCodeDetectorRef.current = { video, stream, barcodeDetector };
-
-      const detectQR = async () => {
-        if (!qrCodeDetectorRef.current) return;
-
-        try {
-          const barcodes = await qrCodeDetectorRef.current.barcodeDetector.detect(qrCodeDetectorRef.current.video);
-          
-          if (barcodes.length > 0) {
-            const qrData = barcodes[0].rawValue;
-            stopScanning();
-            onScan(qrData);
-            return;
-          }
-        } catch (err) {
-          // Ignorer les erreurs de détection et continuer
-        }
-
-        if (qrCodeDetectorRef.current) {
-          requestAnimationFrame(detectQR);
-        }
-      };
-
-      detectQR();
-    } catch (err) {
-      throw err;
-    }
-  };
-
-  const startHtml5QRCode = async () => {
-    try {
-      // Essayer d'importer html5-qrcode dynamiquement
-      const { Html5Qrcode } = await import('html5-qrcode');
-      
-      // Masquer le conteneur natif
-      if (scannerRef.current) {
-        scannerRef.current.style.display = 'none';
-      }
-      
-      // Afficher le conteneur html5-qrcode
-      const qrReader = document.getElementById('qr-reader');
-      if (qrReader) {
-        qrReader.style.display = 'block';
-      }
-      
-      const html5QrCode = new Html5Qrcode('qr-reader');
-      
-      await html5QrCode.start(
-        { facingMode: 'environment' },
-        {
-          fps: 10,
-          qrbox: { width: 250, height: 250 },
-        },
-        (decodedText) => {
-          // QR code détecté
-          stopScanning();
-          html5QrCode.stop().then(() => {
-            html5QrCode.clear();
-          }).catch(() => {});
-          onScan(decodedText);
-        },
-        (errorMessage) => {
-          // Ignorer les erreurs de décodage (pas de QR code visible)
-        }
-      );
-
-      qrCodeDetectorRef.current = html5QrCode;
-    } catch (err) {
-      if (err.message.includes('Cannot find module')) {
-        throw new Error('html5-qrcode n\'est pas installé. Installez-le avec: npm install html5-qrcode');
-      }
-      throw err;
-    }
-  };
-
   const stopScanning = () => {
-    if (qrCodeDetectorRef.current) {
-      if (qrCodeDetectorRef.current.stream) {
-        // Arrêter le stream natif
-        qrCodeDetectorRef.current.stream.getTracks().forEach(track => track.stop());
-      } else if (qrCodeDetectorRef.current.stop) {
-        // Arrêter html5-qrcode
-        qrCodeDetectorRef.current.stop().then(() => {
-          qrCodeDetectorRef.current.clear();
+    if (html5QrCodeRef.current) {
+      try {
+        html5QrCodeRef.current.stop().then(() => {
+          html5QrCodeRef.current.clear();
         }).catch(() => {});
-      }
-      qrCodeDetectorRef.current = null;
+      } catch (_e) {}
+      html5QrCodeRef.current = null;
     }
-    
+    const el = document.getElementById(readerIdRef.current);
+    if (el) {
+      el.innerHTML = '';
+      el.style.display = 'none';
+    }
     if (scannerRef.current) {
       scannerRef.current.innerHTML = '';
     }
-    
+    scanCooldownRef.current = false;
     setIsScanning(false);
+    setScanSuccess(false);
+  };
+
+  const triggerScanFeedback = () => {
+    setScanSuccess(true);
+    try {
+      if (navigator.vibrate) navigator.vibrate(200);
+    } catch (_e) {}
+  };
+
+  const startScanning = async () => {
+    try {
+      setError('');
+      setStatusMessage('Activation de la caméra...');
+      setIsScanning(true);
+      scanCooldownRef.current = false;
+
+      await new Promise((r) => setTimeout(r, 100));
+
+      const { Html5Qrcode } = await import('html5-qrcode');
+
+      const readerId = readerIdRef.current;
+      const container = document.getElementById(readerId);
+      if (!container) {
+        setError('Erreur: conteneur du scan introuvable.');
+        setIsScanning(false);
+        return;
+      }
+      container.innerHTML = '';
+      container.style.display = 'block';
+
+      const html5QrCode = new Html5Qrcode(readerId);
+
+      const qrboxSize = Math.min(280, typeof window !== 'undefined' ? window.innerWidth * 0.75 : 280);
+
+      await html5QrCode.start(
+        { facingMode: 'environment' },
+        {
+          fps: 15,
+          qrbox: { width: qrboxSize, height: qrboxSize },
+          aspectRatio: 1.0,
+          disableFlip: false,
+          videoConstraints: {
+            facingMode: 'environment',
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+        },
+        (decodedText) => {
+          if (scanCooldownRef.current) return;
+          scanCooldownRef.current = true;
+          triggerScanFeedback();
+          setStatusMessage('QR code reçu !');
+
+          const value = (decodedText || '').toString().trim();
+          if (!value) return;
+
+          try {
+            onScan(value);
+          } catch (_e) {
+            scanCooldownRef.current = false;
+          }
+        },
+        () => {
+          // Pas de QR visible - pas d'erreur à afficher
+        }
+      );
+
+      html5QrCodeRef.current = html5QrCode;
+      setStatusMessage('Positionnez le QR code dans le cadre');
+    } catch (err) {
+      setIsScanning(false);
+      const msg = err?.message || '';
+      if (msg.includes('NotAllowedError') || msg.includes('Permission')) {
+        setError('Accès à la caméra refusé. Autorisez la caméra dans les paramètres du navigateur.');
+      } else if (msg.includes('NotFoundError')) {
+        setError('Aucune caméra trouvée.');
+      } else if (msg.includes('NotReadableError')) {
+        setError('Caméra déjà utilisée par une autre application.');
+      } else {
+        setError("Impossible d'accéder à la caméra. Vérifiez les permissions.");
+      }
+    }
   };
 
   return (
@@ -176,7 +133,7 @@ const QRScanner = ({ onScan, onClose }) => {
             </div>
           </div>
           <p className="text-sm text-gray-700 font-medium">
-            Cliquez sur "Démarrer le scan" pour activer la caméra et scanner le QR code du ticket
+            Cliquez sur &quot;Démarrer le scan&quot; pour activer la caméra et scanner le QR code du ticket
           </p>
           <Button variant="primary" onClick={startScanning} className="w-full bg-[#472EAD] hover:bg-[#3d2888] text-white font-semibold py-3">
             <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -187,24 +144,41 @@ const QRScanner = ({ onScan, onClose }) => {
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="relative bg-black rounded-lg overflow-hidden" style={{ aspectRatio: '4/3', minHeight: '300px' }}>
-            {/* Conteneur pour la vidéo (API native) */}
-            <div ref={scannerRef} className="w-full h-full" style={{ display: 'none' }}></div>
-            {/* Conteneur pour html5-qrcode */}
-            <div id="qr-reader" className="w-full h-full" style={{ display: 'none' }}></div>
-            {/* Zone de scan visuelle */}
+          <div
+            className={`relative rounded-xl overflow-hidden bg-black transition-all duration-300 ${
+              scanSuccess ? 'ring-4 ring-green-500 ring-offset-2' : ''
+            }`}
+            style={{ minHeight: '320px' }}
+          >
+            <div ref={scannerRef} className="w-full qr-scanner-video-wrapper" style={{ minHeight: '320px' }}>
+              <style>{`#qr-reader-scanner video { transform: scaleX(-1); }`}</style>
+              <div
+                id={readerIdRef.current}
+                className="w-full overflow-hidden rounded-xl"
+                style={{ minHeight: '320px' }}
+              />
+            </div>
+            {/* Cadre de guidage par-dessus la vidéo (le scan utilise toute la zone) */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-              <div className="border-4 border-[#F58020] rounded-lg w-64 h-64 relative shadow-lg">
-                <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-[#F58020] rounded-tl-lg"></div>
-                <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-[#F58020] rounded-tr-lg"></div>
-                <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-[#F58020] rounded-bl-lg"></div>
-                <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-[#F58020] rounded-br-lg"></div>
+              <div className="border-4 border-[#F58020] rounded-2xl shadow-2xl bg-black/20" style={{ width: 'min(280px, 85vw)', height: 'min(280px, 85vw)' }}>
+                <div className="absolute top-0 left-0 w-10 h-10 border-t-4 border-l-4 border-white rounded-tl-2xl" />
+                <div className="absolute top-0 right-0 w-10 h-10 border-t-4 border-r-4 border-white rounded-tr-2xl" />
+                <div className="absolute bottom-0 left-0 w-10 h-10 border-b-4 border-l-4 border-white rounded-bl-2xl" />
+                <div className="absolute bottom-0 right-0 w-10 h-10 border-b-4 border-r-4 border-white rounded-br-2xl" />
               </div>
             </div>
           </div>
-          <p className="text-sm text-center text-gray-700 font-medium">
-            Positionnez le QR code dans le cadre orange
+
+          <p className="text-sm text-center font-medium text-gray-700 min-h-[1.25rem]">
+            {statusMessage || 'Positionnez le QR code dans le cadre orange'}
           </p>
+
+          {scanSuccess && (
+            <p className="text-sm text-center font-semibold text-green-600 animate-pulse">
+              ✓ QR code détecté
+            </p>
+          )}
+
           <Button variant="danger" onClick={stopScanning} className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-3">
             Arrêter le scan
           </Button>
@@ -227,4 +201,3 @@ const QRScanner = ({ onScan, onClose }) => {
 };
 
 export default QRScanner;
-

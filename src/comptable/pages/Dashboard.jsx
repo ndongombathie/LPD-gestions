@@ -1,8 +1,9 @@
 // ==========================================================
-// 📊 Dashboard.jsx — Comptable (SHADOW DESIGN FINAL)
+// 📊 Dashboard.jsx — ERP STABLE CLEAN VERSION
+// Sans graphique — Architecture durable production
 // ==========================================================
 
-import React, { useMemo } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Wallet,
@@ -11,66 +12,87 @@ import {
   Warehouse,
 } from "lucide-react";
 
-import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-} from "recharts";
+import dashboardAPI from "@/services/api/dashboard";
 
-// ===============================
-// 🔧 MOCK
-// ===============================
-const stats = {
-  caisseJour: 325000,
-  actionsBoutique: 12,
-  actionsDepot: 7,
+/* ================= SAFE UTILS ================= */
+
+const toNumber = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
 };
 
-// ===============================
-// 🔧 FORMAT FCFA
-// ===============================
 const fcfa = (n) =>
   new Intl.NumberFormat("fr-FR", {
     style: "currency",
     currency: "XOF",
-  }).format(n || 0);
+  }).format(toNumber(n));
+
+/* ========================================================== */
 
 export default function DashboardComptable() {
+
   const navigate = useNavigate();
 
-  // ===============================
-  // 🔁 VERSEMENTS
-  // ===============================
-  const versements = useMemo(() => {
-    return JSON.parse(localStorage.getItem("versements")) || [];
+  const [stats, setStats] = useState({
+    nombreProduits: 0,
+    quantiteTotale: 0,
+    nombreVersements: 0,
+    sommeVersements: 0,
+    sommeEncaissements: 0,
+  });
+
+  const [loading, setLoading] = useState(true);
+
+  /* ================= FETCH API ================= */
+
+  useEffect(() => {
+
+    let mounted = true;
+
+    const fetchDashboard = async () => {
+      try {
+
+        const data = await dashboardAPI.getDashboardStats();
+
+        if (!mounted) return;
+
+        setStats({
+          nombreProduits: toNumber(data?.nombreProduits),
+          quantiteTotale: toNumber(data?.quantiteTotale),
+          nombreVersements: toNumber(data?.nombreVersements),
+          sommeVersements: toNumber(data?.sommeVersements),
+          sommeEncaissements: toNumber(data?.sommeEncaissements),
+        });
+
+      } catch (error) {
+        console.error("Erreur dashboard:", error);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    fetchDashboard();
+
+    return () => {
+      mounted = false;
+    };
+
   }, []);
 
-  // ===============================
-  // 📊 AGRÉGATION PAR JOUR
-  // ===============================
-  const versementsParJour = useMemo(() => {
-    const map = {};
-    versements.forEach((v) => {
-      map[v.date] = (map[v.date] || 0) + Number(v.montant);
-    });
+  /* ================= LOADING ================= */
 
-    return Object.keys(map).map((date) => ({
-      date,
-      montant: map[date],
-    }));
-  }, [versements]);
+  if (loading) {
+    return (
+      <div className="p-10 text-center text-gray-500">
+        Chargement du tableau de bord...
+      </div>
+    );
+  }
 
-  const totalVersements = versements.reduce(
-    (s, v) => s + Number(v.montant),
-    0
-  );
+  /* ================= UI ================= */
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 w-full min-w-0">
 
       {/* ================= TITRE ================= */}
       <div>
@@ -78,27 +100,25 @@ export default function DashboardComptable() {
           Tableau de bord comptable
         </h1>
         <p className="text-sm text-gray-500">
-          Vue rapide sur la caisse, les versements et la gestion
+          Vue stratégique des flux financiers
         </p>
       </div>
 
       {/* ================= CARTES ================= */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
         <DashboardCard
-          title="Caisse du jour"
-          value={fcfa(stats.caisseJour)}
-          subtitle="Total journalier"
+          title="Encaissements"
+          value={fcfa(stats.sommeEncaissements)}
+          subtitle="Total des paiements"
           icon={Wallet}
           color="bg-emerald-50 text-emerald-600"
-          onClick={() =>
-            navigate("/comptable/controle-caissier/caisse")
-          }
         />
 
         <DashboardCard
           title="Versements"
-          value={fcfa(totalVersements)}
-          subtitle="Total enregistré"
+          value={fcfa(stats.sommeVersements)}
+          subtitle={`Nombre : ${stats.nombreVersements}`}
           icon={ArrowDownUp}
           color="bg-indigo-50 text-indigo-600"
           onClick={() =>
@@ -107,69 +127,50 @@ export default function DashboardComptable() {
         />
 
         <DashboardCard
-          title="Gestion Boutique"
-          value={stats.actionsBoutique}
-          subtitle="Actions enregistrées"
-          icon={Store}
-          color="bg-sky-50 text-sky-600"
-          onClick={() =>
-            navigate("/comptable/controle-gestionnaire/boutique")
-          }
+          title="Produits Dépôt"
+          value={stats.nombreProduits}
+          subtitle={`Quantité totale : ${stats.quantiteTotale}`}
+          icon={Warehouse}
+          color="bg-orange-50 text-orange-600"
         />
 
         <DashboardCard
-          title="Gestion Dépôt"
-          value={stats.actionsDepot}
-          subtitle="Actions enregistrées"
-          icon={Warehouse}
-          color="bg-orange-50 text-orange-600"
-          onClick={() =>
-            navigate("/comptable/controle-gestionnaire/depot")
-          }
+          title="Produits Boutique"
+          value={stats.quantiteTotale}
+          subtitle="Stock global"
+          icon={Store}
+          color="bg-sky-50 text-sky-600"
         />
+
       </div>
 
-      {/* ================= GRAPHE ================= */}
-      <div className="bg-white rounded-2xl shadow-md p-6">
-        <h2 className="text-sm font-semibold text-[#472EAD] mb-1">
-          Évolution des versements
+      {/* ================= BLOC ANALYSE ================= */}
+      <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
+
+        <h2 className="text-sm font-semibold text-[#472EAD] mb-2">
+          Analyse financière
         </h2>
-        <p className="text-xs text-gray-500 mb-4">
-          Total des versements enregistrés par jour
+
+        <p className="text-sm text-gray-600">
+          Les encaissements s’élèvent à{" "}
+          <span className="font-semibold">
+            {fcfa(stats.sommeEncaissements)}
+          </span>{" "}
+          sur un {" "}
+          <span className="font-semibold">
+            {stats.nombreVersements}
+          </span>{" "}
+          versement(s) enregistré(s).
         </p>
 
-        {versementsParJour.length ? (
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={versementsParJour}>
-                <CartesianGrid
-                  stroke="#E5E7EB"
-                  strokeDasharray="4 4"
-                />
-                <XAxis dataKey="date" />
-                <YAxis />
-                <Tooltip formatter={(v) => fcfa(v)} />
-                <Line
-                  type="monotone"
-                  dataKey="montant"
-                  stroke="#472EAD"
-                  strokeWidth={3}
-                  dot={{ r: 4 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        ) : (
-          <p className="text-center text-sm text-gray-400 py-10">
-            Aucun versement enregistré
-          </p>
-        )}
       </div>
+
     </div>
   );
 }
 
-/* ================= CARTE ================= */
+/* ================= CARD ================= */
+
 function DashboardCard({ title, value, subtitle, icon: Icon, color, onClick }) {
   return (
     <div

@@ -1,6 +1,6 @@
 # ✅ Checklist API - Interface Caissier
 
-## 📊 État général : 0% connecté au backend
+## 📊 État général : intégration en cours (caissier)
 
 | Fonctionnalité | UI Prête | API Nécessaire | Priorité |
 |----------------|----------|----------------|----------|
@@ -75,11 +75,11 @@ Body: {
 
 ---
 
-### 5. Rapport journalier
+### 5. Rapport journalier (caissier)
 ```javascript
-GET /api/caisses-journal/{date}?boutique_id={id}
-PUT /api/caisses-journal/{date}
-POST /api/caisses-journal/{date}/cloture
+GET /api/caissier/caisses-journal/{date}
+POST /api/caissier/caisses-journal
+PUT /api/caissier/caisses-journal/{date}/cloture
 ```
 **Impact** : Impossible de générer de vrais rapports
 
@@ -107,10 +107,10 @@ GET /api/stocks/boutique/{boutique_id}/produit/{produit_id}
 
 ## 🟢 APIs OPTIONNELLES (Amélioration)
 
-### 8. Export PDF/Excel
+### 8. Export PDF/Excel (optionnel)
 ```javascript
-GET /api/caisses-journal/{date}/pdf
-GET /api/caisses-journal/{date}/excel
+GET /api/caissier/caisses-journal/{date}/pdf
+GET /api/caissier/caisses-journal/{date}/excel
 ```
 
 ### 9. WebSocket (Temps réel)
@@ -134,9 +134,9 @@ WS /ws/caisse/{boutique_id}
    - Ligne 60 : `POST /api/decaissements`
 
 3. **RapportCaissePage.jsx**
-   - Ligne 23 : `GET /api/caisses-journal/{date}`
-   - Ligne 195 : `PUT /api/caisses-journal/{date}`
-   - Ligne 107 : `POST /api/caisses-journal/{date}/cloture`
+   - `GET /api/caissier/caisses-journal/{date}`
+   - `POST /api/caissier/caisses-journal`
+   - `PUT /api/caissier/caisses-journal/{date}/cloture`
 
 4. **HistoriquePage.jsx**
    - Ligne 25 : `GET /api/caissier/historique`

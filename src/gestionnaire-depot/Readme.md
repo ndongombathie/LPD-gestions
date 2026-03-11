@@ -3,8 +3,19 @@ npm install react-router-dom react-icons lucide-react html2canvas jspdf
 
 Dramé je penses k ca marchera et ni ca ne marche pas fait un capture de l'erreurs et envoi le à l'ia que tu utilise
 
-# creer un transfer vers le gestionnaire de boutique 
+
+# endpoints  pour la gestion des categories
+GET|HEAD        api/categories ..................................... | affiche la liste des categories
+POST            api/categories ..................................... | creer un categories (donner le  nom en entree)
+GET|HEAD        api/categories/{category} ...........................| afficher les infos d'un categorie (nom)
+PUT|PATCH       api/categories/{category} ...........................|  modiier les infos d'un categorie  (nom)
+DELETE          api/categories/{category}                            | supprimer une categorie
+
+# creer un transfer et mouvement de stock vers le gestionnaire de boutique 
 POST       api/stocks/transfer | envoyer un transfert vers le gestion de boutique
+GET        api/mouvements-stock | afficher les mouvements de stocks
+
+
 # les endpoints pour la gestion des produits
 GET             api/produits  | la liste des produits
 POST            api/produits  | enregistrer un nouveau produit
@@ -14,7 +25,60 @@ PUT|PATCH       api/produits/{produit} | modifier un produit
 DELETE          api/produits/{produit} | supprimer un produit
 
 
+# la liste des produits en rupture
+GET             api/produits_en_rupture | les produits en rupture de stock
 
+# endpoint pour reapprovisionner un produit
+POST            api/stocks/reapprovisionner    | donner en post le quantité et le produit_id
+
+
+ # la liste de l'historique des actions
+GET     api/historique-actions
+
+# Reduction de stock d'un produit
+PUT     api/produits/{produit}/reduire-stock
+
+GET     api/fournisseurs | Liste des fournisseurs 
+
+# les transfert en attente
+GET     api/produits-transfer
+
+# annuler un tramsfert 
+PUT    api/annuler-produits-transfer | donner en payload (transfer_id) du transfert
+
+# le nombre de fournisseur
+GET     api/nombre-fournisseurs
+# le nombre de produit
+GET     api/nombre-produits
+# le nombre de mouvement stock aujourd'hui
+GET     api/nombre-mouvements-stock-today
+# le nombre de mouvement 
+GET     api/nombre-mouvements-stock-total
+# le nombre d'entree dans le stock
+GET      api/nombre-entree-stock-total
+# le nombre de sortie dans le stock
+GET      api/nombre-sortie-stock-total
+# nombre de transfert en attente
+GET       api/nombre-transfer-en-attente
+# nombre de transfert annuler
+GET       api/nombre-transfers-annuler
+# liste des transfert annuler 
+GET       api/nombre-transfer-en-attente
+
+# •	Nombre de produits en rupture
+GET       api/nombre-produits-en-rupture
+
+# nombere de produit en nombre-produits-sous-seuil
+GET       api/nombre-produits-sous-seuil
+
+# nombre de normaux.
+GET       api/nombre-produits-en-normaux
+
+# la liste des produits normales
+GET     api/produits-en-normaux
+
+# la liste des produits sous seuils (faible)
+GET     api/produits-sous-seuil
 
 📝 Note pour l'équipe
 Toutes les modifications sont contenues dans la branche fix/bordures-noires-interface-depot et n'affectent pas les autres rôles (boutique, vendeur, caissier, etc.). Les corrections sont spécifiques à l'interface gestionnaire de dépôt.
