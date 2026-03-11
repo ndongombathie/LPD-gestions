@@ -5,6 +5,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { Search, Eye, X, ChevronLeft, ChevronRight, Package, AlertTriangle, CheckCircle } from "lucide-react";
 import boutiqueAPI from "@/services/api/boutique";
+import useDebouncedValue from "@/hooks/useDebouncedValue";
 
 const DEFAULT_PER_PAGE = 25;
 
@@ -19,34 +20,80 @@ const getEtat = (quantite, seuil) => {
   return "ok";
 };
 
-const getEtatBadge = (etat) => {
-  switch(etat) {
-    case "rupture":
-      return { color: "bg-red-100 text-red-700", icon: AlertTriangle, text: "Rupture" };
-    case "faible":
-      return { color: "bg-orange-100 text-orange-700", icon: AlertTriangle, text: "Stock faible" };
-    default:
-      return { color: "bg-emerald-100 text-emerald-700", icon: CheckCircle, text: "Disponible" };
-  }
-};
+export default function Boutique() {
+  const [rows, setRows] = useState([]);
+  const [pagination, setPagination] = useState(null);
 
-/* ================= PAGINATION ================= */
-const Pagination = ({ currentPage, totalPages, onPageChange, totalItems }) => {
-  const getPageNumbers = useCallback(() => {
-    const pages = [];
-    const maxVisible = 5;
-    
-    if (totalPages <= maxVisible) {
-      for (let i = 1; i <= totalPages; i++) pages.push(i);
-    } else {
-      if (currentPage <= 3) {
-        for (let i = 1; i <= 4; i++) pages.push(i);
-        pages.push('...');
-        pages.push(totalPages);
-      } else if (currentPage >= totalPages - 2) {
-        pages.push(1);
-        pages.push('...');
-        for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const debouncedSearchTerm = useDebouncedValue(searchTerm, 500);
+  
+  // État pour la fiche sélectionnée
+  const [selectedProduit, setSelectedProduit] = useState(null);
+
+  /* ================= FETCH PAGINÉ ================= */
+  const fetchPaginated = useCallback(async () => {
+    try {
+      setLoading(true);
+
+      const res = await boutiqueAPI.getProduitsControle({
+        page,
+        per_page: PER_PAGE,
+        search: debouncedSearchTerm,
+      });
+
+      setRows(res.data ?? []);
+      setPagination(res.pagination ?? null);
+    } catch {
+      setError("Erreur lors du chargement des produits boutique");
+    } finally {
+      setLoading(false);
+    }
+  }, [page, debouncedSearchTerm]);
+
+  useEffect(() => {
+    fetchPaginated();
+  }, [fetchPaginated]);
+
+  /* ================= NORMALISATION + REGROUPEMENT ================= */
+  const normalizeAndGroup = (data) => {
+    const map = new Map();
+
+    data.forEach((row) => {
+      const produit = row.produit ?? {};
+      
+      // Utilisation de l'ID du produit comme clé pour le regroupement
+      // (plus fiable que nom + catégorie_id)
+      const key = produit.id || `${produit.nom}-${produit.categorie_id}`;
+
+      const quantite = Number(row.quantite ?? 0);
+      const seuil = Number(row.seuil ?? 0);
+      const nombre_carton = Number(row.nombre_carton ?? 0);
+      
+      // Récupérer la catégorie depuis produit.categorie (structure JSON correcte)
+      const categorie = produit.categorie ?? {};
+      const nom_categorie = categorie.nom ?? "Non catégorisé";
+
+      if (!map.has(key)) {
+        map.set(key, {
+          id: produit.id ?? key,
+          nom: produit.nom ?? "—",
+          categorie_id: produit.categorie_id,
+          categorie_nom: nom_categorie,
+          prix_achat: produit.prix_achat ?? 0,
+          nombre_carton,
+          quantite,
+          seuil,
+          // Informations supplémentaires pour la fiche
+          description: produit.description ?? "Aucune description",
+          code_barre: produit.code_barre ?? "N/A",
+          date_creation: produit.created_at ?? null,
+          date_modification: produit.updated_at ?? null,
+          fournisseur: produit.fournisseur?.nom ?? "Non spécifié"
+        });
       } else {
         pages.push(1);
         pages.push('...');
@@ -58,7 +105,28 @@ const Pagination = ({ currentPage, totalPages, onPageChange, totalItems }) => {
     return pages;
   }, [currentPage, totalPages]);
 
-  if (totalPages <= 1) return null;
+    return Array.from(map.values());
+  };
+
+  const pageData = useMemo(() => normalizeAndGroup(rows), [rows]);
+
+  /* ================= RECHERCHE GLOBALE ================= */
+  // Désormais gérée par l'API, pageData contient déjà les bons résultats
+  const filteredData = pageData;
+
+
+  // Fonction pour afficher la fiche produit
+  const afficherFiche = (produit) => {
+    setSelectedProduit(produit);
+  };
+
+  // Fonction pour fermer la fiche
+  const fermerFiche = () => {
+    setSelectedProduit(null);
+  };
+
+  if (loading) return <p>Chargement…</p>;
+  if (error) return <p className="text-red-600">{error}</p>;
 
   return (
     <div className="flex items-center justify-between">
@@ -607,6 +675,33 @@ export default function Boutique() {
           </div>
         )}
       </div>
+
+      {/* PAGINATION */}
+      {pagination && pagination.lastPage > 1 && (
+        <div className="flex justify-between items-center text-sm bg-white rounded-2xl shadow-md p-4">
+          <button
+            disabled={page === 1}
+            onClick={() => setPage((p) => p - 1)}
+            className="px-4 py-2 border rounded-lg disabled:opacity-40 hover:bg-gray-50 transition-colors"
+          >
+            ← Précédent
+          </button>
+
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-[#472EAD]">
+              Page {pagination.currentPage} / {pagination.lastPage}
+            </span>
+          </div>
+
+          <button
+            disabled={page === pagination.lastPage}
+            onClick={() => setPage((p) => p + 1)}
+            className="px-4 py-2 border rounded-lg disabled:opacity-40 hover:bg-gray-50 transition-colors"
+          >
+            Suivant →
+          </button>
+        </div>
+      )}
     </div>
   );
 }

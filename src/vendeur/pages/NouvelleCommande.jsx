@@ -32,9 +32,7 @@ import {
   faInfoCircle,
   faCheckCircle,
   faExclamationCircle,
-  faDatabase,
-  faChevronLeft,
-  faChevronRight
+  faDatabase
 } from '@fortawesome/free-solid-svg-icons';
 
 import { useReactToPrint } from 'react-to-print';
@@ -44,20 +42,26 @@ import { produitsDisponiblesAPI } from '../../services/api/produits-disponibles'
 import { commandesAPI } from '../../services/api/commandes';
 import { clientsAPI } from '../../services/api/clients';
 import profileAPI from '../../services/api/profile';
+import gestionnaireBoutiqueAPI from '../../services/api/gestionnaireBoutique';
+import useDebouncedValue from '../../gestionnaire-boutique/hooks/useDebouncedValue';
+import { boutiqueId, echo } from '../../utils/echo';
 
 const Notification = ({ type, message, onClose }) => {
   const [isVisible, setIsVisible] = useState(true);
   const [progress, setProgress] = useState(100);
 
   useEffect(() => {
+    const dismissMs = 1500;
+    const tickMs = 50;
     const timer = setTimeout(() => {
       setIsVisible(false);
       setTimeout(() => onClose(), 150);
-    }, 1500);
+    }, dismissMs);
 
+    const step = 100 / (dismissMs / tickMs);
     const progressInterval = setInterval(() => {
-      setProgress(prev => Math.max(0, prev - (100 / 2000) * 50));
-    }, 50);
+      setProgress(prev => Math.max(0, prev - step));
+    }, tickMs);
 
     return () => {
       clearTimeout(timer);
@@ -142,13 +146,10 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
   const [loadingProduits, setLoadingProduits] = useState(true);
   const [produitsFiltres, setProduitsFiltres] = useState([]);
   const [errorMessage, setErrorMessage] = useState('');
-  const [tousLesProduits, setTousLesProduits] = useState([]);
-  const [loadingRecherche, setLoadingRecherche] = useState(false);
-  const [rechercheEnCours, setRechercheEnCours] = useState(false);
-  const [totalProduitsFiltres, setTotalProduitsFiltres] = useState(0);
-  const [rechercheCurrentPage, setRechercheCurrentPage] = useState(1);
-  const [rechercheLastPage, setRechercheLastPage] = useState(1);
-  const rechercheTimeout = useRef(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageInfo, setPageInfo] = useState({ current: 1, last: 1, total: 0, perPage: 10, links: [] });
+  const debouncedRechercheProduit = useDebouncedValue(rechercheProduit, 350);
+
   const [commandeImprimee, setCommandeImprimee] = useState(null);
   const ticketRef = useRef();
 
@@ -167,10 +168,6 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
   });
   const [loadingVendeur, setLoadingVendeur] = useState(false);
   const [apiError, setApiError] = useState(null);
- 
-  const [currentPage, setCurrentPage] = useState(1);
-  const [lastPage, setLastPage] = useState(1);
-  const [itemsPerPage] = useState(12);
 
   const [notifications, setNotifications] = useState([]);
 
@@ -202,260 +199,10 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
     return type;
   };
 
-  const chargerProduits = async (page = currentPage) => {
-    try {
-      setLoadingProduits(true);
-      setErrorMessage('');
-
-      const response = await produitsDisponiblesAPI.getDisponiblesBoutique(page, itemsPerPage);
-    
-      let produitsData = [];
-      let totalPages = 1;
-
-      if (response && response.produits && Array.isArray(response.produits)) {
-        produitsData = response.produits;
-        totalPages = response.lastPage || response.last_page || 1;
-      } else if (response && response.data && response.data.produits && Array.isArray(response.data.produits)) {
-        produitsData = response.data.produits;
-        totalPages = response.data.lastPage || response.data.last_page || 1;
-      } else if (response && response.data && Array.isArray(response.data)) {
-        produitsData = response.data;
-        totalPages = response.lastPage || response.last_page || 1;
-      } else if (Array.isArray(response)) {
-        produitsData = response;
-      }
-
-      if (produitsData.length > itemsPerPage) {
-        produitsData = produitsData.slice(0, itemsPerPage);
-      }
-
-      setLastPage(totalPages);
-      setCurrentPage(page);
-
-      const produitsFormates = produitsData.map(produit => {
-        const produitObj = produit.produit || produit;
-        
-        const prixDetail = parseFloat(produit.prix_vente_detail || produit.prix || produitObj.prix || 0);
-        const prixGros = parseFloat(produit.prix_vente_gros || produit.prix_unite_carton || produitObj.prix_gros || prixDetail * 0.8);
-        
-        const stockGlobal = parseInt(produit.quantite || produit.stock || produitObj.stock || produitObj.quantite || 0, 10);
-        
-        return {
-          id: produitObj.id || produit.id,
-          nom: produitObj.nom || produit.nom || 'Produit sans nom',
-          code_barre: produitObj.code_barre || produit.code_barre || '',
-          
-          prix_vente_detail: prixDetail,
-          prix_vente_gros: prixGros,
-          prix_achat: parseFloat(produit.prix_achat || 0),
-          prix_total: parseFloat(produit.prix_total || 0),
-          
-          prix_seuil_detail: parseFloat(produit.prix_seuil_detail || prixDetail * 0.7),
-          prix_seuil_gros: parseFloat(produit.prix_seuil_gros || prixGros * 0.7),
-          
-          stock_global: stockGlobal,
-          stock_seuil: parseInt(produit.seuil || produit.stock_seuil || 10, 10),
-          stock: stockGlobal,
-          seuil_alerte: parseInt(produit.seuil || produit.stock_seuil || 10, 10),
-          
-          unite_carton: parseInt(produit.unite_carton || produit.unite_par_carton || 1, 10),
-          prix_unite_carton: prixGros,
-          nombre_carton: Math.floor(stockGlobal / (produit.unite_carton || produit.unite_par_carton || 1)),
-          
-          categorie_id: produit.categorie_id || produitObj.categorie?.id,
-          categorie: produit.categorie_nom || produitObj.categorie?.nom || 'Non catégorisé',
-          
-          created_at: produit.created_at || produitObj.created_at,
-          updated_at: produit.updated_at || produitObj.updated_at,
-          
-          prix: prixDetail,
-          prix_detail: prixDetail,
-          prix_gros: prixGros,
-          prix_seuil: parseFloat(produit.prix_seuil_detail || prixDetail * 0.7)
-        };
-      });
-
-      setProduits(produitsFormates);
-      
-      if (!rechercheEnCours) {
-        setProduitsFiltres(produitsFormates);
-      }
-
-    } catch (error) {
-      setErrorMessage('Impossible de charger les produits depuis l\'API.');
-      setProduits([]);
-      setProduitsFiltres([]);
-    } finally {
-      setLoadingProduits(false);
-    }
-  };
-
-  const chargerTousLesProduits = async () => {
-    if (!rechercheProduit.trim()) {
-      setTousLesProduits([]);
-      setRechercheEnCours(false);
-      setProduitsFiltres(produits);
-      setTotalProduitsFiltres(0);
-      return;
-    }
-
-    setLoadingRecherche(true);
-    setRechercheEnCours(true);
-    
-    try {
-      let page = 1;
-      let allProducts = [];
-      let hasMorePages = true;
-      let maxPages = 10;
-      
-      while (hasMorePages && page <= maxPages) {
-        const response = await produitsDisponiblesAPI.getDisponiblesBoutique(page, 100);
-        
-        let produitsData = [];
-        let lastPage = 1;
-        
-        if (response && response.produits && Array.isArray(response.produits)) {
-          produitsData = response.produits;
-          lastPage = response.lastPage || response.last_page || 1;
-          hasMorePages = page < lastPage;
-        } else if (response && response.data && response.data.produits && Array.isArray(response.data.produits)) {
-          produitsData = response.data.produits;
-          lastPage = response.data.lastPage || response.data.last_page || 1;
-          hasMorePages = page < lastPage;
-        } else if (response && response.data && Array.isArray(response.data)) {
-          produitsData = response.data;
-          lastPage = response.lastPage || response.last_page || 1;
-          hasMorePages = page < lastPage;
-        } else if (Array.isArray(response)) {
-          produitsData = response;
-          hasMorePages = false;
-        }
-        
-        const produitsFormatesPage = produitsData.map(produit => {
-          const produitObj = produit.produit || produit;
-          
-          const prixDetail = parseFloat(produit.prix_vente_detail || produit.prix || produitObj.prix || 0);
-          const prixGros = parseFloat(produit.prix_vente_gros || produit.prix_unite_carton || produitObj.prix_gros || prixDetail * 0.8);
-          const stockGlobal = parseInt(produit.quantite || produit.stock || produitObj.stock || produitObj.quantite || 0, 10);
-          
-          return {
-            id: produitObj.id || produit.id,
-            nom: produitObj.nom || produit.nom || 'Produit sans nom',
-            code_barre: produitObj.code_barre || produit.code_barre || '',
-            prix_vente_detail: prixDetail,
-            prix_vente_gros: prixGros,
-            prix_achat: parseFloat(produit.prix_achat || 0),
-            prix_total: parseFloat(produit.prix_total || 0),
-            prix_seuil_detail: parseFloat(produit.prix_seuil_detail || prixDetail * 0.7),
-            prix_seuil_gros: parseFloat(produit.prix_seuil_gros || prixGros * 0.7),
-            stock_global: stockGlobal,
-            stock_seuil: parseInt(produit.seuil || produit.stock_seuil || 10, 10),
-            stock: stockGlobal,
-            seuil_alerte: parseInt(produit.seuil || produit.stock_seuil || 10, 10),
-            unite_carton: parseInt(produit.unite_carton || produit.unite_par_carton || 1, 10),
-            prix_unite_carton: prixGros,
-            nombre_carton: Math.floor(stockGlobal / (produit.unite_carton || produit.unite_par_carton || 1)),
-            categorie_id: produit.categorie_id || produitObj.categorie?.id,
-            categorie: produit.categorie_nom || produitObj.categorie?.nom || 'Non catégorisé',
-            created_at: produit.created_at || produitObj.created_at,
-            updated_at: produit.updated_at || produitObj.updated_at,
-            prix: prixDetail,
-            prix_detail: prixDetail,
-            prix_gros: prixGros,
-            prix_seuil: parseFloat(produit.prix_seuil_detail || prixDetail * 0.7)
-          };
-        });
-        
-        allProducts = [...allProducts, ...produitsFormatesPage];
-        page++;
-      }
-      
-      setTousLesProduits(allProducts);
-      
-      filtrerProduitsRecherche(allProducts);
-      
-    } catch (error) {
-      addNotification('error', 'Erreur lors de la recherche des produits');
-    } finally {
-      setLoadingRecherche(false);
-    }
-  };
-
-  const filtrerProduitsRecherche = (produitsList) => {
-    if (!rechercheProduit.trim()) {
-      setProduitsFiltres([]);
-      setTotalProduitsFiltres(0);
-      setRechercheLastPage(1);
-      return;
-    }
-
-    const searchLower = rechercheProduit.toLowerCase().trim();
-    
-    const filtres = produitsList.filter(produit => {
-      if (!produit) return false;
-      
-      const nomMatch = produit.nom?.toLowerCase().includes(searchLower) || false;
-      const codeBarreMatch = produit.code_barre?.toLowerCase().includes(searchLower) || false;
-      const categorieMatch = produit.categorie?.toLowerCase().includes(searchLower) || false;
-      
-      return nomMatch || codeBarreMatch || categorieMatch;
-    });
-    
-    setTotalProduitsFiltres(filtres.length);
-    
-    const totalPages = Math.ceil(filtres.length / itemsPerPage);
-    setRechercheLastPage(totalPages || 1);
-    
-    if (rechercheCurrentPage > totalPages && totalPages > 0) {
-      setRechercheCurrentPage(totalPages);
-    }
-    
-    const startIndex = (rechercheCurrentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    const produitsPagination = filtres.slice(startIndex, endIndex);
-    
-    setProduitsFiltres(produitsPagination);
-  };
-
   useEffect(() => {
-    if (rechercheTimeout.current) {
-      clearTimeout(rechercheTimeout.current);
-    }
-
-    rechercheTimeout.current = setTimeout(() => {
-      if (rechercheProduit.trim()) {
-        chargerTousLesProduits();
-      } else {
-        setRechercheEnCours(false);
-        setProduitsFiltres(produits);
-        setTotalProduitsFiltres(0);
-        setTousLesProduits([]);
-      }
-    }, 500);
-
-    return () => {
-      if (rechercheTimeout.current) {
-        clearTimeout(rechercheTimeout.current);
-      }
-    };
-  }, [rechercheProduit]);
-
-  useEffect(() => {
-    if (rechercheEnCours && tousLesProduits.length > 0) {
-      filtrerProduitsRecherche(tousLesProduits);
-    }
-  }, [rechercheCurrentPage, rechercheEnCours]);
-
-  useEffect(() => {
-    chargerProduits(1);
+    chargerProduits();
     chargerInfosVendeur();
   }, []);
-
-  useEffect(() => {
-    if (currentPage > 0 && !rechercheEnCours) {
-      chargerProduits(currentPage);
-    }
-  }, [currentPage]);
 
   useEffect(() => {
     if (sellerName && sellerName !== vendeurInfo.nom) {
@@ -464,10 +211,51 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
   }, [sellerName]);
 
   useEffect(() => {
+    if (!produits || !Array.isArray(produits)) {
+      setProduitsFiltres([]);
+      return;
+    }
+    setProduitsFiltres(produits);
+  }, [produits]);
+
+  useEffect(() => {
+    chargerProduits();
+  }, [currentPage, debouncedRechercheProduit]);
+
+  useEffect(() => {
     if (inputCodeBarreRef.current) {
       inputCodeBarreRef.current.focus();
     }
   }, []);
+
+  useEffect(() => {
+    if (!boutiqueId) return;
+
+    const channel = echo.private(`boutique.${boutiqueId}`);
+
+    const listener = (e) => {
+        chargerProduits();
+    };
+
+    channel.listen('transfert.validee', listener);
+
+    return () => {
+        try {
+            channel.stopListening('transfert.validee');
+            echo.leave(`boutique.${boutiqueId}`);
+
+            addNotification(
+                'info',
+                'Désinscription du canal temps réel réussie.'
+            );
+        } catch (error) {
+            addNotification(
+                'error',
+                'Erreur lors de la désinscription. Rafraîchis la page.'
+            );
+        }
+    };
+}, [boutiqueId]);
 
   const chargerInfosVendeur = async () => {
     try {
@@ -512,6 +300,83 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
     };
   };
 
+  const chargerProduits = async () => {
+    try {
+      setLoadingProduits(true);
+      setErrorMessage('');
+
+      const resp = await gestionnaireBoutiqueAPI.getProduitsDisponiblesBoutique(currentPage, debouncedRechercheProduit || '');
+      const itemsRaw = Array.isArray(resp) ? resp : (resp?.data || []);
+
+      const produitsFormates = itemsRaw.map(produit => {
+        const prixDetail = produit.prix_vente_detail || produit.prix || 0;
+        const prixGros = produit.prix_vente_gros || produit.prix_unite_carton || Math.round(prixDetail * 0.8);
+        
+        return {
+          id: produit.produit.id,
+          nom: produit.produit.nom,
+          code_barre: produit.produit.code_barre || '',
+          prix_vente_detail: prixDetail,
+          prix_vente_gros: prixGros,
+          prix_achat: produit.prix_achat || 0,
+          prix_total: produit.prix_total || 0,
+          prix_seuil_detail: produit.prix_seuil_detail || Math.round(prixDetail * 0.7),
+          prix_seuil_gros: produit.prix_seuil_gros || Math.round(prixGros * 0.7),
+          stock_global: produit.quantite || produit.stock || 0,
+          stock_seuil: produit.seuil || 10,
+          stock: produit.quantite || produit.stock || 0,
+          seuil_alerte: produit.seuil || 10,
+          unite_carton: produit.unite_carton || 1,
+          prix_unite_carton: prixGros,
+          nombre_carton: produit.nombre_carton || Math.floor((produit.stock_global || 0) / (produit.unite_carton || 1)),
+          categorie_id: produit.produit.categorie.id,
+          categorie: produit.produit.categorie.nom || 'Non catégorisé',
+          created_at: produit.created_at,
+          updated_at: produit.updated_at,
+          prix: prixDetail,
+          prix_detail: prixDetail,
+          prix_gros: prixGros,
+          prix_seuil: produit.prix_seuil_detail || Math.round(prixDetail * 0.7)
+        };
+      });
+
+      setProduits(produitsFormates);
+      setProduitsFiltres(produitsFormates);
+      
+      if (!Array.isArray(resp)) {
+        const links = Array.isArray(resp.links) ? resp.links.map(l => {
+          let p = l.page;
+          if (!p && l.url) {
+            const m = l.url.match(/[?&]page=(\d+)/);
+            if (m && m[1]) p = parseInt(m[1], 10);
+          }
+          return { ...l, page: p };
+        }) : [];
+        setPageInfo({
+          current: resp.current_page || 1,
+          last: resp.last_page || 1,
+          total: resp.total || produitsFormates.length,
+          perPage: resp.per_page || produitsFormates.length,
+          links
+        });
+      } else {
+        setPageInfo({ current: 1, last: 1, total: produitsFormates.length, perPage: produitsFormates.length, links: [] });
+      }
+
+    } catch (error) {
+      setErrorMessage('Impossible de charger les produits depuis l\'API.');
+      setProduits([]);
+      
+    } finally {
+      setLoadingProduits(false);
+    }
+  };
+
+  const goToPage = (p) => {
+    if (!p || p < 1 || p > pageInfo.last) return;
+    setCurrentPage(p);
+  };
+
   const obtenirPrixParType = (produit, typeVente) => {
     if (!produit) {
       return { prix: 0, prix_seuil: 0 };
@@ -527,7 +392,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
     }
     
     return {
-      prix: produit.prix_vente_detail || 0,
+      prix: produit.prix_vente_detail ||  0,
       prix_seuil: produit.prix_seuil_detail || 0
     };
   };
@@ -938,7 +803,6 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
         typeVenteGlobalCommande = 'detail';
       }
 
-      
       const vendeurData = getVendeurApiData();
 
       const itemsData = panier.filter(item => item).map(item => {
@@ -999,7 +863,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
         vendeur_telephone: vendeurData.vendeur_telephone,
         boutique_id: vendeurData.boutique_id,
 
-        type_vente: typeVenteGlobalCommande,
+        mode_vente: typeVenteGlobalCommande,
         type_vente_original: typeVenteGlobal,
         type_vente_affichage: getTypeVenteAffichage(typeVenteGlobalCommande),
         
@@ -1049,7 +913,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
             success: true,
             data: {
               id: `temp-pusher-${Date.now()}`,
-              numero: `CMD-PSH-${Date.now().toString().slice(-8)}`,
+              numero: apiResponse?.data?.numero ||0,
               statut: 'en_attente_paiement',
               created_at: new Date().toISOString(),
               type_vente: typeVenteGlobalCommande,
@@ -1065,9 +929,11 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
       let nouvelleCommande;
 
       if (commandeCreee && apiResponse) {
+        console.log("la reponse de api",apiResponse);
+        
         nouvelleCommande = {
-          id: apiResponse?.data?.id || apiResponse?.data?.uuid || `temp-${Date.now()}`,
-          numero_commande: apiResponse?.data?.numero || `CMD-${Date.now().toString().slice(-8)}`,
+          id: apiResponse.id || apiResponse?.data?.uuid || `temp-${Date.now()}`,
+          numero_commande: apiResponse.numero || `CMD-${Date.now().toString().slice(-8)}`,
           date: apiResponse?.data?.created_at || new Date().toISOString(),
           
           type_vente: typeVenteGlobalCommande,
@@ -1235,7 +1101,6 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
       }
 
     } catch (error) {
-
       const typesDansPanier = [...new Set(panier.filter(item => item).map(item => item.type_vente))];
       const typeVenteGlobalCommande = typesDansPanier.includes('detail') && typesDansPanier.includes('gros') ? 'mixte' :
                                     typesDansPanier.includes('gros') ? 'gros' : 'detail';
@@ -1377,10 +1242,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
   };
 
   const rechargerProduits = async () => {
-    await chargerProduits(1);
-    setCurrentPage(1);
-    setRechercheProduit('');
-    setRechercheEnCours(false);
+    await chargerProduits();
     addNotification('success', 'Produits rechargés avec succès');
   };
 
@@ -1416,62 +1278,55 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
     }
 
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {produitsFiltres.map(produit => {
           if (!produit) return null;
 
           return (
-            <div 
-              key={produit.id || Date.now()} 
-              className="bg-gray-50 rounded-lg p-3 border-2 border-gray-200 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-[#472ead] flex flex-col min-w-0 w-full"
-            >
-              <div className="overflow-hidden">
-                <h4 className="text-sm font-semibold text-gray-800 mb-2 truncate" title={produit.nom || 'Produit sans nom'}>
-                  {produit.nom || 'Produit sans nom'}
-                </h4>
-                
-                <div className="space-y-1.5 mb-2">
+            <div key={produit.index || Date.now()} className="bg-gray-50 rounded-lg p-4 border-2 border-gray-200 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-[#472ead] flex flex-col justify-between">
+              <div>
+                <h4 className="text-sm font-semibold text-gray-800 mb-2">{produit.nom || 'Produit sans nom'}</h4>
+                <div className="space-y-2 mb-3">
                   {produit.code_barre && (
-                    <p className="text-xs text-gray-600 flex items-center gap-1.5 truncate">
-                      <FontAwesomeIcon icon={faBarcode} className="text-xs text-gray-400 flex-shrink-0" />
-                      <span className="truncate">Code: {produit.code_barre}</span>
+                    <p className="text-xs text-gray-600 flex items-center gap-2">
+                      <FontAwesomeIcon icon={faBarcode} className="text-xs text-gray-400" />
+                      Code-barre: <span className="font-medium">{produit.code_barre}</span>
                     </p>
                   )}
-                  <p className="text-xs text-gray-600 flex items-center gap-1.5 truncate">
-                    <FontAwesomeIcon icon={faBoxes} className="text-xs text-gray-400 flex-shrink-0" />
-                    <span className="truncate">Cat: {produit.categorie || 'Non catégorisé'}</span>
-                  </p>
+                  <p className="text-xs text-gray-600 flex items-center gap-2">
+                    <FontAwesomeIcon icon={faBoxes} className="text-xs text-gray-400" />
+                    Catégorie: <span className="font-medium">{produit.categorie || 'Non catégorisé'}</span>
+                    </p>
                 </div>
 
-                <div className="space-y-1.5 mb-2">
-                  <div className="bg-white p-1.5 rounded border border-gray-200">
-                    <div className="font-semibold text-gray-800 flex items-center gap-1 text-xs">
-                      <FontAwesomeIcon icon={faShoppingBag} className="text-[#472ead] flex-shrink-0" />
-                      <span className="truncate">Détail:</span>
+                <div className="space-y-2 my-3">
+                  <div className="bg-white p-2 rounded border border-gray-200 text-xs">
+                    <div className="font-semibold text-gray-800 flex items-center gap-2 mb-1 text-xs">
+                      <FontAwesomeIcon icon={faShoppingBag} className="text-xs text-[#472ead]" />
+                      Détail (unité):
                     </div>
-                    <div className="font-bold text-green-600 text-xs truncate">
+                    <div className="font-bold text-green-600 text-sm">
                       {(produit.prix_vente_detail || produit.prix || 0).toLocaleString()} FCFA
                     </div>
-                    <div className="text-[10px] text-gray-500 flex items-center gap-1">
-                      <FontAwesomeIcon icon={faMoneyBillWave} className="text-red-500 flex-shrink-0" />
-                      <span className="truncate">Seuil: {(produit.prix_seuil_detail || produit.prix_seuil || 0).toLocaleString()}</span>
+                    <div className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                      <FontAwesomeIcon icon={faMoneyBillWave} className="text-red-500" />
+                      Seuil: {(produit.prix_seuil_detail || produit.prix_seuil || 0).toLocaleString()} FCFA
                     </div>
                   </div>
-
-                  <div className="bg-white p-1.5 rounded border border-gray-200">
-                    <div className="font-semibold text-gray-800 flex items-center gap-1 text-xs">
-                      <FontAwesomeIcon icon={faPallet} className="text-[#f58020] flex-shrink-0" />
-                      <span className="truncate">Gros:</span>
+                  <div className="bg-white p-2 rounded border border-gray-200 text-xs">
+                    <div className="font-semibold text-gray-800 flex items-center gap-2 mb-1 text-xs">
+                      <FontAwesomeIcon icon={faPallet} className="text-xs text-[#f58020]" />
+                      Gros (carton):
                     </div>
-                    <div className="font-bold text-green-600 text-xs truncate">
+                    <div className="font-bold text-green-600 text-sm">
                       {(produit.prix_vente_gros || produit.prix_unite_carton || 0).toLocaleString()} FCFA
                     </div>
-                    <div className="text-[10px] text-gray-500 flex items-center gap-1">
-                      <FontAwesomeIcon icon={faMoneyBillWave} className="text-red-500 flex-shrink-0" />
-                      <span className="truncate">Seuil: {(produit.prix_seuil_gros || 0).toLocaleString()}</span>
+                    <div className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                      <FontAwesomeIcon icon={faMoneyBillWave} className="text-red-500" />
+                      Seuil: {(produit.prix_seuil_gros || 0).toLocaleString()} FCFA
                     </div>
                     {produit.unite_carton > 1 && (
-                      <div className="text-[10px] text-gray-500 mt-0.5 truncate">
+                      <div className="text-xs text-gray-500 mt-1">
                         {produit.unite_carton} unités/carton
                       </div>
                     )}
@@ -1479,35 +1334,33 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
                 </div>
               </div>
 
-              <div className="mt-2 flex gap-1.5">
-                <button
-                  onClick={() => ajouterAuPanier(produit, 'détail')}
-                  className={`flex-1 py-1.5 px-2 rounded text-[11px] font-semibold flex items-center gap-1 justify-center transition-all duration-300 ${
-                    produit.stock_global === 0
-                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                      : 'bg-gradient-to-br from-[#472ead] to-[#5a3bc0] text-white hover:shadow-md'
-                  }`}
-                  title="Ajouter en vente détail"
-                  disabled={produit.stock_global === 0}
-                >
-                  <FontAwesomeIcon icon={faShoppingBag} className="text-xs flex-shrink-0" />
-                  <span className="truncate">{produit.stock_global === 0 ? 'Épuisé' : 'Détail'}</span>
-                </button>
-                <button
-                  onClick={() => ajouterAuPanier(produit, 'gros')}
-                  className={`flex-1 py-1.5 px-2 rounded text-[11px] font-semibold flex items-center gap-1 justify-center transition-all duration-300 ${
-                    produit.stock_global === 0 || (produit.unite_carton > 1 && produit.stock_global < produit.unite_carton)
-                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                      : 'bg-gradient-to-br from-[#f58020] to-[#ff9c4d] text-white hover:shadow-md'
-                  }`}
-                  title="Ajouter en vente gros"
-                  disabled={produit.stock_global === 0 || (produit.unite_carton > 1 && produit.stock_global < produit.unite_carton)}
-                >
-                  <FontAwesomeIcon icon={faPallet} className="text-xs flex-shrink-0" />
-                  <span className="truncate">
-                    {produit.stock_global === 0 ? 'Épuisé' : 'Gros'}
-                  </span>
-                </button>
+              <div className="mt-4">
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => ajouterAuPanier(produit, 'détail')}
+                    className={`flex-1 py-2 px-3 rounded text-xs font-semibold flex items-center gap-2 justify-center hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 ${produit.stock_global === 0
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : 'bg-gradient-to-br from-[#472ead] to-[#5a3bc0] text-white'
+                      }`}
+                    title="Ajouter en vente détail"
+                    disabled={produit.stock_global === 0}
+                  >
+                    <FontAwesomeIcon icon={faShoppingBag} className="text-xs" />
+                    {produit.stock_global === 0 ? 'Stock épuisé' : 'Détail'}
+                  </button>
+                  <button
+                    onClick={() => ajouterAuPanier(produit, 'gros')}
+                    className={`flex-1 py-2 px-3 rounded text-xs font-semibold flex items-center gap-2 justify-center hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 ${produit.stock_global === 0 || produit.stock_global < produit.unite_carton
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : 'bg-gradient-to-br from-[#f58020] to-[#ff9c4d] text-white'
+                      }`}
+                    title="Ajouter en vente gros"
+                    disabled={produit.stock_global === 0 || produit.stock_global < produit.unite_carton}
+                  >
+                    <FontAwesomeIcon icon={faPallet} className="text-xs" />
+                    {produit.stock_global === 0 ? 'Stock épuisé' : 'Gros'}
+                  </button>
+                </div>
               </div>
             </div>
           );
@@ -1694,40 +1547,26 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
               <FontAwesomeIcon icon={faSearch} className="text-[#472ead] text-sm" />
               Recherche Produits
             </h3>
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Nom, code barre ou catégorie..."
-                value={rechercheProduit}
-                onChange={(e) => setRechercheProduit(e.target.value)}
-                className="w-full py-2 px-3 text-sm border-2 border-gray-200 rounded-lg transition-colors focus:border-[#472ead] focus:outline-none pr-10"
-              />
-              {(loadingRecherche || loadingProduits) && (
-                <div className="absolute right-3 top-2.5">
-                  <FontAwesomeIcon icon={faSpinner} className="animate-spin text-gray-400" />
-                </div>
-              )}
-            </div>
-            {rechercheEnCours && totalProduitsFiltres > 0 && (
-              <p className="text-xs text-gray-500 mt-2">
-                {totalProduitsFiltres} produit(s) trouvé(s) - Page {rechercheCurrentPage}/{rechercheLastPage}
-              </p>
-            )}
+            <input
+              type="text"
+              placeholder="Nom, code barre ou catégorie..."
+              value={rechercheProduit}
+              onChange={(e) => {
+                setRechercheProduit(e.target.value);
+                if (currentPage !== 1) setCurrentPage(1);
+              }}
+              className="w-full py-2 px-3 text-sm border-2 border-gray-200 rounded-lg transition-colors focus:border-[#472ead] focus:outline-none"
+            />
           </div>
 
-          <div className="overflow-hidden">
+          <div>
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-base text-gray-800 font-semibold flex items-center gap-2">
                 <FontAwesomeIcon icon={faBox} className="text-[#472ead] text-sm" />
-                {rechercheEnCours ? 'Résultats de recherche' : 'Produits Disponibles'}
-                {produitsFiltres.length > 0 && (
-                  <span className="ml-2 text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full">
-                    {produitsFiltres.length} produits
-                  </span>
-                )}
+                Produits Disponibles ({produitsFiltres.length})
               </h3>
               <div className="flex items-center gap-2">
-                {(loadingProduits || loadingRecherche) && (
+                {loadingProduits && (
                   <div className="flex items-center gap-2 text-sm text-gray-500">
                     <FontAwesomeIcon icon={faSpinner} className="animate-spin" />
                     Chargement...
@@ -1736,84 +1575,52 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
                 <button
                   onClick={rechargerProduits}
                   className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 py-1 px-3 rounded-lg flex items-center gap-1 transition-colors"
-                  disabled={loadingProduits || loadingRecherche}
                 >
-                  <FontAwesomeIcon icon={faRedo} className={loadingProduits ? 'animate-spin' : ''} />
+                  <FontAwesomeIcon icon={faRedo} />
                   Recharger
                 </button>
               </div>
             </div>
 
             {loadingProduits ? (
-              <div className="flex justify-center items-center py-20">
-                <div className="text-center">
-                  <FontAwesomeIcon icon={faSpinner} className="animate-spin text-4xl text-[#472ead] mb-3" />
-                  <p className="text-gray-600">Chargement des produits...</p>
-                </div>
+              <div className="flex justify-center items-center py-10">
+                <FontAwesomeIcon icon={faSpinner} className="animate-spin text-3xl text-[#472ead]" />
               </div>
             ) : (
-              <>
-                {renderProduitsFiltres()}
-
-                {rechercheEnCours ? (
-                  rechercheLastPage > 1 && (
-                    <div className="flex justify-center items-center gap-4 mt-6 pt-4 border-t border-gray-200">
-                      <button
-                        disabled={rechercheCurrentPage === 1 || loadingRecherche}
-                        onClick={() => setRechercheCurrentPage(prev => Math.max(1, prev - 1))}
-                        className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-                      >
-                        <FontAwesomeIcon icon={faChevronLeft} className="text-xs" />
-                        Précédent
-                      </button>
-
-                      <span className="font-semibold text-sm bg-indigo-50 text-indigo-700 px-4 py-2 rounded-lg">
-                        Page {rechercheCurrentPage} / {rechercheLastPage}
-                      </span>
-
-                      <button
-                        disabled={rechercheCurrentPage === rechercheLastPage || loadingRecherche}
-                        onClick={() => setRechercheCurrentPage(prev => Math.min(rechercheLastPage, prev + 1))}
-                        className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-                      >
-                        Suivant
-                        <FontAwesomeIcon icon={faChevronRight} className="text-xs" />
-                      </button>
-                    </div>
-                  )
-                ) : (
-                  lastPage > 1 && (
-                    <div className="flex justify-center items-center gap-4 mt-6 pt-4 border-t border-gray-200">
-                      <button
-                        disabled={currentPage === 1 || loadingProduits}
-                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                        className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-                      >
-                        <FontAwesomeIcon icon={faChevronLeft} className="text-xs" />
-                        Précédent
-                      </button>
-
-                      <span className="font-semibold text-sm bg-indigo-50 text-indigo-700 px-4 py-2 rounded-lg">
-                        Page {currentPage} / {lastPage}
-                      </span>
-
-                      <button
-                        disabled={currentPage === lastPage || loadingProduits}
-                        onClick={() => setCurrentPage(prev => Math.min(lastPage, prev + 1))}
-                        className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-                      >
-                        Suivant
-                        <FontAwesomeIcon icon={faChevronRight} className="text-xs" />
-                      </button>
-                    </div>
-                  )
-                )}
-              </>
+              renderProduitsFiltres()
             )}
+            <div className="mt-4 flex flex-col items-center gap-3">
+              <div className="text-xs text-gray-600">
+                Page {pageInfo.current} / {pageInfo.last} • {pageInfo.total} produits
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {pageInfo.links.map((l, idx) => {
+                  const isDisabled = !l.url || l.label === '...' || l.page === null;
+                  const isActive = !!l.active;
+                  const labelText = l.label.replace('&laquo; Previous', 'Précédent').replace('Next &raquo;', 'Suivant');
+                  return (
+                    <button
+                      key={`${labelText}-${idx}`}
+                      onClick={() => !isDisabled && goToPage(l.page)}
+                      disabled={isDisabled}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                        isActive
+                          ? 'bg-[#472ead] border-[#472ead] text-white'
+                          : isDisabled
+                            ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
+                            : 'bg-white border-gray-200 text-gray-700 hover:border-[#472ead] hover:bg-[#472ead]/5'
+                      }`}
+                    >
+                      {labelText}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="space-y-5 overflow-y-auto">
+        <div className="space-y-5">
           <div className="bg-white rounded-xl p-5 shadow-sm relative">
             <h3 className="text-base text-gray-800 mb-5 font-semibold flex items-center gap-2">
               <FontAwesomeIcon icon={faUser} className="text-[#472ead] text-sm" />

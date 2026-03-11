@@ -1,62 +1,226 @@
 // ==========================================================
-// 🏭 DepotControle.jsx — VERSION SANS FILTRE PAR ÉTAT
-// RECHERCHE UNIQUEMENT AU CLIC SUR BOUTON RECHERCHER
-// PERSISTANCE DE LA RECHERCHE
-// PAGINATION DYNAMIQUE
+// 🏭 DepotControle.jsx — FOND BLANC + API OPTIMISÉE
+// Optimisations :
+//   ① Un seul fetch initial (per_page=200, toutes pages en parallèle)
+//   ② Pagination côté client — plus de re-fetch au changement de page
+//   ③ Cache mouvements (Map) — pas de re-fetch si déjà chargé
+//   ④ Debounce recherche (300ms) — pas de recalcul à chaque frappe
+//   ⑤ useMemo sur filtrage/tri — recalcul uniquement si données changent
 // ==========================================================
 
-import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { Search, Eye, X, ChevronLeft, ChevronRight, Package } from "lucide-react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import {
+  Search, Eye, X, Package, TrendingUp, TrendingDown,
+  ArrowLeft, ArrowRight, Layers, AlertCircle, Activity,
+  RefreshCw
+} from "lucide-react";
 import depotAPI from "@/services/api/depot";
 
-const DEFAULT_PER_PAGE = 15;
+const PER_PAGE = 20;
 
-/* ================== FONCTION DE FORMATAGE ================= */
-const formatFCFA = (value = 0) => {
-  return Number(value).toLocaleString("fr-FR") + " FCFA";
-};
+export default function DepotControle() {
+  // ── Data
+  const [allProduits, setAllProduits]       = useState([]);       // source unique de vérité
+  const [loading, setLoading]               = useState(true);
+  const [error, setError]                   = useState(null);
 
-const getEtatStock = (stockGlobal, stockSeuil) => {
-  if (stockGlobal === 0) return "Rupture";
-  if (stockGlobal <= stockSeuil) return "Stock faible";
-  return "Disponible";
-};
+  // ── UI state
+  const [page, setPage]                     = useState(1);
+  const [searchInput, setSearchInput]       = useState("");        // valeur brute du champ
+  const [search, setSearch]                 = useState("");        // valeur debouncée
+  const [selectedProduit, setSelectedProduit] = useState(null);
 
-/* ================== PAGINATION ================= */
-const Pagination = ({ currentPage, totalPages, onPageChange, totalItems }) => {
-  const getPageNumbers = useCallback(() => {
-    const pages = [];
-    const maxVisible = 5;
-    
-    if (totalPages <= maxVisible) {
-      for (let i = 1; i <= totalPages; i++) pages.push(i);
-    } else {
-      if (currentPage <= 3) {
-        for (let i = 1; i <= 4; i++) pages.push(i);
-        pages.push('...');
-        pages.push(totalPages);
-      } else if (currentPage >= totalPages - 2) {
-        pages.push(1);
-        pages.push('...');
-        for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
-      } else {
-        pages.push(1);
-        pages.push('...');
-        for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i);
-        pages.push('...');
-        pages.push(totalPages);
+  // ── Mouvements avec cache
+  const [mouvements, setMouvements]         = useState([]);
+  const [loadingMvt, setLoadingMvt]         = useState(false);
+  const mvtCache                            = useRef(new Map());   // ③ cache par produit.id
+
+  // ── Debounce ref
+  const debounceRef = useRef(null);
+
+  /* ═══════════════════════════════════════════════════════
+     ① FETCH UNIQUE — toutes pages en parallèle
+     On récupère d'abord la page 1 pour connaître lastPage,
+     puis on fetch les pages restantes en Promise.all
+  ═══════════════════════════════════════════════════════ */
+  const fetchAll = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Page 1 — donne lastPage
+      const first = await depotAPI.getProduitsControle({ page: 1, per_page: 100 });
+      const lastPage = first?.pagination?.lastPage || 1;
+      let data = first?.data || [];
+
+      // Pages restantes en parallèle
+      if (lastPage > 1) {
+        const pages = Array.from({ length: lastPage - 1 }, (_, i) => i + 2);
+        const results = await Promise.all(
+          pages.map(p => depotAPI.getProduitsControle({ page: p, per_page: 100 }))
+        );
+        results.forEach(r => { data = [...data, ...(r?.data || [])]; });
       }
+
+      setAllProduits(data);
+    } catch {
+      setError("Erreur lors du chargement des produits dépôt");
+    } finally {
+      setLoading(false);
     }
-    return pages;
-  }, [currentPage, totalPages]);
+  }, []);
 
-  if (totalPages <= 1) return null;
+  useEffect(() => { fetchAll(); }, [fetchAll]);
 
+  /* ═══════════════════════════════════════════════════════
+     ④ DEBOUNCE recherche — 300 ms
+  ═══════════════════════════════════════════════════════ */
+  const handleSearchChange = (e) => {
+    const val = e.target.value;
+    setSearchInput(val);
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setSearch(val);
+      setPage(1);
+    }, 300);
+  };
+
+  /* ═══════════════════════════════════════════════════════
+     ⑤ GROUPEMENT + FILTRE — mémoïsé
+  ═══════════════════════════════════════════════════════ */
+  const groupedProduits = useMemo(() => {
+    const map = new Map();
+    allProduits.forEach((p) => {
+      const key = `${p.nom}-${p.categorie_id}`;
+      if (!map.has(key)) map.set(key, { ...p });
+      else map.get(key).nombre_carton += p.nombre_carton || 0;
+    });
+    return Array.from(map.values());
+  }, [allProduits]);
+
+  const filteredProduits = useMemo(() => {
+    if (!search.trim()) return groupedProduits;
+    const q = search.toLowerCase();
+    return groupedProduits.filter(p => p.nom?.toLowerCase().includes(q));
+  }, [search, groupedProduits]);
+
+  // ② Pagination 100% client
+  const totalPages    = Math.max(1, Math.ceil(filteredProduits.length / PER_PAGE));
+  const displayedProduits = useMemo(() => {
+    const start = (page - 1) * PER_PAGE;
+    return filteredProduits.slice(start, start + PER_PAGE);
+  }, [filteredProduits, page]);
+
+  /* ═══════════════════════════════════════════════════════
+     ③ MOUVEMENTS avec cache
+  ═══════════════════════════════════════════════════════ */
+  const afficherFiche = async (produit) => {
+    setSelectedProduit(produit);
+
+    if (mvtCache.current.has(produit.id)) {
+      setMouvements(mvtCache.current.get(produit.id));
+      return;
+    }
+
+    try {
+      setLoadingMvt(true);
+      setMouvements([]);
+      const res = await depotAPI.getMouvementsProduit(produit.id);
+      const data = res?.data || [];
+      mvtCache.current.set(produit.id, data);
+      setMouvements(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingMvt(false);
+    }
+  };
+
+  const fermerFiche = () => { setSelectedProduit(null); setMouvements([]); };
+
+  /* ═══════════════════════════════════════════════════════
+     UTILS
+  ═══════════════════════════════════════════════════════ */
+  const formatFCFA = (v = 0) =>
+    Number(v).toLocaleString("fr-FR").replace(/\s/g, ".") + " FCFA";
+
+  const totalCartons = useMemo(
+    () => filteredProduits.reduce((a, p) => a + (p.nombre_carton || 0), 0),
+    [filteredProduits]
+  );
+  const alertCount = useMemo(
+    () => filteredProduits.filter(p => (p.nombre_carton || 0) <= (p.stock_seuil || 0)).length,
+    [filteredProduits]
+  );
+
+  /* ═══════════════════════════════════════════════════════
+     EARLY RETURNS
+  ═══════════════════════════════════════════════════════ */
+  if (loading)
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 rounded-full border-2 border-violet-200 border-t-violet-600 animate-spin" />
+          <p className="text-sm text-slate-400 font-medium">Chargement des produits…</p>
+        </div>
+      </div>
+    );
+
+  if (error)
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-rose-500 text-sm mb-3">{error}</p>
+          <button
+            onClick={fetchAll}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 text-white text-sm font-medium hover:bg-violet-700 transition-colors"
+          >
+            <RefreshCw size={14} /> Réessayer
+          </button>
+        </div>
+      </div>
+    );
+
+  /* ═══════════════════════════════════════════════════════
+     RENDER
+  ═══════════════════════════════════════════════════════ */
   return (
-    <div className="flex items-center justify-between">
-      <div className="text-sm text-gray-600">
-        <Package size={14} className="inline mr-1" />
-        {totalItems} produit{totalItems > 1 ? 's' : ''}
+    <div className="min-h-screen bg-white text-slate-800 p-6 lg:p-8">
+
+      {/* ── HEADER ── */}
+      <div className="flex flex-wrap items-end justify-between gap-4 mb-8">
+        <div>
+          <p className="text-xs font-semibold tracking-widest uppercase text-violet-500 mb-1">
+            Gestionnaire · Dépôt
+          </p>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight leading-none">
+            Contrôle{" "}
+            <span className="bg-gradient-to-r from-violet-600 to-purple-500 bg-clip-text text-transparent">
+              Stock
+            </span>
+          </h1>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <span className="inline-flex items-center gap-1.5 bg-violet-50 border border-violet-200 text-violet-600 text-xs font-semibold px-3 py-1.5 rounded-full">
+            <Layers size={12} /> {filteredProduits.length} produits
+          </span>
+          <span className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 text-slate-500 text-xs font-semibold px-3 py-1.5 rounded-full">
+            <Package size={12} /> {totalCartons} cartons
+          </span>
+          {alertCount > 0 && (
+            <span className="inline-flex items-center gap-1.5 bg-rose-50 border border-rose-200 text-rose-500 text-xs font-semibold px-3 py-1.5 rounded-full">
+              <AlertCircle size={12} /> {alertCount} alerte{alertCount > 1 ? "s" : ""}
+            </span>
+          )}
+          <button
+            onClick={fetchAll}
+            title="Rafraîchir"
+            className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 text-slate-400 text-xs font-semibold px-3 py-1.5 rounded-full hover:bg-violet-50 hover:border-violet-200 hover:text-violet-500 transition-colors"
+          >
+            <RefreshCw size={12} />
+          </button>
+        </div>
       </div>
       
       <div className="flex items-center gap-1">
@@ -78,484 +242,249 @@ const Pagination = ({ currentPage, totalPages, onPageChange, totalItems }) => {
           <ChevronLeft size={16} />
         </button>
 
-        {getPageNumbers().map((page, index) => (
-          <button
-            key={index}
-            onClick={() => typeof page === 'number' && onPageChange(page)}
-            className={`min-w-[36px] h-9 rounded-lg text-sm font-medium transition-colors ${
-              page === currentPage
-                ? "bg-[#472EAD] text-white"
-                : page === '...'
-                ? "cursor-default"
-                : "hover:bg-gray-50 border"
-            }`}
-            disabled={page === '...'}
-          >
-            {page}
-          </button>
-        ))}
-
-        <button
-          onClick={() => onPageChange(currentPage + 1)}
-          disabled={currentPage === totalPages}
-          className="p-2 rounded-lg border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          title="Page suivante"
-        >
-          <ChevronRight size={16} />
-        </button>
-        
-        <button
-          onClick={() => onPageChange(totalPages)}
-          disabled={currentPage === totalPages}
-          className="p-2 rounded-lg border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          title="Dernière page"
-        >
-          <ChevronRight size={16} className="rotate-180" />
-        </button>
-      </div>
-    </div>
-  );
-};
-
-/* ================== FICHE PRODUIT ================= */
-const FicheProduit = ({ produit, mouvements, loading, onClose }) => {
-  if (!produit) return null;
-
-  return (
-    <div className="bg-white rounded-xl shadow-sm p-4 sm:p-5">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-lg font-semibold text-[#472EAD]">
-          Fiche Produit
-        </h2>
-        <button 
-          onClick={onClose}
-          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-        >
-          <X size={20} />
-        </button>
+      {/* ── SEARCH ── */}
+      <div className="relative mb-6">
+        <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+        <input
+          type="text"
+          placeholder="Rechercher un produit…"
+          value={searchInput}
+          onChange={handleSearchChange}
+          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm text-slate-800 placeholder-slate-400 outline-none focus:border-violet-400 focus:bg-white focus:ring-2 focus:ring-violet-100 transition-all"
+        />
       </div>
 
-      <div className="space-y-4">
-        <h3 className="font-bold text-lg">{produit.nom}</h3>
+      {/* ── MAIN GRID ── */}
+      <div className={`grid gap-5 ${selectedProduit ? "grid-cols-1 lg:grid-cols-[1fr_360px]" : "grid-cols-1"}`}>
 
-        <div>
-          <p className="text-gray-500 text-sm">Fournisseur</p>
-          <p className="font-medium">{produit.fournisseur_nom}</p>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <p className="text-gray-500 text-sm">Prix</p>
-            <p className="font-medium">{formatFCFA(produit.prix_achat)}</p>
-          </div>
-          <div>
-            <p className="text-gray-500 text-sm">Cartons</p>
-            <p className="font-medium">{produit.nombre_carton}</p>
-          </div>
-          <div>
-            <p className="text-gray-500 text-sm">Seuil</p>
-            <p className="font-medium">{produit.stock_seuil || 0}</p>
-          </div>
-          <div>
-            <p className="text-gray-500 text-sm">État</p>
-            <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium mt-1
-              ${produit.etat_stock === 'Rupture' ? 'bg-red-100 text-red-700' : 
-                produit.etat_stock === 'Stock faible' ? 'bg-yellow-100 text-yellow-700' : 
-                'bg-green-100 text-green-700'}`}>
-              {produit.etat_stock}
-            </span>
-          </div>
-        </div>
-
-        {/* Mouvements */}
-        <div className="border-t pt-4">
-          <h4 className="font-semibold mb-3">Mouvements</h4>
-          
-          {loading ? (
-            <div className="flex justify-center py-4">
-              <div className="animate-spin rounded-full h-6 w-6 border-2 border-[#472EAD] border-t-transparent"></div>
-            </div>
-          ) : mouvements.length === 0 ? (
-            <p className="text-sm text-gray-500">Aucun mouvement</p>
-          ) : (
-            <div className="space-y-2 max-h-60 overflow-y-auto">
-              {mouvements.map((m) => (
-                <div
-                  key={m.id}
-                  className={`p-2 rounded text-sm ${
-                    m.type === "entree"
-                      ? "bg-green-50 border border-green-200"
-                      : "bg-red-50 border border-red-200"
-                  }`}
-                >
-                  <div className="font-medium">
-                    {m.type === "entree" ? "📥" : "📤"} {m.quantite}
-                  </div>
-                  <div className="text-xs text-gray-600">
-                    {m.source} → {m.destination}
-                  </div>
-                  <div className="text-xs text-gray-400">
-                    {new Date(m.date).toLocaleDateString("fr-FR")}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-/* ================== PAGE PRINCIPALE ================= */
-export default function DepotControle() {
-  // États des données
-  const [produits, setProduits] = useState([]);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalItems, setTotalItems] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
-  
-  // États des filtres
-  const [searchTerm, setSearchTerm] = useState("");
-  const [activeSearch, setActiveSearch] = useState("");
-  
-  // États de chargement
-  const [isLoading, setIsLoading] = useState(false);
-  const [initialLoadDone, setInitialLoadDone] = useState(false);
-  
-  // Fiche produit
-  const [selectedProduit, setSelectedProduit] = useState(null);
-  const [mouvements, setMouvements] = useState([]);
-  const [loadingMouvements, setLoadingMouvements] = useState(false);
-  
-  // Refs
-  const loadingRef = useRef(false);
-  const previousParamsRef = useRef('');
-
-  /* ============= GÉNÉRATION DES PARAMÈTRES API ============= */
-  const getApiParams = useCallback((page = currentPage) => {
-    const params = { page };
-    
-    if (activeSearch?.trim()) {
-      params.search = activeSearch.trim();
-    }
-    
-    return params;
-  }, [activeSearch, currentPage]);
-
-  /* ============= CHARGEMENT DES DONNÉES ============= */
-  const loadProduits = useCallback(async (page = 1) => {
-    if (loadingRef.current) {
-      console.log("⏳ Chargement déjà en cours, ignoré");
-      return;
-    }
-
-    try {
-      loadingRef.current = true;
-      setIsLoading(true);
-      
-      const params = getApiParams(page);
-      const paramsKey = JSON.stringify(params);
-      
-      if (paramsKey === previousParamsRef.current && initialLoadDone) {
-        console.log("📦 Paramètres identiques, chargement ignoré");
-        return;
-      }
-      
-      console.log("📡 Chargement avec params:", params);
-      previousParamsRef.current = paramsKey;
-      
-      const res = await depotAPI.getProduitsControle({
-        ...params,
-        per_page: DEFAULT_PER_PAGE
-      });
-      
-      console.log("📡 Réponse API:", res);
-      
-      setProduits(res.data || []);
-      setTotalPages(res.pagination?.lastPage || 1);
-      setTotalItems(res.pagination?.total || 0);
-      setCurrentPage(res.pagination?.currentPage || page);
-      
-      setInitialLoadDone(true);
-      
-    } catch (error) {
-      console.error("❌ Erreur chargement:", error);
-      setProduits([]);
-    } finally {
-      setIsLoading(false);
-      loadingRef.current = false;
-    }
-  }, [getApiParams, initialLoadDone]);
-
-  /* ============= EFFET DE CHARGEMENT UNIQUE ============= */
-  useEffect(() => {
-    loadProduits(1);
-  }, []);
-
-  /* ============= EFFET POUR LES FILTRES ============= */
-  useEffect(() => {
-    if (initialLoadDone) {
-      loadProduits(1);
-    }
-  }, [activeSearch]);
-
-  /* ============= CHANGEMENT DE PAGE ============= */
-  const handlePageChange = useCallback((page) => {
-    if (page !== currentPage && initialLoadDone) {
-      loadProduits(page);
-    }
-  }, [currentPage, loadProduits, initialLoadDone]);
-
-  /* ============= RECHERCHE MANUELLE ============= */
-  const handleSearch = useCallback(() => {
-    setActiveSearch(searchTerm);
-  }, [searchTerm]);
-
-  /* ============= RÉINITIALISATION DES FILTRES ============= */
-  const handleResetFilters = useCallback(() => {
-    setSearchTerm("");
-    setActiveSearch("");
-  }, []);
-
-  /* ============= GESTION DE LA TOUCHE ENTRÉE ============= */
-  const handleKeyPress = useCallback((e) => {
-    if (e.key === 'Enter') {
-      handleSearch();
-    }
-  }, [handleSearch]);
-
-  /* ============= CHARGEMENT DES MOUVEMENTS ============= */
-  const chargerMouvements = useCallback(async (produit) => {
-    try {
-      setSelectedProduit(produit);
-      setLoadingMouvements(true);
-      const res = await depotAPI.getMouvementsProduit(produit.id);
-      setMouvements(res.data || []);
-    } catch (error) {
-      console.error("Erreur mouvements:", error);
-    } finally {
-      setLoadingMouvements(false);
-    }
-  }, []);
-
-  /* ============= PRODUITS AVEC ÉTAT CALCULÉ ============= */
-  const produitsAvecEtat = useMemo(() => {
-    return produits.map(p => ({
-      ...p,
-      etat_stock: getEtatStock(p.stock_global || 0, p.stock_seuil || 0)
-    }));
-  }, [produits]);
-
-  return (
-    <div className="min-h-screen bg-gray-50 p-6 md:p-8">
-      <div className="max-w-7xl mx-auto">
-        
-        {/* EN-TÊTE */}
-        <div className="mb-8">
-          <div className="bg-white p-6 rounded-2xl shadow-md">
-            <div className="flex items-center justify-between">
-              <h1 className="text-2xl font-bold text-[#472EAD]">
-                Contrôle Gestionnaire — Dépôt
-              </h1>
-              <div className="text-sm bg-indigo-50 text-[#472EAD] px-4 py-2 rounded-xl font-medium">
-                {!isLoading && totalItems > 0 && (
-                  <span>{totalItems} produit{totalItems > 1 ? 's' : ''}</span>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* RECHERCHE */}
-        <div className="mb-8">
-          <div className="bg-white p-6 rounded-2xl shadow-md">
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  placeholder="Rechercher un produit par son nom... (Appuyez sur Entrée)"
-                  className="w-full pl-9 pr-24 py-2.5 border rounded-xl text-sm focus:ring-2 focus:ring-[#472EAD]/20 focus:border-[#472EAD] outline-none"
-                  disabled={isLoading}
-                />
-                <div className="absolute right-2 top-1.5 flex gap-1">
-                  {searchTerm && searchTerm !== activeSearch && (
-                    <button
-                      onClick={() => setSearchTerm("")}
-                      className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors"
-                      title="Effacer"
-                    >
-                      <X size={16} />
-                    </button>
-                  )}
-                  <button
-                    onClick={handleSearch}
-                    disabled={isLoading || searchTerm === activeSearch}
-                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                      searchTerm !== activeSearch
-                        ? "bg-[#472EAD] text-white hover:bg-[#3a2590]"
-                        : "bg-gray-100 text-gray-400 cursor-not-allowed"
-                    }`}
-                  >
-                    Rechercher
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* FILTRES ACTIFS */}
-            {activeSearch && (
-              <div className="flex items-center gap-3 mt-4 pt-4 border-t border-gray-100">
-                <span className="text-xs font-medium text-gray-500">Filtres actifs :</span>
-                <div className="flex items-center gap-2 flex-wrap">
-                  {activeSearch && (
-                    <span className="bg-indigo-50 text-[#472EAD] px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 font-medium">
-                      <Search size={12} />
-                      "{activeSearch}"
-                      <button
-                        onClick={() => {
-                          setSearchTerm("");
-                          setActiveSearch("");
-                        }}
-                        className="ml-1 hover:text-[#3a2590]"
+        {/* ── TABLE ── */}
+        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="px-5 py-3.5 text-left text-[11px] font-bold tracking-widest uppercase text-slate-400">Produit</th>
+                  <th className="px-5 py-3.5 text-left text-[11px] font-bold tracking-widest uppercase text-slate-400">Fournisseur</th>
+                  <th className="px-5 py-3.5 text-center text-[11px] font-bold tracking-widest uppercase text-slate-400">Prix Achat</th>
+                  <th className="px-5 py-3.5 text-center text-[11px] font-bold tracking-widest uppercase text-slate-400">Cartons</th>
+                  <th className="px-5 py-3.5 text-center text-[11px] font-bold tracking-widest uppercase text-slate-400">Seuil</th>
+                  <th className="px-5 py-3.5 text-center text-[11px] font-bold tracking-widest uppercase text-slate-400">Fiche</th>
+                </tr>
+              </thead>
+              <tbody>
+                {displayedProduits.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-16 text-center">
+                      <Package size={32} className="mx-auto mb-3 text-slate-300" />
+                      <p className="text-slate-400 text-sm">Aucun produit trouvé</p>
+                    </td>
+                  </tr>
+                ) : (
+                  displayedProduits.map((p) => {
+                    const belowSeuil = (p.nombre_carton || 0) <= (p.stock_seuil || 0);
+                    const isActive = selectedProduit?.id === p.id;
+                    return (
+                      <tr
+                        key={p.id}
+                        className={`border-b border-slate-100 last:border-b-0 transition-colors ${
+                          isActive
+                            ? "bg-violet-50"
+                            : "hover:bg-slate-50"
+                        }`}
                       >
-                        <X size={12} />
-                      </button>
-                    </span>
-                  )}
-                  <button
-                    onClick={handleResetFilters}
-                    className="text-xs text-gray-500 hover:text-gray-700 underline underline-offset-2"
-                  >
-                    Tout effacer
-                  </button>
-                </div>
-              </div>
-            )}
+                        {/* Produit */}
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center gap-2.5">
+                            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                              isActive
+                                ? "bg-violet-600"
+                                : "bg-gradient-to-br from-violet-400 to-purple-500"
+                            }`} />
+                            <span className="font-semibold text-slate-800">{p.nom}</span>
+                          </div>
+                        </td>
+
+                        {/* Fournisseur */}
+                        <td className="px-5 py-3.5">
+                          <span className="inline-block bg-slate-100 rounded-md px-2.5 py-1 text-xs text-slate-500 font-medium">
+                            {p.fournisseur_nom || p.fournisseur?.nom || "Non défini"}
+                          </span>
+                        </td>
+
+                        {/* Prix */}
+                        <td className="px-5 py-3.5 text-center">
+                          <span className="font-bold text-xs text-violet-600 bg-violet-50 px-2.5 py-1 rounded-md whitespace-nowrap border border-violet-100">
+                            {formatFCFA(p.prix_achat)}
+                          </span>
+                        </td>
+
+                        {/* Cartons */}
+                        <td className="px-5 py-3.5 text-center">
+                          <span className="font-black text-lg text-slate-800">{p.nombre_carton}</span>
+                        </td>
+
+                        {/* Seuil */}
+                        <td className="px-5 py-3.5 text-center">
+                          <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-md border ${
+                            belowSeuil
+                              ? "bg-rose-50 border-rose-200 text-rose-500"
+                              : "bg-emerald-50 border-emerald-200 text-emerald-600"
+                          }`}>
+                            {belowSeuil ? <TrendingDown size={11} /> : <TrendingUp size={11} />}
+                            {p.stock_seuil || 0}
+                          </span>
+                        </td>
+
+                        {/* Fiche */}
+                        <td className="px-5 py-3.5 text-center">
+                          <button
+                            onClick={() => afficherFiche(p)}
+                            className={`w-8 h-8 rounded-lg text-white flex items-center justify-center mx-auto shadow-sm hover:-translate-y-px active:scale-95 transition-all ${
+                              isActive
+                                ? "bg-violet-700 shadow-violet-200"
+                                : "bg-gradient-to-br from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 shadow-violet-100 hover:shadow-violet-200"
+                            }`}
+                          >
+                            <Eye size={14} />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
 
-        {/* TABLEAU DES PRODUITS */}
-        <div className="mb-8">
-          <div className="bg-white rounded-2xl shadow-md overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-              <h2 className="text-lg font-semibold text-gray-800">
-                Liste des produits
-              </h2>
-            </div>
-            
-            {!isLoading && produitsAvecEtat.length === 0 ? (
-              <div className="text-center py-16">
-                <Package size={48} className="mx-auto text-gray-300 mb-4" />
-                <p className="text-gray-500 text-lg mb-2">
-                  {activeSearch
-                    ? "Aucun produit ne correspond à vos critères"
-                    : "Aucun produit trouvé"}
+        {/* ── FICHE PRODUIT ── */}
+        {selectedProduit && (
+          <div className="bg-white border border-violet-200 rounded-2xl overflow-hidden shadow-sm flex flex-col">
+
+            {/* Header */}
+            <div className="bg-gradient-to-br from-violet-600 to-purple-600 px-5 py-4 flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-bold tracking-widest uppercase text-violet-200 mb-1">
+                  Fiche Produit
                 </p>
-                {activeSearch && (
-                  <button
-                    onClick={handleResetFilters}
-                    className="mt-2 text-[#472EAD] hover:underline text-sm font-medium"
-                  >
-                    Réinitialiser les filtres
-                  </button>
-                )}
+                <h2 className="font-black text-white text-lg leading-tight">
+                  {selectedProduit.nom}
+                </h2>
               </div>
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 p-6">
-                {/* Liste des produits */}
-                <div className={`${selectedProduit ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="p-3 text-left text-gray-600 font-semibold">Produit</th>
-                          <th className="p-3 text-left text-gray-600 font-semibold">Fournisseur</th>
-                          <th className="p-3 text-center text-gray-600 font-semibold">Prix</th>
-                          <th className="p-3 text-center text-gray-600 font-semibold">Cartons</th>
-                          <th className="p-3 text-center text-gray-600 font-semibold">Seuil</th>
-                          <th className="p-3 text-center text-gray-600 font-semibold">État</th>
-                          <th className="p-3 text-center text-gray-600 font-semibold">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {produitsAvecEtat.map((p) => (
-                          <tr key={p.id} className="border-b hover:bg-gray-50 transition-colors">
-                            <td className="p-3 font-medium">{p.nom}</td>
-                            <td className="p-3">{p.fournisseur_nom}</td>
-                            <td className="p-3 text-center">{formatFCFA(p.prix_achat)}</td>
-                            <td className="p-3 text-center">{p.nombre_carton}</td>
-                            <td className="p-3 text-center">{p.stock_seuil || 0}</td>
-                            <td className="p-3 text-center">
-                              <span className={`px-2 py-1 rounded-full text-xs font-medium
-                                ${p.etat_stock === 'Rupture' ? 'bg-red-100 text-red-700' : 
-                                  p.etat_stock === 'Stock faible' ? 'bg-yellow-100 text-yellow-700' : 
-                                  'bg-green-100 text-green-700'}`}>
-                                {p.etat_stock}
-                              </span>
-                            </td>
-                            <td className="p-3 text-center">
-                              <button
-                                onClick={() => chargerMouvements(p)}
-                                className="p-2 bg-[#472EAD] text-white rounded-lg hover:bg-[#36238b] transition-colors"
-                              >
-                                <Eye size={16} />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+              <button
+                onClick={fermerFiche}
+                className="w-7 h-7 rounded-lg bg-white/20 text-white/80 hover:bg-white/30 hover:text-white flex items-center justify-center flex-shrink-0 transition-all mt-0.5"
+              >
+                <X size={13} />
+              </button>
+            </div>
 
-                  {/* PAGINATION */}
-                  {totalPages > 1 && (
-                    <div className="mt-6 pt-4 border-t">
-                      <Pagination
-                        currentPage={currentPage}
-                        totalPages={totalPages}
-                        onPageChange={handlePageChange}
-                        totalItems={totalItems}
-                      />
-                    </div>
-                  )}
+            {/* Body */}
+            <div className="p-5 flex-1 overflow-y-auto">
+
+              {/* KPIs */}
+              <div className="grid grid-cols-2 gap-3 mb-5">
+                <div className="col-span-2 bg-slate-50 border border-slate-200 rounded-xl p-3.5">
+                  <p className="text-[10px] font-bold tracking-widest uppercase text-slate-400 mb-1">Fournisseur</p>
+                  <p className="font-semibold text-slate-700 text-sm">
+                    {selectedProduit.fournisseur_nom || selectedProduit.fournisseur?.nom || "Non défini"}
+                  </p>
                 </div>
+                <div className="bg-violet-50 border border-violet-100 rounded-xl p-3.5">
+                  <p className="text-[10px] font-bold tracking-widest uppercase text-violet-400 mb-1">Prix Achat</p>
+                  <p className="font-bold text-violet-700 text-xs leading-snug">
+                    {formatFCFA(selectedProduit.prix_achat)}
+                  </p>
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5">
+                  <p className="text-[10px] font-bold tracking-widest uppercase text-slate-400 mb-1">Seuil</p>
+                  <p className="font-black text-slate-800 text-2xl">{selectedProduit.stock_seuil || 0}</p>
+                </div>
+              </div>
 
-                {/* FICHE PRODUIT */}
-                {selectedProduit && (
-                  <div className="lg:col-span-1">
-                    <FicheProduit
-                      produit={selectedProduit}
-                      mouvements={mouvements}
-                      loading={loadingMouvements}
-                      onClose={() => {
-                        setSelectedProduit(null);
-                        setMouvements([]);
-                      }}
-                    />
-                  </div>
+              {/* Mouvements */}
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-[10px] font-bold tracking-widest uppercase text-violet-500">
+                  Mouvements
+                </p>
+                {mvtCache.current.has(selectedProduit.id) && (
+                  <span className="text-[9px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                    cache
+                  </span>
                 )}
               </div>
-            )}
-          </div>
-        </div>
 
-        {/* CHARGEMENT */}
-        {isLoading && (
-          <div className="mb-8">
-            <div className="bg-white p-8 rounded-2xl shadow-md flex justify-center items-center">
-              <div className="flex items-center gap-3">
-                <div className="animate-spin rounded-full h-6 w-6 border-3 border-[#472EAD] border-t-transparent"></div>
-                <p className="text-gray-700 font-medium">Chargement des produits...</p>
-              </div>
+              {loadingMvt ? (
+                <div className="space-y-2">
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className="h-16 rounded-xl bg-slate-100 animate-pulse" />
+                  ))}
+                </div>
+              ) : mouvements.length === 0 ? (
+                <div className="text-center py-10">
+                  <Activity size={28} className="mx-auto mb-2 text-slate-300" />
+                  <p className="text-slate-400 text-xs">Aucun mouvement enregistré</p>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                  {mouvements.map((m) => (
+                    <div
+                      key={m.id}
+                      className={`flex items-start gap-3 p-3 rounded-xl border text-xs ${
+                        m.type === "entree"
+                          ? "bg-emerald-50 border-emerald-200"
+                          : "bg-rose-50 border-rose-200"
+                      }`}
+                    >
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                        m.type === "entree"
+                          ? "bg-emerald-100 text-emerald-600"
+                          : "bg-rose-100 text-rose-500"
+                      }`}>
+                        {m.type === "entree" ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={`font-semibold mb-0.5 ${m.type === "entree" ? "text-emerald-700" : "text-rose-600"}`}>
+                          {m.type === "entree" ? "Entrée" : "Sortie"} — {m.quantite}
+                        </p>
+                        <p className="text-slate-500 truncate">{m.source} → {m.destination}</p>
+                        <p className="text-slate-400 mt-0.5">
+                          {new Date(m.date).toLocaleDateString("fr-FR")}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
       </div>
+
+      {/* ── PAGINATION ── */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3 mt-6">
+          <button
+            disabled={page <= 1}
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 text-sm font-medium hover:bg-violet-50 hover:border-violet-200 hover:text-violet-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+          >
+            <ArrowLeft size={14} /> Précédent
+          </button>
+
+          <span className="font-black text-sm text-violet-600 bg-violet-50 border border-violet-200 px-4 py-2 rounded-xl">
+            {page} / {totalPages}
+          </span>
+
+          <button
+            disabled={page >= totalPages}
+            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 text-sm font-medium hover:bg-violet-50 hover:border-violet-200 hover:text-violet-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+          >
+            Suivant <ArrowRight size={14} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

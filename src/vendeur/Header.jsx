@@ -313,81 +313,14 @@ export default function Header({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [pwdOpen, setPwdOpen] = useState(false);
-  const [loading, setLoading] = useState({
-    stats: false,
-    profile: false
-  });
-  const [ventesDuJour, setVentesDuJour] = useState(0);
+  const [loading, setLoading] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
-  const [lastUpdate, setLastUpdate] = useState(Date.now());
 
   const { logout } = useAuth();
 
-  const estAujourdhui = (dateString) => {
-    try {
-      const aujourdhui = new Date();
-      const dateCommande = new Date(dateString);
-      return (
-        dateCommande.getDate() === aujourdhui.getDate() &&
-        dateCommande.getMonth() === aujourdhui.getMonth() &&
-        dateCommande.getFullYear() === aujourdhui.getFullYear()
-      );
-    } catch {
-      return false;
-    }
-  };
-
-  const estCompletee = (statut) => {
-    const statutsComplete = ['complétée', 'completed', 'payee', 'paid', 'delivered', 'livree', 'validée'];
-    const statutLower = String(statut || '').toLowerCase().trim();
-    return statutsComplete.includes(statutLower);
-  };
-
-  const fetchVentesDuJour = async () => {
-    try {
-      setLoading(prev => ({ ...prev, stats: true }));
-      
-      const response = await commandesAPI.getAll({
-        perPage: 100,
-        page: 1,
-        sort: 'desc',
-        orderBy: 'date'
-      });
-      
-      let commandesData = [];
-      if (response.data && Array.isArray(response.data)) {
-        commandesData = response.data;
-      } else if (Array.isArray(response)) {
-        commandesData = response;
-      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
-        commandesData = response.data.data;
-      }
-      
-      if (commandesData && commandesData.length > 0) {
-        const commandesAujourdhui = commandesData.filter(cmd => {
-          const date = cmd.date || cmd.created_at;
-          return estAujourdhui(date);
-        });
-        
-        const ventes = commandesAujourdhui
-          .filter(cmd => estCompletee(cmd.statut || cmd.status))
-          .reduce((sum, cmd) => {
-            return sum + (cmd.total_ttc || cmd.total || 0);
-          }, 0);
-        
-        setVentesDuJour(ventes);
-      }
-      
-    } catch (error) {
-      setVentesDuJour(0);
-    } finally {
-      setLoading(prev => ({ ...prev, stats: false }));
-    }
-  };
-
   const fetchUserProfile = async () => {
     try {
-      setLoading(prev => ({ ...prev, profile: true }));
+      setLoading(true);
       const profile = await profileAPI.getProfile();
       setUserProfile(profile);
       
@@ -409,58 +342,35 @@ export default function Header({
     } catch (error) {
       setUserProfile(user);
     } finally {
-      setLoading(prev => ({ ...prev, profile: false }));
+      setLoading(false);
     }
   };
 
-  const refreshData = () => {
-    setLastUpdate(Date.now());
-    fetchVentesDuJour();
-    fetchUserProfile();
-  };
-
   useEffect(() => {
-    fetchVentesDuJour();
     fetchUserProfile();
-  }, [lastUpdate]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      refreshData();
-    }, 30000);
-    
-    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
-    const handleUserUpdate = () => {
-      refreshData();
-    };
-
     const handleStorageChange = (e) => {
       if (e.key === 'user') {
-        refreshData();
+        const updatedUser = e.newValue ? JSON.parse(e.newValue) : null;
+        setUserProfile(updatedUser);
       }
     };
 
-    window.addEventListener('userUpdated', handleUserUpdate);
     window.addEventListener('storage', handleStorageChange);
     
     return () => {
-      window.removeEventListener('userUpdated', handleUserUpdate);
       window.removeEventListener('storage', handleStorageChange);
     };
   }, []);
 
-  const formatMoney = (v) =>
-    new Intl.NumberFormat("fr-FR").format(v || 0) + " FCFA";
-
   const displayName = useMemo(() => {
     const userData = userProfile || user;
     return getDisplayName(userData);
-  }, [userProfile, user, lastUpdate]);
+  }, [userProfile, user]);
 
-  const initials = useMemo(() => getInitials(displayName), [displayName, lastUpdate]);
+  const initials = useMemo(() => getInitials(displayName), [displayName]);
 
   const handleLogout = async () => {
     if (window.confirm("Voulez-vous vous déconnecter ?")) {
@@ -474,7 +384,7 @@ export default function Header({
   };
 
   const handlePasswordChangeSuccess = () => {
-    refreshData();
+    fetchUserProfile();
   };
 
   return (
@@ -512,20 +422,6 @@ export default function Header({
             </div>
 
             <div className="flex items-center gap-4">
-              <div className="hidden sm:flex flex-col text-right">
-                <span className="text-xs text-gray-500 flex items-center gap-1 justify-end">
-                  <Banknote size={12} /> Ventes du jour
-                </span>
-                <div className="flex items-center gap-2 justify-end">
-                  <span className="font-semibold text-emerald-600">
-                    {formatMoney(ventesDuJour)}
-                  </span>
-                  {loading.stats && (
-                    <div className="w-3 h-3 border border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-                  )}
-                </div>
-              </div>
-
               <div className="relative">
                 <button
                   onClick={() => setMenuOpen((v) => !v)}

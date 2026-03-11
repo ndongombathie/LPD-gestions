@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import Card, { CardHeader } from '../../components/ui/Card';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import caissierApi from '../services/caissierApi';
-import { initializeEcho } from '../../utils/echo';
+import { echo } from '../../utils/echo';
+import { toast } from 'sonner';
 
 // Fonction pour formater le temps relatif
 const formatTimeAgo = (date) => {
@@ -40,27 +41,40 @@ const DashboardPage = () => {
   const [activiteRecente, setActiviteRecente] = useState([]);
   const echoRef = useRef(null);
 
-  // Fonction pour charger les données
+  // Fonction pour charger les données (avec protection contre les appels multiples)
+  const loadingRef = useRef(false);
   const loadData = async () => {
+    if (loadingRef.current) return;
     try {
+      loadingRef.current = true;
       setLoading(true);
-      
-      // Charger toutes les données en parallèle
-      const [statsData, ventesMoyen, ventesHeure, activite] = await Promise.all([
-        caissierApi.getDashboardStats(),
-        caissierApi.getVentesParMoyen(),
-        caissierApi.getVentesParHeure(),
-        caissierApi.getActiviteRecente(5),
+
+      const dateJour = caissierApi.getDateLocal();
+
+      const [statsData, ventesMoyen, ventesHeure, activite, commandesAttente] = await Promise.all([
+        caissierApi.getDashboardStats(dateJour),
+        caissierApi.getVentesParMoyen(dateJour),
+        caissierApi.getVentesParHeure(dateJour),
+        caissierApi.getActiviteRecente(6),
+        caissierApi.getCommandesAttente({ per_page: 1 }),
       ]);
-      
-      setStats(statsData);
+
+      // Utiliser le total des commandes en attente (montant_a_encaisser > 0) pour cohérence avec la page Caisse
+      const ticketsEnAttente = commandesAttente?.total ?? statsData.ticketsEnAttente;
+      setStats({
+        ...statsData,
+        ticketsEnAttente,
+      });
       setVentesParMoyen(ventesMoyen);
       setVentesParHeure(ventesHeure);
-      setActiviteRecente(activite);
+      setActiviteRecente(Array.isArray(activite) ? activite.slice(0, 4) : []);
     } catch (error) {
-      // Erreur silencieuse
+      toast.error('Erreur', {
+        description: error.response?.data?.message || 'Impossible de charger les données du tableau de bord.',
+      });
     } finally {
       setLoading(false);
+      loadingRef.current = false;
     }
   };
 
@@ -72,7 +86,7 @@ const DashboardPage = () => {
     // Initialiser WebSocket de manière asynchrone pour les mises à jour en temps réel
     const timeoutId = setTimeout(() => {
       try {
-        const echo = initializeEcho();
+      //  const echo = initializeEcho();
         if (echo) {
           echoRef.current = echo;
           
@@ -145,7 +159,7 @@ const DashboardPage = () => {
   }
 
   return (
-    <div className="space-y-6 relative z-10" style={{ position: 'relative', visibility: 'visible', opacity: 1, display: 'block', width: '100%', minHeight: '400px' }}>
+    <div className="space-y-14 relative z-10" style={{ position: 'relative', visibility: 'visible', opacity: 1, display: 'block', width: '100%', minHeight: '400px' }}>
       {/* En-tête */}
       <div style={{ backgroundColor: 'transparent', padding: '10px' }}>
         <h1 className="text-3xl font-bold text-[#472EAD]" style={{ color: '#472EAD', fontSize: '2rem' }}>
@@ -157,7 +171,7 @@ const DashboardPage = () => {
       </div>
 
       {/* Statistiques principales */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
         <Card className="border-l-4 border-l-[#472EAD] hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
           <div className="flex items-center justify-between">
             <div>
@@ -221,13 +235,17 @@ const DashboardPage = () => {
       </div>
 
       {/* Graphiques */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Graphique en barres - Ventes par heure */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-4">
+        {/* Graphique en barres - Ventes par heure (backend: tranches 08h-10h à 18h-20h) */}
         <Card>
           <CardHeader title="Ventes par période de la journée" />
           <div className="mt-6">
             <div className="space-y-4">
-              {ventesParHeure.map((vente, index) => (
+              {(Array.isArray(ventesParHeure) && ventesParHeure.length > 0 ? ventesParHeure : [
+                { heure: '08h-10h', montant: 0 }, { heure: '10h-12h', montant: 0 },
+                { heure: '12h-14h', montant: 0 }, { heure: '14h-16h', montant: 0 },
+                { heure: '16h-18h', montant: 0 }, { heure: '18h-20h', montant: 0 },
+              ]).map((vente, index) => (
                 <div key={index}>
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-sm font-medium text-gray-700">
@@ -260,7 +278,22 @@ const DashboardPage = () => {
                     const circumference = 2 * Math.PI * 90;
                     let cumulativePercentage = 0;
                     const colors = ['#472EAD', '#F58020', '#10b981', '#8b5cf6', '#ef4444'];
-                    
+
+                    if (!ventesParMoyen || ventesParMoyen.length === 0) {
+                      return (
+                        <circle
+                          cx="100"
+                          cy="100"
+                          r="90"
+                          fill="transparent"
+                          stroke="#E5E7EB"
+                          strokeWidth="20"
+                          strokeDasharray={`${circumference} ${circumference}`}
+                          strokeDashoffset={0}
+                        />
+                      );
+                    }
+
                     return ventesParMoyen.map((item, index) => {
                       const percentage = item.pourcentage;
                       const strokeDashoffset = circumference * (1 - cumulativePercentage / 100);
@@ -294,7 +327,11 @@ const DashboardPage = () => {
               </div>
             </div>
             <div className="space-y-3">
-              {ventesParMoyen.map((item, index) => {
+              {ventesParMoyen.length === 0 ? (
+                <div className="text-center py-6 text-gray-500">
+                  <p className="text-sm">Aucune vente enregistrée pour le moment</p>
+                </div>
+              ) : ventesParMoyen.map((item, index) => {
                 const colors = ['#472EAD', '#F58020', '#10b981', '#8b5cf6', '#ef4444'];
                 return (
                   <div key={index} className="flex items-center justify-between">
@@ -322,8 +359,8 @@ const DashboardPage = () => {
       </div>
 
       {/* Statistiques supplémentaires */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
+        <Card className="bg-white">
           <CardHeader title="Tickets du jour" />
           <div className="mt-4 space-y-4">
             <div 
@@ -371,22 +408,22 @@ const DashboardPage = () => {
           </div>
         </Card>
 
-        <Card>
+        <Card className="bg-white">
           <CardHeader title="Activité récente" />
-          <div className="mt-4 space-y-3">
+          <div className="mt-4 space-y-4">
             {activiteRecente.length > 0 ? (
-              activiteRecente.map((activite, index) => (
+              activiteRecente.slice(0, 4).map((activite, index) => (
                 <div 
                   key={index} 
-                  className={`flex items-center justify-between p-3 ${
-                    index < activiteRecente.length - 1 ? 'border-b border-gray-200' : ''
+                  className={`flex items-center justify-between p-4 ${
+                    index < Math.min(activiteRecente.length, 4) - 1 ? 'border-b border-gray-200' : ''
                   }`}
                 >
               <div>
                     <p className="text-sm font-medium text-gray-900">
                       {activite.type === 'encaissement' ? 'Encaissement' : 'Décaissement'}
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-sm text-gray-500">
                       {formatTimeAgo(activite.date)}
               </p>
             </div>

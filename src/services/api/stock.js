@@ -50,4 +50,14 @@ export const stockAPI = {
       throw error;
     }
   },
+  // dans stock.js
+validateTransfer: async (transferId) => {
+  const response = await httpClient.put(`${ENDPOINTS.TRANSFER}/${transferId}/validate`);
+  return response.data;
+},
+
+cancelTransfer: async (transferId) => {
+  const response = await httpClient.delete(`${ENDPOINTS.TRANSFER}/${transferId}`);
+  return response.data;
+},
 };

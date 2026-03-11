@@ -1,3 +1,4 @@
+        {/* Historique gestionnaires de boutique*/}
 import React, { useState, useEffect } from "react";
 import { FileText, Filter, Download, Eye, Search, FileDown, Loader2 } from "lucide-react";
 import DataTable from "../components/DataTable";

@@ -1376,67 +1376,64 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
         )}
 
         {commandesFiltrees.length > 0 && (
-          <div className="px-3 py-3 border-t border-gray-200 bg-gray-50">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="text-xs text-gray-600">
-                Page {pagination.currentPage} sur {pagination.totalPages}
-              </div>
-              
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={firstPage}
-                  disabled={pagination.currentPage === 1}
-                  className="p-1.5 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Première page"
-                >
-                  <FontAwesomeIcon icon={faAngleDoubleLeft} />
-                </button>
-                <button
-                  onClick={prevPage}
-                  disabled={pagination.currentPage === 1}
-                  className="p-1.5 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Page précédente"
-                >
-                  <FontAwesomeIcon icon={faAngleLeft} />
-                </button>
+          <div className="mt-4 flex flex-col items-center gap-3 pb-4 pt-3 border-t border-gray-200">
+            <div className="text-xs text-gray-600">
+              Page {pagination.currentPage} / {pagination.totalPages} • {pagination.totalItems} commandes
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={prevPage}
+                disabled={pagination.currentPage === 1}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                  pagination.currentPage === 1
+                    ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
+                    : 'bg-white border-gray-200 text-gray-700 hover:border-[#472ead] hover:bg-[#472ead]/5'
+                }`}
+              >
+                Précédent
+              </button>
 
-                <div className="flex items-center gap-1 mx-2">
-                  {getPageNumbers().map((page, index) => (
-                    page === '...' ? (
-                      <span key={`dots-${index}`} className="px-2 py-1 text-xs text-gray-500">...</span>
-                    ) : (
-                      <button
-                        key={page}
-                        onClick={() => goToPage(page)}
-                        className={`min-w-[28px] h-7 px-2 text-xs rounded-md transition-colors ${
-                          pagination.currentPage === page
-                            ? 'bg-blue-600 text-white font-medium'
-                            : 'text-gray-700 hover:bg-gray-200'
-                        }`}
-                      >
-                        {page}
-                      </button>
-                    )
-                  ))}
-                </div>
+              {getPageNumbers().map((item, index) => {
+                if (item === '...') {
+                  return (
+                    <span 
+                      key={`dots-${index}`} 
+                      className="px-3 py-1.5 text-xs text-gray-500"
+                    >
+                      ...
+                    </span>
+                  );
+                }
 
-                <button
-                  onClick={nextPage}
-                  disabled={pagination.currentPage === pagination.totalPages}
-                  className="p-1.5 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Page suivante"
-                >
-                  <FontAwesomeIcon icon={faAngleRight} />
-                </button>
-                <button
-                  onClick={lastPage}
-                  disabled={pagination.currentPage === pagination.totalPages}
-                  className="p-1.5 text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Dernière page"
-                >
-                  <FontAwesomeIcon icon={faAngleDoubleRight} />
-                </button>
-              </div>
+                const page = parseInt(item);
+                const isActive = pagination.currentPage === page;
+
+                return (
+                  <button
+                    key={page}
+                    onClick={() => goToPage(page)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                      isActive
+                        ? 'bg-[#472ead] border-[#472ead] text-white'
+                        : 'bg-white border-gray-200 text-gray-700 hover:border-[#472ead] hover:bg-[#472ead]/5'
+                    }`}
+                  >
+                    {page}
+                  </button>
+                );
+              })}
+
+              <button
+                onClick={nextPage}
+                disabled={pagination.currentPage === pagination.totalPages}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                  pagination.currentPage === pagination.totalPages
+                    ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
+                    : 'bg-white border-gray-200 text-gray-700 hover:border-[#472ead] hover:bg-[#472ead]/5'
+                }`}
+              >
+                Suivant
+              </button>
             </div>
           </div>
         )}

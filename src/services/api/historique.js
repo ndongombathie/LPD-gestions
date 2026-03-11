@@ -1,5 +1,8 @@
-// services/api/historique.js
+ 
+// src/services/api/historique.js
 import httpClient from '../http/client';
+
+ 
 
 /**
  * 📊 API pour l'historique des commandes
@@ -48,6 +51,15 @@ const normalizeResponse = (response) => {
 };
 
 export const historiqueAPI = {
+    /**
+   * Récupère l'historique des actions (modifications et suppressions)
+   * @param {Object} params - Paramètres de requête (page, etc.)
+   * @returns {Promise} - Promesse contenant les données paginées
+   */
+  getAll: async (params = {}) => {
+    const response = await httpClient.get('/historique-actions', { params });
+    return response.data;
+  } ,
   /**
    * Récupérer l'historique des commandes avec filtres
    */
@@ -221,4 +233,5 @@ export const historiqueAPI = {
       return { success: false, error: error.message };
     }
   },
+
 };

@@ -1,13 +1,25 @@
 import { formatCurrency, formatDateTime } from '../../utils/formatters';
 
+const getBoutiqueHeader = (boutique) => {
+  if (boutique && (boutique.nom || boutique.adresse)) {
+    return {
+      nom: boutique.nom || 'LPD',
+      adresse: boutique.adresse || 'Colobane',
+      telephone: boutique.telephone || '',
+    };
+  }
+  return { nom: 'LPD', adresse: 'Colobane', telephone: '' };
+};
+
 /**
- * Fonction utilitaire pour imprimer un décaissement
- * Inclut toutes les informations et le nom du caissier pour la traçabilité
+ * Fonction utilitaire pour imprimer un décaissement (données réelles).
+ * @param {Object} decaissement - Données du décaissement (id, montant, statut, motif, cree_par, fait_par, fait_le, created_at)
+ * @param {Object} [boutique] - Optionnel: { nom, adresse, telephone } pour l'en-tête
  */
-export const printDecaissement = (decaissement) => {
-  // Créer un élément temporaire pour l'impression
+export const printDecaissement = (decaissement, boutique = null) => {
+  const header = getBoutiqueHeader(boutique);
   const printWindow = window.open('', '_blank');
-  
+
   if (!printWindow) {
     alert('Veuillez autoriser les fenêtres popup pour imprimer le décaissement');
     return;
@@ -82,7 +94,7 @@ export const printDecaissement = (decaissement) => {
             font-weight: bold;
             text-transform: uppercase;
           }
-          .statut-fait {
+          .statut-valide {
             background-color: #d1fae5;
             color: #065f46;
           }
@@ -133,9 +145,9 @@ export const printDecaissement = (decaissement) => {
           <div class="header-info">
             <div>
               <h1>LPD GESTIONS</h1>
-              <p>Boutique: [Nom de la boutique]</p>
-              <p>Adresse: [Adresse]</p>
-              <p>Téléphone: [Téléphone]</p>
+              <p>Boutique: ${header.nom}</p>
+              <p>Adresse: ${header.adresse}</p>
+              ${header.telephone ? `<p>Téléphone: ${header.telephone}</p>` : ''}
             </div>
             <div style="text-align: right;">
               <h2 style="font-size: 20px; margin-bottom: 10px;">DÉCAISSEMENT</h2>
@@ -153,8 +165,8 @@ export const printDecaissement = (decaissement) => {
           </div>
           <div class="info-row">
             <span class="info-label">Statut:</span>
-            <span class="statut ${decaissement.statut === 'fait' ? 'statut-fait' : 'statut-attente'}">
-              ${decaissement.statut === 'fait' ? 'Effectué' : 'En attente'}
+            <span class="statut ${decaissement.statut === 'valide' || decaissement.statut === 'validé' ? 'statut-valide' : 'statut-attente'}">
+              ${decaissement.statut === 'valide' || decaissement.statut === 'validé' ? 'Validé' : 'En attente'}
             </span>
           </div>
         </div>
@@ -178,15 +190,15 @@ export const printDecaissement = (decaissement) => {
           </div>
         </div>
 
-        ${decaissement.statut === 'fait' ? `
+        ${decaissement.statut === 'valide' || decaissement.statut === 'validé' ? `
         <div class="traceability">
-          <h3>Traçabilité - Effectuation</h3>
+          <h3>Traçabilité - Validation</h3>
           <div class="info-row">
-            <span class="info-label">Effectué par:</span>
+            <span class="info-label">Validé par:</span>
             <span class="info-value" style="font-weight: bold; color: #472EAD;">${decaissement.fait_par || 'N/A'}</span>
           </div>
           <div class="info-row">
-            <span class="info-label">Date d'effectuation:</span>
+            <span class="info-label">Date et heure de validation:</span>
             <span class="info-value">${decaissement.fait_le ? formatDateTime(decaissement.fait_le) : 'N/A'}</span>
           </div>
         </div>

@@ -16,11 +16,20 @@ export const formatCurrency = (amount) => {
  */
 export const formatDate = (date) => {
   if (!date) return '';
-  return new Intl.DateTimeFormat('fr-FR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  }).format(new Date(date));
+  try {
+    const d =
+      typeof date === 'string' && date.includes(' ') && !date.includes('T')
+        ? new Date(date.replace(' ', 'T'))
+        : new Date(date);
+    if (Number.isNaN(d.getTime())) return '';
+    return new Intl.DateTimeFormat('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    }).format(d);
+  } catch (_e) {
+    return '';
+  }
 };
 
 /**
@@ -28,13 +37,22 @@ export const formatDate = (date) => {
  */
 export const formatDateTime = (date) => {
   if (!date) return '';
-  return new Intl.DateTimeFormat('fr-FR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(date));
+  try {
+    const d =
+      typeof date === 'string' && date.includes(' ') && !date.includes('T')
+        ? new Date(date.replace(' ', 'T'))
+        : new Date(date);
+    if (Number.isNaN(d.getTime())) return '';
+    return new Intl.DateTimeFormat('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(d);
+  } catch (_e) {
+    return '';
+  }
 };
 
 /**
@@ -42,10 +60,19 @@ export const formatDateTime = (date) => {
  */
 export const formatDateShort = (date) => {
   if (!date) return '';
-  return new Intl.DateTimeFormat('fr-FR', {
-    day: '2-digit',
-    month: 'short',
-  }).format(new Date(date));
+  try {
+    const d =
+      typeof date === 'string' && date.includes(' ') && !date.includes('T')
+        ? new Date(date.replace(' ', 'T'))
+        : new Date(date);
+    if (Number.isNaN(d.getTime())) return '';
+    return new Intl.DateTimeFormat('fr-FR', {
+      day: '2-digit',
+      month: 'short',
+    }).format(d);
+  } catch (_e) {
+    return '';
+  }
 };
 
 /**

@@ -121,60 +121,31 @@ const CaissierRoutes = () => {
 
 ## Services API
 
-Créez un service API pour centraliser les appels :
+Le projet utilise déjà une instance Axios centralisée (`src/services/http/client.js`) et un service caissier (`src/caissier/services/caissierApi.js`).
+Les endpoints “dashboard/rapport” sont maintenant sous le préfixe `caissier/` :
+
+- `GET /api/caissier/dashboard/stats`
+- `GET /api/caissier/dashboard/ventes-par-moyen`
+- `GET /api/caissier/dashboard/ventes-par-heure`
+- `GET /api/caissier/caisses-journal/{date}`
+- `POST /api/caissier/caisses-journal`
+- `PUT /api/caissier/caisses-journal/{date}/cloture`
+
+### Exemple (si vous devez l’utiliser ailleurs)
 
 ```jsx
-// src/caissier/services/api.js
-import axios from 'axios';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
-
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// Intercepteur pour ajouter le token d'authentification
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('auth_token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+// Exemple minimal (déjà implémenté dans src/caissier/services/caissierApi.js)
+import { httpClient } from '../services/http/client';
 
 export const caissierApi = {
-  // Récupérer les tickets en attente
-  getPendingTickets: () => api.get('/tickets/pending'),
-  
-  // Encaisser un ticket
-  encaisserTicket: (ticketId, data) => 
-    api.post(`/tickets/${ticketId}/encaisser`, data),
-  
-  // Créer un décaissement
-  createDecaissement: (data) => 
-    api.post('/decaissements', data),
-  
-  // Récupérer le rapport journalier
-  getRapportJournalier: (date) => 
-    api.get(`/caisses-journal/${date}`),
-  
-  // Enregistrer le fond de caisse
-  saveFondCaisse: (data) => 
-    api.post('/caisses-journal', data),
-  
-  // Clôturer la caisse
-  cloturerCaisse: (date, data) => 
-    api.put(`/caisses-journal/${date}/cloture`, data),
-  
-  // Récupérer l'historique
-  getHistorique: (params) => 
-    api.get('/caissier/historique', { params }),
-};
+  getDashboardStats: (date) => httpClient.get('/caissier/dashboard/stats', { params: { date } }),
+  getVentesParMoyen: (date) => httpClient.get('/caissier/dashboard/ventes-par-moyen', { params: { date } }),
+  getVentesParHeure: (date) => httpClient.get('/caissier/dashboard/ventes-par-heure', { params: { date } }),
 
-export default api;
+  getCaisseJournal: (date) => httpClient.get(`/caissier/caisses-journal/${date}`),
+  createCaisseJournal: (data) => httpClient.post('/caissier/caisses-journal', data),
+  cloturerCaisse: (date, data) => httpClient.put(`/caissier/caisses-journal/${date}/cloture`, data),
+};
 ```
 
 Puis utilisez ce service dans vos composants :
@@ -198,7 +169,7 @@ const fetchTickets = async () => {
 Créez un fichier `.env` à la racine du projet :
 
 ```env
-REACT_APP_API_URL=http://localhost:8000/api
+VITE_API_URL=http://localhost:8000/api
 ```
 
 ## Protection des routes
