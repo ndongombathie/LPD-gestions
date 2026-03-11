@@ -12,6 +12,7 @@ import QRScanner from '../components/QRScanner';
 import caissierApi from '../services/caissierApi';
 import { toast } from 'sonner';
 import { echo } from '../../utils/echo';
+import { m } from 'framer-motion';
 
 const CaissePage = () => {
   const location = useLocation();
@@ -52,8 +53,8 @@ const CaissePage = () => {
     
 
     // Calculer le reste dû à partir des paiements
-    const totalPaye = paiements.reduce((sum, p) => sum + (p.montant || 0), 0);
-    const resteDu = totalTTC - totalPaye;
+    const totalPaye = paiements[0]?.somme_payees || 0;
+    const resteDu = paiements[0]?.reste_du || 0;
 
     // Pour les clients spéciaux, récupérer le moyen de paiement depuis le premier paiement en attente
     // (créé par le responsable)
@@ -72,6 +73,8 @@ const CaissePage = () => {
       prix: detail.prix_unitaire || 0,
       prix_unitaire: detail.prix_unitaire || 0,
     }));
+    console.log('les paiements sont',paiements);
+    
 
     return {
       id: commande.id,
@@ -80,16 +83,18 @@ const CaissePage = () => {
       date_ticket: commande.date || commande.created_at,
       vendeur_nom: commande.vendeur ? `${commande.vendeur.prenom || ''} ${commande.vendeur.nom || ''}`.trim() : 'N/A',
       total_ht: totalHT,
-      tva: tva,
-      total_ttc: totalTTC,
+      tva: tva || 0,
+      tva_applicable: commande.tva_appliquee || false,
+      total_ttc: commande.total || 0,
       moyen_paiement: moyenPaiementDefini, // Pour les clients spéciaux, récupéré depuis les paiements
       statut: resteDu > 0 ? (totalPaye > 0 ? 'partiellement_payee' : 'attente') : 'encaissé',
       client_special: isClientSpecial,
       client_nom: commande.client ? `${commande.client.prenom || ''} ${commande.client.nom || ''}`.trim() : null,
       lignes: lignes,
       montant_deja_paye: paiements[0]?.somme_payees,
-      reste_du: paiements[0]?.reste_du,
+      reste_du: paiements[0]?.reste_du || 0,
       paiements: paiements,
+      montant_a_encaisser: commande.montant_a_encaisser || totalTTC, // Par défaut, le montant à payer est le total TTC, mais pour les paiements partiels, c'est le reste dû
       premiere_tranche:commande.premiere_tranche || null,
     };
   };
@@ -246,9 +251,9 @@ const CaissePage = () => {
     // En espèces : le montant donné doit être au moins égal au montant à payer
     if (paymentData.moyenPaiement === 'especes') {
       const donne = parseFloat(paymentData.montantDonneEspeces) || 0;
-      if (donne < resteDu) {
+      if (donne < selectedTicket.montant_a_encaisser) {
         toast.error('Erreur', {
-          description: `Le montant donné (${formatCurrency(donne)}) est inférieur au montant à payer (${formatCurrency(resteDu)}). Le client doit donner au moins ${formatCurrency(resteDu)}.`,
+          description: `Le montant donné (${formatCurrency(donne)}) est inférieur au montant à payer (${formatCurrency(selectedTicket.montant_a_encaisser)}). Le client doit donner au moins ${formatCurrency(selectedTicket.montant_a_encaisser)}.`,
         });
         return;
       }
@@ -269,8 +274,11 @@ const CaissePage = () => {
       };
 
       // Appel API pour créer le paiement
+      console.log(montant);
+      
       await caissierApi.creerPaiement(selectedTicket.commande_id, {
-        type_paiement: moyenPaiementFinal || 'especes'
+        type_paiement: moyenPaiementFinal || 'especes',
+        montant: selectedTicket.montant_a_encaisser || 0,
       });
 
       toast.success('Encaissement réussi', {
@@ -325,6 +333,7 @@ const CaissePage = () => {
 
   const handleQRScan = async (qrData) => {
     try {
+      console.log('QR code scanné:', qrData);
       const raw = (qrData ?? '').toString().trim();
 
       const extractCommandeId = (value) => {
@@ -782,7 +791,7 @@ const CaissePage = () => {
               disabled={
                 isProcessingPayment ||
                 (paymentData.moyenPaiement === 'especes' &&
-                  (parseFloat(paymentData.montantDonneEspeces) || 0) < (selectedTicket?.reste_du ?? selectedTicket?.total_ttc ?? 0))
+                  (parseFloat(paymentData.montantDonneEspeces) || 0) != (selectedTicket?.montant_a_encaisser || 0))
               }
               className="bg-[#472EAD] hover:bg-[#3d2888] text-white font-semibold shadow-md hover:shadow-lg w-full py-3 disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -828,22 +837,29 @@ const CaissePage = () => {
                   </div>
                 )}
               </div>
-              <div className="mt-4 pt-4 border-t border-gray-200">
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="text-gray-600">Total HT:</span>
-                  <span className="font-medium">{formatCurrency(selectedTicket.total_ht)}</span>
-                </div>
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="text-gray-600">TVA (18%):</span>
-                  <span className="font-medium">{formatCurrency(selectedTicket.tva)}</span>
-                </div>
+              
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                {selectedTicket.tva_applicable &&(
+                  <span>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-gray-600">Total HT:</span>
+                      <span className="font-medium">{formatCurrency(selectedTicket.total_ht)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-gray-600">TVA (18%):</span>
+                      <span className="font-medium">{formatCurrency(selectedTicket.tva)}</span>
+                    </div>
+                  </span>
+                 )}
                 <div className="flex justify-between text-lg font-bold pt-2 border-t border-gray-300">
                   <span>Total TTC:</span>
                   <span className="text-[#472EAD]">
                     {formatCurrency(selectedTicket.total_ttc)}
                   </span>
                 </div>
-              </div>
+                </div>
+              
+              
             </div>
 
             {/* Détails des articles */}
@@ -926,13 +942,14 @@ const CaissePage = () => {
                   type="number"
                   min="0"
                   step="1"
-                  value={paymentData.montantDonneEspeces}
+                  value={paymentData.montant_a_encaisser}
                   onChange={(e) => setPaymentData(prev => ({ ...prev, montantDonneEspeces: e.target.value }))}
                   placeholder="Ex: 15000"
                   className="w-full"
                 />
                 {(() => {
-                  const resteDu = selectedTicket.reste_du || selectedTicket.total_ttc;
+                  const resteDu = selectedTicket.montant_a_encaisser || 0;
+                  
                   const donne = parseFloat(paymentData.montantDonneEspeces) || 0;
                   const monnaieARendre = Math.max(0, donne - resteDu);
                   const insuffisant = donne > 0 && donne < resteDu;
@@ -970,19 +987,19 @@ const CaissePage = () => {
                 type="text"
                 readOnly
                 disabled
-                value={formatCurrency(selectedTicket.reste_du ?? selectedTicket.total_ttc ?? selectedTicket.montant_a_encaisser ?? 0)}
+                value={formatCurrency(selectedTicket.montant_a_encaisser ?? 0)}
                 className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2.5 text-gray-700 font-semibold tabular-nums cursor-not-allowed"
                 aria-label="Montant envoyé (non modifiable)"
               />
               <p className="text-xs text-gray-500">Montant envoyé à la caisse par le dépôt / responsable (non modifiable).</p>
-              {(selectedTicket.reste_du && selectedTicket.reste_du < selectedTicket.total_ttc) && (
+              {(selectedTicket.reste_du > 0 && selectedTicket.reste_du < selectedTicket.total_ttc) && (
                 <p className="text-xs text-gray-600">
                   Reste dû: {formatCurrency(selectedTicket.reste_du)} (Total: {formatCurrency(selectedTicket.total_ttc)}, Déjà payé: {formatCurrency(selectedTicket.montant_deja_paye || 0)})
                 </p>
               )}
             </div>
 
-            {selectedTicket.reste_du && selectedTicket.reste_du < selectedTicket.total_ttc && (
+            {selectedTicket.reste_du > 0 && selectedTicket.reste_du < selectedTicket.total_ttc && (
               <div className="bg-blue-50 border-2 border-blue-300 rounded-lg p-4">
                 <p className="text-sm text-blue-800 font-semibold">
                   Paiement partiel : {formatCurrency(selectedTicket.montant_deja_paye || 0)} déjà payé sur {formatCurrency(selectedTicket.total_ttc)}
@@ -1116,7 +1133,7 @@ const CaissePage = () => {
                 )}
                 <div className="flex justify-between">
                   <span className="text-gray-600">Total TTC:</span>
-                  <span className="font-bold text-[#472EAD]">{formatCurrency(ticketToCancel.total_ttc)}</span>
+                  <span className="font-bold text-[#472EAD]">{formatCurrency(ticketToCancel.montant_a_encaisser)}</span>
                 </div>
               </div>
             </div>

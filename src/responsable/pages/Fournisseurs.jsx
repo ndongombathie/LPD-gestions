@@ -25,6 +25,50 @@ import DataTable from "../components/DataTable.jsx";
 import Pagination from "../components/Pagination.jsx";
 import { fournisseursAPI } from '@/responsable/services/api';
 
+// ==========================================================
+// 🌀 Mini Loader LPD (Top Right)
+// ==========================================================
+const LPDLoader = ({ visible }) => {
+  if (!visible) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.8, y: -10 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.8 }}
+      transition={{ duration: 0.3 }}
+      className="fixed top-20 right-8 z-50"
+    >
+      <div className="relative w-14 h-14">
+        {/* Cercle animé externe */}
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{
+            repeat: Infinity,
+            duration: 3,
+            ease: "linear",
+          }}
+          className="absolute inset-0 rounded-full border-2 border-t-[#F58020] border-r-transparent border-b-[#472EAD] border-l-transparent"
+        />
+
+        {/* Cercle interne */}
+        <motion.div
+          animate={{ scale: [1, 1.05, 1] }}
+          transition={{
+            repeat: Infinity,
+            duration: 1.8,
+            ease: "easeInOut",
+          }}
+          className="absolute inset-2 rounded-full bg-[#472EAD] flex items-center justify-center shadow-lg"
+        >
+          <span className="text-[11px] font-black text-[#F58020] tracking-wider">
+            LPD
+          </span>
+        </motion.div>
+      </div>
+    </motion.div>
+  );
+};
 
 const cls = (...a) => a.filter(Boolean).join(" ");
 
@@ -256,8 +300,7 @@ function FournisseurForm({ initial, onSubmit, onCancel, submitting }) {
 // ———————————————————————————
 export default function Fournisseurs() {
   const [fournisseurs, setFournisseurs] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingPage, setLoadingPage] = useState(false);
+  const [isFetching, setIsFetching] = useState(true); // ← UN SEUL ÉTAT POUR TOUS LES CHARGEMENTS
   const [searchInput, setSearchInput] = useState("");
   const [openAdd, setOpenAdd] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
@@ -282,12 +325,7 @@ export default function Fournisseurs() {
   // 🔗 Chargement depuis l'API Laravel - recherche instantanée
   useEffect(() => {
     const fetchFournisseurs = async () => {
-      // Si c'est le chargement initial
-      if (page === 1 && fournisseurs.length === 0) {
-        setLoading(true);
-      } else {
-        setLoadingPage(true);
-      }
+      setIsFetching(true); // ← ACTIVE LE LOADER
       
       try {
         const data = await fournisseursAPI.getAll({
@@ -319,8 +357,7 @@ export default function Fournisseurs() {
           "Impossible de charger la liste des fournisseurs."
         );
       } finally {
-        setLoading(false);
-        setLoadingPage(false);
+        setIsFetching(false); // ← DÉSACTIVE LE LOADER
       }
     };
 
@@ -335,20 +372,6 @@ export default function Fournisseurs() {
     ).length;
     return { total, avecLivraison };
   }, [totalItems, fournisseurs]);
-
-  // Loader d'affichage initial
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[70vh] bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white">
-        <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-white/80 border border-[#E4E0FF] shadow-sm">
-          <Loader2 className="w-5 h-5 text-[#472EAD] animate-spin" />
-          <span className="text-sm font-medium text-[#472EAD]">
-            Chargement des fournisseurs...
-          </span>
-        </div>
-      </div>
-    );
-  }
 
   // ➕ Ajout (POST /api/fournisseurs)
   const handleAdd = async (form) => {
@@ -510,6 +533,12 @@ export default function Fournisseurs() {
   return (
     <>
       <div className="min-h-screen w-full bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white px-4 sm:px-6 lg:px-10 py-6 sm:py-8 overflow-y-auto">
+        
+        {/* 🌀 Loader LPD subtil en haut à droite - POUR TOUS LES CHARGEMENTS */}
+        <AnimatePresence>
+          <LPDLoader visible={isFetching} />
+        </AnimatePresence>
+
         <div className="max-w-6xl mx-auto space-y-8">
           
           <motion.header
@@ -642,7 +671,7 @@ export default function Fournisseurs() {
               ]}
             />
 
-            {/* ✅ PAGINATION */}
+            {/* ✅ PAGINATION - PLUS DE TEXTE DE CHARGEMENT ICI */}
             <div className="mt-6">
               <Pagination
                 page={page}
@@ -653,14 +682,6 @@ export default function Fournisseurs() {
                   setPage(p);
                 }}
               />
-              
-              {/* Indicateur de chargement pendant le changement de page */}
-              {loadingPage && (
-                <div className="flex justify-center py-2 text-xs text-gray-400 mt-2">
-                  <Loader2 className="w-3 h-3 mr-1 animate-spin text-[#472EAD]" />
-                  Chargement de la page...
-                </div>
-              )}
             </div>
 
           </section>

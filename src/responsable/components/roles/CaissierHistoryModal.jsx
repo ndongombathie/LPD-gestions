@@ -50,7 +50,7 @@ const formatDate = (dateString) => {
   }
 };
 
-export default function CaissierHistoryModal({ employee, isOpen, onClose }) {
+export default function CaissierHistoryModal({ employee,date, isOpen, onClose }) {
   const [operations, setOperations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [filtreType, setFiltreType] = useState("tous");
@@ -72,6 +72,7 @@ export default function CaissierHistoryModal({ employee, isOpen, onClose }) {
           employee.caissier.id,
           {
             search: recherche || undefined,
+            date: date || undefined,
           }
         );
 
