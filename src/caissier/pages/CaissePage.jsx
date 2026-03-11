@@ -73,6 +73,8 @@ const CaissePage = () => {
       prix: detail.prix_unitaire || 0,
       prix_unitaire: detail.prix_unitaire || 0,
     }));
+    console.log('les paiements sont',paiements);
+    
 
     return {
       id: commande.id,
@@ -81,7 +83,8 @@ const CaissePage = () => {
       date_ticket: commande.date || commande.created_at,
       vendeur_nom: commande.vendeur ? `${commande.vendeur.prenom || ''} ${commande.vendeur.nom || ''}`.trim() : 'N/A',
       total_ht: totalHT,
-      tva: tva,
+      tva: tva || 0,
+      tva_applicable: commande.tva_appliquee || false,
       total_ttc: commande.total || 0,
       moyen_paiement: moyenPaiementDefini, // Pour les clients spéciaux, récupéré depuis les paiements
       statut: resteDu > 0 ? (totalPaye > 0 ? 'partiellement_payee' : 'attente') : 'encaissé',
@@ -833,22 +836,29 @@ const CaissePage = () => {
                   </div>
                 )}
               </div>
-              <div className="mt-4 pt-4 border-t border-gray-200">
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="text-gray-600">Total HT:</span>
-                  <span className="font-medium">{formatCurrency(selectedTicket.total_ht)}</span>
-                </div>
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="text-gray-600">TVA (18%):</span>
-                  <span className="font-medium">{formatCurrency(selectedTicket.tva)}</span>
-                </div>
+              
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                {selectedTicket.tva_applicable &&(
+                  <span>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-gray-600">Total HT:</span>
+                      <span className="font-medium">{formatCurrency(selectedTicket.total_ht)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-gray-600">TVA (18%):</span>
+                      <span className="font-medium">{formatCurrency(selectedTicket.tva)}</span>
+                    </div>
+                  </span>
+                 )}
                 <div className="flex justify-between text-lg font-bold pt-2 border-t border-gray-300">
                   <span>Total TTC:</span>
                   <span className="text-[#472EAD]">
                     {formatCurrency(selectedTicket.total_ttc)}
                   </span>
                 </div>
-              </div>
+                </div>
+              
+              
             </div>
 
             {/* Détails des articles */}
