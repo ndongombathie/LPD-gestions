@@ -406,6 +406,7 @@ export default function CaissiersPage() {
         {showHistory && selectedCaissier && (
           <CaissierHistoryModal
             employee={selectedCaissier}
+            date={selectedCaissier.created_at}
             isOpen={showHistory}
             onClose={() => setShowHistory(false)}
           />
