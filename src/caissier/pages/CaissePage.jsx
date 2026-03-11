@@ -333,6 +333,7 @@ const CaissePage = () => {
 
   const handleQRScan = async (qrData) => {
     try {
+      console.log('QR code scanné:', qrData);
       const raw = (qrData ?? '').toString().trim();
 
       const extractCommandeId = (value) => {

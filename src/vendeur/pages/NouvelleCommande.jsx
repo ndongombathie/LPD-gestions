@@ -913,7 +913,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
             success: true,
             data: {
               id: `temp-pusher-${Date.now()}`,
-              numero: `CMD-PSH-${Date.now().toString().slice(-8)}`,
+              numero: apiResponse?.data?.numero ||0,
               statut: 'en_attente_paiement',
               created_at: new Date().toISOString(),
               type_vente: typeVenteGlobalCommande,
@@ -929,9 +929,11 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
       let nouvelleCommande;
 
       if (commandeCreee && apiResponse) {
+        console.log("la reponse de api",apiResponse);
+        
         nouvelleCommande = {
-          id: apiResponse?.data?.id || apiResponse?.data?.uuid || `temp-${Date.now()}`,
-          numero_commande: apiResponse?.data?.numero || `CMD-${Date.now().toString().slice(-8)}`,
+          id: apiResponse.id || apiResponse?.data?.uuid || `temp-${Date.now()}`,
+          numero_commande: apiResponse.numero || `CMD-${Date.now().toString().slice(-8)}`,
           date: apiResponse?.data?.created_at || new Date().toISOString(),
           
           type_vente: typeVenteGlobalCommande,
