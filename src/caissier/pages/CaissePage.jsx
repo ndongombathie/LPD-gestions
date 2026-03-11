@@ -53,7 +53,7 @@ const CaissePage = () => {
     
 
     // Calculer le reste dû à partir des paiements
-    const totalPaye = paiements.reduce((sum, p) => sum + (p.montant || 0), 0);
+    const totalPaye = paiements[0]?.somme_payees || 0;
     const resteDu = paiements[0]?.reste_du || 0;
 
     // Pour les clients spéciaux, récupérer le moyen de paiement depuis le premier paiement en attente
@@ -991,14 +991,14 @@ const CaissePage = () => {
                 aria-label="Montant envoyé (non modifiable)"
               />
               <p className="text-xs text-gray-500">Montant envoyé à la caisse par le dépôt / responsable (non modifiable).</p>
-              {(selectedTicket.reste_du && selectedTicket.reste_du < selectedTicket.total_ttc) && (
+              {(selectedTicket.reste_du > 0 && selectedTicket.reste_du < selectedTicket.total_ttc) && (
                 <p className="text-xs text-gray-600">
                   Reste dû: {formatCurrency(selectedTicket.reste_du)} (Total: {formatCurrency(selectedTicket.total_ttc)}, Déjà payé: {formatCurrency(selectedTicket.montant_deja_paye || 0)})
                 </p>
               )}
             </div>
 
-            {selectedTicket.reste_du && selectedTicket.reste_du < selectedTicket.total_ttc && (
+            {selectedTicket.reste_du > 0 && selectedTicket.reste_du < selectedTicket.total_ttc && (
               <div className="bg-blue-50 border-2 border-blue-300 rounded-lg p-4">
                 <p className="text-sm text-blue-800 font-semibold">
                   Paiement partiel : {formatCurrency(selectedTicket.montant_deja_paye || 0)} déjà payé sur {formatCurrency(selectedTicket.total_ttc)}
