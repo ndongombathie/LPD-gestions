@@ -450,7 +450,7 @@ export default function Header({ onMenuClick, isMobile }) { // ← PROPS AJOUTÉ
         <div className="h-[6px] w-full bg-gradient-to-r from-[#472EAD] via-[#472EAD] to-[#F58020]" />
 
         <div className="bg-white h-16 shadow-sm border-b">
-          <div className="max-w-7xl mx-auto h-full px-4 flex items-center justify-between">
+          <div className="w-full h-full px-4 flex items-center justify-between">
             {/* LOGO & TITRE */}
             <div className="flex items-center gap-3">
               {/* Bouton menu pour mobile */}

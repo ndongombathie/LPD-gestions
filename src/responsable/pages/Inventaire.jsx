@@ -500,7 +500,7 @@ export default function Inventaire() {
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-gray-50 via-gray-50/50 to-white px-4 sm:px-6 lg:px-8 py-6 overflow-y-auto">
-      <div className="max-w-7xl mx-auto space-y-8">
+      <div className="w-full space-y-8">
         {/* HEADER */}
         <motion.header
           initial={{ opacity: 0, y: -10 }}

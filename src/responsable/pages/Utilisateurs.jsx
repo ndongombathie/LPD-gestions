@@ -244,7 +244,7 @@ useEffect(() => {
         <LPDLoader visible={loading} />
       </AnimatePresence>
 
-      <div className="max-w-6xl mx-auto space-y-8">
+      <div className="w-full space-y-8">
         
         {/* Loader d'affichage initial - UNIQUEMENT au premier chargement */}
         {initialLoad && loading && users.length === 0 ? (
