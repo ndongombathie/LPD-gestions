@@ -311,6 +311,9 @@ export default function CaissiersPage() {
                     Fond d'ouverture
                   </th>
                   <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                    Date
+                  </th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                     Actions
                   </th>
                 </tr>
@@ -358,6 +361,11 @@ export default function CaissiersPage() {
                     <td className="px-3 py-3">
                       <div className="text-sm font-semibold text-gray-900">
                         {formatFCFA(caissier.fond_ouverture || 0)}
+                      </div>
+                    </td>
+                    <td className="px-3 py-3">
+                      <div className="text-sm font-semibold text-gray-900">
+                        {new Date(caissier.created_at).toLocaleDateString()}
                       </div>
                     </td>
                     <td className="px-3 py-3">
