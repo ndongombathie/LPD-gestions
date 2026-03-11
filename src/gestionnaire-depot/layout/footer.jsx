@@ -19,7 +19,7 @@ export default function Footer() {
         px-6
       "
     >
-      <div className="max-w-6xl mx-auto flex justify-between items-center text-xs text-slate-500">
+      <div className="w-full flex justify-between items-center text-xs text-slate-500">
         <span>
           © {currentYear}{" "}
           <span className="font-semibold text-[#472EAD]"> SSD </span> -Consulting
