@@ -2,7 +2,7 @@ import httpClient from "../http/client";
 
 const PRODUITS_ENDPOINT = "/produits-controle-depots";
 const MOUVEMENTS_ENDPOINT = "/mouvements-stock";
-const DEFAULT_PER_PAGE = 25;
+const DEFAULT_PER_PAGE = 15;
 
 /**
  * 🟢 Calcul état du stock
@@ -13,140 +13,134 @@ const getEtatStock = (stockGlobal, stockSeuil) => {
   return "Disponible";
 };
 
-/**
- * 🔄 Compter les réapprovisionnements
- */
-const getNombreReappro = (mouvements = []) => {
-  if (!Array.isArray(mouvements)) return 0;
-  return mouvements.length;
-};
-
 const depotAPI = {
   /**
-   * 📦 Produits dépôt (avec pagination)
+   * 📦 Produits dépôt - RECHERCHE STRICTE
    */
   getProduitsControle: async (params = {}) => {
     try {
       const {
         page = 1,
         per_page = DEFAULT_PER_PAGE,
+        search = '',
         ...filters
       } = params;
 
-      const res = await httpClient.get(PRODUITS_ENDPOINT, {
-        params: {
-          page,
-          per_page,
-          ...filters,
-        },
-      });
+      // Construction des paramètres
+      const queryParams = new URLSearchParams();
+      
+      // Paramètres obligatoires
+      queryParams.append('page', page);
+      queryParams.append('per_page', per_page);
+      
+      // ✅ RECHERCHE - Envoyée telle quelle au backend
+      if (search && search.trim() !== '') {
+        queryParams.append('search', search.trim());
+        console.log('🔍 RECHERCHE STRICTE:', search.trim());
+      }
 
+      const url = `${PRODUITS_ENDPOINT}?${queryParams.toString()}`;
+      console.log('📡 URL:', url);
+
+      const res = await httpClient.get(url);
       const payload = res?.data ?? {};
 
-      const rawData = Array.isArray(payload?.data)
-        ? payload.data
-        : [];
+      // Extraction des données
+      let rawData = [];
+      if (Array.isArray(payload?.data)) {
+        rawData = payload.data;
+      } else if (Array.isArray(payload)) {
+        rawData = payload;
+      }
 
-      /**
-       * 🔥 TRANSFORMATION CORRIGÉE
-       */
+      console.log(`📦 Reçu ${rawData.length} produits du backend`);
+
+      // ✅ SI RECHERCHE ACTIVE, on vérifie que le backend a bien filtré
+      if (search && search.trim() !== '' && rawData.length > 0) {
+        // Vérification que TOUS les produits contiennent le terme recherché
+        const allMatch = rawData.every(p => 
+          p.nom?.toLowerCase().includes(search.toLowerCase())
+        );
+        
+        if (!allMatch) {
+          console.warn('⚠️ Attention: Le backend n\'a pas filtré correctement!');
+        }
+      }
+
+      // Transformation des données
       const data = rawData.map((produit) => ({
         id: produit.id,
         nom: produit.nom,
         code: produit.code,
-
-        // ✅ ON GARDE LE FOURNISSEUR
-        fournisseur: {
-          id: produit.fournisseur?.id ?? null,
-          nom: produit.fournisseur?.nom ?? "Non défini",
-          contact: produit.fournisseur?.contact ?? null,
-          adresse: produit.fournisseur?.adresse ?? null,
-        },
-
-        prix_achat: produit.prix_achat,
-        nombre_carton: produit.nombre_carton,
-        stock_global: produit.stock_global,
-        stock_seuil: produit.stock_seuil,
-
+        
+        // Fournisseur
+        fournisseur_nom: produit.fournisseur?.nom ?? 
+                        produit.fournisseur_nom ?? 
+                        "Non défini",
+        
+        fournisseur_id: produit.fournisseur?.id ?? 
+                       produit.fournisseur_id ?? 
+                       null,
+        
+        prix_achat: produit.prix_achat ?? produit.prix ?? 0,
+        nombre_carton: produit.nombre_carton ?? produit.quantite ?? 0,
+        stock_global: produit.stock_global ?? produit.stock ?? 0,
+        stock_seuil: produit.stock_seuil ?? produit.seuil ?? 0,
+        
         etat_stock: getEtatStock(
-          produit.stock_global,
-          produit.stock_seuil
-        ),
-
-        nombre_reappro: getNombreReappro(
-          produit.entreees_sorties
+          produit.stock_global ?? produit.stock ?? 0,
+          produit.stock_seuil ?? produit.seuil ?? 0
         ),
       }));
 
-      return {
-        data,
-        pagination: {
-          currentPage: payload?.current_page ?? page,
-          lastPage: payload?.last_page ?? 1,
-          perPage: payload?.per_page ?? per_page,
-          total: payload?.total ?? data.length,
-          from: payload?.from ?? null,
-          to: payload?.to ?? null,
-        },
+      // Pagination
+      const pagination = {
+        currentPage: payload?.current_page ?? payload?.page ?? page,
+        lastPage: payload?.last_page ?? payload?.total_pages ?? 1,
+        perPage: payload?.per_page ?? payload?.perPage ?? per_page,
+        total: payload?.total ?? data.length,
       };
+
+      return { data, pagination };
+
     } catch (error) {
-      console.error(
-        "❌ Erreur chargement produits dépôt :",
-        error.response?.data || error.message
-      );
-      throw error;
+      console.error("❌ ERREUR API:", error);
+      return { 
+        data: [], 
+        pagination: { currentPage: 1, lastPage: 1, total: 0 } 
+      };
     }
   },
 
   /**
-   * 📜 Mouvements d’un produit
+   * 📜 Mouvements d'un produit
    */
   getMouvementsProduit: async (produitId) => {
     try {
-      if (!produitId) {
-        throw new Error("produitId est requis");
-      }
-
       const res = await httpClient.get(MOUVEMENTS_ENDPOINT, {
-        params: {
-          produit_id: produitId,
-          per_page: 100,
-        },
+        params: { 
+          produit_id: produitId, 
+          per_page: 100 
+        }
       });
-
+      
       const payload = res?.data ?? {};
-      const rawData = Array.isArray(payload?.data)
-        ? payload.data
-        : [];
-
-      const data = rawData.map((mouvement) => ({
-        id: mouvement.id,
-        type: mouvement.type,
-        source: mouvement.source,
-        destination: mouvement.destination,
-        quantite: mouvement.quantite,
-        motif: mouvement.motif,
-        date: mouvement.date,
-        quantite_avant:
-          mouvement.entree_sortie?.quantite_avant ?? null,
-        quantite_apres:
-          mouvement.entree_sortie?.quantite_apres ?? null,
+      const rawData = Array.isArray(payload?.data) ? payload.data : 
+                     Array.isArray(payload) ? payload : [];
+      
+      const data = rawData.map(m => ({
+        id: m.id,
+        type: m.type,
+        source: m.source,
+        destination: m.destination,
+        quantite: m.quantite,
+        date: m.date,
       }));
 
-      return {
-        data,
-        pagination: {
-          currentPage: payload?.current_page ?? 1,
-          lastPage: payload?.last_page ?? 1,
-          total: payload?.total ?? data.length,
-        },
-      };
+      return { data };
     } catch (error) {
-      console.error(
-        "❌ Erreur chargement mouvements produit :",
-        error.response?.data || error.message
-      );
-      throw error;
+      console.error("❌ Erreur mouvements:", error);
+      return { data: [] };
     }
   },
 };
