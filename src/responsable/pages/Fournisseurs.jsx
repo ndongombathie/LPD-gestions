@@ -539,7 +539,7 @@ export default function Fournisseurs() {
           <LPDLoader visible={isFetching} />
         </AnimatePresence>
 
-        <div className="max-w-6xl mx-auto space-y-8">
+        <div className="w-full space-y-8">
           
           <motion.header
             initial={{ opacity: 0, y: -10 }}
