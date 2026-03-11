@@ -2281,7 +2281,7 @@ useEffect(() => {
       </AnimatePresence>
 
       <div className="w-full h-full bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white px-3 sm:px-4 lg:px-6 py-4 sm:py-5 overflow-y-auto">
-        <div className="max-w-6xl mx-auto space-y-8">
+        <div className="w-full space-y-8">
           
           {/* HEADER */}
           <motion.header

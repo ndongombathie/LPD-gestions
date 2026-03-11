@@ -766,7 +766,7 @@ const openTrancheClient = async (client) => {
       </AnimatePresence>
 
       <div className="min-h-screen w-full bg-gradient-to-br from-[#F7F6FF] via-[#F9FAFF] to-white px-3 sm:px-4 lg:px-6 py-6 sm:py-8 overflow-y-auto">
-        <div className="max-w-6xl mx-auto space-y-8">
+        <div className="w-full space-y-8">
           
           {/* HEADER avec badge intégré */}
           <motion.header
