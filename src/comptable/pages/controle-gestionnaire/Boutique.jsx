@@ -3,9 +3,8 @@
 // ==========================================================
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { Search, Eye, X, ChevronLeft, ChevronRight, Package, AlertTriangle, CheckCircle } from "lucide-react";
+import { Search, Eye, X, ChevronLeft, ChevronRight, Package, AlertTriangle, CheckCircle, AlertCircle } from "lucide-react";
 import boutiqueAPI from "@/services/api/boutique";
-import useDebouncedValue from "@/hooks/useDebouncedValue";
 
 const DEFAULT_PER_PAGE = 25;
 
@@ -20,80 +19,44 @@ const getEtat = (quantite, seuil) => {
   return "ok";
 };
 
-export default function Boutique() {
-  const [rows, setRows] = useState([]);
-  const [pagination, setPagination] = useState(null);
+const getEtatBadge = (etat) => {
+  switch (etat) {
+    case "rupture":
+      return { 
+        text: "Rupture", 
+        color: "bg-red-100 text-red-800",
+        icon: AlertCircle
+      };
+    case "faible":
+      return { 
+        text: "Stock faible", 
+        color: "bg-yellow-100 text-yellow-800",
+        icon: AlertTriangle
+      };
+    default:
+      return { 
+        text: "OK", 
+        color: "bg-green-100 text-green-800",
+        icon: CheckCircle
+      };
+  }
+};
 
-  const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  const [searchTerm, setSearchTerm] = useState("");
-  const debouncedSearchTerm = useDebouncedValue(searchTerm, 500);
-  
-  // État pour la fiche sélectionnée
-  const [selectedProduit, setSelectedProduit] = useState(null);
-
-  /* ================= FETCH PAGINÉ ================= */
-  const fetchPaginated = useCallback(async () => {
-    try {
-      setLoading(true);
-
-      const res = await boutiqueAPI.getProduitsControle({
-        page,
-        per_page: PER_PAGE,
-        search: debouncedSearchTerm,
-      });
-
-      setRows(res.data ?? []);
-      setPagination(res.pagination ?? null);
-    } catch {
-      setError("Erreur lors du chargement des produits boutique");
-    } finally {
-      setLoading(false);
-    }
-  }, [page, debouncedSearchTerm]);
-
-  useEffect(() => {
-    fetchPaginated();
-  }, [fetchPaginated]);
-
-  /* ================= NORMALISATION + REGROUPEMENT ================= */
-  const normalizeAndGroup = (data) => {
-    const map = new Map();
-
-    data.forEach((row) => {
-      const produit = row.produit ?? {};
-      
-      // Utilisation de l'ID du produit comme clé pour le regroupement
-      // (plus fiable que nom + catégorie_id)
-      const key = produit.id || `${produit.nom}-${produit.categorie_id}`;
-
-      const quantite = Number(row.quantite ?? 0);
-      const seuil = Number(row.seuil ?? 0);
-      const nombre_carton = Number(row.nombre_carton ?? 0);
-      
-      // Récupérer la catégorie depuis produit.categorie (structure JSON correcte)
-      const categorie = produit.categorie ?? {};
-      const nom_categorie = categorie.nom ?? "Non catégorisé";
-
-      if (!map.has(key)) {
-        map.set(key, {
-          id: produit.id ?? key,
-          nom: produit.nom ?? "—",
-          categorie_id: produit.categorie_id,
-          categorie_nom: nom_categorie,
-          prix_achat: produit.prix_achat ?? 0,
-          nombre_carton,
-          quantite,
-          seuil,
-          // Informations supplémentaires pour la fiche
-          description: produit.description ?? "Aucune description",
-          code_barre: produit.code_barre ?? "N/A",
-          date_creation: produit.created_at ?? null,
-          date_modification: produit.updated_at ?? null,
-          fournisseur: produit.fournisseur?.nom ?? "Non spécifié"
-        });
+/* ================= COMPOSANT PAGINATION ================= */
+const Pagination = ({ currentPage, totalPages, onPageChange, totalItems }) => {
+  const getPageNumbers = () => {
+    const pages = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (currentPage <= 3) {
+        for (let i = 1; i <= 5; i++) pages.push(i);
+        pages.push('...');
+        pages.push(totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        pages.push(1);
+        pages.push('...');
+        for (let i = totalPages - 4; i <= totalPages; i++) pages.push(i);
       } else {
         pages.push(1);
         pages.push('...');
@@ -103,30 +66,7 @@ export default function Boutique() {
       }
     }
     return pages;
-  }, [currentPage, totalPages]);
-
-    return Array.from(map.values());
   };
-
-  const pageData = useMemo(() => normalizeAndGroup(rows), [rows]);
-
-  /* ================= RECHERCHE GLOBALE ================= */
-  // Désormais gérée par l'API, pageData contient déjà les bons résultats
-  const filteredData = pageData;
-
-
-  // Fonction pour afficher la fiche produit
-  const afficherFiche = (produit) => {
-    setSelectedProduit(produit);
-  };
-
-  // Fonction pour fermer la fiche
-  const fermerFiche = () => {
-    setSelectedProduit(null);
-  };
-
-  if (loading) return <p>Chargement…</p>;
-  if (error) return <p className="text-red-600">{error}</p>;
 
   return (
     <div className="flex items-center justify-between">
@@ -278,7 +218,7 @@ const FicheProduit = ({ produit, onClose }) => {
         <div className="border rounded-lg p-4">
           <h4 className="font-semibold text-gray-700 mb-3">Description</h4>
           <p className="text-gray-600 text-sm">
-            {produit.description}
+            {produit.description || "Aucune description"}
           </p>
         </div>
 
@@ -315,19 +255,18 @@ export default function Boutique() {
   // Recherche - UNIQUEMENT par nom
   const [searchTerm, setSearchTerm] = useState("");
   const [activeSearch, setActiveSearch] = useState("");
-  const [isSearching, setIsSearching] = useState(false);
   
   // États de chargement
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [initialLoadDone, setInitialLoadDone] = useState(false);
   
   // Fiche produit
   const [selectedProduit, setSelectedProduit] = useState(null);
   
   // Refs
-  const loadingRef = useRef(false);
-  const previousParamsRef = useRef('');
   const abortControllerRef = useRef(null);
+  const previousParamsRef = useRef('');
 
   /* ============= NORMALISATION ============= */
   const normalizeProduit = useCallback((row) => {
@@ -353,11 +292,11 @@ export default function Boutique() {
 
   /* ============= GÉNÉRATION DES PARAMÈTRES API ============= */
   const getApiParams = useCallback((page = currentPage) => {
-    const params = { page };
+    const params = { page, per_page: DEFAULT_PER_PAGE };
     
-    // ✅ RECHERCHE UNIQUEMENT PAR NOM (côté backend)
+    // RECHERCHE UNIQUEMENT PAR NOM (côté backend)
     if (activeSearch?.trim()) {
-      params.search = activeSearch.trim(); // Le backend doit filtrer par nom
+      params.search = activeSearch.trim();
     }
     
     return params;
@@ -365,36 +304,30 @@ export default function Boutique() {
 
   /* ============= CHARGEMENT DES DONNÉES ============= */
   const loadProduits = useCallback(async (page = 1) => {
-    if (loadingRef.current) {
-      console.log("⏳ Chargement déjà en cours, ignoré");
-      return;
-    }
-
     // Annuler la requête précédente
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
+    
     abortControllerRef.current = new AbortController();
 
     try {
-      loadingRef.current = true;
       setIsLoading(true);
+      setError(null);
       
       const params = getApiParams(page);
       const paramsKey = JSON.stringify(params);
       
+      // Éviter les chargements inutiles si les paramètres n'ont pas changé
       if (paramsKey === previousParamsRef.current && initialLoadDone) {
-        console.log("📦 Paramètres identiques, chargement ignoré");
+        setIsLoading(false);
         return;
       }
       
       console.log("📡 Chargement avec params:", params);
       previousParamsRef.current = paramsKey;
       
-      const res = await boutiqueAPI.getProduitsControle({
-        ...params,
-        per_page: DEFAULT_PER_PAGE
-      });
+      const res = await boutiqueAPI.getProduitsControle(params);
       
       console.log("📡 Réponse API:", res);
       
@@ -411,15 +344,15 @@ export default function Boutique() {
     } catch (error) {
       if (error.name !== 'AbortError') {
         console.error("❌ Erreur chargement:", error);
+        setError("Erreur lors du chargement des produits");
         setProduits([]);
       }
     } finally {
       setIsLoading(false);
-      loadingRef.current = false;
     }
   }, [getApiParams, initialLoadDone, normalizeProduit]);
 
-  /* ============= EFFET DE CHARGEMENT UNIQUE ============= */
+  /* ============= EFFET DE CHARGEMENT INITIAL ============= */
   useEffect(() => {
     loadProduits(1);
     
@@ -428,7 +361,7 @@ export default function Boutique() {
         abortControllerRef.current.abort();
       }
     };
-  }, []);
+  }, []); // Dépendances vides = exécuté une seule fois au montage
 
   /* ============= EFFET POUR LA RECHERCHE ============= */
   useEffect(() => {
@@ -439,12 +372,12 @@ export default function Boutique() {
 
   /* ============= CHANGEMENT DE PAGE ============= */
   const handlePageChange = useCallback((page) => {
-    if (page !== currentPage && initialLoadDone) {
+    if (page !== currentPage && !isLoading) {
       loadProduits(page);
     }
-  }, [currentPage, loadProduits, initialLoadDone]);
+  }, [currentPage, isLoading, loadProduits]);
 
-  /* ============= RECHERCHE MANUELLE ============= */
+  /* ============= RECHERCHE ============= */
   const handleSearch = useCallback(() => {
     setActiveSearch(searchTerm);
   }, [searchTerm]);
@@ -453,9 +386,10 @@ export default function Boutique() {
   const handleReset = useCallback(() => {
     setSearchTerm("");
     setActiveSearch("");
-    setCurrentPage(1);
-    loadProduits(1);
-  }, [loadProduits]);
+    if (initialLoadDone) {
+      loadProduits(1);
+    }
+  }, [loadProduits, initialLoadDone]);
 
   /* ============= GESTION DE LA TOUCHE ENTRÉE ============= */
   const handleKeyPress = useCallback((e) => {
@@ -463,6 +397,11 @@ export default function Boutique() {
       handleSearch();
     }
   }, [handleSearch]);
+
+  /* ============= EFFACER LA RECHERCHE ============= */
+  const handleClearSearch = useCallback(() => {
+    setSearchTerm("");
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50 p-6 md:p-8">
@@ -475,11 +414,11 @@ export default function Boutique() {
               <h1 className="text-2xl font-bold text-[#472EAD]">
                 Contrôle Gestionnaire — Boutique
               </h1>
-              <div className="text-sm bg-indigo-50 text-[#472EAD] px-4 py-2 rounded-xl font-medium">
-                {!isLoading && totalItems > 0 && (
-                  <span>{totalItems} produit{totalItems > 1 ? 's' : ''}</span>
-                )}
-              </div>
+              {!isLoading && totalItems > 0 && (
+                <div className="text-sm bg-indigo-50 text-[#472EAD] px-4 py-2 rounded-xl font-medium">
+                  {totalItems} produit{totalItems > 1 ? 's' : ''}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -502,7 +441,7 @@ export default function Boutique() {
                 <div className="absolute right-2 top-1.5 flex gap-1">
                   {searchTerm && searchTerm !== activeSearch && (
                     <button
-                      onClick={() => setSearchTerm("")}
+                      onClick={handleClearSearch}
                       className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors"
                       title="Effacer"
                     >
@@ -511,9 +450,9 @@ export default function Boutique() {
                   )}
                   <button
                     onClick={handleSearch}
-                    disabled={isLoading || searchTerm === activeSearch}
+                    disabled={isLoading || !searchTerm.trim() || searchTerm === activeSearch}
                     className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                      searchTerm !== activeSearch
+                      searchTerm.trim() && searchTerm !== activeSearch
                         ? "bg-[#472EAD] text-white hover:bg-[#3a2590]"
                         : "bg-gray-100 text-gray-400 cursor-not-allowed"
                     }`}
@@ -533,11 +472,9 @@ export default function Boutique() {
                     <Search size={12} />
                     "{activeSearch}"
                     <button
-                      onClick={() => {
-                        setSearchTerm("");
-                        setActiveSearch("");
-                      }}
+                      onClick={handleReset}
                       className="ml-1 hover:text-[#3a2590]"
+                      title="Effacer la recherche"
                     >
                       <X size={12} />
                     </button>
@@ -554,6 +491,15 @@ export default function Boutique() {
           </div>
         </div>
 
+        {/* MESSAGE D'ERREUR */}
+        {error && (
+          <div className="mb-8">
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl">
+              {error}
+            </div>
+          </div>
+        )}
+
         {/* TABLEAU */}
         <div className="mb-8">
           <div className="bg-white rounded-2xl shadow-md overflow-hidden">
@@ -563,7 +509,14 @@ export default function Boutique() {
               </h2>
             </div>
             
-            {!isLoading && produits.length === 0 ? (
+            {isLoading ? (
+              <div className="p-8 flex justify-center items-center">
+                <div className="flex items-center gap-3">
+                  <div className="animate-spin rounded-full h-6 w-6 border-3 border-[#472EAD] border-t-transparent"></div>
+                  <p className="text-gray-700 font-medium">Chargement des produits...</p>
+                </div>
+              </div>
+            ) : produits.length === 0 ? (
               <div className="text-center py-16">
                 <Package size={48} className="mx-auto text-gray-300 mb-4" />
                 <p className="text-gray-500 text-lg mb-2">
@@ -591,7 +544,7 @@ export default function Boutique() {
                           <th className="p-3 text-left text-gray-600 font-semibold">Produit</th>
                           <th className="p-3 text-left text-gray-600 font-semibold">Catégorie</th>
                           <th className="p-3 text-center text-gray-600 font-semibold">Prix</th>
-                          <th className="p-3 text-center text-gray-600 font-semibold">Cartons</th>
+                          <th className="p-3 text-center text-gray-600 font-semibold">Qté</th>
                           <th className="p-3 text-center text-gray-600 font-semibold">Seuil</th>
                           <th className="p-3 text-center text-gray-600 font-semibold">État</th>
                           <th className="p-3 text-center text-gray-600 font-semibold">Action</th>
@@ -612,7 +565,7 @@ export default function Boutique() {
                                 </span>
                               </td>
                               <td className="p-3 text-center">{formatFCFA(p.prix_achat)}</td>
-                              <td className="p-3 text-center">{p.nombre_carton}</td>
+                              <td className="p-3 text-center font-medium">{p.quantite}</td>
                               <td className="p-3 text-center">{p.seuil}</td>
                               <td className="p-3 text-center">
                                 <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${badge.color}`}>
@@ -662,46 +615,7 @@ export default function Boutique() {
             )}
           </div>
         </div>
-
-        {/* CHARGEMENT */}
-        {isLoading && (
-          <div className="mb-8">
-            <div className="bg-white p-8 rounded-2xl shadow-md flex justify-center items-center">
-              <div className="flex items-center gap-3">
-                <div className="animate-spin rounded-full h-6 w-6 border-3 border-[#472EAD] border-t-transparent"></div>
-                <p className="text-gray-700 font-medium">Chargement des produits...</p>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
-
-      {/* PAGINATION */}
-      {pagination && pagination.lastPage > 1 && (
-        <div className="flex justify-between items-center text-sm bg-white rounded-2xl shadow-md p-4">
-          <button
-            disabled={page === 1}
-            onClick={() => setPage((p) => p - 1)}
-            className="px-4 py-2 border rounded-lg disabled:opacity-40 hover:bg-gray-50 transition-colors"
-          >
-            ← Précédent
-          </button>
-
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-[#472EAD]">
-              Page {pagination.currentPage} / {pagination.lastPage}
-            </span>
-          </div>
-
-          <button
-            disabled={page === pagination.lastPage}
-            onClick={() => setPage((p) => p + 1)}
-            className="px-4 py-2 border rounded-lg disabled:opacity-40 hover:bg-gray-50 transition-colors"
-          >
-            Suivant →
-          </button>
-        </div>
-      )}
     </div>
   );
 }
