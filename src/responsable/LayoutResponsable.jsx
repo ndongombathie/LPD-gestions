@@ -64,9 +64,9 @@ export default function LayoutResponsable() {
           isMobile={isMobile}
         />
 
-        {/* Zone scrollable */}
+        {/* Zone scrollable - contenu principal en full width */}
         <div className="flex-1 overflow-y-auto bg-gradient-to-b from-white to-lpd-light">
-          <div className="max-w-6xl mx-auto px-4 py-6 pb-28">
+          <div className="w-full px-4 py-6 pb-28">
             <Outlet />
           </div>
         </div>
