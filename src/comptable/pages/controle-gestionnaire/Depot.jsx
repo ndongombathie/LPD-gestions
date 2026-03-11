@@ -1,122 +1,245 @@
 // ==========================================================
-// 🏭 DepotControle.jsx — FOND BLANC + API OPTIMISÉE
-// Optimisations :
-//   ① Un seul fetch initial (per_page=200, toutes pages en parallèle)
-//   ② Pagination côté client — plus de re-fetch au changement de page
-//   ③ Cache mouvements (Map) — pas de re-fetch si déjà chargé
-//   ④ Debounce recherche (300ms) — pas de recalcul à chaque frappe
-//   ⑤ useMemo sur filtrage/tri — recalcul uniquement si données changent
+// 🏭 DepotControle.jsx — API À LA DEMANDE
+// Comportement :
+//   • Un appel API à chaque changement de page
+//   • Un appel API à chaque recherche (debounced)
+//   • Cache pour les mouvements uniquement
 // ==========================================================
 
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import {
   Search, Eye, X, Package, TrendingUp, TrendingDown,
-  ArrowLeft, ArrowRight, Layers, AlertCircle, Activity,
-  RefreshCw
+  Layers, AlertCircle, Activity,
+  RefreshCw, ChevronLeft, ChevronRight
 } from "lucide-react";
 import depotAPI from "@/services/api/depot";
 
-const PER_PAGE = 20;
+const DEFAULT_PER_PAGE = 20;
+
+/* ================= FORMAT PRIX ================= */
+const formatFCFA = (v = 0) =>
+  Number(v).toLocaleString("fr-FR").replace(/\s/g, ".") + " FCFA";
+
+/* ================= COMPOSANT PAGINATION ================= */
+const Pagination = ({ currentPage, totalPages, onPageChange, totalItems }) => {
+  const getPageNumbers = () => {
+    const pages = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (currentPage <= 3) {
+        for (let i = 1; i <= 5; i++) pages.push(i);
+        pages.push('...');
+        pages.push(totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        pages.push(1);
+        pages.push('...');
+        for (let i = totalPages - 4; i <= totalPages; i++) pages.push(i);
+      } else {
+        pages.push(1);
+        pages.push('...');
+        for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i);
+        pages.push('...');
+        pages.push(totalPages);
+      }
+    }
+    return pages;
+  };
+
+  return (
+    <div className="flex items-center justify-between w-full">
+      <div className="text-sm text-gray-600">
+        <Package size={14} className="inline mr-1" />
+        {totalItems} produit{totalItems > 1 ? 's' : ''}
+      </div>
+      
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => onPageChange(1)}
+          disabled={currentPage === 1}
+          className="p-2 rounded-lg border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          title="Première page"
+        >
+          <ChevronLeft size={16} className="rotate-180" />
+        </button>
+        
+        <button
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          className="p-2 rounded-lg border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          title="Page précédente"
+        >
+          <ChevronLeft size={16} />
+        </button>
+
+        {getPageNumbers().map((page, index) => (
+          <button
+            key={index}
+            onClick={() => typeof page === 'number' && onPageChange(page)}
+            className={`min-w-[36px] h-9 rounded-lg text-sm font-medium transition-colors ${
+              page === currentPage
+                ? "bg-violet-600 text-white"
+                : page === '...'
+                ? "cursor-default"
+                : "hover:bg-gray-50 border"
+            }`}
+            disabled={page === '...'}
+          >
+            {page}
+          </button>
+        ))}
+
+        <button
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          className="p-2 rounded-lg border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          title="Page suivante"
+        >
+          <ChevronRight size={16} />
+        </button>
+        
+        <button
+          onClick={() => onPageChange(totalPages)}
+          disabled={currentPage === totalPages}
+          className="p-2 rounded-lg border hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          title="Dernière page"
+        >
+          <ChevronRight size={16} className="rotate-180" />
+        </button>
+      </div>
+    </div>
+  );
+};
 
 export default function DepotControle() {
   // ── Data
-  const [allProduits, setAllProduits]       = useState([]);       // source unique de vérité
-  const [loading, setLoading]               = useState(true);
-  const [error, setError]                   = useState(null);
+  const [produits, setProduits] = useState([]);
+  const [pagination, setPagination] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   // ── UI state
-  const [page, setPage]                     = useState(1);
-  const [searchInput, setSearchInput]       = useState("");        // valeur brute du champ
-  const [search, setSearch]                 = useState("");        // valeur debouncée
+  const [page, setPage] = useState(1);
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
   const [selectedProduit, setSelectedProduit] = useState(null);
 
   // ── Mouvements avec cache
-  const [mouvements, setMouvements]         = useState([]);
-  const [loadingMvt, setLoadingMvt]         = useState(false);
-  const mvtCache                            = useRef(new Map());   // ③ cache par produit.id
+  const [mouvements, setMouvements] = useState([]);
+  const [loadingMvt, setLoadingMvt] = useState(false);
+  const mvtCache = useRef(new Map());
 
-  // ── Debounce ref
-  const debounceRef = useRef(null);
+  // ── Debounce timer
+  const debounceTimer = useRef(null);
+  
+  // ── AbortController pour annuler les requêtes
+  const abortControllerRef = useRef(null);
 
   /* ═══════════════════════════════════════════════════════
-     ① FETCH UNIQUE — toutes pages en parallèle
-     On récupère d'abord la page 1 pour connaître lastPage,
-     puis on fetch les pages restantes en Promise.all
+     CHARGEMENT DES PRODUITS (page courante + recherche)
   ═══════════════════════════════════════════════════════ */
-  const fetchAll = useCallback(async () => {
+  const fetchProduits = useCallback(async (pageNum = page, searchTerm = search) => {
+    // Annuler la requête précédente
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    
+    abortControllerRef.current = new AbortController();
+
     try {
       setLoading(true);
       setError(null);
 
-      // Page 1 — donne lastPage
-      const first = await depotAPI.getProduitsControle({ page: 1, per_page: 100 });
-      const lastPage = first?.pagination?.lastPage || 1;
-      let data = first?.data || [];
+      const params = {
+        page: pageNum,
+        per_page: DEFAULT_PER_PAGE
+      };
 
-      // Pages restantes en parallèle
-      if (lastPage > 1) {
-        const pages = Array.from({ length: lastPage - 1 }, (_, i) => i + 2);
-        const results = await Promise.all(
-          pages.map(p => depotAPI.getProduitsControle({ page: p, per_page: 100 }))
-        );
-        results.forEach(r => { data = [...data, ...(r?.data || [])]; });
+      // Ajouter la recherche si elle existe
+      if (searchTerm.trim()) {
+        params.search = searchTerm.trim();
       }
 
-      setAllProduits(data);
-    } catch {
-      setError("Erreur lors du chargement des produits dépôt");
+      console.log("📡 Chargement page:", pageNum, "recherche:", searchTerm);
+      
+      const response = await depotAPI.getProduitsControle(params);
+      
+      setProduits(response?.data || []);
+      setPagination(response?.pagination || null);
+      
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        console.error("Erreur fetchProduits:", err);
+        setError("Erreur lors du chargement des produits");
+        setProduits([]);
+        setPagination(null);
+      }
     } finally {
       setLoading(false);
     }
+  }, [page, search]); // Dépend de page et search
+
+  // Chargement initial et quand page ou search change
+  useEffect(() => {
+    fetchProduits(page, search);
+    
+    // Cleanup
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, [page, search, fetchProduits]);
+
+  /* ═══════════════════════════════════════════════════════
+     DEBOUNCE RECHERCHE
+  ═══════════════════════════════════════════════════════ */
+  const handleSearchChange = useCallback((e) => {
+    const value = e.target.value;
+    setSearchInput(value);
+    
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
+    }
+    
+    debounceTimer.current = setTimeout(() => {
+      setSearch(value);
+      setPage(1); // Reset à la première page pour la nouvelle recherche
+    }, 500); // 500ms de debounce
   }, []);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+  /* ═══════════════════════════════════════════════════════
+     CHANGEMENT DE PAGE
+  ═══════════════════════════════════════════════════════ */
+  const handlePageChange = useCallback((newPage) => {
+    if (newPage >= 1 && newPage <= (pagination?.lastPage || 1) && !loading) {
+      setPage(newPage);
+    }
+  }, [pagination?.lastPage, loading]);
 
   /* ═══════════════════════════════════════════════════════
-     ④ DEBOUNCE recherche — 300 ms
+     STATISTIQUES (calculées sur la page courante uniquement)
   ═══════════════════════════════════════════════════════ */
-  const handleSearchChange = (e) => {
-    const val = e.target.value;
-    setSearchInput(val);
-    clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      setSearch(val);
-      setPage(1);
-    }, 300);
-  };
+  const stats = useMemo(() => {
+    const totalCartons = produits.reduce(
+      (acc, p) => acc + (p.nombre_carton || 0), 
+      0
+    );
+    
+    const alertCount = produits.filter(
+      p => (p.nombre_carton || 0) <= (p.stock_seuil || 0)
+    ).length;
+    
+    return { totalCartons, alertCount };
+  }, [produits]);
 
   /* ═══════════════════════════════════════════════════════
-     ⑤ GROUPEMENT + FILTRE — mémoïsé
+     MOUVEMENTS AVEC CACHE
   ═══════════════════════════════════════════════════════ */
-  const groupedProduits = useMemo(() => {
-    const map = new Map();
-    allProduits.forEach((p) => {
-      const key = `${p.nom}-${p.categorie_id}`;
-      if (!map.has(key)) map.set(key, { ...p });
-      else map.get(key).nombre_carton += p.nombre_carton || 0;
-    });
-    return Array.from(map.values());
-  }, [allProduits]);
-
-  const filteredProduits = useMemo(() => {
-    if (!search.trim()) return groupedProduits;
-    const q = search.toLowerCase();
-    return groupedProduits.filter(p => p.nom?.toLowerCase().includes(q));
-  }, [search, groupedProduits]);
-
-  // ② Pagination 100% client
-  const totalPages    = Math.max(1, Math.ceil(filteredProduits.length / PER_PAGE));
-  const displayedProduits = useMemo(() => {
-    const start = (page - 1) * PER_PAGE;
-    return filteredProduits.slice(start, start + PER_PAGE);
-  }, [filteredProduits, page]);
-
-  /* ═══════════════════════════════════════════════════════
-     ③ MOUVEMENTS avec cache
-  ═══════════════════════════════════════════════════════ */
-  const afficherFiche = async (produit) => {
+  const afficherFiche = useCallback(async (produit) => {
     setSelectedProduit(produit);
 
+    // Vérifier le cache
     if (mvtCache.current.has(produit.id)) {
       setMouvements(mvtCache.current.get(produit.id));
       return;
@@ -125,38 +248,46 @@ export default function DepotControle() {
     try {
       setLoadingMvt(true);
       setMouvements([]);
-      const res = await depotAPI.getMouvementsProduit(produit.id);
-      const data = res?.data || [];
+      
+      const response = await depotAPI.getMouvementsProduit(produit.id);
+      const data = response?.data || [];
+      
+      // Mettre en cache
       mvtCache.current.set(produit.id, data);
       setMouvements(data);
-    } catch (e) {
-      console.error(e);
+    } catch (err) {
+      console.error("Erreur chargement mouvements:", err);
     } finally {
       setLoadingMvt(false);
     }
-  };
+  }, []);
 
-  const fermerFiche = () => { setSelectedProduit(null); setMouvements([]); };
+  const fermerFiche = useCallback(() => {
+    setSelectedProduit(null);
+    setMouvements([]);
+  }, []);
 
   /* ═══════════════════════════════════════════════════════
-     UTILS
+     RÉINITIALISATION
   ═══════════════════════════════════════════════════════ */
-  const formatFCFA = (v = 0) =>
-    Number(v).toLocaleString("fr-FR").replace(/\s/g, ".") + " FCFA";
+  const handleRefresh = useCallback(() => {
+    mvtCache.current.clear(); // Vider le cache des mouvements
+    fetchProduits(page, search); // Recharger la page courante
+  }, [page, search, fetchProduits]);
 
-  const totalCartons = useMemo(
-    () => filteredProduits.reduce((a, p) => a + (p.nombre_carton || 0), 0),
-    [filteredProduits]
-  );
-  const alertCount = useMemo(
-    () => filteredProduits.filter(p => (p.nombre_carton || 0) <= (p.stock_seuil || 0)).length,
-    [filteredProduits]
-  );
+  /* ═══════════════════════════════════════════════════════
+     EFFACER RECHERCHE
+  ═══════════════════════════════════════════════════════ */
+  const handleClearSearch = useCallback(() => {
+    setSearchInput("");
+    setSearch("");
+    setPage(1);
+  }, []);
 
   /* ═══════════════════════════════════════════════════════
      EARLY RETURNS
   ═══════════════════════════════════════════════════════ */
-  if (loading)
+  if (loading && produits.length === 0) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
@@ -165,14 +296,16 @@ export default function DepotControle() {
         </div>
       </div>
     );
+  }
 
-  if (error)
+  if (error && produits.length === 0) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
+          <AlertCircle size={48} className="mx-auto text-rose-500 mb-4" />
           <p className="text-rose-500 text-sm mb-3">{error}</p>
           <button
-            onClick={fetchAll}
+            onClick={handleRefresh}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 text-white text-sm font-medium hover:bg-violet-700 transition-colors"
           >
             <RefreshCw size={14} /> Réessayer
@@ -180,9 +313,10 @@ export default function DepotControle() {
         </div>
       </div>
     );
+  }
 
   /* ═══════════════════════════════════════════════════════
-     RENDER
+     RENDER PRINCIPAL
   ═══════════════════════════════════════════════════════ */
   return (
     <div className="min-h-screen bg-white text-slate-800 p-6 lg:p-8">
@@ -203,22 +337,27 @@ export default function DepotControle() {
 
         <div className="flex flex-wrap gap-2">
           <span className="inline-flex items-center gap-1.5 bg-violet-50 border border-violet-200 text-violet-600 text-xs font-semibold px-3 py-1.5 rounded-full">
-            <Layers size={12} /> {filteredProduits.length} produits
+            <Layers size={12} /> {pagination?.total || 0} total
           </span>
           <span className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 text-slate-500 text-xs font-semibold px-3 py-1.5 rounded-full">
-            <Package size={12} /> {totalCartons} cartons
+            <Package size={12} /> {stats.totalCartons} cartons
           </span>
-          {alertCount > 0 && (
+          {stats.alertCount > 0 && (
             <span className="inline-flex items-center gap-1.5 bg-rose-50 border border-rose-200 text-rose-500 text-xs font-semibold px-3 py-1.5 rounded-full">
-              <AlertCircle size={12} /> {alertCount} alerte{alertCount > 1 ? "s" : ""}
+              <AlertCircle size={12} /> {stats.alertCount} alerte{stats.alertCount > 1 ? "s" : ""}
             </span>
           )}
           <button
-            onClick={fetchAll}
+            onClick={handleRefresh}
+            disabled={loading}
             title="Rafraîchir"
-            className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 text-slate-400 text-xs font-semibold px-3 py-1.5 rounded-full hover:bg-violet-50 hover:border-violet-200 hover:text-violet-500 transition-colors"
+            className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full transition-colors ${
+              loading
+                ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                : "bg-slate-50 border border-slate-200 text-slate-400 hover:bg-violet-50 hover:border-violet-200 hover:text-violet-500"
+            }`}
           >
-            <RefreshCw size={12} />
+            <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
           </button>
         </div>
       </div>
@@ -231,9 +370,29 @@ export default function DepotControle() {
           placeholder="Rechercher un produit…"
           value={searchInput}
           onChange={handleSearchChange}
-          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm text-slate-800 placeholder-slate-400 outline-none focus:border-violet-400 focus:bg-white focus:ring-2 focus:ring-violet-100 transition-all"
+          disabled={loading}
+          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-10 py-3 text-sm text-slate-800 placeholder-slate-400 outline-none focus:border-violet-400 focus:bg-white focus:ring-2 focus:ring-violet-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         />
+        {searchInput && (
+          <button
+            onClick={handleClearSearch}
+            disabled={loading}
+            className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 disabled:opacity-50"
+          >
+            <X size={15} />
+          </button>
+        )}
       </div>
+
+      {/* ── INDICATEUR DE CHARGEMENT (overlay léger) ── */}
+      {loading && (
+        <div className="mb-4 flex justify-center">
+          <div className="bg-violet-50 text-violet-600 text-xs font-semibold px-4 py-2 rounded-full inline-flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full border-2 border-violet-200 border-t-violet-600 animate-spin" />
+            Chargement...
+          </div>
+        </div>
+      )}
 
       {/* ── MAIN GRID ── */}
       <div className={`grid gap-5 ${selectedProduit ? "grid-cols-1 lg:grid-cols-[1fr_360px]" : "grid-cols-1"}`}>
@@ -253,17 +412,20 @@ export default function DepotControle() {
                 </tr>
               </thead>
               <tbody>
-                {displayedProduits.length === 0 ? (
+                {produits.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="py-16 text-center">
                       <Package size={32} className="mx-auto mb-3 text-slate-300" />
-                      <p className="text-slate-400 text-sm">Aucun produit trouvé</p>
+                      <p className="text-slate-400 text-sm">
+                        {search ? "Aucun produit trouvé" : "Aucun produit disponible"}
+                      </p>
                     </td>
                   </tr>
                 ) : (
-                  displayedProduits.map((p) => {
+                  produits.map((p) => {
                     const belowSeuil = (p.nombre_carton || 0) <= (p.stock_seuil || 0);
                     const isActive = selectedProduit?.id === p.id;
+                    
                     return (
                       <tr
                         key={p.id}
@@ -273,7 +435,6 @@ export default function DepotControle() {
                             : "hover:bg-slate-50"
                         }`}
                       >
-                        {/* Produit */}
                         <td className="px-5 py-3.5">
                           <div className="flex items-center gap-2.5">
                             <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
@@ -285,46 +446,42 @@ export default function DepotControle() {
                           </div>
                         </td>
 
-                        {/* Fournisseur */}
                         <td className="px-5 py-3.5">
                           <span className="inline-block bg-slate-100 rounded-md px-2.5 py-1 text-xs text-slate-500 font-medium">
                             {p.fournisseur_nom || p.fournisseur?.nom || "Non défini"}
                           </span>
                         </td>
 
-                        {/* Prix */}
                         <td className="px-5 py-3.5 text-center">
                           <span className="font-bold text-xs text-violet-600 bg-violet-50 px-2.5 py-1 rounded-md whitespace-nowrap border border-violet-100">
                             {formatFCFA(p.prix_achat)}
                           </span>
                         </td>
 
-                        {/* Cartons */}
                         <td className="px-5 py-3.5 text-center">
                           <span className="font-black text-lg text-slate-800">{p.nombre_carton}</span>
                         </td>
 
-                        {/* Seuil */}
                         <td className="px-5 py-3.5 text-center">
                           <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-md border ${
                             belowSeuil
                               ? "bg-rose-50 border-rose-200 text-rose-500"
                               : "bg-emerald-50 border-emerald-200 text-emerald-600"
                           }`}>
-                            {belowSeuil ? <TrendingDown size={11} /> : <TrendingUp size={11} />}
+                            {belowSeuil ? <TrendingUp size={11} className="rotate-180" /> : <TrendingUp size={11} />}
                             {p.stock_seuil || 0}
                           </span>
                         </td>
 
-                        {/* Fiche */}
                         <td className="px-5 py-3.5 text-center">
                           <button
                             onClick={() => afficherFiche(p)}
+                            disabled={loadingMvt}
                             className={`w-8 h-8 rounded-lg text-white flex items-center justify-center mx-auto shadow-sm hover:-translate-y-px active:scale-95 transition-all ${
                               isActive
                                 ? "bg-violet-700 shadow-violet-200"
                                 : "bg-gradient-to-br from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 shadow-violet-100 hover:shadow-violet-200"
-                            }`}
+                            } disabled:opacity-50 disabled:cursor-not-allowed`}
                           >
                             <Eye size={14} />
                           </button>
@@ -336,12 +493,23 @@ export default function DepotControle() {
               </tbody>
             </table>
           </div>
+          
+          {/* Pagination */}
+          {pagination && pagination.lastPage > 1 && (
+            <div className="px-5 py-4 border-t border-slate-200">
+              <Pagination
+                currentPage={pagination.currentPage || page}
+                totalPages={pagination.lastPage || 1}
+                onPageChange={handlePageChange}
+                totalItems={pagination.total || 0}
+              />
+            </div>
+          )}
         </div>
 
         {/* ── FICHE PRODUIT ── */}
         {selectedProduit && (
-          <div className="bg-white border border-violet-200 rounded-2xl overflow-hidden shadow-sm flex flex-col">
-
+          <div className="bg-white border border-violet-200 rounded-2xl overflow-hidden shadow-sm flex flex-col h-fit sticky top-4">
             {/* Header */}
             <div className="bg-gradient-to-br from-violet-600 to-purple-600 px-5 py-4 flex items-start justify-between gap-3">
               <div>
@@ -361,7 +529,7 @@ export default function DepotControle() {
             </div>
 
             {/* Body */}
-            <div className="p-5 flex-1 overflow-y-auto">
+            <div className="p-5 flex-1 overflow-y-auto max-h-[calc(100vh-200px)]">
 
               {/* KPIs */}
               <div className="grid grid-cols-2 gap-3 mb-5">
@@ -380,6 +548,10 @@ export default function DepotControle() {
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5">
                   <p className="text-[10px] font-bold tracking-widest uppercase text-slate-400 mb-1">Seuil</p>
                   <p className="font-black text-slate-800 text-2xl">{selectedProduit.stock_seuil || 0}</p>
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5">
+                  <p className="text-[10px] font-bold tracking-widest uppercase text-slate-400 mb-1">Cartons</p>
+                  <p className="font-black text-slate-800 text-2xl">{selectedProduit.nombre_carton || 0}</p>
                 </div>
               </div>
 
@@ -441,31 +613,6 @@ export default function DepotControle() {
           </div>
         )}
       </div>
-
-      {/* ── PAGINATION ── */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-3 mt-6">
-          <button
-            disabled={page <= 1}
-            onClick={() => setPage(p => Math.max(1, p - 1))}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 text-sm font-medium hover:bg-violet-50 hover:border-violet-200 hover:text-violet-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-          >
-            <ArrowLeft size={14} /> Précédent
-          </button>
-
-          <span className="font-black text-sm text-violet-600 bg-violet-50 border border-violet-200 px-4 py-2 rounded-xl">
-            {page} / {totalPages}
-          </span>
-
-          <button
-            disabled={page >= totalPages}
-            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 text-sm font-medium hover:bg-violet-50 hover:border-violet-200 hover:text-violet-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-          >
-            Suivant <ArrowRight size={14} />
-          </button>
-        </div>
-      )}
     </div>
   );
 }

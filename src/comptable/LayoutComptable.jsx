@@ -23,7 +23,7 @@ export default function LayoutComptable() {
 
         {/* === Contenu principal - full width, marges réduites === */}
         <main className="flex-1 overflow-y-auto bg-gradient-to-b from-white to-lpd-light px-2 sm:px-4 md:px-6 pt-0 pb-0 w-full">
-          <div className="w-full max-w-[1600px] mx-auto">
+          <div className="w-full">
             <Outlet />
           </div>
         </main>
