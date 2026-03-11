@@ -3,7 +3,7 @@
 // ==========================================================
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion"; // ← AJOUT AnimatePresence
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Users,
   Banknote,
@@ -23,7 +23,7 @@ import Pagination from "@/responsable/components/Pagination";
 import { journalResponsableAPI } from "@/responsable/services/api/JournalResponsable";
 
 // ==========================================================
-// 🌀 Mini Loader LPD (Top Right) - AJOUTÉ
+// 🌀 Mini Loader LPD (Top Right)
 // ==========================================================
 const LPDLoader = ({ visible }) => {
   if (!visible) return null;
@@ -74,7 +74,7 @@ const formatFCFA = (n) =>
   }).format(Number(n || 0));
 
 export default function CaissiersPage() {
-  const [isFetching, setIsFetching] = useState(true); // ← UN SEUL ÉTAT POUR LE CHARGEMENT
+  const [isFetching, setIsFetching] = useState(true);
   const [caissiers, setCaissiers] = useState([]);
   const [selectedCaissier, setSelectedCaissier] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
@@ -115,7 +115,7 @@ export default function CaissiersPage() {
   useEffect(() => {
     const loadCaissiers = async () => {
       try {
-        setIsFetching(true); // ← ACTIVE LE LOADER
+        setIsFetching(true);
 
         const response = await journalResponsableAPI.getCaissiers({
           page: page,
@@ -138,7 +138,7 @@ export default function CaissiersPage() {
       } catch (error) {
         setCaissiers([]);
       } finally {
-        setIsFetching(false); // ← DÉSACTIVE LE LOADER
+        setIsFetching(false);
       }
     };
 
@@ -172,20 +172,21 @@ export default function CaissiersPage() {
     setShowHistory(true);
   };
 
-  const handleFondOuverture = (caissier) => {
-    setSelectedCaissier(caissier);
+  // ✅ Nouvelle fonction pour ouvrir le modal SANS caissier sélectionné
+  const handleGeneralFondOuverture = () => {
+    setSelectedCaissier(null); // Pas de caissier spécifique
     setShowFondOuverture(true);
   };
 
   return (
     <>
-      {/* 🌀 Loader LPD subtil en haut à droite - POUR TOUS LES CHARGEMENTS */}
+      {/* 🌀 Loader LPD subtil en haut à droite */}
       <AnimatePresence>
         <LPDLoader visible={isFetching} />
       </AnimatePresence>
 
       <div className="w-full">
-        {/* EN-TÊTE COMPACT */}
+        {/* EN-TÊTE COMPACT AVEC BOUTON FOND D'OUVERTURE GÉNÉRAL */}
         <div className="mb-5">
           <div className="flex items-start justify-between mb-3">
             <div>
@@ -194,6 +195,15 @@ export default function CaissiersPage() {
                 {globalStats.total} caissier{globalStats.total > 1 ? 's' : ''} au total • {filteredCaissiers.length} affiché{filteredCaissiers.length > 1 ? 's' : ''}
               </p>
             </div>
+            
+            {/* ✅ GROS BOUTON FOND D'OUVERTURE GÉNÉRALISÉ EN HAUT */}
+            <button
+              onClick={handleGeneralFondOuverture}
+              className="flex items-center gap-2 px-4 py-2.5 bg-[#472EAD] text-white rounded-lg shadow-md hover:bg-[#5A3CF5] hover:shadow-lg text-xs sm:text-sm transition"
+            >
+              <Wallet size={16} />
+              Fond d'ouverture
+            </button>
           </div>
 
           {/* FILTRE DE PÉRIODE */}
@@ -276,7 +286,7 @@ export default function CaissiersPage() {
           </div>
         </div>
 
-        {/* TABLEAU OPTIMISÉ */}
+        {/* TABLEAU OPTIMISÉ - SANS BOUTONS FOND DANS LES ACTIONS */}
         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden mb-5">
           <div className="px-3 py-2 border-b border-gray-200 bg-gray-50">
             <div className="flex items-center justify-between">
@@ -377,13 +387,7 @@ export default function CaissiersPage() {
                           <Eye className="w-3 h-3" />
                           Détails
                         </button>
-                        <button
-                          onClick={() => handleFondOuverture(caissier)}
-                          className="flex items-center gap-1 px-2 py-1 text-xs text-emerald-600 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 rounded"
-                        >
-                          <Wallet className="w-3 h-3" />
-                          Fond
-                        </button>
+                        {/* ✅ BOUTON FOND SUPPRIMÉ - IL N'Y A PLUS QUE DÉTAILS */}
                       </div>
                     </td>
                   </tr>
@@ -412,10 +416,10 @@ export default function CaissiersPage() {
           />
         )}
 
-        {/* MODAL FOND D'OUVERTURE */}
-        {showFondOuverture && selectedCaissier && (
+        {/* ✅ MODAL FOND D'OUVERTURE - s'ouvre via le gros bouton général */}
+        {showFondOuverture && (
           <FondOuvertureModal
-            employee={selectedCaissier}
+            employee={selectedCaissier} // Ici c'est null, donc le modal sait qu'il est en mode général
             isOpen={showFondOuverture}
             onClose={() => setShowFondOuverture(false)}
             onToast={toast}
