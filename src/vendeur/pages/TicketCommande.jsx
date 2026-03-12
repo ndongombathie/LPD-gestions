@@ -65,7 +65,7 @@ const TicketCommande = forwardRef(({ commande }, ref) => {
         <div className="mb-2">
           <p className="text-xs">Client</p>
           <p className="text-sm font-bold">
-            {commande.client.nom} {commande.client.prenom}
+            {commande.client.prenom} {commande.client.nom}
           </p>
         </div>
 
