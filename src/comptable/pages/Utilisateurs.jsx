@@ -612,7 +612,6 @@ export default function Utilisateurs() {
   const loadUsers = useCallback(async (page = 1) => {
     // Éviter les appels multiples simultanés
     if (loadingRef.current) {
-      console.log("⏳ Chargement déjà en cours, ignoré");
       return;
     }
 
@@ -625,16 +624,12 @@ export default function Utilisateurs() {
       
       // Éviter les appels avec les mêmes paramètres
       if (paramsKey === previousParamsRef.current && initialLoadDone) {
-        console.log("📦 Paramètres identiques, chargement ignoré");
         return;
       }
       
-      console.log("📡 Chargement avec params:", params);
       previousParamsRef.current = paramsKey;
       
       const response = await utilisateursAPI.getAll(params);
-      
-      console.log("📡 Réponse API:", response);
       
       if (response?.data) {
         setUsers(response.data);
