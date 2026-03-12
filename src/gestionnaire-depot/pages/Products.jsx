@@ -1,5 +1,6 @@
 // src/gestionnaire-depot/pages/Products.jsx
 import React, { useState, useMemo, useEffect, useCallback } from "react";
+import { useDebounce } from 'use-debounce';
 import { useProducts } from "../hooks/useProducts";
 import { useCategories } from "../hooks/useCategories";
 import { useAllFournisseurs } from "../hooks/useAllFournisseurs";
@@ -683,57 +684,20 @@ const HistoryTab = ({
 };
 
 // =========================================================================
-// ONGLET CATÉGORIES
+// ONGLET CATÉGORIES (version corrigée avec recherche côté serveur)
 // =========================================================================
-const CategoriesTab = ({ 
-  categories, 
-  total,
-  onEditCategory, 
-  onDeleteCategory, 
-  onAddCategory
-}) => {
+const CategoriesTab = ({ onEditCategory, onDeleteCategory, onAddCategory }) => {
   const [searchTerm, setSearchTerm] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize] = useState(20);
+  const [debouncedSearch] = useDebounce(searchTerm, 300);
 
-  // Filtrer les catégories par recherche
-  const filteredCategories = useMemo(() => {
-    if (!categories || categories.length === 0) return [];
-    if (searchTerm.trim() === '') return categories;
-    
-    const term = searchTerm.toLowerCase();
-    return categories.filter(cat =>
-      cat.nom?.toLowerCase().includes(term)
-    );
-  }, [categories, searchTerm]);
-
-  // Pagination locale
-  const paginatedCategories = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    return filteredCategories.slice(start, start + pageSize);
-  }, [filteredCategories, currentPage, pageSize]);
-
-  const totalPages = Math.ceil(filteredCategories.length / pageSize);
-
-  // Réinitialiser la page quand la recherche change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm]);
-
-  if (!categories || categories.length === 0) {
-    return (
-      <div className="bg-white rounded-xl shadow-sm border p-8 text-center">
-        <FaFolder className="text-6xl text-gray-300 mx-auto mb-4" />
-        <p className="text-lg text-gray-500">Aucune catégorie trouvée</p>
-        <button 
-          onClick={onAddCategory}
-          className="mt-4 px-4 py-2 bg-[#472EAD] text-white rounded-lg hover:bg-[#3a2590] transition-colors"
-        >
-          Créer une catégorie
-        </button>
-      </div>
-    );
-  }
+  const {
+    categories,
+    total,
+    loading,
+    currentPage,
+    totalPages,
+    goToPage,
+  } = useCategories(1, 10, debouncedSearch);
 
   return (
     <>
@@ -741,7 +705,7 @@ const CategoriesTab = ({
         <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
           <div className="flex items-center gap-4">
             <div className="text-sm bg-slate-50 px-3 py-1 rounded-lg">
-              <span className="font-bold text-[#472EAD]">{filteredCategories.length}</span> / {total} catégories
+              <span className="font-bold text-[#472EAD]">{total}</span> catégories
             </div>
             <div className="relative">
               <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-[#472EAD]" />
@@ -764,68 +728,91 @@ const CategoriesTab = ({
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border mt-4 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-gradient-to-r from-[#F7F5FF] to-[#FFF5F0] border-b text-[#472EAD]">
-            <tr>
-              <th className="p-3 text-left">
-                <div className="flex items-center gap-1">
-                  <FaFolder className="text-[#472EAD]" />
-                  <span>Nom</span>
-                </div>
-              </th>
-              <th className="p-3 text-center">
-                <div className="flex items-center gap-1 justify-center">
-                  <FaTools className="text-[#472EAD]" />
-                  <span>Actions</span>
-                </div>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {paginatedCategories.length > 0 ? paginatedCategories.map((cat) => (
-              <tr key={cat.id} className="border-t hover:bg-[#F7F5FF]/30 transition-colors">
-                <td className="p-3 font-medium text-[#472EAD]">{cat.nom}</td>
-                <td className="p-3 text-center">
-                  <div className="flex items-center justify-center gap-3">
-                    <button 
-                      onClick={() => onEditCategory(cat)} 
-                      className="inline-flex items-center gap-1 text-[#472EAD] hover:text-[#3a2590] hover:underline text-xs"
-                    >
-                      <FaEdit /><span>Modifier</span>
-                    </button>
-                    <button 
-                      onClick={() => onDeleteCategory(cat.id)} 
-                      className="inline-flex items-center gap-1 text-xs text-[#F58020] hover:text-red-600 hover:underline"
-                    >
-                      <FaTrashAlt /><span>Supprimer</span>
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            )) : (
-              <tr>
-                <td colSpan={2} className="p-8 text-center">
-                  <div className="text-gray-400">
-                    <FaFolder className="text-4xl mx-auto mb-3 opacity-50" />
-                    <p className="text-lg font-medium text-[#472EAD]">
-                      Aucune catégorie trouvée
-                    </p>
-                  </div>
-                </td>
-              </tr>
+        {loading ? (
+          <div className="p-8 text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#472EAD] mx-auto"></div>
+            <p className="mt-2 text-sm text-[#472EAD]">Chargement...</p>
+          </div>
+        ) : (
+          <>
+            <table className="w-full text-sm">
+              <thead className="bg-gradient-to-r from-[#F7F5FF] to-[#FFF5F0] border-b text-[#472EAD]">
+                <tr>
+                  <th className="p-3 text-left">
+                    <div className="flex items-center gap-1">
+                      <FaFolder className="text-[#472EAD]" />
+                      <span>Nom</span>
+                    </div>
+                  </th>
+                  <th className="p-3 text-center">
+                    <div className="flex items-center gap-1 justify-center">
+                      <FaTools className="text-[#472EAD]" />
+                      <span>Actions</span>
+                    </div>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {categories.length > 0 ? categories.map((cat) => (
+                  <tr key={cat.id} className="border-t hover:bg-[#F7F5FF]/30 transition-colors">
+                    <td className="p-3 font-medium text-[#472EAD]">{cat.nom}</td>
+                    <td className="p-3 text-center">
+                      <div className="flex items-center justify-center gap-3">
+                        <button 
+                          onClick={() => onEditCategory(cat)} 
+                          className="inline-flex items-center gap-1 text-[#472EAD] hover:text-[#3a2590] hover:underline text-xs"
+                        >
+                          <FaEdit /><span>Modifier</span>
+                        </button>
+                        <button 
+                          onClick={() => onDeleteCategory(cat.id)} 
+                          className="inline-flex items-center gap-1 text-xs text-[#F58020] hover:text-red-600 hover:underline"
+                        >
+                          <FaTrashAlt /><span>Supprimer</span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )) : (
+                  <tr>
+                    <td colSpan={2} className="p-8 text-center">
+                      <div className="text-gray-400">
+                        <FaFolder className="text-4xl mx-auto mb-3 opacity-50" />
+                        <p className="text-lg font-medium text-[#472EAD]">
+                          Aucune catégorie trouvée
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex justify-center items-center gap-4 p-4 border-t">
+                <button
+                  onClick={() => goToPage(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="px-4 py-2 border rounded-lg text-sm disabled:opacity-50 bg-white hover:bg-slate-50"
+                >
+                  Précédent
+                </button>
+                <span className="text-sm">
+                  Page {currentPage} / {totalPages}
+                </span>
+                <button
+                  onClick={() => goToPage(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="px-4 py-2 border rounded-lg text-sm disabled:opacity-50 bg-white hover:bg-slate-50"
+                >
+                  Suivant
+                </button>
+              </div>
             )}
-          </tbody>
-        </table>
+          </>
+        )}
       </div>
-      
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <SimplePagination
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={setCurrentPage}
-        />
-      )}
     </>
   );
 };
@@ -1234,8 +1221,6 @@ export default function Products() {
           )}
           {activeTab === "categories" && (
             <CategoriesTab
-              categories={categories}
-              total={categoriesTotal}
               onEditCategory={handleEditCategory}
               onDeleteCategory={handleDeleteCategory}
               onAddCategory={handleAddCategory}

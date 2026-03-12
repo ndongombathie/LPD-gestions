@@ -435,7 +435,7 @@ export default function Reports() {
   }
 
   return (
-    <div className="depot-page p-6 max-w-7xl mx-auto" style={{ color: PALETTE.text }}>
+    <div className="depot-page p-6  mx-auto" style={{ color: PALETTE.text }}>
       {/* En-tête moderne */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-8">
         <div className="flex items-center gap-3">
