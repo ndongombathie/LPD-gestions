@@ -373,12 +373,11 @@ export default function Header({
   const initials = useMemo(() => getInitials(displayName), [displayName]);
 
   const handleLogout = async () => {
-    if (window.confirm("Voulez-vous vous déconnecter ?")) {
-      try {
-        await logout();
-        if (onLogout) onLogout();
-      } catch (error) {
-      }
+    try {
+      await logout();
+      if (onLogout) onLogout();
+    } catch (error) {
+      console.error('Erreur de déconnexion:', error);
     }
     setMenuOpen(false);
   };
