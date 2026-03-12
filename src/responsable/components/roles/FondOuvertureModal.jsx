@@ -1,7 +1,7 @@
 // ==========================================================
 // 💰 FondOuvertureModal.jsx — Modal de saisie du fond d'ouverture
 // Permet au responsable de définir le fond de caisse initial
-// pour un caissier sélectionné
+// Mode général (tous caissiers) ou spécifique (caissier sélectionné)
 // ==========================================================
 
 import React, { useState, useEffect } from "react";
@@ -11,11 +11,12 @@ import {
   Wallet, 
   Calendar, 
   AlertCircle,
-  CheckCircle,
   DollarSign,
-  Save
+  Save,
+  Loader2
 } from "lucide-react";
 import { journalResponsableAPI } from "@/responsable/services/api/JournalResponsable";
+import { decaissementsAPI } from "@/responsable/services/api/decaissements";
 
 const formatFCFA = (n) =>
   new Intl.NumberFormat("fr-FR", {
@@ -36,20 +37,86 @@ export default function FondOuvertureModal({
   const [montant, setMontant] = useState("");
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+  const [selectedCaissier, setSelectedCaissier] = useState(null);
+  const [searchCaissier, setSearchCaissier] = useState("");
+  const [isOpenDropdown, setIsOpenDropdown] = useState(false);
+  const [allCaissiers, setAllCaissiers] = useState([]);
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const [loadingCaissiers, setLoadingCaissiers] = useState(false);
+  
+  // ✅ Mode général ou spécifique
+  const isGeneralMode = !employee;
   
   const date = todayISO(); // Date du jour fixe
 
-  // Réinitialiser le formulaire quand le modal s'ouvre avec un nouvel employé
+  // ✅ Chargement unique de tous les caissiers (même endpoint que DecaissementForm)
+  const loadAllCaissiers = async () => {
+    if (hasLoaded) return;
+
+    try {
+      setLoadingCaissiers(true);
+      // Utilisation du même endpoint que dans DecaissementForm
+      const res = await decaissementsAPI.getAllCaissiers();
+      setAllCaissiers(res || []);
+      setHasLoaded(true);
+    } catch (error) {
+      console.error("Erreur chargement caissiers:", error);
+    } finally {
+      setLoadingCaissiers(false);
+    }
+  };
+
+  // ✅ Click outside pour fermer le dropdown
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (!e.target.closest(".caissier-combobox")) {
+        setIsOpenDropdown(false);
+      }
+    };
+
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, []);
+
+  // Réinitialiser le formulaire quand le modal s'ouvre
   useEffect(() => {
     if (isOpen) {
       setMontant("");
       setErrors({});
+      setSelectedCaissier(null);
+      setSearchCaissier("");
+      setIsOpenDropdown(false);
+      
+      // Si un employé est fourni (mode spécifique), on le sélectionne
+      if (employee) {
+        const caissierData = employee.caissier || employee;
+        setSelectedCaissier(caissierData);
+        setSearchCaissier(`${caissierData.prenom || ""} ${caissierData.nom || ""}`.trim());
+      }
     }
   }, [isOpen, employee]);
+
+  // ✅ Filtrage frontend des caissiers (comme dans DecaissementForm)
+  const filteredCaissiers = allCaissiers.filter((c) =>
+    `${c.nom || ""} ${c.prenom || ""}`
+      .toLowerCase()
+      .includes(searchCaissier.toLowerCase())
+  );
+
+  const selectCaissier = (c) => {
+    setSelectedCaissier(c);
+    setSearchCaissier(`${c.nom || ""} ${c.prenom || ""}`.trim());
+    setIsOpenDropdown(false);
+    // Effacer l'erreur si elle existe
+    if (errors.caissier) {
+      setErrors(prev => ({ ...prev, caissier: null }));
+    }
+  };
 
   const validateForm = () => {
     const newErrors = {};
 
+    // Validation montant
     if (!montant) {
       newErrors.montant = "Le montant est obligatoire";
     } else {
@@ -59,6 +126,11 @@ export default function FondOuvertureModal({
       } else if (montantNum > 10000000) {
         newErrors.montant = "Le montant ne peut pas dépasser 10 000 000 FCFA";
       }
+    }
+
+    // Validation caissier en mode général
+    if (isGeneralMode && !selectedCaissier) {
+      newErrors.caissier = "Veuillez sélectionner un caissier";
     }
 
     setErrors(newErrors);
@@ -72,6 +144,7 @@ export default function FondOuvertureModal({
     }
   };
 
+  // ✅ handleSubmit adapté
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -85,26 +158,45 @@ export default function FondOuvertureModal({
     try {
       const montantNum = parseFloat(montant);
 
+      // 🔥 Déterminer l'ID du caissier (employee fourni ou caissier sélectionné)
+      let caissierId = null;
+      
+      if (employee) {
+        // Mode spécifique (via le tableau)
+        caissierId = employee?.caissier?.id ?? employee?.id ?? null;
+      } else {
+        // Mode général (via le dropdown)
+        caissierId = selectedCaissier?.id ?? null;
+      }
+
+      if (!caissierId) {
+        throw new Error("Aucun caissier sélectionné");
+      }
+
       await journalResponsableAPI.attribuerFondCaisse(
-        employee.caissier?.id || employee.id,
+        caissierId,
         montantNum
       );
+
+      // Nom du caissier pour le toast
+      const caissierName = employee 
+        ? `${employee?.caissier?.prenom || ""} ${employee?.caissier?.nom || ""}`.trim()
+        : `${selectedCaissier?.prenom || ""} ${selectedCaissier?.nom || ""}`.trim();
 
       onToast(
         "success",
         "Fond d'ouverture enregistré",
-        `${employee.caissier?.prenom || ""} ${employee.caissier?.nom || ""} • ${formatFCFA(montantNum)}`
+        `${caissierName || "Caissier"} • ${formatFCFA(montantNum)}`
       );
 
       onClose();
 
     } catch (error) {
-
-
       onToast(
         "error",
         "Erreur",
         error?.response?.data?.message ||
+        error?.message ||
         "Erreur lors de l'enregistrement du fond d'ouverture"
       );
     } finally {
@@ -144,7 +236,7 @@ export default function FondOuvertureModal({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-200">
-              {/* Header */}
+              {/* Header corrigé */}
               <div className="bg-gradient-to-r from-[#472EAD] to-[#5A3CF5] px-6 py-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-white/20 rounded-lg">
@@ -153,7 +245,9 @@ export default function FondOuvertureModal({
                   <div>
                     <h2 className="text-lg font-semibold text-white">Fond d'ouverture</h2>
                     <p className="text-xs text-white/80">
-                      Caisse • {employee.caissier?.prenom || ""} {employee.caissier?.nom || ""}
+                      {employee 
+                        ? `Caisse • ${employee?.caissier?.prenom || ""} ${employee?.caissier?.nom || ""}`
+                        : "Sélectionner un caissier"}
                     </p>
                   </div>
                 </div>
@@ -167,6 +261,96 @@ export default function FondOuvertureModal({
 
               {/* Formulaire */}
               <form onSubmit={handleSubmit} className="p-6 space-y-5">
+                {/* Sélection du caissier (uniquement en mode général) - MÊME DESIGN QUE DecaissementForm */}
+                {isGeneralMode && (
+                  <div className="relative caissier-combobox">
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Caissier <span className="text-red-500">*</span>
+                    </label>
+
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={
+                          selectedCaissier
+                            ? `${selectedCaissier.prenom || ""} ${selectedCaissier.nom || ""}`.trim()
+                            : searchCaissier
+                        }
+                        onClick={async () => {
+                          setIsOpenDropdown(true);
+                          await loadAllCaissiers();
+                        }}
+                        onChange={(e) => {
+                          setSelectedCaissier(null);
+                          setSearchCaissier(e.target.value);
+                          setIsOpenDropdown(true);
+                        }}
+                        placeholder="Rechercher un caissier..."
+                        className={`w-full rounded-lg border px-3 py-2.5 text-sm focus:ring-2 focus:ring-[#472EAD]/20 focus:border-[#472EAD] transition ${
+                          errors.caissier ? "border-red-300 bg-red-50" : "border-gray-300"
+                        }`}
+                        disabled={loading}
+                      />
+
+                      {/* Flèche dropdown */}
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          setIsOpenDropdown((prev) => !prev);
+                          await loadAllCaissiers();
+                        }}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      >
+                        <svg
+                          className={`w-4 h-4 transition-transform ${
+                            isOpenDropdown ? "rotate-180" : ""
+                          }`}
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          viewBox="0 0 24 24"
+                        >
+                          <path d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+
+                      {loadingCaissiers && (
+                        <Loader2 className="w-4 h-4 animate-spin absolute right-9 top-1/2 -translate-y-1/2 text-[#472EAD]" />
+                      )}
+                    </div>
+
+                    {errors.caissier && (
+                      <p className="mt-1.5 text-xs text-red-600 flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" />
+                        {errors.caissier}
+                      </p>
+                    )}
+
+                    {/* Dropdown avec filtrage frontend - MÊME DESIGN */}
+                    {isOpenDropdown && (
+                      <div className="absolute z-50 mt-1 w-full border border-gray-200 rounded-lg bg-white shadow-lg max-h-60 overflow-y-auto">
+                        {filteredCaissiers.length > 0 ? (
+                          filteredCaissiers.map((c) => (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onClick={() => selectCaissier(c)}
+                              className="w-full text-left px-3 py-2.5 text-sm hover:bg-[#F7F5FF] border-b border-gray-100 last:border-0"
+                            >
+                              <div className="font-medium">{c.prenom} {c.nom}</div>
+                              <div className="text-xs text-gray-500">{c.email}</div>
+                            </button>
+                          ))
+                        ) : (
+                          <div className="px-3 py-3 text-sm text-gray-500 text-center">
+                            Aucun caissier trouvé
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Montant */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -183,7 +367,7 @@ export default function FondOuvertureModal({
                         errors.montant ? "border-red-300 bg-red-50" : "border-gray-300"
                       }`}
                       disabled={loading}
-                      autoFocus
+                      autoFocus={!isGeneralMode} // AutoFocus seulement si pas de dropdown
                     />
                   </div>
                   {errors.montant && (
