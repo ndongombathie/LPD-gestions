@@ -932,9 +932,9 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
         console.log("la reponse de api",apiResponse);
         
         nouvelleCommande = {
-          id: apiResponse.id || apiResponse?.data?.uuid || `temp-${Date.now()}`,
+          id: apiResponse.id || apiResponse?.id || `temp-${Date.now()}`,
           numero_commande: apiResponse.numero || `CMD-${Date.now().toString().slice(-8)}`,
-          date: apiResponse?.data?.created_at || new Date().toISOString(),
+          date: apiResponse.created_at || new Date().toISOString(),
           
           type_vente: typeVenteGlobalCommande,
           type_vente_affichage: getTypeVenteAffichage(typeVenteGlobalCommande),
@@ -1631,6 +1631,22 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-xs font-medium text-gray-600 block">
+                    Prénom *
+                  </label>
+                  <div className="relative">
+                    <FontAwesomeIcon icon={faUser} className="absolute left-3 top-3 text-gray-500 text-sm z-10" />
+                    <input
+                      type="text"
+                      placeholder="Saisir le prénom"
+                      value={client.prenom}
+                      onChange={(e) => setClient({ ...client, prenom: e.target.value })}
+                      className="w-full py-2.5 px-3 pl-10 text-sm border-2 border-gray-200 rounded-lg transition-colors focus:border-[#472ead] focus:outline-none hover:border-gray-300"
+                      required
+                    />
+                   </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-gray-600 block">
                     Nom *
                   </label>
                   <div className="relative">
@@ -1641,23 +1657,6 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
                       placeholder="Saisir le nom"
                       value={client.nom}
                       onChange={(e) => setClient({ ...client, nom: e.target.value })}
-                      className="w-full py-2.5 px-3 pl-10 text-sm border-2 border-gray-200 rounded-lg transition-colors focus:border-[#472ead] focus:outline-none hover:border-gray-300"
-                      required
-                    />
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <label className="text-xs font-medium text-gray-600 block">
-                    Prénom *
-                  </label>
-                  <div className="relative">
-                    <FontAwesomeIcon icon={faUser} className="absolute left-3 top-3 text-gray-500 text-sm z-10" />
-                    <input
-                      type="text"
-                      placeholder="Saisir le prénom"
-                      value={client.prenom}
-                      onChange={(e) => setClient({ ...client, prenom: e.target.value })}
                       className="w-full py-2.5 px-3 pl-10 text-sm border-2 border-gray-200 rounded-lg transition-colors focus:border-[#472ead] focus:outline-none hover:border-gray-300"
                       required
                     />
@@ -1708,7 +1707,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
                         Client identifié
                       </p>
                       <p className="text-sm font-semibold text-emerald-900 mt-0.5">
-                        {client.nom.trim()} {client.prenom.trim()}
+                         {client.prenom.trim()} {client.nom.trim()}
                       </p>
                     </div>
                   </div>
