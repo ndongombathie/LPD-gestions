@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Eye, Check, CheckCircle2, AlertTriangle, Search } from "lucide-react";
+import { Eye, CheckCircle2, AlertTriangle, Search } from "lucide-react";
 import DataTable from "../components/DataTable";
 import Pagination from "../components/Pagination";
 import LoadingSpinner from "../components/LoadingSpinner";
 import EmptyState from "../components/EmptyState";
 import useDebouncedValue from "../hooks/useDebouncedValue";
 import { gestionnaireBoutiqueAPI } from "@/services/api";
-import { toast } from "sonner";
+import { toast, Toaster } from "sonner";
 
 const Produits = () => {
   const [transferts, setTransferts] = useState([]);
@@ -290,10 +290,10 @@ const Produits = () => {
                 data={transferts}
                 actions={[
                   {
-                    title: "Compléter",
-                    icon: <Check size={30} />,
-                    color: "text-green-600",
-                    hoverBg: "bg-green-50",
+                    title: "Valider",
+                    icon: <span className="px-3 py-1 text-xs font-semibold tracking-wide">Valider</span>,
+                    color: "text-white bg-green-600 border border-green-600 hover:bg-green-700",
+                    hoverBg: "bg-green-700",
                     onClick: openCompletionModal,
                   },
                 ]}
@@ -600,6 +600,8 @@ const Produits = () => {
             </div>
           </div>
         )}
+
+        <Toaster position="top-right" richColors expand={true} />
       </div>
     </div>
   );
