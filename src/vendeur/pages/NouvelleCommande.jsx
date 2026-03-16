@@ -227,23 +227,19 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
       inputCodeBarreRef.current.focus();
     }
   }, []);
+  
 
   useEffect(() => {
     if (!boutiqueId) return;
-
     const channel = echo.private(`boutique.${boutiqueId}`);
-
-    const listener = (e) => {
+    const listener = () => {
         chargerProduits();
     };
-
-    channel.listen('transfert.validee', listener);
-
+    channel.listen('.transfert.validee', listener);
     return () => {
         try {
             channel.stopListening('transfert.validee');
             echo.leave(`boutique.${boutiqueId}`);
-
             addNotification(
                 'info',
                 'Désinscription du canal temps réel réussie.'
