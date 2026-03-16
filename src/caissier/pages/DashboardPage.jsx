@@ -103,7 +103,7 @@ const DashboardPage = () => {
           // Écouter les événements de paiement et décaissement pour mettre à jour le dashboard
           if (boutiqueId) {
             const boutiqueChannel = echo.private(`boutique.${boutiqueId}`);
-            
+          
             // Écouter les nouveaux paiements
             boutiqueChannel.listen('.paiement.cree', () => {
               loadData(); // Recharger les données du dashboard
