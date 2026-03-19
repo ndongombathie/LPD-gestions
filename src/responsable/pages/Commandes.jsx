@@ -740,7 +740,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
             );
 
             return {
-              id: produit.id,
+              id: t.id,
 
               // 🔥 CODE BARRE UNIQUEMENT
               ref: produit.code ?? null,
@@ -760,6 +760,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
           });
 
         setCatalogue(normalized);
+        console.log(normalized)
         setHasLoadedProduits(true);
       } catch (error) {
         logger.error("produits.load.all", error);
