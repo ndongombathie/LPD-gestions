@@ -67,7 +67,7 @@ export function normalizeCommande(cmd) {
 
     return {
       id: l.id,
-      produitId: l.produit_id || l.produitId || null,
+      produitId: l.id || l.produitId || null,
       libelle:
         l.libelle ||
         l.nom_produit ||
