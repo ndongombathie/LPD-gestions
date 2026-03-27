@@ -4,7 +4,7 @@
 // ==========================================================
 
 import React, { useEffect, useMemo, useState } from "react";
-import { Printer, Loader } from "lucide-react";
+import { Printer, Loader, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, RefreshCw } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import DataTable from "../components/DataTable.jsx";
@@ -42,6 +42,7 @@ export default function ControleVendeur() {
 
   const [loading, setLoading] = useState(false);
   const [loadingGlobal, setLoadingGlobal] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const [search, setSearch] = useState("");
 
@@ -60,185 +61,255 @@ export default function ControleVendeur() {
 
   /* ================= FETCH PAGE ================= */
 
+  const fetchPage = async () => {
+    try {
+      setLoading(true);
+      const startDate = (dateDebut || todayFormatted) + " 00:00:00";
+      const endDate = (dateFin || todayFormatted) + " 23:59:59";
+
+      const response = await controleVenteAPI.getCommandes({
+        page,
+        per_page: 15,
+        date_debut: startDate,
+        date_fin: endDate,
+        type_client: typeClient || undefined
+      });
+
+      setVentes(response?.items || []);
+      setPagination(response?.pagination || {});
+
+    } catch (error) {
+      console.error("Erreur fetch page :", error);
+      setVentes([]);
+      setPagination({});
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
+    fetchPage();
+  }, [page, dateDebut, dateFin, typeClient]);
 
-    const fetchPage = async () => {
+  /* ================= FETCH GLOBAL ================= */
 
-      try {
+  const fetchGlobal = async () => {
+    try {
+      setLoadingGlobal(true);
+      let current = 1;
+      let last = 1;
+      let all = [];
 
-        setLoading(true);
-
+      do {
         const response = await controleVenteAPI.getCommandes({
-          page,
-          per_page: 15,
+          page: current,
+          per_page: 100,
           date_debut: dateDebut,
           date_fin: dateFin,
           type_client: typeClient || undefined
         });
 
-        setVentes(response?.items || []);
-        setPagination(response?.pagination || {});
+        const items = response?.items || [];
+        const pagination = response?.pagination || {};
 
-      } catch (error) {
+        all = [...all, ...items];
+        last = pagination.lastPage || 1;
+        current++;
 
-        console.error("Erreur fetch page :", error);
-        setVentes([]);
-        setPagination({});
+      } while (current <= last && last > 0);
 
-      } finally {
-
-        setLoading(false);
-
-      }
-
-    };
-
-    fetchPage();
-
-  }, [page, dateDebut, dateFin, typeClient]);
-
-  /* ================= FETCH GLOBAL ================= */
+      setVentesGlobales(all);
+    } catch (error) {
+      console.error("Erreur fetch global :", error);
+      setVentesGlobales([]);
+    } finally {
+      setLoadingGlobal(false);
+    }
+  };
 
   useEffect(() => {
-
-    const fetchGlobal = async () => {
-
-      try {
-
-        setLoadingGlobal(true);
-
-        let current = 1;
-        let last = 1;
-        let all = [];
-
-        do {
-
-          const response = await controleVenteAPI.getCommandes({
-            page: current,
-            per_page: 100,
-            date_debut: dateDebut,
-            date_fin: dateFin,
-            type_client: typeClient || undefined
-          });
-
-          const items = response?.items || [];
-          const pagination = response?.pagination || {};
-
-          all = [...all, ...items];
-
-          last = pagination.lastPage || 1;
-
-          current++;
-
-        } while (current <= last && last > 0);
-
-        setVentesGlobales(all);
-
-      } catch (error) {
-
-        console.error("Erreur fetch global :", error);
-        setVentesGlobales([]);
-
-      } finally {
-
-        setLoadingGlobal(false);
-
-      }
-
-    };
-
     fetchGlobal();
-
   }, [dateDebut, dateFin, typeClient]);
+
+  /* ================= ACTUALISER ================= */
+
+  const actualiserPage = async () => {
+    setRefreshing(true);
+    try {
+      await fetchPage();
+      await fetchGlobal();
+    } catch (error) {
+      console.error("Erreur lors de l'actualisation :", error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   /* ================= FILTER FRONT ================= */
 
   const ventesFiltrees = useMemo(() => {
-
     return ventes.filter((v) =>
       (v.vendeurNom || "")
         .toLowerCase()
         .includes(search.toLowerCase())
     );
-
   }, [ventes, search]);
 
-  /* ================= PDF ================= */
+  /* ================= PAGINATION HANDLERS ================= */
 
-  const imprimerPDF = () => {
+  const goToFirstPage = () => {
+    setPage(1);
+  };
 
-    if (!ventesGlobales.length) return;
-
-    const doc = new jsPDF();
-
-    /* ===== HEADER ===== */
-
-    doc.setFillColor(71, 46, 173);
-    doc.rect(0, 0, 210, 35, "F");
-
-    doc.setTextColor(245, 128, 32);
-    doc.setFontSize(24);
-    doc.text("LPD", 105, 15, { align: "center" });
-
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(10);
-    doc.text("LIBRAIRIE PAPETERIE DARADJI", 105, 22, { align: "center" });
-
-    doc.setFontSize(12);
-    doc.text("CONTROLE GLOBAL DES VENTES", 105, 30, { align: "center" });
-
-    doc.setTextColor(0, 0, 0);
-
-    /* ===== INFOS ===== */
-
-    const now = new Date();
-
-    doc.setFontSize(10);
-
-    doc.text(
-      `Date impression : ${now.toLocaleDateString("fr-FR")} ${now.toLocaleTimeString("fr-FR")}`,
-      14,
-      50
-    );
-
-    doc.text(
-      `Période du ${formatDateFR(dateDebut)} au ${formatDateFR(dateFin)}`,
-      14,
-      57
-    );
-
-    if (typeClient) {
-
-      doc.text(
-        `Type client : ${typeClient === "special"
-          ? "Clients spéciaux"
-          : "Clients normaux"
-        }`,
-        14,
-        64
-      );
-
+  const goToPreviousPage = () => {
+    if (page > 1) {
+      setPage(page - 1);
     }
+  };
 
-    /* ===== TABLE ===== */
+  const goToNextPage = () => {
+    if (page < (pagination.lastPage || 1)) {
+      setPage(page + 1);
+    }
+  };
 
-    autoTable(doc, {
-      startY: typeClient ? 70 : 65,
-      head: [["Vendeur", "Client", "Date", "Produits", "Total", "Payé", "Reste"]],
-      body: ventesGlobales.map((v) => [
-        v.vendeurNom || "-",
-        v.clientNom || "-",
-        formatDateFR(v.date),
-        v.nombreProduits || 0,
-        formatFCFA(v.total),
-        formatFCFA(v.totalPaye),
-        formatFCFA(v.reste),
-      ]),
-      styles: { fontSize: 9 },
-    });
+  const goToLastPage = () => {
+    setPage(pagination.lastPage || 1);
+  };
 
-    doc.save("controle_global_ventes.pdf");
+  const goToPage = (pageNumber) => {
+    if (pageNumber >= 1 && pageNumber <= (pagination.lastPage || 1)) {
+      setPage(pageNumber);
+    }
+  };
 
+  /* ================= RENDER PAGINATION BUTTONS ================= */
+
+  const renderPaginationButtons = () => {
+    const currentPage = page;
+    const lastPage = pagination.lastPage || 1;
+    const totalItems = pagination.total || 0;
+    const perPage = pagination.perPage || 15;
+    const startItem = (currentPage - 1) * perPage + 1;
+    const endItem = Math.min(currentPage * perPage, totalItems);
+
+    // Calculate which page numbers to show
+    const getPageNumbers = () => {
+      const delta = 2;
+      const range = [];
+      const rangeWithDots = [];
+      let l;
+
+      for (let i = 1; i <= lastPage; i++) {
+        if (i === 1 || i === lastPage || (i >= currentPage - delta && i <= currentPage + delta)) {
+          range.push(i);
+        }
+      }
+
+      range.forEach((i) => {
+        if (l) {
+          if (i - l === 2) {
+            rangeWithDots.push(l + 1);
+          } else if (i - l !== 1) {
+            rangeWithDots.push('...');
+          }
+        }
+        rangeWithDots.push(i);
+        l = i;
+      });
+
+      return rangeWithDots;
+    };
+
+    return (
+      <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6 rounded-b-xl">
+        <div className="flex flex-1 justify-between sm:hidden">
+          <button
+            onClick={goToPreviousPage}
+            disabled={currentPage === 1}
+            className="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Précédent
+          </button>
+          <button
+            onClick={goToNextPage}
+            disabled={currentPage === lastPage}
+            className="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Suivant
+          </button>
+        </div>
+        <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm text-gray-700">
+              Affichage de <span className="font-medium">{startItem}</span> à{' '}
+              <span className="font-medium">{endItem}</span> sur{' '}
+              <span className="font-medium">{totalItems}</span> résultats
+            </p>
+          </div>
+          <div>
+            <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
+              <button
+                onClick={goToFirstPage}
+                disabled={currentPage === 1}
+                className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <span className="sr-only">Première page</span>
+                <ChevronsLeft className="h-5 w-5" aria-hidden="true" />
+              </button>
+              <button
+                onClick={goToPreviousPage}
+                disabled={currentPage === 1}
+                className="relative inline-flex items-center px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <span className="sr-only">Précédent</span>
+                <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+              </button>
+              
+              {getPageNumbers().map((pageNum, idx) => (
+                pageNum === '...' ? (
+                  <span
+                    key={`dots-${idx}`}
+                    className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-700 ring-1 ring-inset ring-gray-300 focus:outline-offset-0"
+                  >
+                    ...
+                  </span>
+                ) : (
+                  <button
+                    key={pageNum}
+                    onClick={() => goToPage(pageNum)}
+                    className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold ${
+                      currentPage === pageNum
+                        ? 'z-10 bg-[#472EAD] text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#472EAD]'
+                        : 'text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                )
+              ))}
+              
+              <button
+                onClick={goToNextPage}
+                disabled={currentPage === lastPage}
+                className="relative inline-flex items-center px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <span className="sr-only">Suivant</span>
+                <ChevronRight className="h-5 w-5" aria-hidden="true" />
+              </button>
+              <button
+                onClick={goToLastPage}
+                disabled={currentPage === lastPage}
+                className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <span className="sr-only">Dernière page</span>
+                <ChevronsRight className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </nav>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   /* ================= UI ================= */
@@ -295,19 +366,19 @@ export default function ControleVendeur() {
         </div>
 
         <button
-          onClick={imprimerPDF}
-          disabled={!ventesGlobales.length || loadingGlobal}
+          onClick={actualiserPage}
+          disabled={refreshing}
           className="flex items-center justify-center gap-2 bg-[#472EAD] text-white rounded px-4 py-2 disabled:opacity-50"
         >
 
-          {loadingGlobal ? (
+          {refreshing ? (
             <>
               <Loader size={16} className="animate-spin" />
-              Chargement...
+              Actualisation...
             </>
           ) : (
             <>
-              <Printer size={16} /> Impression Globale
+              <RefreshCw size={16} /> Actualiser
             </>
           )}
 
@@ -319,7 +390,7 @@ export default function ControleVendeur() {
 
       {!loading && ventesFiltrees.length > 0 && (
 
-        <div className="bg-white p-4 rounded-xl shadow">
+        <div className="bg-white rounded-xl shadow overflow-hidden">
 
           <DataTable
             data={ventesFiltrees}
@@ -334,8 +405,25 @@ export default function ControleVendeur() {
             ]}
           />
 
+          {renderPaginationButtons()}
+
         </div>
 
+      )}
+
+      {/* Loading State */}
+      {loading && (
+        <div className="flex justify-center items-center py-12">
+          <Loader size={32} className="animate-spin text-[#472EAD]" />
+          <span className="ml-2 text-gray-600">Chargement des données...</span>
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!loading && ventesFiltrees.length === 0 && (
+        <div className="bg-white rounded-xl shadow p-8 text-center text-gray-500">
+          Aucune vente trouvée pour cette période
+        </div>
       )}
 
     </div>
