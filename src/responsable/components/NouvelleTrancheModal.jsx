@@ -113,7 +113,6 @@ useEffect(() => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    console.log("SUBMIT TRIGGERED");
 
     if (!commandeSelectionnee) {
       toast("error", "Commande invalide");
@@ -291,7 +290,7 @@ useEffect(() => {
                         <div className="absolute z-50 mt-1 w-full border border-gray-200 rounded-xl bg-white shadow-lg max-h-60 overflow-y-auto">
                           {filteredCommandes.length > 0 ? (
                           filteredCommandes.map((c) => {
-                            const isEnCours = Number(c.montantAEncaisser) > 0;
+                            const isEnCours = Number(c.montantAEncaisser || 0) > 0;
 
                             return (
                               <button
