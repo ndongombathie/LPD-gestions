@@ -152,16 +152,19 @@ const getClientsEndettes = async (params = {}) => {
     const rawData = Array.isArray(payload?.data) ? payload.data : [];
 
     const data = rawData.map((client) => ({
-      id: client?.id,
-      nom: client?.nom ?? "",
-      prenom: client?.prenom ?? "",
-      fullName: `${client?.prenom ?? ""} ${client?.nom ?? ""}`.trim(),
-      telephone: client?.telephone ?? "",
-      email: client?.email ?? "",
-      dette_totale: safeNumber(client?.dette_totale),
-      dernier_paiement: safeDate(client?.dernier_paiement),
-      created_at: safeDate(client?.created_at),
-    }));
+  id: client?.id,
+  nom: client?.nom ?? "",
+  prenom: client?.prenom ?? "",
+  fullName: `${client?.prenom ?? ""} ${client?.nom ?? ""}`.trim(),
+  telephone: client?.telephone ?? "",
+  email: client?.email ?? "",
+
+  // ✅ FIX ICI
+  dette_totale: safeNumber(client?.dette),
+
+  dernier_paiement: safeDate(client?.dernier_paiement),
+  created_at: safeDate(client?.created_at),
+}));
 
     return {
       data,
