@@ -116,6 +116,7 @@ const InvoicePrint = ({ ticket, boutique = null, caissierNom = '' }) => {
              ticket.moyen_paiement === 'om' ? 'Orange Money' :
              ticket.moyen_paiement === 'cheque' ? 'Chèque' : 'Autre'}
           </p>
+          <p className="text-sm text-gray-600"><span className="font-semibold">Montant recu :</span></p>
           {ticket.montant_paye && (
             <p className="text-sm text-gray-600">
               <span className="font-semibold">Montant payé:</span> {formatCurrency(ticket.montant_paye)}
@@ -302,14 +303,7 @@ export const printInvoice = (ticket, boutique = null, caissierNom = null) => {
 
         <div class="totals">
           <div class="totals-table">
-            <div class="totals-row">
-              <span>Total HT:</span>
-              <span style="font-weight: bold;">${formatCurrency(ticket.total_ht)}</span>
-            </div>
-            <div class="totals-row">
-              <span>TVA (18%):</span>
-              <span style="font-weight: bold;">${formatCurrency(ticket.tva)}</span>
-            </div>
+
             <div class="totals-row total-final">
               <span>Total TTC:</span>
               <span style="color: #472EAD;">${formatCurrency(ticket.total_ttc)}</span>
@@ -327,6 +321,8 @@ export const printInvoice = (ticket, boutique = null, caissierNom = null) => {
               ticket.moyen_paiement === 'cheque' ? 'Chèque' : 'Autre'
             }
           </p>
+          <p className="text-sm text-gray-600"><span className="font-semibold">Montant recu :</span></p>
+          <p className="text-sm text-gray-600"><span className="font-semibold">Montant rendu :</span></p>
           ${ticket.montant_paye ? `
           <p style="font-size: 14px;">
             <strong>Montant payé:</strong> ${formatCurrency(ticket.montant_paye)}
