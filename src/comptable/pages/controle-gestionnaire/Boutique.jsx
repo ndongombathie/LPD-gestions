@@ -324,12 +324,9 @@ export default function Boutique() {
         return;
       }
       
-      console.log("📡 Chargement avec params:", params);
       previousParamsRef.current = paramsKey;
       
       const res = await boutiqueAPI.getProduitsControle(params);
-      
-      console.log("📡 Réponse API:", res);
       
       // Normaliser les données
       const produitsData = (res.data || []).map(normalizeProduit);

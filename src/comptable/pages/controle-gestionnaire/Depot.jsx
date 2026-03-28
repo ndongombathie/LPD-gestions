@@ -154,13 +154,11 @@ export default function DepotControle() {
         page: pageNum,
         per_page: DEFAULT_PER_PAGE
       };
-
+      
       // Ajouter la recherche si elle existe
       if (searchTerm.trim()) {
         params.search = searchTerm.trim();
       }
-
-      console.log("📡 Chargement page:", pageNum, "recherche:", searchTerm);
       
       const response = await depotAPI.getProduitsControle(params);
       

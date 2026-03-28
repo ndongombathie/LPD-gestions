@@ -4,6 +4,7 @@
 // ✅ RECHERCHE UNIQUEMENT AU CLIC SUR BOUTON RECHERCHER
 // ✅ PERSISTANCE DE LA RECHERCHE
 // ✅ FLUIDITÉ TOTALE (pas de debounce)
+// ✅ CORRECTION DU PROBLÈME DE REFRESH APRÈS CRUD
 // ==========================================================
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
@@ -565,6 +566,9 @@ export default function Utilisateurs() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [initialLoadDone, setInitialLoadDone] = useState(false);
   
+  // ✅ Ajout d'un trigger pour forcer le rechargement après CRUD
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  
   // États des modales
   const [openAdd, setOpenAdd] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
@@ -608,11 +612,10 @@ export default function Utilisateurs() {
     return params;
   }, [activeSearch, selectedRole, currentPage]);
 
-  /* ============= CHARGEMENT DES DONNÉES (VERSION ROBUSTE) ============= */
-  const loadUsers = useCallback(async (page = 1) => {
+  /* ============= CHARGEMENT DES DONNÉES (VERSION CORRIGÉE) ============= */
+  const loadUsers = useCallback(async (page = 1, forceRefresh = false) => {
     // Éviter les appels multiples simultanés
     if (loadingRef.current) {
-      console.log("⏳ Chargement déjà en cours, ignoré");
       return;
     }
 
@@ -623,18 +626,16 @@ export default function Utilisateurs() {
       const params = getApiParams(page);
       const paramsKey = JSON.stringify(params);
       
-      // Éviter les appels avec les mêmes paramètres
-      if (paramsKey === previousParamsRef.current && initialLoadDone) {
-        console.log("📦 Paramètres identiques, chargement ignoré");
+      // ✅ CORRECTION: Permettre le rechargement forcé même si les paramètres sont identiques
+      if (!forceRefresh && paramsKey === previousParamsRef.current && initialLoadDone) {
+        console.log("📦 Paramètres identiques, chargement ignoré (forceRefresh=false)");
         return;
       }
       
-      console.log("📡 Chargement avec params:", params);
+      console.log("📡 Chargement avec params:", params, forceRefresh ? "(force refresh)" : "");
       previousParamsRef.current = paramsKey;
       
       const response = await utilisateursAPI.getAll(params);
-      
-      console.log("📡 Réponse API:", response);
       
       if (response?.data) {
         setUsers(response.data);
@@ -660,10 +661,23 @@ export default function Utilisateurs() {
     }
   }, [getApiParams, addToast, initialLoadDone]);
 
+  /* ============= FONCTION POUR FORCER LE REFRESH ============= */
+  const forceRefresh = useCallback(() => {
+    console.log("🔄 Force refresh triggered");
+    setRefreshTrigger(prev => prev + 1);
+  }, []);
+
   /* ============= EFFET DE CHARGEMENT UNIQUE ============= */
   useEffect(() => {
     loadUsers(1);
   }, []); // ⚠️ Dépendances vides - ne s'exécute qu'au montage
+
+  /* ============= EFFET POUR LE REFRESH FORCÉ ============= */
+  useEffect(() => {
+    if (refreshTrigger > 0 && initialLoadDone) {
+      loadUsers(currentPage, true); // Force refresh sur la page actuelle
+    }
+  }, [refreshTrigger, loadUsers, currentPage, initialLoadDone]);
 
   /* ============= EFFET POUR LES FILTRES ============= */
   useEffect(() => {
@@ -692,7 +706,7 @@ export default function Utilisateurs() {
     addToast("✅ Filtres réinitialisés");
   }, [addToast]);
 
-  /* ============= GESTIONNAIRES CRUD ============= */
+  /* ============= GESTIONNAIRES CRUD AVEC FORCE REFRESH ============= */
   const handleCreateUser = useCallback(async (formData) => {
     try {
       setIsSubmitting(true);
@@ -702,7 +716,9 @@ export default function Utilisateurs() {
       
       addToast("✅ Utilisateur créé avec succès. Mot de passe envoyé par email.");
       setOpenAdd(false);
-      await loadUsers(1); // Retour à la page 1 après création
+      
+      // ✅ CORRECTION: Forcer le refresh après création
+      forceRefresh();
       
     } catch (error) {
       console.error("❌ Erreur création:", error);
@@ -722,7 +738,7 @@ export default function Utilisateurs() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [addToast, loadUsers]);
+  }, [addToast, forceRefresh]);
 
   const handleUpdateUser = useCallback(async () => {
     if (!editTarget) return;
@@ -738,7 +754,9 @@ export default function Utilisateurs() {
       
       addToast("✅ Utilisateur modifié avec succès");
       setEditTarget(null);
-      await loadUsers(currentPage);
+      
+      // ✅ CORRECTION: Forcer le refresh après modification
+      forceRefresh();
       
     } catch (error) {
       console.error("❌ Erreur modification:", error);
@@ -746,7 +764,7 @@ export default function Utilisateurs() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [editTarget, addToast, currentPage, loadUsers]);
+  }, [editTarget, addToast, forceRefresh]);
 
   const handleDeleteUser = useCallback(async () => {
     if (!deleteTarget) return;
@@ -756,14 +774,17 @@ export default function Utilisateurs() {
       
       await utilisateursAPI.remove(deleteTarget.id);
       
-      addToast("🗑️ Utilisateur supprimé", "error");
+      addToast("🗑️ Utilisateur supprimé", "succes");
       setDeleteTarget(null);
       
+      // ✅ CORRECTION: Vérifier si on doit changer de page avant de forcer le refresh
       if (users.length === 1 && currentPage > 1) {
-        await loadUsers(currentPage - 1);
-      } else {
-        await loadUsers(currentPage);
+        // Si c'était le dernier élément de la page, on va à la page précédente
+        setCurrentPage(currentPage - 1);
       }
+      
+      // Forcer le refresh
+      forceRefresh();
       
     } catch (error) {
       console.error("❌ Erreur suppression:", error);
@@ -771,7 +792,7 @@ export default function Utilisateurs() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [deleteTarget, addToast, users.length, currentPage, loadUsers]);
+  }, [deleteTarget, addToast, users.length, currentPage, forceRefresh]);
 
   const handleResetPassword = useCallback(async () => {
     if (!resetTarget) return;
