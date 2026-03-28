@@ -21,12 +21,12 @@ export default function LayoutComptable() {
         {/* === Header === */}
         <Header />
 
-        {/* === Contenu principal (scrollable) === */}
-        <main className="flex-1 overflow-y-auto bg-gradient-to-b from-white to-lpd-light px-4 pt-0 pb-0">
-  <div className="max-w-7xl mx-auto">
-    <Outlet />
-  </div>
-</main>
+        {/* === Contenu principal - full width, marges réduites === */}
+        <main className="flex-1 overflow-y-auto bg-gradient-to-b from-white to-lpd-light px-2 sm:px-4 md:px-6 pt-0 pb-0 w-full">
+          <div className="w-full">
+            <Outlet />
+          </div>
+        </main>
 
 
         {/* === Pied de page === */}

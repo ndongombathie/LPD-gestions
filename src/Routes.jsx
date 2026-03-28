@@ -2,7 +2,8 @@
 // 🗺️ Routes.jsx — Configuration centralisée des routes LPD
 // ==========================================================
 
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { AnimatePresence } from "framer-motion";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 // =================== AUTHENTIFICATION ===================
@@ -24,12 +25,7 @@ import DecaissementsResponsable from "./responsable/pages/Decaissements";
 import LayoutComptable from "./comptable/LayoutComptable";
 import DashboardComptable from "./comptable/pages/Dashboard";
 import UtilisateursComptable from "./comptable/pages/Utilisateurs";
-import FournisseursComptable from "./comptable/pages/Fournisseurs";
-import CommandesComptable from "./comptable/pages/Commandes";
-import InventaireComptable from "./comptable/pages/Inventaire";
-import RapportsComptable from "./comptable/pages/Rapports";
-import JournalActivitesComptable from "./comptable/pages/JournalActivites";
-import ClientsSpeciauxComptable from "./comptable/pages/ClientsSpeciaux";
+
 import VentesControle from "./comptable/pages/VentesControle";
 
 // Contrôle caissier (Comptable)
@@ -118,12 +114,7 @@ export default function AppRoutes() {
         <Route index element={<Navigate to="/comptable/dashboard" replace />} />
         <Route path="dashboard" element={<DashboardComptable />} />
         <Route path="utilisateurs" element={<UtilisateursComptable />} />
-        <Route path="fournisseurs" element={<FournisseursComptable />} />
-        <Route path="clients-speciaux" element={<ClientsSpeciauxComptable />} />
-        <Route path="commandes" element={<CommandesComptable />} />
-        <Route path="inventaire" element={<InventaireComptable />} />
-        <Route path="rapports" element={<RapportsComptable />} />
-        <Route path="journal-activites" element={<JournalActivitesComptable />} />
+       
         
         {/* Contrôle caissier */}
         <Route path="controle-caissier/caisse" element={<JournalCaisse />} />

@@ -1,42 +1,79 @@
 // ==========================================================
-// 📜 HistoriqueVersements.jsx — PRO
-// DESIGN SHADOW FINAL (SANS BORDURES)
+// 📜 HistoriqueVersements.jsx — VERSION API PRO ULTRA STABLE
 // ==========================================================
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { Search, Printer } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import historiqueVersementAPI from "@/services/api/historiqueVersement";
 
-// ===============================
-// 🔧 FORMAT FCFA (ÉCRAN)
-// ===============================
+/* ================= FORMAT ================= */
+
 const formatFCFA = (n) =>
   new Intl.NumberFormat("fr-FR", {
     style: "currency",
     currency: "XOF",
-  }).format(n || 0);
+  }).format(Number(n || 0));
 
-// ===============================
-// 📌 COMPOSANT
-// ===============================
+const formatDate = (d) => {
+  if (!d) return "-";
+  const date = new Date(d);
+  if (isNaN(date)) return "-";
+  return date.toLocaleDateString("fr-FR");
+};
+
+const normalizeDate = (d) => {
+  if (!d) return "";
+  return new Date(d).toISOString().split("T")[0];
+};
+
+/* ========================================================== */
+/* COMPONENT */
+/* ========================================================== */
+
 export default function HistoriqueVersements() {
   const [versements, setVersements] = useState([]);
+  const [pagination, setPagination] = useState(null);
+
+  const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [dateDebut, setDateDebut] = useState("");
   const [dateFin, setDateFin] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  // ===============================
-  // 🔁 CHARGEMENT
-  // ===============================
+  /* ================= FETCH ================= */
+
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+
+      const res = await historiqueVersementAPI.getHistorique({
+        page,
+        per_page: 10,
+      });
+
+      setVersements(res?.items || []);
+      setPagination(res?.pagination || null);
+
+      if (res?.pagination?.lastPage && page > res.pagination.lastPage) {
+        setPage(1);
+      }
+    } catch (error) {
+      console.error("Erreur chargement versements:", error);
+      setVersements([]);
+      setPagination(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [page]);
+
   useEffect(() => {
-    const data = JSON.parse(localStorage.getItem("versements") || "[]");
-    setVersements(data);
-  }, []);
+    fetchData();
+  }, [fetchData]);
 
-  // ===============================
-  // 🔍 FILTRAGE
-  // ===============================
+  /* ================= FILTRAGE ================= */
+
   const dataFiltre = useMemo(() => {
     let data = [...versements];
 
@@ -44,177 +81,247 @@ export default function HistoriqueVersements() {
       const q = search.toLowerCase();
       data = data.filter(
         (v) =>
-          v.caissier.toLowerCase().includes(q) ||
-          (v.commentaire && v.commentaire.toLowerCase().includes(q))
+          (v.caissier_nom || "").toLowerCase().includes(q) ||
+          (v.observation || "").toLowerCase().includes(q)
       );
     }
 
-    if (dateDebut) data = data.filter((v) => v.date >= dateDebut);
-    if (dateFin) data = data.filter((v) => v.date <= dateFin);
+    if (dateDebut) {
+      data = data.filter(
+        (v) => normalizeDate(v.date) >= dateDebut
+      );
+    }
+
+    if (dateFin) {
+      data = data.filter(
+        (v) => normalizeDate(v.date) <= dateFin
+      );
+    }
 
     return data;
   }, [search, dateDebut, dateFin, versements]);
 
-  const totalGeneral = dataFiltre.reduce((s, v) => s + v.montant, 0);
+  const totalGeneral = useMemo(
+    () =>
+      dataFiltre.reduce(
+        (s, v) => s + Number(v.montant || 0),
+        0
+      ),
+    [dataFiltre]
+  );
 
-  // ===============================
-  // 🖨 PDF
-  // ===============================
-  const imprimerPDF = () => {
-    if (!dataFiltre.length) {
-      alert("Aucun versement à imprimer.");
+  /* ================= PDF ================= */
+
+  const genererPDF = (data, filename) => {
+    if (!data.length) {
+      alert("Aucune donnée à imprimer.");
       return;
     }
 
     const doc = new jsPDF();
+
     doc.setFontSize(14);
-    doc.text("Historique des Versements — LPD Manager", 14, 20);
+    doc.text("Historique des Versements — LPD", 14, 20);
 
     autoTable(doc, {
-      startY: 40,
-      head: [["Caissier", "Date", "Montant", "Commentaire"]],
-      body: dataFiltre.map((v) => [
-        v.caissier,
-        v.date,
-        v.montant
-          .toString()
-          .replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " FCFA",
-        v.commentaire || "-",
+      startY: 35,
+      head: [["Caissier", "Date", "Montant", "Observation"]],
+      body: data.map((v) => [
+        v.caissier_nom || "-",
+        formatDate(v.date),
+        formatFCFA(v.montant),
+        v.observation || "-",
       ]),
-      styles: { fontSize: 10 },
+      styles: { fontSize: 9 },
       headStyles: { fillColor: [71, 46, 173] },
     });
 
-    const y = doc.lastAutoTable.finalY + 14;
-    doc.text(
-      `TOTAL : ${totalGeneral
-        .toString()
-        .replace(/\B(?=(\d{3})+(?!\d))/g, ".")} FCFA`,
-      14,
-      y
+    const total = data.reduce(
+      (s, v) => s + Number(v.montant || 0),
+      0
     );
 
-    doc.save("Historique_Versements_LPD.pdf");
+    const y = doc.lastAutoTable.finalY + 10;
+    doc.setFontSize(11);
+    doc.text(`TOTAL : ${formatFCFA(total)}`, 14, y);
+
+    doc.save(filename);
   };
 
+  const imprimerPage = () =>
+    genererPDF(dataFiltre, "Historique_Versements_Page.pdf");
+
+  const imprimerGlobal = async () => {
+    try {
+      setLoading(true);
+      const allData =
+        await historiqueVersementAPI.getAllHistorique();
+      genererPDF(
+        allData || [],
+        "Historique_Versements_Global.pdf"
+      );
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const disablePrev =
+    loading ||
+    !pagination ||
+    pagination.currentPage <= 1;
+
+  const disableNext =
+    loading ||
+    !pagination ||
+    pagination.currentPage >= pagination.lastPage;
+
+  /* ========================================================== */
+  /* UI */
+  /* ========================================================== */
+
   return (
-    <div className="space-y-8">
+    <div className="bg-gray-50 min-h-screen py-12">
 
-      {/* ================= TITRE ================= */}
-      <div>
-        <h1 className="text-xl font-semibold text-[#472EAD]">
-          Historique des Versements
-        </h1>
-        <p className="text-sm text-gray-500">
-          Suivi détaillé des versements enregistrés
-        </p>
-      </div>
+      <div className="w-full px-6 flex flex-col gap-12">
 
-      {/* ================= FILTRES ================= */}
-      <div className="bg-white rounded-2xl shadow-md p-5 flex flex-wrap gap-4">
-
-        {/* Recherche */}
-        <div className="flex items-center gap-2 flex-1 min-w-[220px]">
-          <Search size={18} className="text-[#472EAD]" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Rechercher caissier ou commentaire…"
-            className="w-full px-3 py-2 rounded-lg bg-gray-50 text-sm
-                       focus:outline-none focus:ring-2 focus:ring-[#472EAD]/30"
-          />
+        {/* HEADER */}
+        <div className="space-y-2">
+          <h1 className="text-2xl font-semibold text-[#472EAD]">
+            Historique des Versements
+          </h1>
+          <p className="text-sm text-gray-500">
+            Suivi détaillé des versements enregistrés
+          </p>
         </div>
 
-        {/* Date début */}
-        <input
-          type="date"
-          value={dateDebut}
-          onChange={(e) => setDateDebut(e.target.value)}
-          className="px-3 py-2 rounded-lg bg-gray-50 text-sm
-                     focus:outline-none focus:ring-2 focus:ring-[#472EAD]/30"
-        />
+        {/* FILTER CARD */}
+        <div className="bg-white rounded-2xl shadow-md p-6">
+          <div className="flex flex-wrap gap-4 items-center">
 
-        {/* Date fin */}
-        <input
-          type="date"
-          value={dateFin}
-          onChange={(e) => setDateFin(e.target.value)}
-          className="px-3 py-2 rounded-lg bg-gray-50 text-sm
-                     focus:outline-none focus:ring-2 focus:ring-[#472EAD]/30"
-        />
+            <div className="flex items-center gap-2 flex-1 min-w-[260px]">
+              <Search size={18} className="text-[#472EAD]" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Rechercher caissier ou observation…"
+                className="w-full px-3 py-2 rounded-lg bg-gray-50 text-sm
+                           focus:outline-none focus:ring-2 focus:ring-[#472EAD]/30"
+              />
+            </div>
 
-        {/* PDF */}
-        <button
-          onClick={imprimerPDF}
-          className="ml-auto flex items-center gap-2 px-4 py-2
-                     bg-[#472EAD] text-white rounded-xl shadow
-                     hover:shadow-lg transition"
-        >
-          <Printer size={16} /> Imprimer
-        </button>
-      </div>
+            <input
+              type="date"
+              value={dateDebut}
+              onChange={(e) => setDateDebut(e.target.value)}
+              className="px-3 py-2 rounded-lg bg-gray-50 text-sm"
+            />
 
-      {/* ================= TABLE ================= */}
-      <div className="bg-white rounded-2xl shadow-md p-4 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-[#EFEAFF] text-[#472EAD]">
-            <tr>
-              <th className="px-3 py-2 text-left">Caissier</th>
-              <th className="px-3 py-2">Date</th>
-              <th className="px-3 py-2 text-right">Montant</th>
-              <th className="px-3 py-2 text-left">Commentaire</th>
-            </tr>
-          </thead>
+            <input
+              type="date"
+              value={dateFin}
+              onChange={(e) => setDateFin(e.target.value)}
+              className="px-3 py-2 rounded-lg bg-gray-50 text-sm"
+            />
 
-          <tbody>
-            {dataFiltre.length ? (
-              dataFiltre.map((v) => (
-                <tr key={v.id} className="odd:bg-gray-50">
-                  <td className="px-3 py-2">{v.caissier}</td>
-                  <td className="px-3 py-2">{v.date}</td>
-                  <td className="px-3 py-2 text-right font-semibold">
-                    {formatFCFA(v.montant)}
-                  </td>
-                  <td className="px-3 py-2">{v.commentaire || "-"}</td>
+            <div className="flex gap-3 ml-auto">
+              <button
+                onClick={imprimerPage}
+                className="flex items-center gap-2 px-4 py-2
+                           bg-[#472EAD] text-white rounded-xl shadow"
+              >
+                <Printer size={16} /> Page
+              </button>
+
+              <button
+                onClick={imprimerGlobal}
+                className="flex items-center gap-2 px-4 py-2
+                           bg-emerald-600 text-white rounded-xl shadow"
+              >
+                <Printer size={16} /> Global
+              </button>
+            </div>
+
+          </div>
+        </div>
+
+        {/* TABLE CARD */}
+        <div className="bg-white rounded-2xl shadow-md p-6">
+          <div className="overflow-x-auto">
+            <table className="w-full table-fixed text-sm">
+
+              <thead className="bg-[#EFEAFF] text-[#472EAD]">
+                <tr>
+                  <th className="w-1/4 px-4 py-4 text-left">Caissier</th>
+                  <th className="w-1/4 px-4 py-4 text-center">Date</th>
+                  <th className="w-1/4 px-4 py-4 text-right">Montant</th>
+                  <th className="w-1/4 px-4 py-4 text-left">Observation</th>
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={4} className="px-3 py-6 text-center text-gray-500">
-                  Aucun versement trouvé
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+              </thead>
 
-      {/* ================= STATS ================= */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard
-          label="Total Général"
-          value={formatFCFA(totalGeneral)}
-        />
-        <StatCard
-          label="Nombre de versements"
-          value={dataFiltre.length}
-        />
-        <StatCard
-          label="Dernière mise à jour"
-          value={new Date().toLocaleDateString()}
-        />
-      </div>
-    </div>
-  );
-}
+              <tbody>
+                {dataFiltre.length ? (
+                  dataFiltre.map((v) => (
+                    <tr key={v.id} className="odd:bg-gray-50 border-t">
+                      <td className="px-4 py-4">{v.caissier_nom || "-"}</td>
+                      <td className="px-4 py-4 text-center">
+                        {formatDate(v.date)}
+                      </td>
+                      <td className="px-4 py-4 text-right font-semibold">
+                        {formatFCFA(v.montant)}
+                      </td>
+                      <td className="px-4 py-4 truncate">
+                        {v.observation || "-"}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={4} className="px-4 py-8 text-center text-gray-500">
+                      Aucun versement trouvé
+                    </td>
+                  </tr>
+                )}
+              </tbody>
 
-/* ================== STAT CARD ================== */
-function StatCard({ label, value }) {
-  return (
-    <div className="bg-white rounded-2xl shadow-md p-5 text-center">
-      <p className="text-sm text-gray-500">{label}</p>
-      <p className="font-bold text-lg mt-1">{value}</p>
+            </table>
+          </div>
+        </div>
+
+        {/* PAGINATION */}
+        {pagination && pagination.lastPage > 1 && (
+          <div className="bg-white rounded-2xl shadow-md p-5 flex justify-between items-center">
+            <button
+              disabled={disablePrev}
+              onClick={() => setPage((p) => p - 1)}
+              className="px-4 py-2 border rounded disabled:opacity-40"
+            >
+              Précédent
+            </button>
+
+            <span>
+              Page {pagination.currentPage} / {pagination.lastPage}
+            </span>
+
+            <button
+              disabled={disableNext}
+              onClick={() => setPage((p) => p + 1)}
+              className="px-4 py-2 border rounded disabled:opacity-40"
+            >
+              Suivant
+            </button>
+          </div>
+        )}
+
+        {loading && (
+          <div className="text-center text-gray-500">
+            Chargement...
+          </div>
+        )}
+
+      </div>
     </div>
   );
 }

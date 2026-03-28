@@ -1,303 +1,393 @@
-import React, { useMemo, useState } from "react";
-import { Printer } from "lucide-react";
+import React, { useEffect, useState, useCallback } from "react";
+import { Printer, Save } from "lucide-react";
+import inventaireBoutiqueAPI from "@/services/api/inventaireBoutique";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
-/* =========================================================
-   DONNÉES SIMULÉES (API PLUS TARD)
-========================================================= */
+const PER_PAGE = 15;
 
-const produits = [
-  {
-    id: 1,
-    nom: "Bic",
-    prixAchat: 50,
-    prixMin: 100,
-    seuilStock: 10,
-    reapprovisionnements: [
-      { date: "2025-01-01", quantite: 100 },
-      { date: "2025-01-10", quantite: 50 },
-    ],
-  },
-];
-
-const ventes = [
-  {
-    produitId: 1,
-    date: "2025-01-12",
-    quantite: 10,
-    prixVente: 120,
-    vendeur: "vendeur",
-  },
-  {
-    produitId: 1,
-    date: "2025-01-13",
-    quantite: 5,
-    prixVente: 80,
-    vendeur: "responsable",
-  },
-];
-
-/* =========================================================
-   UTILS
-========================================================= */
 const fcfa = (v) =>
-  `${Number(v || 0)
-    .toString()
-    .replace(/\B(?=(\d{3})+(?!\d))/g, ".")} FCFA`;
+  `${Number(v ?? 0).toLocaleString("fr-FR").replace(/\s/g, ".")} FCFA`;
 
-const formatDate = (d) => d.replace(/-/g, ".");
-
-/* =========================================================
-   COMPOSANT
-========================================================= */
 export default function InventaireBoutique() {
+
+  const [items, setItems] = useState([]);
+  const [pagination, setPagination] = useState(null);
+
+  const [totals, setTotals] = useState({
+    prix_achat_total: 0,
+    prix_valeur_sortie_total: 0,
+    valeur_estimee_total: 0,
+    benefice_total: 0,
+  });
+
+  const [page, setPage] = useState(1);
   const [dateDebut, setDateDebut] = useState("");
   const [dateFin, setDateFin] = useState("");
-  const [historique, setHistorique] = useState([]);
 
-  /* ================= FILTRAGE VENTES ================= */
-  const ventesFiltrees = useMemo(() => {
-    return ventes.filter((v) => {
-      if (!dateDebut && !dateFin) return true;
-      if (dateDebut && !dateFin) return v.date === dateDebut;
-      if (dateDebut && dateFin)
-        return v.date >= dateDebut && v.date <= dateFin;
-      return true;
-    });
-  }, [dateDebut, dateFin]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [dateError, setDateError] = useState("");
 
-  /* ================= CALCULS PRODUITS ================= */
-  const statsProduits = produits.map((p) => {
-    const totalAppro = p.reapprovisionnements.reduce(
-      (s, r) => s + r.quantite,
-      0
-    );
+  /* ================= FETCH ================= */
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
 
-    const ventesProduit = ventesFiltrees.filter(
-      (v) => v.produitId === p.id
-    );
-
-    const totalVendu = ventesProduit.reduce(
-      (s, v) => s + v.quantite,
-      0
-    );
-
-    const restant = totalAppro - totalVendu;
-
-    const totalVentes = ventesProduit.reduce(
-      (s, v) => s + v.quantite * v.prixVente,
-      0
-    );
-
-    const totalAchats = totalAppro * p.prixAchat;
-    const resultat = totalVentes - totalAchats;
-
-    return {
-      nom: p.nom,
-      totalAppro,
-      totalVendu,
-      restant,
-      nbReappro: p.reapprovisionnements.length,
-      totalVentes,
-      totalAchats,
-      resultat,
-      prixMin: p.prixMin,
-      seuilStock: p.seuilStock,
-    };
-  });
-
-  /* ================= TOTAUX ================= */
-  const totalVentesGlobal = statsProduits.reduce(
-    (s, p) => s + p.totalVentes,
-    0
-  );
-  const totalAchatsGlobal = statsProduits.reduce(
-    (s, p) => s + p.totalAchats,
-    0
-  );
-  const resultatGlobal = totalVentesGlobal - totalAchatsGlobal;
-
-  /* ================= ALERTES ================= */
-  const alertes = [];
-
-  statsProduits.forEach((p) => {
-    if (p.resultat < 0) {
-      alertes.push({
-        type: "danger",
-        message: `Perte sur ${p.nom} : ${fcfa(p.resultat)}`,
+      const res = await inventaireBoutiqueAPI.getInventaire({
+        page,
+        per_page: PER_PAGE,
+        date_debut: dateDebut || undefined,
+        date_fin: dateFin || undefined,
       });
-    }
-    if (p.restant <= p.seuilStock) {
-      alertes.push({
-        type: "warning",
-        message: `Stock critique : ${p.nom} (${p.restant} unités restantes)`,
-      });
-    }
-  });
 
-  ventesFiltrees.forEach((v) => {
-    const produit = produits.find((p) => p.id === v.produitId);
-    if (v.prixVente < produit.prixMin && v.vendeur === "vendeur") {
-      alertes.push({
-        type: "danger",
-        message: `Vente INTERDITE sous prix minimum (${produit.nom})`,
-      });
-    }
-    if (v.prixVente < produit.prixMin && v.vendeur === "responsable") {
-      alertes.push({
-        type: "info",
-        message: `Vente responsable sous prix minimum (${produit.nom})`,
-      });
-    }
-  });
+      setItems(res.items);
+      setPagination(res.pagination);
 
-  /* ================= IMPRESSION PDF ================= */
-  const imprimerInventaire = () => {
-    // ✅ VALIDATION
+      // Charger les cartes financières à chaque fetch
+      if (dateDebut && dateFin) {
+        try {
+          const totalsRes = await inventaireBoutiqueAPI.enregistrerInventaire({
+            date_debut: dateDebut,
+            date_fin: dateFin,
+          });
+          setTotals(totalsRes);
+        } catch (err) {
+          console.error("Erreur chargement des totaux:", err);
+        }
+      }
+
+    } catch (err) {
+      console.error("Erreur inventaire boutique:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, dateDebut, dateFin]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  /* ================= VALIDER DATES ================= */
+  const validerDates = () => {
     if (!dateDebut || !dateFin) {
-      alert("Veuillez renseigner une date de début et une date de fin.");
-      return;
+      setDateError("⚠️ Sélectionnez une période exacte.");
+      return false;
     }
 
     if (dateDebut > dateFin) {
-      alert("La date de début ne peut pas être supérieure à la date de fin.");
+      setDateError("⚠️ La date de début ne peut pas être supérieure à la date de fin.");
+      return false;
+    }
+
+    setDateError("");
+    return true;
+  };
+
+  /* ================= ENREGISTRER ================= */
+  const enregistrerInventaire = async () => {
+    if (!validerDates()) {
       return;
     }
 
-    const doc = new jsPDF();
-    let y = 20;
+    try {
+      setSaving(true);
 
-    const periode = `${formatDate(dateDebut)} → ${formatDate(dateFin)}`;
+      const res = await inventaireBoutiqueAPI.enregistrerInventaire({
+        date_debut: dateDebut,
+        date_fin: dateFin,
+      });
 
-    doc.setFontSize(14);
-    doc.text("INVENTAIRE BOUTIQUE", 14, y);
-    y += 8;
-    doc.setFontSize(11);
-    doc.text(`Période : ${periode}`, 14, y);
-    y += 10;
+      setTotals(res);
+      
+      // Rafraîchir les données après enregistrement
+      await fetchData();
 
-    autoTable(doc, {
-      startY: y,
-      head: [[
-        "Produit",
-        "Entrées",
-        "Vendus",
-        "Restant",
-        "Réappro",
-        "Total ventes",
-        "Résultat",
-      ]],
-      body: statsProduits.map((p) => [
-        p.nom,
-        p.totalAppro,
-        p.totalVendu,
-        p.restant,
-        p.nbReappro,
-        fcfa(p.totalVentes),
-        fcfa(p.resultat),
-      ]),
-    });
+      alert("✅ Inventaire boutique enregistré avec succès");
 
-    y = doc.lastAutoTable.finalY + 10;
-
-    doc.text(`Total ventes : ${fcfa(totalVentesGlobal)}`, 14, y);
-    doc.text(`Total achats : ${fcfa(totalAchatsGlobal)}`, 14, y + 6);
-    doc.text(`Résultat global : ${fcfa(resultatGlobal)}`, 14, y + 12);
-
-    doc.save("Inventaire_Boutique.pdf");
-
-    setHistorique((h) => [
-      ...h,
-      {
-        date: new Date().toISOString(),
-        periode,
-        totalVentesGlobal,
-        resultatGlobal,
-      },
-    ]);
+    } catch (err) {
+      console.error(err);
+      alert("❌ Erreur enregistrement");
+    } finally {
+      setSaving(false);
+    }
   };
 
-  /* ================= UI ================= */
+  /* ================= IMPRIMER GLOBAL ================= */
+  const imprimer = async () => {
+    if (!validerDates()) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      let current = 1;
+      let lastPage = 1;
+      let allItems = [];
+
+      do {
+        const res = await inventaireBoutiqueAPI.getInventaire({
+          page: current,
+          per_page: PER_PAGE,
+          date_debut: dateDebut,
+          date_fin: dateFin,
+        });
+
+        allItems = [...allItems, ...res.items];
+        lastPage = res.pagination.lastPage;
+        current++;
+
+      } while (current <= lastPage);
+
+      if (!allItems.length) {
+        alert("Aucune donnée à imprimer");
+        return;
+      }
+
+      const doc = new jsPDF();
+
+      doc.setFillColor(71, 46, 173);
+      doc.rect(10, 8, 190, 22, "F");
+
+      doc.setTextColor(245, 128, 32);
+      doc.setFontSize(24);
+      doc.text("LPD", 105, 22, { align: "center" });
+
+      doc.setTextColor(255);
+      doc.setFontSize(10);
+      doc.text("LIBRAIRIE PAPETERIE DARADJI", 105, 28, { align: "center" });
+
+      doc.setTextColor(0);
+      doc.setFontSize(11);
+      doc.text(`Période : ${dateDebut} → ${dateFin}`, 14, 40);
+      doc.text(`Édité le : ${new Date().toLocaleDateString("fr-FR")}`, 140, 40);
+
+      autoTable(doc, {
+        startY: 48,
+        head: [[
+          "Produit",
+          "Stock Initial",
+          "Qté Vendue",
+          "Écart",
+          "Total Vendu",
+        ]],
+        body: allItems.map((p) => [
+          p.nom,
+          p.stock_initial,
+          p.quantite_vendue,
+          p.ecart,
+          fcfa(p.total_vendu),
+        ]),
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [71, 46, 173] },
+      });
+
+      doc.addPage();
+      doc.setFontSize(14);
+      doc.text("RÉCAPITULATIF FINANCIER", 14, 20);
+
+      doc.setFontSize(12);
+      doc.text(`Achat total : ${fcfa(totals.prix_achat_total)}`, 14, 40);
+      doc.text(`Valeur sortie : ${fcfa(totals.prix_valeur_sortie_total)}`, 14, 55);
+      doc.text(`Valeur stock : ${fcfa(totals.valeur_estimee_total)}`, 14, 70);
+      doc.text(`Bénéfice : ${fcfa(totals.benefice_total)}`, 14, 85);
+
+      doc.save("Inventaire_Boutique_GLOBAL.pdf");
+
+    } catch (err) {
+      console.error(err);
+      alert("Erreur impression");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="p-6 space-y-8">
-      <h1 className="text-2xl font-bold text-indigo-700">
-        Inventaire Boutique — Comptable
-      </h1>
+    <div className="min-h-screen bg-gray-100 p-6 md:p-10">
+      <div className="w-full">
+        
+        {/* HEADER - ESPACEMENT EN HAUT */}
+        <div className="mb-12">
+          <div className="flex flex-wrap justify-between items-center gap-4 bg-white p-6 rounded-2xl shadow-md">
+            <h1 className="text-2xl font-bold text-indigo-700">
+              Inventaire Boutique — Comptable
+            </h1>
 
-      {/* FILTRES */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <input
-          type="date"
-          className="border px-3 py-2"
-          value={dateDebut}
-          onChange={(e) => setDateDebut(e.target.value)}
-        />
-        <input
-          type="date"
-          className="border px-3 py-2"
-          value={dateFin}
-          onChange={(e) => setDateFin(e.target.value)}
-        />
-        <button
-          onClick={imprimerInventaire}
-          className="bg-indigo-600 text-white px-4 py-2 flex items-center gap-2 justify-center"
-        >
-          <Printer size={18} /> Imprimer inventaire
-        </button>
-      </div>
-
-      {/* ALERTES */}
-      <div className="space-y-2">
-        {alertes.map((a, i) => (
-          <div
-            key={i}
-            className={`p-3 rounded ${
-              a.type === "danger"
-                ? "bg-red-100 text-red-700"
-                : a.type === "warning"
-                ? "bg-yellow-100 text-yellow-700"
-                : "bg-blue-100 text-blue-700"
-            }`}
-          >
-            {a.message}
-          </div>
-        ))}
-      </div>
-
-      {/* TABLEAU */}
-      <table className="w-full border-collapse">
-        <thead className="bg-gray-100">
-          <tr>
-            <th className="p-2">Produit</th>
-            <th className="p-2">Entrées</th>
-            <th className="p-2">Vendus</th>
-            <th className="p-2">Restant</th>
-            <th className="p-2">Réappro</th>
-            <th className="p-2">Total ventes</th>
-            <th className="p-2">Résultat</th>
-          </tr>
-        </thead>
-        <tbody>
-          {statsProduits.map((p, i) => (
-            <tr key={i}>
-              <td className="p-2">{p.nom}</td>
-              <td className="p-2 text-center">{p.totalAppro}</td>
-              <td className="p-2 text-center">{p.totalVendu}</td>
-              <td className="p-2 text-center">{p.restant}</td>
-              <td className="p-2 text-center">{p.nbReappro}</td>
-              <td className="p-2 text-right">{fcfa(p.totalVentes)}</td>
-              <td
-                className={`p-2 text-right font-semibold ${
-                  p.resultat < 0 ? "text-red-600" : "text-green-600"
-                }`}
+            <div className="flex gap-3 flex-wrap">
+              <button
+                onClick={enregistrerInventaire}
+                disabled={saving}
+                className="bg-green-600 text-white px-5 py-2.5 rounded-xl flex gap-2 shadow-md hover:bg-green-700 transition-colors font-medium"
               >
-                {fcfa(p.resultat)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+                <Save size={18}/>
+                {saving ? "Enregistrement..." : "Enregistrer"}
+              </button>
+
+              <button
+                onClick={imprimer}
+                className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl flex gap-2 shadow-md hover:bg-indigo-700 transition-colors font-medium"
+              >
+                <Printer size={18}/>
+                Imprimer Global
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* CARTES FINANCIÈRES - GRAND ESPACEMENT AVANT/APRÈS */}
+        <div className="mb-12">
+          <div className="bg-white p-8 rounded-2xl shadow-md">
+            <h2 className="text-xl font-semibold text-gray-800 mb-8 border-b border-gray-200 pb-4">
+              Récapitulatif financier
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+              <Card title="Achat Total" value={fcfa(totals.prix_achat_total)} />
+              <Card title="Valeur Sortie" value={fcfa(totals.prix_valeur_sortie_total)} />
+              <Card title="Valeur Stock" value={fcfa(totals.valeur_estimee_total)} />
+              <Card title="Bénéfice" value={fcfa(totals.benefice_total)} />
+            </div>
+          </div>
+        </div>
+
+        {/* FILTRE - GRAND ESPACEMENT AVANT/APRÈS */}
+        <div className="mb-12">
+          <div className="bg-white p-8 rounded-2xl shadow-md">
+            <h2 className="text-xl font-semibold text-gray-800 mb-6 border-b border-gray-200 pb-4">
+              Période d'inventaire
+            </h2>
+            <div className="space-y-6">
+              <div className="flex flex-wrap gap-6 items-end">
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium text-gray-600">Du</label>
+                  <input 
+                    type="date"
+                    value={dateDebut}
+                    onChange={(e) => {
+                      setDateDebut(e.target.value);
+                      setDateError("");
+                      setPage(1);
+                    }}
+                    className="border-2 px-5 py-3 rounded-xl shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 w-64"
+                  />
+                </div>
+                
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium text-gray-600">Au</label>
+                  <input 
+                    type="date"
+                    value={dateFin}
+                    onChange={(e) => {
+                      setDateFin(e.target.value);
+                      setDateError("");
+                      setPage(1);
+                    }}
+                    className="border-2 px-5 py-3 rounded-xl shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 w-64"
+                  />
+                </div>
+              </div>
+              
+              {/* AFFICHAGE DE L'ERREUR */}
+              {dateError && (
+                <div className="bg-red-50 border-l-4 border-red-500 p-5 rounded-lg">
+                  <p className="text-red-700 text-sm font-medium">
+                    {dateError}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* TABLEAU - GRAND ESPACEMENT AVANT/APRÈS */}
+        <div className="mb-12">
+          <div className="bg-white rounded-2xl shadow-md overflow-hidden">
+            <div className="px-8 py-6 border-b-2 border-gray-200 bg-gray-50">
+              <h2 className="text-xl font-semibold text-gray-800">
+                Détail des produits
+              </h2>
+            </div>
+            <div className="overflow-x-auto p-2">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="px-8 py-5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Produit</th>
+                    <th className="px-8 py-5 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Stock Initial</th>
+                    <th className="px-8 py-5 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Qté Vendue</th>
+                    <th className="px-8 py-5 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Écart</th>
+                    <th className="px-8 py-5 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Total Vendu</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {items.map((p) => (
+                    <tr key={p.produit_id} className="hover:bg-indigo-50 transition-colors">
+                      <td className="px-8 py-5 text-gray-900 font-medium">{p.nom}</td>
+                      <td className="px-8 py-5 text-center text-gray-900">{p.stock_initial}</td>
+                      <td className="px-8 py-5 text-center text-gray-900">{p.quantite_vendue}</td>
+                      <td className="px-8 py-5 text-center text-gray-900">{p.ecart}</td>
+                      <td className="px-8 py-5 text-right font-semibold text-indigo-700">{fcfa(p.total_vendu)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        {/* PAGINATION - GRAND ESPACEMENT AVANT/APRÈS */}
+        {pagination && pagination.lastPage > 1 && (
+          <div className="mb-8">
+            <div className="bg-white px-8 py-5 rounded-2xl shadow-md flex justify-between items-center">
+              <button
+                disabled={page <= 1}
+                onClick={() => setPage(p => p - 1)}
+                className="px-6 py-3 border-2 border-gray-300 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 hover:border-gray-400 transition-all text-sm font-medium"
+              >
+                ← Précédent
+              </button>
+
+              <span className="text-base text-gray-700 bg-gray-100 px-6 py-3 rounded-xl">
+                Page <span className="font-bold text-indigo-700">{pagination.currentPage}</span> / {pagination.lastPage}
+              </span>
+
+              <button
+                disabled={page >= pagination.lastPage}
+                onClick={() => setPage(p => p + 1)}
+                className="px-6 py-3 border-2 border-gray-300 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 hover:border-gray-400 transition-all text-sm font-medium"
+              >
+                Suivant →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* CHARGEMENT */}
+        {loading && (
+          <div className="bg-white p-12 rounded-2xl shadow-md flex justify-center items-center">
+            <div className="flex items-center gap-4">
+              <div className="animate-spin rounded-full h-8 w-8 border-4 border-indigo-600 border-t-transparent"></div>
+              <p className="text-gray-700 text-lg font-medium">Chargement en cours...</p>
+            </div>
+          </div>
+        )}
+
+        {/* ESPACE SUPPLEMENTAIRE EN BAS */}
+        <div className="h-8"></div>
+      </div>
+    </div>
+  );
+}
+
+/* ===== CARD COMPONENT ===== */
+function Card({ title, value }) {
+  return (
+    <div className="bg-gradient-to-br from-indigo-50 to-white rounded-2xl p-7 border-2 border-indigo-100 hover:shadow-xl hover:border-indigo-200 transition-all duration-300">
+      <p className="text-sm text-indigo-700 mb-3 font-bold uppercase tracking-wider">
+        {title}
+      </p>
+      <p className="text-2xl lg:text-3xl font-extrabold text-gray-800 break-words">
+        {value}
+      </p>
     </div>
   );
 }

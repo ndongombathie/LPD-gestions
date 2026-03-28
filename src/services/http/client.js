@@ -19,7 +19,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
  */
 export const httpClient = axios.create({
   baseURL: API_URL,
-  timeout: 30000, // 30 secondes timeout - augmenté pour éviter les timeouts prématurés
+  timeout: 50000, // 10 secondes timeout
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
@@ -36,6 +36,8 @@ httpClient.interceptors.request.use(
     const token = sessionStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    } else {
+      console.warn('⚠️ Aucun token trouvé dans sessionStorage');
     }
     return config;
   },
@@ -53,7 +55,17 @@ httpClient.interceptors.response.use(
     return response;
   },
   (error) => {
-    // 🔴 Erreur globale
+    // 🔴 Erreur globale — retirer toute mention localhost des messages affichés à l'utilisateur
+    const cleanMessage = (msg) => {
+      if (typeof msg !== 'string') return msg;
+      return msg.replace(/https?:\/\/localhost[^\s]*/gi, '').replace(/\s+/g, ' ').trim();
+    };
+    if (error.response?.data?.message) {
+      error.response.data.message = cleanMessage(error.response.data.message);
+    }
+    if (error.message && typeof error.message === 'string') {
+      error.message = cleanMessage(error.message);
+    }
 
     // 401: Token expiré ou invalide
     if (error.response?.status === 401) {

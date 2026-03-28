@@ -118,10 +118,7 @@ export default function Sidebar() {
         </ul>
       </nav>
 
-      {/* FOOTER */}
-      <div className="text-center text-xs text-gray-400 py-4 border-t">
-        © {new Date().getFullYear()} SSD CONSULTING
-      </div>
+    
     </aside>
   );
 }

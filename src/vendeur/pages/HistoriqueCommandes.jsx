@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
   faHistory,
@@ -25,276 +25,835 @@ import {
   faCalendar,
   faBoxOpen,
   faCalculator,
-  faList
+  faList,
+  faSpinner,
+  faExclamationTriangle,
+  faDatabase,
+  faUserTie,
+  faMapMarkerAlt,
+  faChevronDown,
+  faChevronUp,
+  faSort,
+  faArrowUp,
+  faArrowDown,
+  faInfoCircle,
+  faCheck,
+  faBan,
+  faBell,
+  faMoneyBill,
+  faAngleLeft,
+  faAngleRight,
+  faAngleDoubleLeft,
+  faAngleDoubleRight
 } from '@fortawesome/free-solid-svg-icons';
-import '../css//HistoriqueCommandes.css';
+import { commandesAPI } from '../../services/api/commandes';
+import profileAPI from '../../services/api/profile';
 
-const HistoriqueCommandes = ({ commandes = [], sellerName = null }) => {
+const HistoriqueCommandes = ({ sellerName = null }) => {
+  const [commandes, setCommandes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [stats, setStats] = useState({
+    aujourdhui: 0,
+    en_attente: 0,
+    valide: 0,
+    annulee: 0,
+    total_gros: 0,
+    total_detail: 0,
+    total_ventes: 0,
+    montant_total: 0
+  });
+
   const [filtreStatut, setFiltreStatut] = useState('tous');
   const [filtreTypeVente, setFiltreTypeVente] = useState('tous');
-  const [filtreDate, setFiltreDate] = useState('tous');
+  const [filtreDate, setFiltreDate] = useState('aujourdhui');
   const [dateDebut, setDateDebut] = useState('');
   const [dateFin, setDateFin] = useState('');
   const [recherche, setRecherche] = useState('');
   const [commandeSelectionnee, setCommandeSelectionnee] = useState(null);
   const [modalOuvert, setModalOuvert] = useState(false);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [commandeDetails, setCommandeDetails] = useState(null);
+  const [vendeurInfo, setVendeurInfo] = useState(null);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [sortField, setSortField] = useState('date');
+  const [sortDirection, setSortDirection] = useState('desc');
+  
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    itemsPerPage: 10,
+    totalItems: 0,
+    totalPages: 1
+  });
 
-  // ---------- Données simulées (si aucune commande fournie) ----------
-  const genererCommandesSimulees = () => {
-    const aujourdhui = new Date();
-    const hier = new Date(aujourdhui);
-    hier.setDate(hier.getDate() - 1);
-    const ilYa3Jours = new Date(aujourdhui);
-    ilYa3Jours.setDate(ilYa3Jours.getDate() - 3);
-    const ilYa5Jours = new Date(aujourdhui);
-    ilYa5Jours.setDate(ilYa5Jours.getDate() - 5);
+  const [lastUpdate, setLastUpdate] = useState(Date.now());
+  const [showRefreshNotification, setShowRefreshNotification] = useState(false);
+  
+  const [filtresActifs, setFiltresActifs] = useState({});
 
-    return [
-      {
-        id: 1,
-        numero_commande: 'CMD-2024-001',
-        client: { nom: 'Marie Diop', telephone: '77 123 45 67', adresse: 'Dakar, Plateau' },
-        total_ht: 40000,
-        tva: 7200,
-        total_ttc: 47200,
-        statut: 'complétée',
-        types_vente: ['détail', 'gros'],
-        date: aujourdhui.toISOString(),
-        vendeur: 'Vendeur Principal',
-        produits: [
-          { 
-            nom: 'Bloc Note Mood diary', 
-            quantite: 2, 
-            prix_unitaire: 350, 
-            prix_vente: 350, 
-            reference: 'Mood diary',
-            sous_total: 700,
-            type_vente: 'détail'
-          },
-          { 
-            nom: 'Kirene', 
-            quantite: 10, 
-            prix_unitaire: 3800, 
-            prix_vente: 3800, 
-            reference: 'Kirene',
-            sous_total: 38000,
-            type_vente: 'gros'
-          }
-        ]
-      },
-      {
-        id: 2,
-        numero_commande: 'CMD-2024-002',
-        client: { nom: 'Jean Dupont', telephone: '76 234 56 78', adresse: 'Dakar, Almadies' },
-        total_ht: 75000,
-        tva: 13500,
-        total_ttc: 88500,
-        statut: 'en_attente_paiement',
-        types_vente: ['gros'],
-        date: hier.toISOString(),
-        vendeur: 'Vendeur Principal',
-        produits: [
-          { 
-            nom: 'Aggraffes', 
-            quantite: 5, 
-            prix_unitaire: 1000, 
-            prix_vente: 1000, 
-            reference: 'Agg-NO-384556',
-            sous_total: 5000,
-            type_vente: 'gros'
-          },
-          { 
-            nom: 'Kirene', 
-            quantite: 10, 
-            prix_unitaire: 3800, 
-            prix_vente: 3800, 
-            reference: 'Kirene',
-            sous_total: 38000,
-            type_vente: 'gros'
-          }
-        ]
-      },
-      {
-        id: 3,
-        numero_commande: 'CMD-2024-003',
-        client: { nom: 'Aissatou Fall', telephone: '78 345 67 89', adresse: 'Dakar, Ouakam' },
-        total_ht: 15000,
-        tva: 2700,
-        total_ttc: 17700,
-        statut: 'complétée',
-        types_vente: ['détail'],
-        date: ilYa3Jours.toISOString(),
-        vendeur: 'Vendeur Principal',
-        produits: [
-          { 
-            nom: 'Bloc Note Mood diary', 
-            quantite: 3, 
-            prix_unitaire: 350, 
-            prix_vente: 350, 
-            reference: 'Mood diary',
-            sous_total: 1050,
-            type_vente: 'détail'
-          },
-          { 
-            nom: 'Bouteille d\'eau 1.5L', 
-            quantite: 2, 
-            prix_unitaire: 400, 
-            prix_vente: 400, 
-            reference: 'Paix-peace-1.5L',
-            sous_total: 800,
-            type_vente: 'détail'
-          }
-        ]
-      },
-      {
-        id: 4,
-        numero_commande: 'CMD-2024-004',
-        client: { nom: 'Moussa Diallo', telephone: '70 123 45 67', adresse: 'Dakar, Fann' },
-        total_ht: 25000,
-        tva: 4500,
-        total_ttc: 29500,
-        statut: 'complétée',
-        types_vente: ['détail'],
-        date: ilYa5Jours.toISOString(),
-        vendeur: 'Vendeur Principal',
-        produits: [
-          { 
-            nom: 'Cahier 200 pages', 
-            quantite: 2, 
-            prix_unitaire: 1200, 
-            prix_vente: 1200, 
-            reference: 'CAH-200-M',
-            sous_total: 2400,
-            type_vente: 'détail'
-          }
-        ]
-      }
-    ];
-  };
-
-  const commandesAffichees = commandes.length > 0 ? commandes : genererCommandesSimulees();
-
-  // ---------- Helpers ----------
-  const normaliserDate = (dateString) => {
+  // Charger les commandes avec pagination côté serveur
+  const chargerCommandes = useCallback(async (page = 1, conserveDonnees = false) => {
+    setLoading(true);
+    setError(null);
+    
     try {
-      const date = new Date(dateString);
-      return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      if (!conserveDonnees) {
+        chargerInfosVendeur();
+      }
+
+      // Construire les paramètres de filtrage pour l'API
+      const params = {
+        page: page,
+        perPage: pagination.itemsPerPage,
+        sortField: sortField,
+        sortDirection: sortDirection
+      };
+
+      // Ajouter les filtres si nécessaire
+      if (filtreStatut !== 'tous') {
+        params.statut = filtreStatut;
+      }
+
+      if (filtreTypeVente !== 'tous') {
+        params.type_vente = filtreTypeVente;
+      }
+
+      // Gestion des filtres de date
+      if (filtreDate !== 'tous') {
+        const aujourdhui = new Date();
+        
+        switch (filtreDate) {
+          case 'aujourdhui':
+            params.date_debut = aujourdhui.toISOString().split('T')[0];
+            params.date_fin = aujourdhui.toISOString().split('T')[0];
+            break;
+          case 'hier':
+            const hier = new Date(aujourdhui);
+            hier.setDate(hier.getDate() - 1);
+            params.date_debut = hier.toISOString().split('T')[0];
+            params.date_fin = hier.toISOString().split('T')[0];
+            break;
+          case '7jours':
+            const date7jours = new Date(aujourdhui);
+            date7jours.setDate(date7jours.getDate() - 7);
+            params.date_debut = date7jours.toISOString().split('T')[0];
+            params.date_fin = aujourdhui.toISOString().split('T')[0];
+            break;
+          case '30jours':
+            const date30jours = new Date(aujourdhui);
+            date30jours.setDate(date30jours.getDate() - 30);
+            params.date_debut = date30jours.toISOString().split('T')[0];
+            params.date_fin = aujourdhui.toISOString().split('T')[0];
+            break;
+          case 'personnalisee':
+            if (dateDebut && dateFin) {
+              params.date_debut = dateDebut;
+              params.date_fin = dateFin;
+            }
+            break;
+        }
+      }
+
+      if (recherche.trim()) {
+        params.recherche = recherche.trim();
+      }
+
+      const response = await commandesAPI.getAll(params);
+
+      let commandesPage = [];
+      let paginationInfo = null;
+      let totalItems = 0;
+      
+      if (response?.data && Array.isArray(response.data)) {
+        commandesPage = response.data;
+        paginationInfo = response;
+        totalItems = response.total || response.pagination?.total || 0;
+      } else if (response?.data?.data && Array.isArray(response.data.data)) {
+        commandesPage = response.data.data;
+        paginationInfo = response.data;
+        totalItems = response.data.total || response.data.pagination?.total || 0;
+      } else if (Array.isArray(response)) {
+        commandesPage = response;
+        totalItems = response.length;
+      }
+
+      // Transformer les commandes
+      const commandesTransformees = commandesPage.map(commande => {
+        const produits = extraireProduitsDeLaCommande(commande);
+        const typeVente = determinerTypeVente(commande);
+        const tvaAppliquee = estTVAAppliquee(commande);
+        
+        const montantTTC = Number(
+          commande.total_ttc || 
+          commande.total || 
+          commande.montant_ttc || 
+          commande.montant || 
+          commande.grand_total ||
+          0
+        );
+        
+        const montantHT = Number(
+          commande.total_ht || 
+          commande.montant_ht || 
+          commande.subtotal ||
+          commande.sub_total ||
+          (tvaAppliquee ? Math.round(montantTTC / 1.18) : montantTTC)
+        );
+        
+        const montantTVA = tvaAppliquee 
+          ? Number(
+              commande.tva || 
+              commande.montant_tva ||
+              commande.tva_amount ||
+              Math.round(montantHT * 0.18) || 
+              (montantTTC - montantHT) || 
+              0
+            )
+          : 0;
+        
+        let clientNom = 'Client';
+        let clientTelephone = '';
+        let clientAdresse = '';
+        
+        if (commande.client) {
+          if (typeof commande.client === 'object') {
+            clientNom = formaterNomClient(commande.client);
+            clientTelephone = commande.client.telephone || commande.client.phone || '';
+            clientAdresse = commande.client.adresse || commande.client.address || '';
+          } else if (typeof commande.client === 'string') {
+            clientNom = commande.client;
+          }
+        }
+        
+        let nomVendeur = sellerName || 'Vendeur';
+        if (commande.vendeur) {
+          if (typeof commande.vendeur === 'object') {
+            nomVendeur = commande.vendeur.nom || commande.vendeur.name || nomVendeur;
+          } else if (typeof commande.vendeur === 'string') {
+            nomVendeur = commande.vendeur;
+          }
+        } else if (vendeurInfo) {
+          nomVendeur = vendeurInfo.nom || vendeurInfo.name || nomVendeur;
+        }
+        
+        return {
+          id: commande.id || commande.uuid || `cmd-${Date.now()}-${Math.random()}`,
+          numero_commande: commande.numero_commande || commande.numero || 
+                          commande.reference || commande.order_number || 
+                          `CMD-${Date.now().toString().slice(-8)}`,
+          client: {
+            nom: clientNom,
+            telephone: clientTelephone,
+            adresse: clientAdresse
+          },
+          total_ht: montantHT,
+          tva: montantTVA,
+          total_ttc: montantTTC,
+          montant_ht: montantHT,
+          montant_ttc: montantTTC,
+          tva_appliquee: tvaAppliquee,
+          tva_active: tvaAppliquee,
+          tva_taux: tvaAppliquee ? 18 : 0,
+          statut: mapAPIStatut(commande.statut || commande.status),
+          type_vente: typeVente,
+          date: commande.date || commande.created_at || 
+                commande.date_commande || commande.updated_at || new Date().toISOString(),
+          vendeur: nomVendeur,
+          produits: produits
+        };
+      });
+
+      // Mettre à jour les commandes (remplacer ou ajouter selon le contexte)
+      if (conserveDonnees && page === 1) {
+        setCommandes(commandesTransformees);
+      } else if (conserveDonnees) {
+        setCommandes(prev => [...prev, ...commandesTransformees]);
+      } else {
+        setCommandes(commandesTransformees);
+      }
+      
+      // Mettre à jour les informations de pagination
+      setPagination(prev => ({
+        ...prev,
+        currentPage: page,
+        totalItems: totalItems || commandesTransformees.length,
+        totalPages: paginationInfo?.last_page || 
+                   paginationInfo?.total_pages || 
+                   Math.ceil((totalItems || commandesTransformees.length) / prev.itemsPerPage)
+      }));
+      
+      // Charger les statistiques si c'est la première page
+      if (page === 1 && !conserveDonnees) {
+        chargerStatistiques(commandesTransformees);
+      }
+      
+      // Mettre en cache uniquement les données de la première page pour les stats
+      if (page === 1) {
+        try {
+          localStorage.setItem('commandes_cache_page1', JSON.stringify({
+            data: commandesTransformees,
+            timestamp: Date.now(),
+            pagination: {
+              totalItems: totalItems || commandesTransformees.length,
+              totalPages: paginationInfo?.last_page || 
+                         paginationInfo?.total_pages || 
+                         Math.ceil((totalItems || commandesTransformees.length) / pagination.itemsPerPage)
+            }
+          }));
+        } catch (e) {
+          // Ignorer les erreurs de cache
+        }
+      }
+      
+      if (page === 1) {
+        setShowRefreshNotification(true);
+        setTimeout(() => setShowRefreshNotification(false), 3000);
+      }
+      
     } catch (error) {
-      return null;
+      setError(`Impossible de charger les commandes: ${error.message}`);
+      
+      // Essayer de charger depuis le cache pour la page 1
+      if (pagination.currentPage === 1) {
+        try {
+          const cached = localStorage.getItem('commandes_cache_page1');
+          if (cached) {
+            const { data, timestamp, pagination: cachedPagination } = JSON.parse(cached);
+            setCommandes(data);
+            setPagination(prev => ({
+              ...prev,
+              totalItems: cachedPagination.totalItems,
+              totalPages: cachedPagination.totalPages
+            }));
+            chargerStatistiques(data);
+            setError(null);
+          }
+        } catch (cacheError) {
+          // Ignorer les erreurs de cache
+        }
+      }
+      
+    } finally {
+      setLoading(false);
+      setLastUpdate(Date.now());
     }
-  };
+  }, [sellerName, vendeurInfo, pagination.itemsPerPage, filtreStatut, filtreTypeVente, filtreDate, dateDebut, dateFin, recherche, sortField, sortDirection]);
 
-  const commandeCorrespondAuType = (commande, typeFiltre) => {
-    if (typeFiltre === 'tous') return true;
-    if (typeFiltre === 'mixte') {
-      return commande.types_vente && commande.types_vente.length > 1;
-    }
-    if (commande.types_vente && Array.isArray(commande.types_vente)) {
-      return commande.types_vente.includes(typeFiltre);
-    }
-    return commande.type_vente === typeFiltre;
-  };
+  // Charger les statistiques (pourrait être une API séparée)
+  const chargerStatistiques = useCallback((commandesList) => {
+    // Calculer les stats seulement pour les commandes chargées
+    const commandesAujourdhui = commandesList.filter(c => estAujourdhui(c.date));
+    
+    let totalGros = 0;
+    let totalDetail = 0;
+    let montantTotal = 0;
+    
+    commandesList.forEach(commande => {
+      if (commande.type_vente === 'gros') totalGros++;
+      else if (commande.type_vente === 'détail') totalDetail++;
+      else if (commande.type_vente === 'mixte') {
+        totalGros++;
+        totalDetail++;
+      }
+      
+      if (commande.total_ttc) {
+        montantTotal += commande.total_ttc;
+      } else if (commande.montant_ttc) {
+        montantTotal += commande.montant_ttc;
+      } else if (commande.total) {
+        montantTotal += commande.total;
+      }
+    });
+    
+    setStats({
+      aujourdhui: commandesAujourdhui.length,
+      en_attente: commandesAujourdhui.filter(c => {
+        const statut = c.statut?.toLowerCase() || '';
+        return statut.includes('attente') || 
+               statut === 'en_attente_paiement' || 
+               statut === 'pending';
+      }).length,
+      valide: commandesAujourdhui.filter(c => {
+        const statut = c.statut?.toLowerCase() || '';
+        return statut === 'complétée' || 
+               statut === 'completed' ||
+               statut === 'payee' ||
+               statut === 'paid';
+      }).length,
+      annulee: commandesAujourdhui.filter(c => {
+        const statut = c.statut?.toLowerCase() || '';
+        return statut === 'annulée' || 
+               statut === 'cancelled';
+      }).length,
+      total_gros: totalGros,
+      total_detail: totalDetail,
+      total_ventes: commandesList.length,
+      montant_total: montantTotal
+    });
+  }, []);
 
-  const commandeCorrespondADate = (commande, dateFiltre) => {
-    if (dateFiltre === 'tous') return true;
-    const dateCommande = normaliserDate(commande.date);
-    if (!dateCommande) return false;
-    if (dateFiltre === 'personnalisee') {
-      if (!dateDebut && !dateFin) return true;
-      const debut = dateDebut ? normaliserDate(dateDebut) : null;
-      const fin = dateFin ? normaliserDate(dateFin) : null;
-      if (debut && !fin) return dateCommande.getTime() === debut.getTime();
-      if (!debut && fin) return dateCommande.getTime() === fin.getTime();
-      if (debut && fin) return dateCommande >= debut && dateCommande <= fin;
+  // Charger les commandes au montage et quand les filtres changent
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      chargerCommandes(1, false);
+    }, 300); // Délai pour éviter trop d'appels API
+
+    return () => clearTimeout(timer);
+  }, [filtreStatut, filtreTypeVente, filtreDate, dateDebut, dateFin, recherche, sortField, sortDirection, pagination.itemsPerPage]);
+
+  // Gérer le changement de page
+  useEffect(() => {
+    if (pagination.currentPage > 1) {
+      chargerCommandes(pagination.currentPage, false);
+    }
+  }, [pagination.currentPage]);
+
+  // Les fonctions utilitaires restent les mêmes (estTVAAppliquee, mapAPIStatut, etc.)
+  const estTVAAppliquee = (commande) => {
+    if (!commande) return false;
+    
+    const tvaIndicators = [
+      commande.tva_appliquee,
+      commande.tva_appliquee === 1,
+      commande.tva_appliquee === '1',
+      commande.tva_appliquee === true,
+      commande.tva_appliquee === 'true',
+      commande.tva_active,
+      commande.tva_active === 1,
+      commande.tva_active === true,
+      commande.apply_tva,
+      commande.apply_tva === 1,
+      commande.apply_tva === true,
+      commande.appliquer_tva,
+      commande.has_tva,
+      commande.tva_inclus,
+      commande.tva_inclus === 1,
+      commande.tva_inclus === true,
+      commande.tva_incluse,
+      commande.tva_incluse === 1,
+      commande.tva_incluse === true
+    ];
+
+    if (tvaIndicators.some(indicator => indicator === true)) {
       return true;
     }
-    const aujourdhui = normaliserDate(new Date());
-    const hier = new Date(aujourdhui);
-    hier.setDate(hier.getDate() - 1);
-    switch (dateFiltre) {
-      case 'aujourdhui':
-        return dateCommande.getTime() === aujourdhui.getTime();
-      case 'hier':
-        return dateCommande.getTime() === hier.getTime();
-      case '7jours': {
-        const date7Jours = new Date(aujourdhui);
-        date7Jours.setDate(date7Jours.getDate() - 7);
-        return dateCommande >= date7Jours;
-      }
-      case '30jours': {
-        const date30Jours = new Date(aujourdhui);
-        date30Jours.setDate(date30Jours.getDate() - 30);
-        return dateCommande >= date30Jours;
-      }
-      default:
-        return true;
-    }
-  };
 
-  const commandeCorrespondARecherche = (commande, termeRecherche) => {
-    if (!termeRecherche.trim()) return true;
-    const terme = termeRecherche.toLowerCase().trim();
-    if (commande.numero_commande?.toLowerCase().includes(terme)) return true;
-    if (commande.client?.nom?.toLowerCase().includes(terme)) return true;
-    if (commande.client?.telephone?.includes(terme)) return true;
-    if (commande.produits && Array.isArray(commande.produits)) {
-      const produitTrouve = commande.produits.some(produit => 
-        produit.nom?.toLowerCase().includes(terme) ||
-        produit.reference?.toLowerCase().includes(terme)
-      );
-      if (produitTrouve) return true;
+    const tvaTaux = Number(commande.tva_taux || commande.taux_tva || commande.tva_rate || 0);
+    if (tvaTaux > 0) {
+      return true;
     }
+
+    const montantTVA = Number(
+      commande.tva || 
+      commande.montant_tva || 
+      commande.tva_amount || 
+      0
+    );
+    if (montantTVA > 0) {
+      return true;
+    }
+
+    const montantTTC = Number(
+      commande.total_ttc || 
+      commande.montant_ttc || 
+      commande.total || 
+      0
+    );
+    
+    const montantHT = Number(
+      commande.total_ht || 
+      commande.montant_ht || 
+      commande.subtotal ||
+      0
+    );
+    
+    if (montantTTC > 0 && montantHT > 0 && montantTTC > montantHT) {
+      return true;
+    }
+
     return false;
   };
 
-  const commandesFiltrees = commandesAffichees.filter(commande => {
-    const matchStatut = filtreStatut === 'tous' || commande.statut === filtreStatut;
-    const matchTypeVente = commandeCorrespondAuType(commande, filtreTypeVente);
-    const matchDate = commandeCorrespondADate(commande, filtreDate);
-    const matchRecherche = commandeCorrespondARecherche(commande, recherche);
-    return matchStatut && matchTypeVente && matchDate && matchRecherche;
-  });
+  const mapAPIStatut = (statutAPI) => {
+    const mapping = {
+      'validee': 'complétée',
+      'completed': 'complétée',
+      'pending': 'en_attente_paiement',
+      'en_attente': 'en_attente_paiement',
+      'en attente': 'en_attente_paiement',
+      'en attente paiement': 'en_attente_paiement',
+      'cancelled': 'annulée',
+      'annulee': 'annulée',
+      'annulée': 'annulée',
+      'local_only': 'en_attente_paiement',
+      'en_attente_paiement': 'en_attente_paiement',
+      'payee': 'complétée',
+      'paid': 'complétée',
+      'delivered': 'complétée',
+      'livree': 'complétée',
+      'processing': 'en_attente_paiement',
+      'traitement': 'en_attente_paiement',
+      'attente': 'en_attente_paiement',
+      'validée': 'complétée'
+    };
+    const statut = statutAPI?.toLowerCase()?.trim();
+    return mapping[statut] || statutAPI || 'en_attente_paiement';
+  };
 
-  const getAffichageTypesVente = (commande) => {
-    if (commande.types_vente && Array.isArray(commande.types_vente)) {
-      return commande.types_vente.length === 1 ? commande.types_vente[0] : 'mixte';
+  const extraireProduitsDeLaCommande = (commandeData) => {
+    let produits = [];
+    
+    const sourcesProduits = [
+      commandeData.items,
+      commandeData.produits,
+      commandeData.lignes_commande,
+      commandeData.lignes,
+      commandeData.order_items,
+      commandeData.products,
+      commandeData.details,
+      commandeData.articles
+    ];
+    
+    for (const source of sourcesProduits) {
+      if (source && Array.isArray(source) && source.length > 0) {
+        produits = source.map(item => {
+          let nomProduit = 'Produit sans nom';
+          
+          if (item.nom) nomProduit = item.nom;
+          else if (item.name) nomProduit = item.name;
+          else if (item.libelle) nomProduit = item.libelle;
+          else if (item.designation) nomProduit = item.designation;
+          else if (item.product_nom) nomProduit = item.product_nom;
+          else if (item.product_name) nomProduit = item.product_name;
+          else if (item.product?.nom) nomProduit = item.product.nom;
+          else if (item.product?.name) nomProduit = item.product.name;
+          else if (item.produit?.nom) nomProduit = item.produit.nom;
+          else if (item.produit?.name) nomProduit = item.produit.name;
+          
+          let typeVenteProduit = 'détail';
+          if (item.type_vente) {
+            const typeStr = item.type_vente.toLowerCase();
+            if (typeStr === 'gros' || typeStr === 'gross' || typeStr === 'wholesale') {
+              typeVenteProduit = 'gros';
+            } else if (typeStr === 'détail' || typeStr === 'detail' || typeStr === 'retail') {
+              typeVenteProduit = 'détail';
+            }
+          }
+          
+          return {
+            id: item.id || item.product_id || item.produit_id,
+            nom: nomProduit,
+            quantite: Number(item.quantite || item.quantity || item.qte || item.qty || 1),
+            prix_unitaire: Number(item.prix_unitaire || item.prix || item.price || 0),
+            prix_vente: Number(item.prix_vente || item.prix_detail || item.prix_gros || item.sale_price || item.prix_unitaire || 0),
+            type_vente: typeVenteProduit,
+            sous_total: Number(item.sous_total || item.subtotal || item.total_item || 
+                              (Number(item.quantite || 1) * Number(item.prix_vente || item.prix || 0)) || 0)
+          };
+        });
+        break;
+      }
     }
-    return commande.type_vente || 'détail';
+    
+    return produits;
+  };
+
+  const chargerInfosVendeur = useCallback(async () => {
+    try {
+      const response = await profileAPI.getProfile();
+      if (response && response.data) {
+        setVendeurInfo(response.data);
+      }
+    } catch (error) {
+      console.error('Erreur chargement vendeur:', error);
+    }
+  }, []);
+
+  const formaterNomClient = (client) => {
+    if (!client) return 'Client';
+    
+    if (typeof client === 'object') {
+      if (client.nom && client.prenom) return `${client.prenom} ${client.nom}`;
+      if (client.nom_complet) return client.nom_complet;
+      if (client.full_name) return client.full_name;
+      if (client.name) return client.name;
+      if (client.nom) return client.nom;
+      
+      const prenom = client.firstName || client.first_name || client.prenom || '';
+      const nom = client.lastName || client.last_name || client.nom || client.name || '';
+      
+      if (prenom && nom) return `${prenom} ${nom}`;
+      if (nom) return nom;
+      if (prenom) return prenom;
+    }
+    
+    if (typeof client === 'string') return client;
+    
+    return 'Client';
+  };
+
+  const estAujourdhui = (dateString) => {
+    try {
+      const aujourdhui = new Date();
+      const dateCommande = new Date(dateString);
+      
+      return (
+        dateCommande.getDate() === aujourdhui.getDate() &&
+        dateCommande.getMonth() === aujourdhui.getMonth() &&
+        dateCommande.getFullYear() === aujourdhui.getFullYear()
+      );
+    } catch {
+      return false;
+    }
+  };
+
+  const determinerTypeVente = (commande) => {
+    if (commande.type_vente) {
+      const typeStr = commande.type_vente.toString().toLowerCase().trim();
+      if (typeStr === 'gros' || typeStr === 'gross' || typeStr === 'wholesale') {
+        return 'gros';
+      }
+      if (typeStr === 'détail' || typeStr === 'detail' || typeStr === 'retail') {
+        return 'détail';
+      }
+      if (typeStr === 'mixte' || typeStr === 'mixed') {
+        return 'mixte';
+      }
+    }
+    
+    const produits = extraireProduitsDeLaCommande(commande);
+    
+    if (produits && produits.length > 0) {
+      let aDuGros = false;
+      let aDuDetail = false;
+      
+      produits.forEach(p => {
+        if (p.type_vente) {
+          const productType = p.type_vente.toString().toLowerCase();
+          if (productType === 'gros' || productType === 'gross' || productType === 'wholesale') {
+            aDuGros = true;
+          } else if (productType === 'détail' || productType === 'detail' || productType === 'retail') {
+            aDuDetail = true;
+          }
+        }
+        
+        if (p.prix_gros && p.prix_gros > 0) {
+          aDuGros = true;
+        }
+        if (p.prix_detail && p.prix_detail > 0) {
+          aDuDetail = true;
+        }
+      });
+      
+      if (aDuGros && aDuDetail) {
+        return 'mixte';
+      } else if (aDuGros) {
+        return 'gros';
+      } else if (aDuDetail) {
+        return 'détail';
+      }
+    }
+    
+    return 'détail';
+  };
+
+  const chargerDetailsCommande = async (commande) => {
+    if (!commande) return;
+    
+    setDetailsLoading(true);
+    setCommandeSelectionnee(commande);
+    setError(null);
+    
+    try {
+      if (!commande.id || commande.id.toString().startsWith('mock-')) {
+        setCommandeDetails(commande);
+        setModalOuvert(true);
+        setDetailsLoading(false);
+        return;
+      }
+      
+      const response = await commandesAPI.getById(commande.id);
+      
+      if (response && response.data) {
+        const details = response.data;
+        const produits = extraireProduitsDeLaCommande(details);
+        
+        if (produits.length === 0 && commande.produits?.length > 0) {
+          produits.push(...commande.produits);
+        }
+        
+        let typeVente = commande.type_vente;
+        if (!typeVente) {
+          typeVente = determinerTypeVente(details);
+        }
+        
+        const tvaAppliquee = estTVAAppliquee(details) || estTVAAppliquee(commande);
+        
+        const totalTTC = Number(
+          details.total_ttc || 
+          details.total || 
+          details.montant_ttc || 
+          commande.total_ttc || 
+          0
+        );
+        
+        const totalHT = Number(
+          details.total_ht || 
+          details.montant_ht || 
+          (tvaAppliquee ? Math.round(totalTTC / 1.18) : totalTTC) ||
+          commande.total_ht || 
+          0
+        );
+        
+        const tva = tvaAppliquee 
+          ? Number(
+              details.tva || 
+              details.montant_tva ||
+              Math.round(totalHT * 0.18) || 
+              commande.tva || 
+              (totalTTC - totalHT) ||
+              0
+            )
+          : 0;
+        
+        let clientNom = 'Client';
+        let clientTelephone = '';
+        let clientAdresse = '';
+        
+        if (details.client) {
+          if (typeof details.client === 'object') {
+            clientNom = formaterNomClient(details.client);
+            clientTelephone = details.client.telephone || details.client.phone || '';
+            clientAdresse = details.client.adresse || details.client.address || '';
+          } else if (typeof details.client === 'string') {
+            clientNom = details.client;
+          }
+        } else if (commande.client) {
+          clientNom = commande.client.nom || 'Client';
+          clientTelephone = commande.client.telephone || '';
+          clientAdresse = commande.client.adresse || '';
+        }
+        
+        setCommandeDetails({
+          ...commande,
+          produits: produits,
+          client: {
+            nom: clientNom,
+            telephone: clientTelephone,
+            adresse: clientAdresse
+          },
+          total_ht: totalHT,
+          tva: tva,
+          total_ttc: totalTTC,
+          montant_ht: totalHT,
+          montant_ttc: totalTTC,
+          tva_appliquee: tvaAppliquee,
+          tva_active: tvaAppliquee,
+          tva_taux: tvaAppliquee ? 18 : 0,
+          statut: mapAPIStatut(details.statut || details.status || commande.statut),
+          numero_commande: details.numero_commande || details.numero || 
+                          details.reference || commande.numero_commande,
+          date: details.date || details.created_at || commande.date,
+          type_vente: typeVente,
+          vendeur: details.vendeur_nom || details.seller_name || commande.vendeur
+        });
+        
+      } else {
+        setCommandeDetails(commande);
+      }
+    } catch (error) {
+      setError(`Erreur: ${error.message}`);
+      setCommandeDetails(commande);
+    } finally {
+      setModalOuvert(true);
+      setDetailsLoading(false);
+    }
+  };
+
+  const ouvrirDetails = async (commande) => {
+    await chargerDetailsCommande(commande);
+  };
+
+  useEffect(() => {
+    const handleCommandeCreee = (event) => {
+      chargerCommandes(1, false);
+    };
+
+    window.addEventListener('commande-creee', handleCommandeCreee);
+    
+    return () => {
+      window.removeEventListener('commande-creee', handleCommandeCreee);
+    };
+  }, [chargerCommandes]);
+
+  const goToPage = (page) => {
+    setPagination(prev => ({
+      ...prev,
+      currentPage: Math.max(1, Math.min(page, prev.totalPages))
+    }));
+    
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const nextPage = () => {
+    goToPage(pagination.currentPage + 1);
+  };
+
+  const prevPage = () => {
+    goToPage(pagination.currentPage - 1);
+  };
+
+  const firstPage = () => {
+    goToPage(1);
+  };
+
+  const lastPage = () => {
+    goToPage(pagination.totalPages);
+  };
+
+  const changeItemsPerPage = (newItemsPerPage) => {
+    setPagination(prev => ({
+      ...prev,
+      itemsPerPage: newItemsPerPage,
+      currentPage: 1
+    }));
+  };
+
+  const reinitialiserFiltres = () => {
+    setFiltreStatut('tous');
+    setFiltreTypeVente('tous');
+    setFiltreDate('aujourdhui');
+    setDateDebut('');
+    setDateFin('');
+    setRecherche('');
+    setSortField('date');
+    setSortDirection('desc');
   };
 
   const getStatutIcone = (statut) => {
     switch (statut) {
-      case 'complétée': return <FontAwesomeIcon icon={faCheckCircle} className="statut-icone" />;
-      case 'en_attente_paiement': return <FontAwesomeIcon icon={faClock} className="statut-icone" />;
-      case 'annulée': return <FontAwesomeIcon icon={faTimesCircle} className="statut-icone" />;
-      default: return <FontAwesomeIcon icon={faFileAlt} className="statut-icone" />;
+      case 'complétée': return <FontAwesomeIcon icon={faCheckCircle} />;
+      case 'en_attente_paiement': return <FontAwesomeIcon icon={faClock} />;
+      case 'annulée': return <FontAwesomeIcon icon={faTimesCircle} />;
+      default: return <FontAwesomeIcon icon={faFileAlt} />;
     }
   };
 
-  const getStatutClasse = (statut) => {
+  const getStatutCouleur = (statut) => {
     switch (statut) {
-      case 'complétée': return 'statut-completee';
-      case 'en_attente_paiement': return 'statut-attente';
-      case 'annulée': return 'statut-annulee';
-      default: return 'statut-default';
+      case 'complétée': return 'bg-green-100 text-green-800 border-green-200';
+      case 'en_attente_paiement': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'annulée': return 'bg-red-100 text-red-800 border-red-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
 
-  const getTypeVenteIcone = (type) => {
+  const getTypeVenteCouleur = (type) => {
     switch (type) {
-      case 'détail': return <FontAwesomeIcon icon={faShoppingBag} className="type-vente-icone" />;
-      case 'gros': return <FontAwesomeIcon icon={faPallet} className="type-vente-icone" />;
-      case 'mixte': return <FontAwesomeIcon icon={faSync} className="type-vente-icone" />;
-      default: return <FontAwesomeIcon icon={faBox} className="type-vente-icone" />;
-    }
-  };
-
-  const getTypeVenteClasse = (type) => {
-    switch (type) {
-      case 'détail': return 'type-detail';
-      case 'gros': return 'type-gros';
-      case 'mixte': return 'type-mixte';
-      default: return 'type-default';
+      case 'détail': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'gros': return 'bg-purple-100 text-purple-800 border-purple-200';
+      case 'mixte': return 'bg-indigo-100 text-indigo-800 border-indigo-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
 
@@ -313,540 +872,584 @@ const HistoriqueCommandes = ({ commandes = [], sellerName = null }) => {
     }
   };
 
-  const formaterDateSimple = (dateString) => {
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('fr-FR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      });
-    } catch (error) {
-      return 'Date invalide';
-    }
-  };
-
-  const ouvrirDetails = (commande) => {
-    setCommandeSelectionnee(commande);
-    setModalOuvert(true);
+  const formaterMontant = (montant) => {
+    return new Intl.NumberFormat('fr-FR').format(montant || 0);
   };
 
   const fermerDetails = () => {
     setModalOuvert(false);
-    setCommandeSelectionnee(null);
+    setTimeout(() => {
+      setCommandeSelectionnee(null);
+      setCommandeDetails(null);
+    }, 300);
   };
 
-  const compterProduitsParType = (commande) => {
-    const compteur = { détail: 0, gros: 0 };
-    if (commande.produits && Array.isArray(commande.produits)) {
-      commande.produits.forEach(produit => {
-        if (produit.type_vente === 'détail') compteur.détail += produit.quantite || 0;
-        else if (produit.type_vente === 'gros') compteur.gros += produit.quantite || 0;
-      });
+  const renderProduitsTable = () => {
+    if (!commandeDetails?.produits || commandeDetails.produits.length === 0) {
+      return (
+        <div className="text-center py-6 bg-gray-50 rounded-lg border border-gray-200">
+          <FontAwesomeIcon icon={faBox} className="text-3xl text-gray-400 mb-3" />
+          <p className="text-gray-600 text-sm">Aucun produit dans cette commande</p>
+        </div>
+      );
     }
-    return compteur;
+    
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-200">
+              <th className="py-2 px-3 text-left font-medium text-gray-700">Produit</th>
+              <th className="py-2 px-3 text-left font-medium text-gray-700">Qté</th>
+              <th className="py-2 px-3 text-left font-medium text-gray-700">Prix unit.</th>
+              <th className="py-2 px-3 text-left font-medium text-gray-700">Sous-total</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200">
+            {commandeDetails.produits.map((produit, index) => {
+              const quantite = produit.quantite || 0;
+              const prixVente = produit.prix_vente || produit.prix_unitaire || 0;
+              const sousTotal = produit.sous_total || (quantite * prixVente);
+              
+              return (
+                <tr key={index} className="hover:bg-gray-50">
+                  <td className="py-2 px-3">
+                    <div className="font-medium text-gray-900">{produit.nom}</div>
+                  </td>
+                  <td className="py-2 px-3 text-gray-900">{quantite}</td>
+                  <td className="py-2 px-3 text-gray-900">{formaterMontant(prixVente)}</td>
+                  <td className="py-2 px-3 text-gray-900 font-medium">{formaterMontant(sousTotal)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
   };
 
-  const calculerTotalParType = (commande) => {
-    const totals = { détail: 0, gros: 0 };
-    if (commande.produits && Array.isArray(commande.produits)) {
-      commande.produits.forEach(produit => {
-        const sousTotal = (produit.prix_vente || produit.prix_unitaire || 0) * (produit.quantite || 0);
-        if (produit.type_vente === 'détail') totals.détail += sousTotal;
-        else if (produit.type_vente === 'gros') totals.gros += sousTotal;
-      });
+  const donneesModal = commandeDetails || commandeSelectionnee;
+
+  const startIndex = (pagination.currentPage - 1) * pagination.itemsPerPage + 1;
+  const endIndex = Math.min(pagination.currentPage * pagination.itemsPerPage, pagination.totalItems);
+
+  const getPageNumbers = () => {
+    const delta = 2;
+    const range = [];
+    const rangeWithDots = [];
+    let l;
+
+    for (let i = 1; i <= pagination.totalPages; i++) {
+      if (i === 1 || i === pagination.totalPages || (i >= pagination.currentPage - delta && i <= pagination.currentPage + delta)) {
+        range.push(i);
+      }
     }
-    return totals;
-  };
 
-  const reinitialiserDatesPersonnalisees = () => {
-    setDateDebut('');
-    setDateFin('');
-  };
+    range.forEach((i) => {
+      if (l) {
+        if (i - l === 2) {
+          rangeWithDots.push(l + 1);
+        } else if (i - l !== 1) {
+          rangeWithDots.push('...');
+        }
+      }
+      rangeWithDots.push(i);
+      l = i;
+    });
 
-  // ---------- Statistiques ----------
-  const commandesAujourdhui = commandesAffichees.filter(commande => {
-    const dateCommande = normaliserDate(commande.date);
-    const aujourdhui = normaliserDate(new Date());
-    return dateCommande && dateCommande.getTime() === aujourdhui.getTime();
-  }).length;
-
-  // ---------- Fonction utilitaire pour obtenir le nom du vendeur (source Header/Sidebar) ----------
-  const obtenirNomVendeurAffiche = (commande) => {
-    // Priorité : champ commande.vendeur s'il existe et n'est pas le placeholder 'Vendeur Principal'
-    if (commande?.vendeur && commande.vendeur !== 'Vendeur Principal') return commande.vendeur;
-    // Sinon utiliser sellerName passé depuis Header / Sidebar
-    if (sellerName) return sellerName;
-    // Sinon fallback
-    return 'Non spécifié';
+    return rangeWithDots;
   };
 
   return (
-    <div className="historique-commandes">
-      <div className="historique-entete">
-        <div className="entete-principal">
-          <h2>
-            <FontAwesomeIcon icon={faHistory} className="entete-icone" />
-            Historique des Commandes
-          </h2>
-          <p>Consultez l'historique complet des commandes clients</p>
+    <div className="min-h-screen bg-gray-50 p-4">
+      {showRefreshNotification && (
+        <div className="fixed top-4 right-4 z-50 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 text-sm animate-slide-in">
+          <FontAwesomeIcon icon={faBell} className="animate-bounce" />
+          <span>Commandes mises à jour !</span>
         </div>
-        <div className="entete-statistiques">
-          <div className="statistique-globale">
-            <span className="statistique-valeur">{commandesAffichees.length}</span>
-            <span className="statistique-label">Commandes totales</span>
+      )}
+
+      {error && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 text-sm">
+          <FontAwesomeIcon icon={faExclamationTriangle} className="text-red-500" />
+          <span>{error}</span>
+          <button onClick={() => setError(null)} className="ml-2 text-red-700 hover:text-red-900">
+            <FontAwesomeIcon icon={faTimes} />
+          </button>
+        </div>
+      )}
+
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+              <FontAwesomeIcon icon={faHistory} className="text-blue-600" />
+              Historique des Commandes
+            </h1>
+            <p className="text-sm text-gray-600 mt-1">
+              {pagination.totalItems} commandes au total • Dernière màj: {new Date(lastUpdate).toLocaleTimeString('fr-FR')}
+              {!loading && pagination.totalItems > 0 && ` • Page ${pagination.currentPage}/${pagination.totalPages}`}
+            </p>
           </div>
-          <div className="statistique-globale statut-attente">
-            <span className="statistique-valeur">
-              {commandesAffichees.filter(c => c.statut === 'en_attente_paiement').length}
-            </span>
-            <span className="statistique-label">En attente</span>
+          
+          <div className="flex items-center gap-2">
+            {vendeurInfo && (
+              <span className="inline-flex items-center px-2 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-medium">
+                <FontAwesomeIcon icon={faUserTie} className="mr-1" />
+                {vendeurInfo.nom || vendeurInfo.name || sellerName || 'Vendeur'}
+              </span>
+            )}
+            
+            <button 
+              onClick={() => chargerCommandes(1, false)}
+              disabled={loading}
+              className="inline-flex items-center px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+            >
+              <FontAwesomeIcon icon={loading ? faSpinner : faRedo} className={`mr-1.5 ${loading ? 'animate-spin' : ''}`} />
+              {loading ? 'Chargement...' : 'Actualiser'}
+            </button>
           </div>
-          <div className="statistique-globale aujourdhui">
-            <span className="statistique-valeur">{commandesAujourdhui}</span>
-            <span className="statistique-label">Aujourd'hui</span>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div className="bg-white rounded-lg shadow p-3 border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-600">Aujourd'hui</p>
+                <p className="text-xl font-bold text-gray-900">{stats.aujourdhui}</p>
+              </div>
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <FontAwesomeIcon icon={faCalendarDay} className="text-blue-600 text-sm" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-3 border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-600">En attente</p>
+                <p className="text-xl font-bold text-yellow-600">{stats.en_attente}</p>
+              </div>
+              <div className="p-2 bg-yellow-100 rounded-lg">
+                <FontAwesomeIcon icon={faClock} className="text-yellow-600 text-sm" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-3 border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-600">Validées</p>
+                <p className="text-xl font-bold text-green-600">{stats.valide}</p>
+              </div>
+              <div className="p-2 bg-green-100 rounded-lg">
+                <FontAwesomeIcon icon={faCheck} className="text-green-600 text-sm" />
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Filtres et recherche */}
-      <div className="controles-historique">
-        <div className="filtres-groupe">
-          <div className="filtre-item">
-            <label>
-              <FontAwesomeIcon icon={faFilter} className="filtre-icone" />
-              Statut :
-            </label>
-            <select 
-              value={filtreStatut} 
-              onChange={(e) => setFiltreStatut(e.target.value)}
-              className="select-filtre"
-            >
-              <option value="tous">Tous les statuts</option>
-              <option value="complétée">Complétées</option>
-              <option value="en_attente_paiement">En attente</option>
-              <option value="annulée">Annulées</option>
-            </select>
+      <div className="bg-white rounded-lg shadow border border-gray-200 mb-6">
+        <div 
+          className="p-3 cursor-pointer hover:bg-gray-50 flex items-center justify-between"
+          onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+        >
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-blue-100 rounded-lg">
+              <FontAwesomeIcon icon={faFilter} className="text-blue-600 text-sm" />
+            </div>
+            <span className="text-sm font-medium text-gray-900">Filtres</span>
+            {(filtreStatut !== 'tous' || filtreTypeVente !== 'tous' || filtreDate !== 'aujourdhui' || recherche) && (
+              <span className="px-1.5 py-0.5 bg-blue-100 text-blue-800 rounded-full text-xs">
+                Actifs
+              </span>
+            )}
           </div>
+          <FontAwesomeIcon 
+            icon={showAdvancedFilters ? faChevronUp : faChevronDown} 
+            className="text-gray-400 text-sm"
+          />
+        </div>
 
-          <div className="filtre-item">
-            <label>
-              <FontAwesomeIcon icon={faBoxOpen} className="filtre-icone" />
-              Type de vente :
-            </label>
-            <select 
-              value={filtreTypeVente} 
-              onChange={(e) => setFiltreTypeVente(e.target.value)}
-              className="select-filtre"
-            >
-              <option value="tous">Tous les types</option>
-              <option value="détail">Détail uniquement</option>
-              <option value="gros">Gros uniquement</option>
-              <option value="mixte">Ventes mixtes</option>
-            </select>
-          </div>
+        {showAdvancedFilters && (
+          <div className="p-3 border-t border-gray-200">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Statut</label>
+                <select
+                  value={filtreStatut}
+                  onChange={(e) => setFiltreStatut(e.target.value)}
+                  className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="tous">Tous</option>
+                  <option value="complétée">Complétées</option>
+                  <option value="en_attente_paiement">En attente</option>
+                  <option value="annulée">Annulées</option>
+                </select>
+              </div>
 
-          <div className="filtre-item">
-            <label>
-              <FontAwesomeIcon icon={faCalendarAlt} className="filtre-icone" />
-              Période :
-            </label>
-            <select 
-              value={filtreDate} 
-              onChange={(e) => {
-                setFiltreDate(e.target.value);
-                if (e.target.value !== 'personnalisee') reinitialiserDatesPersonnalisees();
-              }}
-              className="select-filtre"
-            >
-              <option value="tous">Toutes les dates</option>
-              <option value="aujourdhui">Aujourd'hui</option>
-              <option value="hier">Hier</option>
-              <option value="7jours">7 derniers jours</option>
-              <option value="30jours">30 derniers jours</option>
-              <option value="personnalisee">
-                <FontAwesomeIcon icon={faCalendar} /> Période personnalisée
-              </option>
-            </select>
-          </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Type</label>
+                <select
+                  value={filtreTypeVente}
+                  onChange={(e) => setFiltreTypeVente(e.target.value)}
+                  className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="tous">Tous</option>
+                  <option value="détail">Détail</option>
+                  <option value="gros">Gros</option>
+                  <option value="mixte">Mixte</option>
+                </select>
+              </div>
 
-          {filtreDate === 'personnalisee' && (
-            <div className="periode-personnalisee">
-              <div className="date-input-groupe">
-                <label>Du :</label>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Période</label>
+                <select
+                  value={filtreDate}
+                  onChange={(e) => setFiltreDate(e.target.value)}
+                  className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="tous">Toutes</option>
+                  <option value="aujourdhui">Aujourd'hui</option>
+                  <option value="hier">Hier</option>
+                  <option value="7jours">7 jours</option>
+                  <option value="30jours">30 jours</option>
+                  <option value="personnalisee">Personnalisée</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Recherche</label>
+                <input
+                  type="text"
+                  placeholder="N° commande, client..."
+                  value={recherche}
+                  onChange={(e) => setRecherche(e.target.value)}
+                  className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            {filtreDate === 'personnalisee' && (
+              <div className="grid grid-cols-2 gap-3 mb-3">
                 <input
                   type="date"
                   value={dateDebut}
                   onChange={(e) => setDateDebut(e.target.value)}
-                  className="input-date"
+                  className="px-2 py-1.5 text-sm border border-gray-300 rounded-lg"
                 />
-              </div>
-              <div className="date-input-groupe">
-                <label>Au :</label>
                 <input
                   type="date"
                   value={dateFin}
                   onChange={(e) => setDateFin(e.target.value)}
-                  className="input-date"
+                  className="px-2 py-1.5 text-sm border border-gray-300 rounded-lg"
                 />
               </div>
-              {(dateDebut || dateFin) && (
-                <button 
-                  className="bouton-reinitialiser-dates"
-                  onClick={reinitialiserDatesPersonnalisees}
-                  title="Réinitialiser les dates"
-                >
-                  <FontAwesomeIcon icon={faRedo} />
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className="recherche-historique">
-          <input
-            type="text"
-            placeholder="Rechercher par numéro, client, téléphone ou produit..."
-            value={recherche}
-            onChange={(e) => setRecherche(e.target.value)}
-            className="input-recherche-historique"
-          />
-          <FontAwesomeIcon icon={faSearch} className="icone-recherche" />
-        </div>
-      </div>
-
-      {/* Résumé période sélectionnée */}
-      {filtreDate === 'personnalisee' && (dateDebut || dateFin) && (
-        <div className="resume-periode">
-          <p>
-            <FontAwesomeIcon icon={faCalendarAlt} className="resume-icone" />
-            Période sélectionnée : 
-            {dateDebut && ` Du ${formaterDateSimple(dateDebut)}`}
-            {dateFin && ` Au ${formaterDateSimple(dateFin)}`}
-            {!dateDebut && dateFin && ` Date exacte : ${formaterDateSimple(dateFin)}`}
-            {dateDebut && !dateFin && ` Date exacte : ${formaterDateSimple(dateDebut)}`}
-            {dateDebut && dateFin && dateDebut === dateFin && ` Date exacte : ${formaterDateSimple(dateDebut)}`}
-          </p>
-        </div>
-      )}
-
-      {/* Liste des commandes */}
-      <div className="liste-commandes">
-        {commandesFiltrees.length === 0 ? (
-          <div className="aucune-commande">
-            <FontAwesomeIcon icon={faBox} className="aucune-commande-icone" />
-            <h3>Aucune commande trouvée</h3>
-            <p>Aucune commande ne correspond à vos critères de recherche.</p>
-            {(recherche || filtreStatut !== 'tous' || filtreTypeVente !== 'tous' || filtreDate !== 'tous') && (
-              <button 
-                className="bouton-reinitialiser"
-                onClick={() => {
-                  setRecherche('');
-                  setFiltreStatut('tous');
-                  setFiltreTypeVente('tous');
-                  setFiltreDate('tous');
-                  reinitialiserDatesPersonnalisees();
-                }}
-              >
-                <FontAwesomeIcon icon={faRedo} className="bouton-icone" />
-                Réinitialiser tous les filtres
-              </button>
             )}
+
+            <div className="flex justify-end">
+              <button
+                onClick={reinitialiserFiltres}
+                className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+              >
+                Réinitialiser
+              </button>
+            </div>
           </div>
-        ) : (
-          commandesFiltrees.map(commande => {
-            const typesAffichage = getAffichageTypesVente(commande);
-            const compteurProduits = compterProduitsParType(commande);
-            const totalsParType = calculerTotalParType(commande);
-            const nomVendeurCarte = obtenirNomVendeurAffiche(commande);
-
-            return (
-              <div key={commande.id} className="carte-commande">
-                <div className="commande-entete">
-                  <div className="commande-info-principale">
-                    <h3 className="numero-commande">
-                      <FontAwesomeIcon icon={faFileInvoiceDollar} className="numero-commande-icone" />
-                      {commande.numero_commande}
-                    </h3>
-                    <div className="commande-meta">
-                      <span className="commande-date">
-                        <FontAwesomeIcon icon={faCalendarAlt} className="meta-icone" />
-                        {formaterDate(commande.date)}
-                      </span>
-                      <span className="separateur">•</span>
-                      <span className={`statut-commande ${getStatutClasse(commande.statut)}`}>
-                        {getStatutIcone(commande.statut)} {commande.statut}
-                      </span>
-                      <span className="separateur">•</span>
-                      <span className={`type-vente-commande ${getTypeVenteClasse(typesAffichage)}`}>
-                        {getTypeVenteIcone(typesAffichage)} {typesAffichage}
-                      </span>
-                      {/* Affichage du vendeur sur la carte (lecture seule) */}
-                      <span className="separateur">•</span>
-                      <span className="vendeur-carte" title={`Vendeur: ${nomVendeurCarte}`}>
-                        <FontAwesomeIcon icon={faUser} className="meta-icone" /> {nomVendeurCarte}
-                      </span>
-                    </div>
-                  </div>
-                  
-                  <div className="commande-total">
-                    <div className="total-ttc">{commande.total_ttc?.toLocaleString() || '0'} FCFA</div>
-                    <div className="details-total">
-                      HT: {commande.total_ht?.toLocaleString() || '0'} FCFA • TVA: {commande.tva?.toLocaleString() || '0'} FCFA
-                    </div>
-                  </div>
-                </div>
-
-                <div className="commande-client">
-                  <div className="info-client">
-                    <strong>
-                      <FontAwesomeIcon icon={faUser} className="client-icone" />
-                      {commande.client?.nom || 'Client non spécifié'}
-                    </strong>
-                    {commande.client?.telephone && (
-                      <span className="client-telephone">
-                        <FontAwesomeIcon icon={faPhone} className="telephone-icone" />
-                        {commande.client.telephone}
-                      </span>
-                    )}
-                    <span className="client-date">
-                      <FontAwesomeIcon icon={faCalendarDay} className="date-icone" />
-                      {formaterDateSimple(commande.date)}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="commande-produits">
-                  <h4>
-                    <FontAwesomeIcon icon={faBox} className="produits-icone" />
-                    Détails des produits et prix :
-                  </h4>
-                  <div className="repartition-types">
-                    {compteurProduits.détail > 0 && (
-                      <span className="badge-type detail">
-                        <FontAwesomeIcon icon={faShoppingBag} className="badge-icone" />
-                        {compteurProduits.détail} produit(s) détail - {totalsParType.détail.toLocaleString()} FCFA
-                      </span>
-                    )}
-                    {compteurProduits.gros > 0 && (
-                      <span className="badge-type gros">
-                        <FontAwesomeIcon icon={faPallet} className="badge-icone" />
-                        {compteurProduits.gros} produit(s) gros - {totalsParType.gros.toLocaleString()} FCFA
-                      </span>
-                    )}
-                  </div>
-                  <div className="liste-produits-commande">
-                    {commande.produits?.slice(0, 3).map((produit, index) => {
-                      const prixUnitaire = produit.prix_vente || produit.prix_unitaire || 0;
-                      const sousTotal = prixUnitaire * (produit.quantite || 0);
-                      
-                      return (
-                        <div key={index} className="produit-commande">
-                          <span className="produit-nom">{produit.nom}</span>
-                          <span className="produit-quantite">× {produit.quantite}</span>
-                          <span className={`produit-type ${produit.type_vente}`}>
-                            {produit.type_vente === 'détail' ? 
-                              <FontAwesomeIcon icon={faShoppingBag} /> : 
-                              <FontAwesomeIcon icon={faPallet} />
-                            }
-                          </span>
-                          <span className="produit-prix-unitaire">{prixUnitaire.toLocaleString()} FCFA</span>
-                          <span className="produit-sous-total-preview">{sousTotal.toLocaleString()} FCFA</span>
-                        </div>
-                      );
-                    })}
-                    {commande.produits?.length > 3 && (
-                      <div className="plus-produits">
-                        + {commande.produits.length - 3} autre(s) produit(s) - 
-                        Total: {commande.total_ttc?.toLocaleString()} FCFA
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="commande-actions">
-                  <button 
-                    className="bouton-details"
-                    onClick={() => ouvrirDetails(commande)}
-                  >
-                    <FontAwesomeIcon icon={faEye} className="bouton-details-icone" />
-                    Voir détails complets
-                  </button>
-                </div>
-              </div>
-            );
-          })
         )}
       </div>
 
-      {/* Résumé des filtres */}
-      {commandesFiltrees.length > 0 && (
-        <div className="resume-filtres">
-          <p>
-            <FontAwesomeIcon icon={faChartBar} className="resume-icone" />
-            Affichage de <strong>{commandesFiltrees.length}</strong> commande(s) sur {commandesAffichees.length} total
-            {filtreStatut !== 'tous' && ` • Statut: ${filtreStatut}`}
-            {filtreTypeVente !== 'tous' && ` • Type: ${filtreTypeVente}`}
-            {filtreDate !== 'tous' && ` • Période: ${filtreDate}`}
-            {recherche && ` • Recherche: "${recherche}"`}
-          </p>
+      <div className="flex justify-between items-center mb-3">
+        <div className="text-sm text-gray-600">
+          Total: <span className="font-bold">{pagination.totalItems}</span> commandes
         </div>
-      )}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-600">Afficher:</span>
+          <select
+            value={pagination.itemsPerPage}
+            onChange={(e) => changeItemsPerPage(Number(e.target.value))}
+            className="px-2 py-1 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <option value={10}>10</option>
+            <option value={20}>20</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+          </select>
+          <span className="text-xs text-gray-600">
+            {pagination.totalItems > 0 ? `${startIndex}-${endIndex} sur ${pagination.totalItems}` : '0 élément'}
+          </span>
+        </div>
+      </div>
 
-      {/* Modal des détails */}
-      {modalOuvert && commandeSelectionnee && (
-        <div className="modal-overlay" onClick={fermerDetails}>
-          <div className="modal-contenu" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-entete">
-              <h2>
-                <FontAwesomeIcon icon={faReceipt} className="modal-icone" />
-                Détails complets de la commande
-              </h2>
-              <button className="bouton-fermer" onClick={fermerDetails}>
+      <div className="bg-white rounded-lg shadow border border-gray-200">
+        {loading && commandes.length === 0 ? (
+          <div className="p-8 text-center">
+            <FontAwesomeIcon icon={faSpinner} className="animate-spin text-2xl text-blue-600 mb-2" />
+            <p className="text-sm text-gray-600">Chargement des commandes...</p>
+          </div>
+        ) : commandes.length === 0 ? (
+          <div className="p-8 text-center">
+            <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gray-100 flex items-center justify-center">
+              <FontAwesomeIcon icon={faBox} className="text-xl text-gray-400" />
+            </div>
+            <p className="text-sm text-gray-600 mb-3">Aucune commande trouvée</p>
+            <button
+              onClick={reinitialiserFiltres}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
+            >
+              Réinitialiser
+            </button>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-200">
+            {commandes.map(commande => (
+              <div key={commande.id} className="p-3 hover:bg-gray-50">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <FontAwesomeIcon icon={faFileInvoiceDollar} className="text-blue-600 text-xs" />
+                      <span className="text-sm font-semibold text-gray-900">{commande.numero_commande}</span>
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${getStatutCouleur(commande.statut)}`}>
+                        {getStatutIcone(commande.statut)}
+                        <span className="text-xs">
+                          {commande.statut === 'en_attente_paiement' ? 'Attente' : 
+                           commande.statut === 'complétée' ? 'Validée' : 
+                           commande.statut === 'annulée' ? 'Annulée' : commande.statut}
+                        </span>
+                      </span>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${getTypeVenteCouleur(commande.type_vente)}`}>
+                        {commande.type_vente === 'gros' ? 'Gros' : 
+                         commande.type_vente === 'mixte' ? 'Mixte' : 'Détail'}
+                      </span>
+                    </div>
+                    
+                    <div className="flex items-center gap-3 text-xs text-gray-600 mb-1 flex-wrap">
+                      <span className="flex items-center gap-1">
+                        <FontAwesomeIcon icon={faUser} className="text-gray-400" />
+                        {commande.client?.nom || 'Client'}
+                      </span>
+                      {commande.client?.telephone && (
+                        <span className="flex items-center gap-1">
+                          <FontAwesomeIcon icon={faPhone} className="text-gray-400" />
+                          {commande.client.telephone}
+                        </span>
+                      )}
+                      <span className="flex items-center gap-1">
+                        <FontAwesomeIcon icon={faCalendarAlt} className="text-gray-400" />
+                        {formaterDate(commande.date)}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-gray-600">
+                        {commande.produits?.length || 0} produit(s)
+                      </span>
+                      {(commande.tva_appliquee || commande.tva > 0) ? (
+                        <span className="text-green-600 text-xs flex items-center gap-1">
+                          <FontAwesomeIcon icon={faCheckCircle} className="text-xs" />
+                          TVA 18%
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 text-xs flex items-center gap-1">
+                          <FontAwesomeIcon icon={faTimesCircle} className="text-xs" />
+                          Sans TVA
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+                    <div className="text-base font-bold text-gray-900">
+                      {formaterMontant(commande.total_ttc || commande.montant_ttc || commande.total)} FCFA
+                    </div>
+                    <button
+                      onClick={() => ouvrirDetails(commande)}
+                      className="mt-1 inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-50 text-blue-600 rounded hover:bg-blue-100"
+                    >
+                      <FontAwesomeIcon icon={faEye} />
+                      Détails
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {commandes.length > 0 && (
+          <div className="mt-4 flex flex-col items-center gap-3 pb-4 pt-3 border-t border-gray-200">
+            <div className="text-xs text-gray-600">
+              Page {pagination.currentPage} / {pagination.totalPages} • {pagination.totalItems} commandes
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={prevPage}
+                disabled={pagination.currentPage === 1}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                  pagination.currentPage === 1
+                    ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
+                    : 'bg-white border-gray-200 text-gray-700 hover:border-[#472ead] hover:bg-[#472ead]/5'
+                }`}
+              >
+                Précédent
+              </button>
+
+              {getPageNumbers().map((item, index) => {
+                if (item === '...') {
+                  return (
+                    <span 
+                      key={`dots-${index}`} 
+                      className="px-3 py-1.5 text-xs text-gray-500"
+                    >
+                      ...
+                    </span>
+                  );
+                }
+
+                const page = parseInt(item);
+                const isActive = pagination.currentPage === page;
+
+                return (
+                  <button
+                    key={page}
+                    onClick={() => goToPage(page)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                      isActive
+                        ? 'bg-[#472ead] border-[#472ead] text-white'
+                        : 'bg-white border-gray-200 text-gray-700 hover:border-[#472ead] hover:bg-[#472ead]/5'
+                    }`}
+                  >
+                    {page}
+                  </button>
+                );
+              })}
+
+              <button
+                onClick={nextPage}
+                disabled={pagination.currentPage === pagination.totalPages}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                  pagination.currentPage === pagination.totalPages
+                    ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
+                    : 'bg-white border-gray-200 text-gray-700 hover:border-[#472ead] hover:bg-[#472ead]/5'
+                }`}
+              >
+                Suivant
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {modalOuvert && donneesModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={fermerDetails}></div>
+          
+          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-4 border-b sticky top-0 bg-white">
+              <div className="flex items-center gap-2">
+                <FontAwesomeIcon icon={faReceipt} className="text-blue-600" />
+                <h3 className="text-lg font-semibold">Détails de la commande</h3>
+                <span className="text-sm text-gray-600">{donneesModal.numero_commande}</span>
+              </div>
+              <button onClick={fermerDetails} className="text-gray-400 hover:text-gray-600">
                 <FontAwesomeIcon icon={faTimes} />
               </button>
             </div>
-            
-            <div className="modal-corps">
-              {/* Informations générales */}
-              <div className="section-modal">
-                <h3>
-                  <FontAwesomeIcon icon={faFileInvoiceDollar} />
-                  Informations de la commande
-                </h3>
-                <div className="info-grid">
-                  <div className="info-item">
-                    <strong>Numéro:</strong>
-                    <span>{commandeSelectionnee.numero_commande}</span>
-                  </div>
-                  <div className="info-item">
-                    <strong>Date:</strong>
-                    <span>{formaterDate(commandeSelectionnee.date)}</span>
-                  </div>
-                  <div className="info-item">
-                    <strong>Statut:</strong>
-                    <span className={`statut-commande ${getStatutClasse(commandeSelectionnee.statut)}`}>
-                      {getStatutIcone(commandeSelectionnee.statut)} {commandeSelectionnee.statut}
-                    </span>
-                  </div>
-                  <div className="info-item">
-                    <strong>Vendeur:</strong>
-                    <span>
-                      { (commandeSelectionnee.vendeur && commandeSelectionnee.vendeur !== 'Vendeur Principal')
-                          ? commandeSelectionnee.vendeur
-                          : (sellerName || 'Non spécifié')
-                      }
-                    </span>
-                  </div>
-                  <div className="info-item">
-                    <strong>Type(s) de vente:</strong>
-                    <span>
-                      {commandeSelectionnee.types_vente && Array.isArray(commandeSelectionnee.types_vente) 
-                        ? commandeSelectionnee.types_vente.map(type => (
-                            <span key={type} className={`badge-type ${type}`} style={{marginLeft: '5px'}}>
-                              {type === 'détail' ? 'Détail' : 'Gros'}
-                            </span>
-                          ))
-                        : 'Détail'
-                      }
-                    </span>
-                  </div>
-                </div>
-              </div>
 
-              {/* Informations client */}
-              <div className="section-modal">
-                <h3>
-                  <FontAwesomeIcon icon={faUser} />
-                  Informations client
-                </h3>
-                <div className="info-grid">
-                  <div className="info-item">
-                    <strong>Nom:</strong>
-                    <span>{commandeSelectionnee.client?.nom || 'Non spécifié'}</span>
-                  </div>
-                  <div className="info-item">
-                    <strong>Téléphone:</strong>
-                    <span>{commandeSelectionnee.client?.telephone || 'Non spécifié'}</span>
-                  </div>
-                  <div className="info-item full-width">
-                    <strong>Adresse:</strong>
-                    <span>{commandeSelectionnee.client?.adresse || 'Non spécifié'}</span>
-                  </div>
+            <div className="p-4 space-y-4">
+              {detailsLoading ? (
+                <div className="py-8 text-center">
+                  <FontAwesomeIcon icon={faSpinner} className="animate-spin text-2xl text-blue-600 mb-2" />
+                  <p className="text-sm text-gray-600">Chargement...</p>
                 </div>
-              </div>
-
-              {/* Détails des produits */}
-              <div className="section-modal">
-                <h3>
-                  <FontAwesomeIcon icon={faList} />
-                  Produits commandés ({commandeSelectionnee.produits?.length || 0})
-                </h3>
-                <div className="tableau-produits">
-                  <div className="entete-tableau">
-                    <div className="colonne-produit">Produit</div>
-                    <div className="colonne-reference">Référence</div>
-                    <div className="colonne-type">Type</div>
-                    <div className="colonne-quantite">Quantité</div>
-                    <div className="colonne-prix">Prix unitaire</div>
-                    <div className="colonne-total">Sous-total</div>
-                  </div>
-                  {commandeSelectionnee.produits?.map((produit, index) => {
-                    const prixUnitaire = produit.prix_vente || produit.prix_unitaire || 0;
-                    const sousTotal = prixUnitaire * (produit.quantite || 0);
-                    return (
-                      <div key={index} className="ligne-produit">
-                        <div className="colonne-produit"><strong>{produit.nom}</strong></div>
-                        <div className="colonne-reference">{produit.reference || 'N/A'}</div>
-                        <div className="colonne-type">
-                          <span className={`badge-type ${produit.type_vente}`}>
-                            {produit.type_vente === 'détail' ? 
-                              <><FontAwesomeIcon icon={faShoppingBag} /> Détail</> : 
-                              <><FontAwesomeIcon icon={faPallet} /> Gros</>
-                            }
-                          </span>
-                        </div>
-                        <div className="colonne-quantite">{produit.quantite}</div>
-                        <div className="colonne-prix">{prixUnitaire.toLocaleString()} FCFA</div>
-                        <div className="colonne-total"><strong>{sousTotal.toLocaleString()} FCFA</strong></div>
+              ) : (
+                <>
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <h4 className="text-sm font-semibold mb-2">Informations</h4>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <span className="text-gray-600">Statut:</span>{' '}
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${getStatutCouleur(donneesModal.statut)}`}>
+                          {getStatutIcone(donneesModal.statut)}
+                          {donneesModal.statut}
+                        </span>
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
+                      <div>
+                        <span className="text-gray-600">Type:</span>{' '}
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${getTypeVenteCouleur(donneesModal.type_vente)}`}>
+                          {donneesModal.type_vente}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Date:</span>{' '}
+                        <span>{formaterDate(donneesModal.date)}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Vendeur:</span>{' '}
+                        <span>{donneesModal.vendeur}</span>
+                      </div>
+                    </div>
+                  </div>
 
-              {/* Totaux */}
-              <div className="section-modal">
-                <h3>
-                  <FontAwesomeIcon icon={faCalculator} />
-                  Totaux de la commande
-                </h3>
-                <div className="totaux-commande">
-                  <div className="ligne-total-modal">
-                    <span>Total HT:</span>
-                    <span>{commandeSelectionnee.total_ht?.toLocaleString() || '0'} FCFA</span>
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <h4 className="text-sm font-semibold mb-2">Client</h4>
+                    <div className="space-y-1 text-sm">
+                      <p><span className="text-gray-600">Nom:</span> {donneesModal.client?.nom || 'Non spécifié'}</p>
+                      {donneesModal.client?.telephone && (
+                        <p><span className="text-gray-600">Tél:</span> {donneesModal.client.telephone}</p>
+                      )}
+                      {donneesModal.client?.adresse && (
+                        <p><span className="text-gray-600">Adresse:</span> {donneesModal.client.adresse}</p>
+                      )}
+                    </div>
                   </div>
-                  <div className="ligne-total-modal">
-                    <span>TVA (18%):</span>
-                    <span>{commandeSelectionnee.tva?.toLocaleString() || '0'} FCFA</span>
+
+                  <div>
+                    <h4 className="text-sm font-semibold mb-2">Produits ({donneesModal.produits?.length || 0})</h4>
+                    {renderProduitsTable()}
                   </div>
-                  <div className="ligne-total-modal total-ttc-modal">
-                    <strong>Total TTC:</strong>
-                    <strong>{commandeSelectionnee.total_ttc?.toLocaleString() || '0'} FCFA</strong>
+
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Total HT:</span>
+                        <span className="font-medium">{formaterMontant(donneesModal.total_ht || donneesModal.montant_ht)} FCFA</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 flex items-center gap-1">
+                          TVA (18%):
+                        </span>
+                        <span className="font-medium">{formaterMontant(donneesModal.tva)} FCFA</span>
+                      </div>
+                      <div className="flex justify-between pt-2 border-t font-bold">
+                        <span>Total TTC:</span>
+                        <span className="text-blue-600">{formaterMontant(donneesModal.total_ttc || donneesModal.montant_ttc)} FCFA</span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
+                </>
+              )}
             </div>
 
-            <div className="modal-pied">
-              <button className="bouton-fermer-modal" onClick={fermerDetails}>
-                <FontAwesomeIcon icon={faTimes} className="bouton-icone" />
+            <div className="flex justify-end p-4 border-t bg-gray-50">
+              <button onClick={fermerDetails} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
                 Fermer
               </button>
             </div>
           </div>
         </div>
       )}
+
+      <style jsx>{`
+        @keyframes slide-in {
+          from { transform: translateX(100%); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
+        .animate-slide-in {
+          animation: slide-in 0.3s ease-out;
+        }
+      `}</style>
     </div>
   );
 };

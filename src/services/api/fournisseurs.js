@@ -1,6 +1,4 @@
-/**
- * 🏪 Fournisseurs API
- */
+// src/services/api/fournisseurs.js
 import httpClient from '../http/client';
 
 const ENDPOINTS = {
@@ -59,6 +57,20 @@ export const fournisseursAPI = {
     } catch (error) {
       console.error('❌ Erreur delete fournisseur:', error.response?.data || error.message);
       throw error;
+    }
+  },
+
+  // Nouvelle méthode pour obtenir le nombre total de fournisseurs
+  getNombre: async () => {
+    try {
+      const response = await httpClient.get('/nombre-fournisseurs');
+      // La réponse peut être un nombre ou un objet { count: ... }
+      if (typeof response.data === 'number') return response.data;
+      if (response.data && typeof response.data.count === 'number') return response.data.count;
+      return parseInt(response.data, 10) || 0;
+    } catch (error) {
+      console.error('❌ Erreur getNombre fournisseurs:', error.message);
+      return 0;
     }
   },
 };
