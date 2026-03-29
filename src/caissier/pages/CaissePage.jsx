@@ -266,15 +266,24 @@ const CaissePage = () => {
 
     setIsProcessingPayment(true);
     try {
+      const montantDu = Number(
+        selectedTicket.montant_a_encaisser ?? selectedTicket.reste_du ?? selectedTicket.total_ttc ?? 0
+      );
+      const donneEspeces = parseFloat(paymentData.montantDonneEspeces) || 0;
       const ticketEncaisse = {
         ...selectedTicket,
         moyen_paiement: moyenPaiementFinal,
         montant_paye: montant,
         statut: 'encaissé',
+        ...(moyenPaiementFinal === 'especes'
+          ? {
+              monnaie_recue: donneEspeces,
+              monnaie_rendue: Math.max(0, donneEspeces - montantDu),
+            }
+          : {}),
       };
 
       // Appel API pour créer le paiement
-      console.log(montant);
       
       await caissierApi.creerPaiement(selectedTicket.commande_id, {
         type_paiement: moyenPaiementFinal || 'especes',
@@ -301,11 +310,21 @@ const CaissePage = () => {
       // Vérifier si le paiement a quand même été créé (code 200 ou 201)
       const statusCode = error.response?.status;
       if (statusCode === 200 || statusCode === 201) {
+        const montantDu = Number(
+          selectedTicket.montant_a_encaisser ?? selectedTicket.reste_du ?? selectedTicket.total_ttc ?? 0
+        );
+        const donneEspeces = parseFloat(paymentData.montantDonneEspeces) || 0;
         const ticketEncaisse = {
           ...selectedTicket,
           moyen_paiement: moyenPaiementFinal,
           montant_paye: montant,
           statut: 'encaissé',
+          ...(moyenPaiementFinal === 'especes'
+            ? {
+                monnaie_recue: donneEspeces,
+                monnaie_rendue: Math.max(0, donneEspeces - montantDu),
+              }
+            : {}),
         };
         toast.success('Encaissement réussi', {
           description: `Paiement de ${formatCurrency(montant)} enregistré`,
