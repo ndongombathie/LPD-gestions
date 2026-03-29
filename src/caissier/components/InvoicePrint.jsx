@@ -1,6 +1,14 @@
 import React from 'react';
 import { formatCurrency, formatDateTime } from '../../utils/formatters';
 
+/** Espèces : libellé API `especes` ou variantes */
+const isPaiementEspeces = (m) =>
+  m === 'especes' ||
+  m === 'Espèces' ||
+  String(m || '')
+    .toLowerCase()
+    .replace(/\s/g, '') === 'especes';
+
 /**
  * Composant pour l'impression de facture
  * À utiliser avec window.print() pour l'impression
@@ -116,11 +124,23 @@ const InvoicePrint = ({ ticket, boutique = null, caissierNom = '' }) => {
              ticket.moyen_paiement === 'om' ? 'Orange Money' :
              ticket.moyen_paiement === 'cheque' ? 'Chèque' : 'Autre'}
           </p>
-          {ticket.montant_paye && (
+          {isPaiementEspeces(ticket.moyen_paiement) && (
+            <>
+              <p className="text-sm text-gray-600">
+                <span className="font-semibold">Monnaie reçue:</span>{' '}
+                {formatCurrency(ticket.monnaie_recue ?? ticket.montant_paye ?? 0)}
+              </p>
+              <p className="text-sm text-gray-600">
+                <span className="font-semibold">Monnaie rendue:</span>{' '}
+                {formatCurrency(ticket.monnaie_rendue ?? 0)}
+              </p>
+            </>
+          )}
+          {!isPaiementEspeces(ticket.moyen_paiement) && ticket.montant_paye ? (
             <p className="text-sm text-gray-600">
               <span className="font-semibold">Montant payé:</span> {formatCurrency(ticket.montant_paye)}
             </p>
-          )}
+          ) : null}
         </div>
 
         {/* Pied de page */}
@@ -302,14 +322,7 @@ export const printInvoice = (ticket, boutique = null, caissierNom = null) => {
 
         <div class="totals">
           <div class="totals-table">
-            <div class="totals-row">
-              <span>Total HT:</span>
-              <span style="font-weight: bold;">${formatCurrency(ticket.total_ht)}</span>
-            </div>
-            <div class="totals-row">
-              <span>TVA (18%):</span>
-              <span style="font-weight: bold;">${formatCurrency(ticket.tva)}</span>
-            </div>
+
             <div class="totals-row total-final">
               <span>Total TTC:</span>
               <span style="color: #472EAD;">${formatCurrency(ticket.total_ttc)}</span>
@@ -327,11 +340,18 @@ export const printInvoice = (ticket, boutique = null, caissierNom = null) => {
               ticket.moyen_paiement === 'cheque' ? 'Chèque' : 'Autre'
             }
           </p>
-          ${ticket.montant_paye ? `
+          ${isPaiementEspeces(ticket.moyen_paiement) ? `
+          <p style="font-size: 14px;">
+            <strong>Monnaie reçue:</strong> ${formatCurrency(ticket.monnaie_recue ?? ticket.montant_paye ?? 0)}
+          </p>
+          <p style="font-size: 14px;">
+            <strong>Monnaie rendue:</strong> ${formatCurrency(ticket.monnaie_rendue ?? 0)}
+          </p>
+          ` : (ticket.montant_paye ? `
           <p style="font-size: 14px;">
             <strong>Montant payé:</strong> ${formatCurrency(ticket.montant_paye)}
           </p>
-          ` : ''}
+          ` : '')}
         </div>
 
         <div class="footer">

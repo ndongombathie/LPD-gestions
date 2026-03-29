@@ -266,15 +266,24 @@ const CaissePage = () => {
 
     setIsProcessingPayment(true);
     try {
+      const montantDu = Number(
+        selectedTicket.montant_a_encaisser ?? selectedTicket.reste_du ?? selectedTicket.total_ttc ?? 0
+      );
+      const donneEspeces = parseFloat(paymentData.montantDonneEspeces) || 0;
       const ticketEncaisse = {
         ...selectedTicket,
         moyen_paiement: moyenPaiementFinal,
         montant_paye: montant,
         statut: 'encaissé',
+        ...(moyenPaiementFinal === 'especes'
+          ? {
+              monnaie_recue: donneEspeces,
+              monnaie_rendue: Math.max(0, donneEspeces - montantDu),
+            }
+          : {}),
       };
 
       // Appel API pour créer le paiement
-      console.log(montant);
       
       await caissierApi.creerPaiement(selectedTicket.commande_id, {
         type_paiement: moyenPaiementFinal || 'especes',
@@ -301,11 +310,21 @@ const CaissePage = () => {
       // Vérifier si le paiement a quand même été créé (code 200 ou 201)
       const statusCode = error.response?.status;
       if (statusCode === 200 || statusCode === 201) {
+        const montantDu = Number(
+          selectedTicket.montant_a_encaisser ?? selectedTicket.reste_du ?? selectedTicket.total_ttc ?? 0
+        );
+        const donneEspeces = parseFloat(paymentData.montantDonneEspeces) || 0;
         const ticketEncaisse = {
           ...selectedTicket,
           moyen_paiement: moyenPaiementFinal,
           montant_paye: montant,
           statut: 'encaissé',
+          ...(moyenPaiementFinal === 'especes'
+            ? {
+                monnaie_recue: donneEspeces,
+                monnaie_rendue: Math.max(0, donneEspeces - montantDu),
+              }
+            : {}),
         };
         toast.success('Encaissement réussi', {
           description: `Paiement de ${formatCurrency(montant)} enregistré`,
@@ -669,15 +688,27 @@ const CaissePage = () => {
                         </div>
                       </div>
                     )}
-                    <div className="mt-2 pt-2 border-t border-gray-200">
-                      <div className="flex flex-wrap gap-3 text-xs text-gray-500">
-                        <span>THT: {formatCurrency(ticket.total_ht)}</span>
-                        <span>•</span>
-                        <span>TVA: {formatCurrency(ticket.tva)}</span>
-                        <span>•</span>
-                        <span className="font-semibold text-gray-700">TTC: {formatCurrency(ticket.total_ttc)}</span>
-                      </div>
-                    </div>
+
+                    {
+                      ticket.tva_applicable ? (
+                        <div className="mt-2 pt-2 border-t border-gray-200">
+                          <div className="flex flex-wrap gap-3 text-xs text-gray-500">
+                            <span>THT: {formatCurrency(ticket.total_ht)}</span>
+                            <span>•</span>
+                            <span>TVA: {formatCurrency(ticket.tva)}</span>
+                            <span>•</span>
+                            <span className="font-semibold text-gray-700">
+                              TTC: {formatCurrency(ticket.total_ttc)}
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="font-semibold text-gray-700">
+                          TTC: {formatCurrency(ticket.total_ttc)}
+                        </span>
+                      )
+                    }
+                
                   </div>
                   <div className="flex flex-row gap-2 flex-shrink-0">
                     <Button
@@ -788,11 +819,7 @@ const CaissePage = () => {
             <Button 
               variant="primary" 
               onClick={handlePaymentSubmit}
-              disabled={
-                isProcessingPayment ||
-                (paymentData.moyenPaiement === 'especes' &&
-                  (parseFloat(paymentData.montantDonneEspeces) || 0) != (selectedTicket?.montant_a_encaisser || 0))
-              }
+
               className="bg-[#472EAD] hover:bg-[#3d2888] text-white font-semibold shadow-md hover:shadow-lg w-full py-3 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isProcessingPayment ? (

@@ -239,7 +239,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
     channel.listen('.transfert.validee', listener);
     return () => {
         try {
-            channel.stopListening('transfert.validee');
+            channel.stopListening('.transfert.validee');
             echo.leave(`boutique.${boutiqueId}`);
             addNotification(
                 'info',
