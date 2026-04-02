@@ -29,6 +29,9 @@ const CaissePage = () => {
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [ticketToCancel, setTicketToCancel] = useState(null);
   const [isCancellingTicket, setIsCancellingTicket] = useState(false);
+  /** Après encaissement réussi : modal Imprimer / Annuler (remplace le toast avec action) */
+  const [isFactureModalOpen, setIsFactureModalOpen] = useState(false);
+  const [ticketFacture, setTicketFacture] = useState(null);
   const [filterText, setFilterText] = useState('');
   const [showArticleDetails, setShowArticleDetails] = useState({});
   const [currentPage, setCurrentPage] = useState(1);
@@ -290,17 +293,10 @@ const CaissePage = () => {
         montant: selectedTicket.montant_a_encaisser || 0,
       });
 
-      toast.success('Encaissement réussi', {
-        description: `Paiement de ${formatCurrency(montant)} enregistré`,
-        action: {
-          label: 'Imprimer',
-          onClick: () => printInvoice(ticketEncaisse),
-        }
-      });
-
-      // Fermer le modal immédiatement
       setIsPaymentModalOpen(false);
       setSelectedTicket(null);
+      setTicketFacture(ticketEncaisse);
+      setIsFactureModalOpen(true);
 
       // Recharger les tickets pour que le ticket disparaisse immédiatement
       await fetchTicketsSafe(currentPage, filterText.trim());
@@ -326,15 +322,10 @@ const CaissePage = () => {
               }
             : {}),
         };
-        toast.success('Encaissement réussi', {
-          description: `Paiement de ${formatCurrency(montant)} enregistré`,
-          action: {
-            label: 'Imprimer',
-            onClick: () => printInvoice(ticketEncaisse),
-          }
-        });
         setIsPaymentModalOpen(false);
         setSelectedTicket(null);
+        setTicketFacture(ticketEncaisse);
+        setIsFactureModalOpen(true);
         await fetchTicketsSafe(currentPage, filterText.trim());
         // Mettre à jour le compteur de tickets traités
         await fetchDashboardStats();
@@ -736,19 +727,6 @@ const CaissePage = () => {
                       </svg>
                       Annuler
                     </Button>
-                    {ticket.statut === 'encaissé' && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => printInvoice(ticket)}
-                        className="border-2 border-[#472EAD] text-[#472EAD] hover:bg-[#F7F5FF] font-semibold text-xs px-3 py-1.5"
-                      >
-                        <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                        </svg>
-                        Imprimer
-                      </Button>
-                    )}
                   </div>
                 </div>
               </div>
@@ -1035,6 +1013,59 @@ const CaissePage = () => {
             )}
           </div>
         )}
+      </Modal>
+
+      {/* Après encaissement : choix d’impression (remplace le toast vert avec bouton Imprimer) */}
+      <Modal
+        isOpen={isFactureModalOpen}
+        onClose={() => {
+          setIsFactureModalOpen(false);
+          setTicketFacture(null);
+        }}
+        title="Facture"
+        size="md"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setIsFactureModalOpen(false);
+                setTicketFacture(null);
+              }}
+              className="border border-gray-300 font-semibold hover:bg-gray-100"
+            >
+              Annuler
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                if (ticketFacture) printInvoice(ticketFacture);
+                setIsFactureModalOpen(false);
+                setTicketFacture(null);
+              }}
+              className="bg-[#472EAD] hover:bg-[#3d2888] text-white font-semibold shadow-md hover:shadow-lg"
+            >
+              Imprimer
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-gray-700">
+            Encaissement enregistré avec succès. Voulez-vous imprimer la facture&nbsp;?
+          </p>
+          {ticketFacture && (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
+              <p>
+                <span className="font-medium text-gray-800">Ticket :</span> {ticketFacture.numero}
+              </p>
+              <p className="mt-1">
+                <span className="font-medium text-gray-800">Montant :</span>{' '}
+                {formatCurrency(ticketFacture.montant_paye ?? ticketFacture.total_ttc)}
+              </p>
+            </div>
+          )}
+        </div>
       </Modal>
 
       {/* Modal Scanner QR Code */}
