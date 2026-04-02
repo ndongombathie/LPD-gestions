@@ -247,9 +247,18 @@ const CaissePage = () => {
   const handlePaymentSubmit = async () => {
     if (!selectedTicket || isProcessingPayment) return;
 
-    const resteDu = selectedTicket.reste_du || selectedTicket.total_ttc;
-    // Le montant enregistré est toujours le reste dû de la commande (non modifiable)
-    const montant = resteDu;
+    /**
+     * Montant réellement encaissé sur cette opération (aligné sur l’API).
+     * - Paiement complet : souvent = TTC ou reste dû final.
+     * - Paiement partiel / tranche : = montant_a_encaisser (pas le TTC ni tout le reste dû global si différent).
+     */
+    const montantEncaisseOperation = (() => {
+      const ma = Number(selectedTicket.montant_a_encaisser);
+      if (Number.isFinite(ma) && ma > 0) return ma;
+      const r = Number(selectedTicket.reste_du);
+      if (Number.isFinite(r) && r > 0) return r;
+      return Number(selectedTicket.total_ttc || 0);
+    })();
 
     // En espèces : le montant donné doit être au moins égal au montant à payer
     if (paymentData.moyenPaiement === 'especes') {
@@ -276,7 +285,7 @@ const CaissePage = () => {
       const ticketEncaisse = {
         ...selectedTicket,
         moyen_paiement: moyenPaiementFinal,
-        montant_paye: montant,
+        montant_paye: montantEncaisseOperation,
         statut: 'encaissé',
         ...(moyenPaiementFinal === 'especes'
           ? {
@@ -313,7 +322,7 @@ const CaissePage = () => {
         const ticketEncaisse = {
           ...selectedTicket,
           moyen_paiement: moyenPaiementFinal,
-          montant_paye: montant,
+          montant_paye: montantEncaisseOperation,
           statut: 'encaissé',
           ...(moyenPaiementFinal === 'especes'
             ? {
@@ -947,8 +956,8 @@ const CaissePage = () => {
                   type="number"
                   min="0"
                   step="1"
-                  value={paymentData.montant_a_encaisser}
-                  onChange={(e) => setPaymentData(prev => ({ ...prev, montantDonneEspeces: e.target.value }))}
+                  value={paymentData.montantDonneEspeces}
+                  onChange={(e) => setPaymentData((prev) => ({ ...prev, montantDonneEspeces: e.target.value }))}
                   placeholder="Ex: 15000"
                   className="w-full"
                 />
