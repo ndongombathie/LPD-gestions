@@ -251,9 +251,9 @@ const ProductListTab = ({
 };
 
 // =========================================================================
-// ONGLET AJUSTEMENT
+// ONGLET AJUSTEMENT (modifié)
 // =========================================================================
-const AdjustmentTab = ({ onAdjust }) => {
+const AdjustmentTab = ({ onAdjust, refreshKey }) => {
   const [subTab, setSubTab] = useState("rupture");
   const [searchTerm, setSearchTerm] = useState("");
   const [tempSearchTerm, setTempSearchTerm] = useState("");
@@ -275,9 +275,15 @@ const AdjustmentTab = ({ onAdjust }) => {
     fetchCounts();
   }, []);
 
+  // Chargement initial et quand les filtres changent
   useEffect(() => {
     fetchProduitsParStatut(subTab, currentPage, searchTerm);
-  }, [subTab, currentPage, searchTerm, fetchProduitsParStatut]);
+  }, [subTab, currentPage, searchTerm]);
+
+  // Rechargement forcé après un ajustement
+  useEffect(() => {
+    fetchProduitsParStatut(subTab, currentPage, searchTerm);
+  }, [refreshKey]);
 
   const handleSearch = () => {
     setSearchTerm(tempSearchTerm);
@@ -683,7 +689,7 @@ const HistoryTab = ({
 };
 
 // =========================================================================
-// ONGLET CATÉGORIES
+// ONGLET CATÉGORIES (inchangé)
 // =========================================================================
 const CategoriesTab = ({ 
   categories, 
@@ -848,6 +854,10 @@ export default function Products() {
   const [nbRupture, setNbRupture] = useState(0);
   const [nbFaible, setNbFaible] = useState(0);
 
+  // Nouveaux états pour le rafraîchissement de l'onglet Ajustement
+  const [adjustmentRefreshKey, setAdjustmentRefreshKey] = useState(0);
+  const [isAdjusting, setIsAdjusting] = useState(false); // pour bloquer double clic
+
   // Hooks
   const {
     products,
@@ -904,7 +914,7 @@ export default function Products() {
         setNbRupture(rupture || 0);
         setNbFaible(faible || 0);
       } catch (error) {
-        
+        // silencieux
       }
     };
     fetchCounts();
@@ -964,7 +974,6 @@ export default function Products() {
       toast.success("Produit supprimé avec succès !");
       setDeleteId(null);
     } catch (error) {
-      
       toast.error("Erreur lors de la suppression du produit.");
     }
   };
@@ -1004,7 +1013,6 @@ export default function Products() {
       }
       closeProductModal();
     } catch (error) {
-      
       toast.error("Erreur lors de l'enregistrement du produit.");
     }
   };
@@ -1038,6 +1046,7 @@ export default function Products() {
       return;
     }
 
+    setIsAdjusting(true);
     try {
       if (adjustAction === "reappro") {
         await reapprovisionner(adjustProduct.id, qty);
@@ -1046,10 +1055,12 @@ export default function Products() {
         await diminuerStock(adjustProduct.id, qty);
         toast.success("Stock diminué avec succès !");
       }
+      setAdjustmentRefreshKey(prev => prev + 1); // Force le rechargement de l'onglet Ajustement
       closeAdjustModal();
     } catch (error) {
-      
       toast.error("Erreur lors de l'ajustement du stock.");
+    } finally {
+      setIsAdjusting(false);
     }
   };
 
@@ -1092,7 +1103,6 @@ export default function Products() {
       }
       closeCategoryModal();
     } catch (error) {
-    
       toast.error("Erreur lors de l'enregistrement de la catégorie.");
     }
   };
@@ -1109,7 +1119,6 @@ export default function Products() {
       setDeleteCategoryId(null);
       toast.success("Catégorie supprimée avec succès !");
     } catch (error) {
-    
       toast.error("Erreur lors de la suppression de la catégorie.");
     }
   };
@@ -1217,6 +1226,7 @@ export default function Products() {
           {activeTab === "ajustement" && (
             <AdjustmentTab
               onAdjust={handleAdjust}
+              refreshKey={adjustmentRefreshKey}   // ← passage de la clé
             />
           )}
           {activeTab === "historique" && (
@@ -1255,7 +1265,7 @@ export default function Products() {
               {modalType === "add" ? "Nouveau Produit" : "Modifier le Produit"}
             </h2>
             <form onSubmit={handleSubmitProduct} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Nom */}
+              {/* ... contenu identique (inchangé) ... */}
               <div>
                 <label className="block text-xs font-semibold text-[#472EAD] mb-1">Nom du produit *</label>
                 <input
@@ -1268,7 +1278,6 @@ export default function Products() {
                 />
               </div>
 
-              {/* Catégorie */}
               <div>
                 <label className="block text-xs font-semibold text-[#472EAD] mb-1">Catégorie *</label>
                 <div className="space-y-2">
@@ -1305,7 +1314,6 @@ export default function Products() {
                 </div>
               </div>
 
-              {/* Fournisseur */}
               <div>
                 <label className="block text-xs font-semibold text-[#472EAD] mb-1">Fournisseur</label>
                 <div className="space-y-2">
@@ -1341,7 +1349,6 @@ export default function Products() {
                 </div>
               </div>
 
-              {/* Code-barre */}
               <div>
                 <label className="block text-xs font-semibold text-[#472EAD] mb-1">Code-barre</label>
                 <input
@@ -1354,7 +1361,6 @@ export default function Products() {
                 />
               </div>
 
-              {/* Prix par carton */}
               <div>
                 <label className="block text-xs font-semibold text-[#472EAD] mb-1">Prix par carton (F)</label>
                 <input
@@ -1368,7 +1374,6 @@ export default function Products() {
                 />
               </div>
 
-              {/* Cartons en stock */}
               <div>
                 <label className="block text-xs font-semibold text-[#472EAD] mb-1">Cartons en stock</label>
                 <input
@@ -1388,7 +1393,6 @@ export default function Products() {
                 )}
               </div>
 
-              {/* Unités par carton */}
               <div>
                 <label className="block text-xs font-semibold text-[#472EAD] mb-1">Unités par carton *</label>
                 <input
@@ -1402,7 +1406,6 @@ export default function Products() {
                 />
               </div>
 
-              {/* Stock minimum */}
               <div>
                 <label className="block text-xs font-semibold text-[#472EAD] mb-1">Stock minimum (cartons)</label>
                 <input
@@ -1416,13 +1419,11 @@ export default function Products() {
                 />
               </div>
 
-              {/* Info stock global */}
               <div className="col-span-full text-sm text-[#472EAD] font-semibold mt-2 flex items-center gap-2 bg-gradient-to-r from-[#F7F5FF] to-[#FFF5F0] p-3 rounded-lg">
                 <FaBoxes />
                 <span>Stock global estimé : {Number(currentProduct.nombre_carton || 0) * Number(currentProduct.unite_carton || 1)} unités</span>
               </div>
 
-              {/* Boutons */}
               <div className="col-span-full flex justify-end gap-3 mt-4">
                 <button type="button" onClick={closeProductModal} className="px-4 py-2 text-sm border rounded hover:bg-slate-50 text-[#472EAD]">Annuler</button>
                 <button type="submit" className="px-4 py-2 text-sm rounded bg-gradient-to-r from-[#472EAD] to-[#F58020] text-white hover:opacity-90 inline-flex items-center gap-2">
@@ -1468,10 +1469,23 @@ export default function Products() {
                 />
               </div>
               <div className="flex justify-end gap-3 pt-2">
-                <button type="button" onClick={closeAdjustModal} className="px-4 py-2 text-sm border rounded hover:bg-slate-50 text-[#472EAD]">Annuler</button>
-                <button type="submit" className={`px-4 py-2 text-sm rounded text-white inline-flex items-center gap-2 ${
-                  adjustAction === "reappro" ? "bg-gradient-to-r from-[#472EAD] to-[#6D5BD0] hover:opacity-90" : "bg-gradient-to-r from-[#F58020] to-[#FFA94D] hover:opacity-90"
-                }`}>
+                <button
+                  type="button"
+                  onClick={closeAdjustModal}
+                  disabled={isAdjusting}
+                  className="px-4 py-2 text-sm border rounded hover:bg-slate-50 text-[#472EAD] disabled:opacity-50"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={isAdjusting}
+                  className={`px-4 py-2 text-sm rounded text-white inline-flex items-center gap-2 ${
+                    adjustAction === "reappro"
+                      ? "bg-gradient-to-r from-[#472EAD] to-[#6D5BD0] hover:opacity-90"
+                      : "bg-gradient-to-r from-[#F58020] to-[#FFA94D] hover:opacity-90"
+                  } ${isAdjusting ? "opacity-50 cursor-not-allowed" : ""}`}
+                >
                   {adjustAction === "reappro" ? (
                     <>
                       <FaArrowUp /><span>Réapprovisionner</span>
