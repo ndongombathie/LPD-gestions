@@ -201,6 +201,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
 
   useEffect(() => {
     chargerProduits();
+    console.log(boutiqueId);
     chargerInfosVendeur();
   }, []);
 
@@ -228,22 +229,18 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
     }
   }, []);
 
+
   useEffect(() => {
     if (!boutiqueId) return;
-
     const channel = echo.private(`boutique.${boutiqueId}`);
-
-    const listener = (e) => {
+    const listener = () => {
         chargerProduits();
     };
-
-    channel.listen('transfert.validee', listener);
-
+    channel.listen('.transfert.validee', listener);
     return () => {
         try {
-            channel.stopListening('transfert.validee');
+            channel.stopListening('.transfert.validee');
             echo.leave(`boutique.${boutiqueId}`);
-
             addNotification(
                 'info',
                 'Désinscription du canal temps réel réussie.'
@@ -313,9 +310,9 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
         const prixGros = produit.prix_vente_gros || produit.prix_unite_carton || Math.round(prixDetail * 0.8);
         
         return {
-          id: produit.produit.id,
+          id: produit.id,
           nom: produit.produit.nom,
-          code_barre: produit.produit.code_barre || '',
+          code_barre: produit.produit.code || '',
           prix_vente_detail: prixDetail,
           prix_vente_gros: prixGros,
           prix_achat: produit.prix_achat || 0,
@@ -812,7 +809,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
         const typeVenteArticle = item.type_vente || normaliserTypeVente(typeVenteGlobal);
         
         const itemData = {
-          produit_id: item.id,
+          id: item.id,
           nom: item.nom,
           code_barre: item.code_barre,
           quantite: quantite,
@@ -901,6 +898,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
       let commandeCreee = false;
 
       try {
+        console.log(commandeData)
         apiResponse = await commandesAPI.create(commandeData);
         commandeCreee = true;
       } catch (error) {
@@ -959,9 +957,9 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
           },
           
           items: panier.filter(item => item).map(item => ({
-            produit_id: item.id,
+            id: item.id,
             nom: item.nom,
-            code_barre: item.code_barre,
+            code_barre: item.code,
             quantite: item.quantite,
             type_vente: item.type_vente,
             type_vente_affichage: item.type_vente === 'detail' ? 'Détail' : 'Gros',
@@ -1030,9 +1028,9 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
           },
           
           items: panier.filter(item => item).map(item => ({
-            produit_id: item.id,
+            id: item.id,
             nom: item.nom,
-            code_barre: item.code_barre,
+            code_barre: item.code,
             quantite: item.quantite,
             type_vente: item.type_vente,
             type_vente_affichage: item.type_vente === 'detail' ? 'Détail' : 'Gros',
@@ -1134,7 +1132,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
         vendeur: getVendeurApiData(),
         
         items: panier.filter(item => item).map(item => ({
-          produit_id: item.id,
+          id: item.id,
           nom: item.nom,
           code_barre: item.code_barre,
           quantite: item.quantite,

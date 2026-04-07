@@ -740,7 +740,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
             );
 
             return {
-              id: produit.id,
+              id: t.id,
 
               // 🔥 CODE BARRE UNIQUEMENT
               ref: produit.code ?? null,
@@ -760,6 +760,7 @@ function CommandeForm({ clientInitial, onCreate, toast }) {
           });
 
         setCatalogue(normalized);
+        console.log(normalized)
         setHasLoadedProduits(true);
       } catch (error) {
         logger.error("produits.load.all", error);
@@ -2112,7 +2113,7 @@ export default function Commandes() {
         type_vente: typeVenteGlobal,
         tva_appliquee: commandeDraft.appliquerTVA ? true : false,
         items: commandeDraft.lignes.map((l) => ({
-          produit_id: l.produitId,
+          id: l.produitId,
           quantite: l.qte,
           prix_unitaire: l.prixUnitaire,
           mode_vente: l.modeVente,

@@ -29,6 +29,9 @@ const CaissePage = () => {
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [ticketToCancel, setTicketToCancel] = useState(null);
   const [isCancellingTicket, setIsCancellingTicket] = useState(false);
+  /** Après encaissement réussi : modal Imprimer / Annuler (remplace le toast avec action) */
+  const [isFactureModalOpen, setIsFactureModalOpen] = useState(false);
+  const [ticketFacture, setTicketFacture] = useState(null);
   const [filterText, setFilterText] = useState('');
   const [showArticleDetails, setShowArticleDetails] = useState({});
   const [currentPage, setCurrentPage] = useState(1);
@@ -244,9 +247,18 @@ const CaissePage = () => {
   const handlePaymentSubmit = async () => {
     if (!selectedTicket || isProcessingPayment) return;
 
-    const resteDu = selectedTicket.reste_du || selectedTicket.total_ttc;
-    // Le montant enregistré est toujours le reste dû de la commande (non modifiable)
-    const montant = resteDu;
+    /**
+     * Montant réellement encaissé sur cette opération (aligné sur l’API).
+     * - Paiement complet : souvent = TTC ou reste dû final.
+     * - Paiement partiel / tranche : = montant_a_encaisser (pas le TTC ni tout le reste dû global si différent).
+     */
+    const montantEncaisseOperation = (() => {
+      const ma = Number(selectedTicket.montant_a_encaisser);
+      if (Number.isFinite(ma) && ma > 0) return ma;
+      const r = Number(selectedTicket.reste_du);
+      if (Number.isFinite(r) && r > 0) return r;
+      return Number(selectedTicket.total_ttc || 0);
+    })();
 
     // En espèces : le montant donné doit être au moins égal au montant à payer
     if (paymentData.moyenPaiement === 'especes') {
@@ -266,32 +278,34 @@ const CaissePage = () => {
 
     setIsProcessingPayment(true);
     try {
+      const montantDu = Number(
+        selectedTicket.montant_a_encaisser ?? selectedTicket.reste_du ?? selectedTicket.total_ttc ?? 0
+      );
+      const donneEspeces = parseFloat(paymentData.montantDonneEspeces) || 0;
       const ticketEncaisse = {
         ...selectedTicket,
         moyen_paiement: moyenPaiementFinal,
-        montant_paye: montant,
+        montant_paye: montantEncaisseOperation,
         statut: 'encaissé',
+        ...(moyenPaiementFinal === 'especes'
+          ? {
+              monnaie_recue: donneEspeces,
+              monnaie_rendue: Math.max(0, donneEspeces - montantDu),
+            }
+          : {}),
       };
 
       // Appel API pour créer le paiement
-      console.log(montant);
       
       await caissierApi.creerPaiement(selectedTicket.commande_id, {
         type_paiement: moyenPaiementFinal || 'especes',
         montant: selectedTicket.montant_a_encaisser || 0,
       });
 
-      toast.success('Encaissement réussi', {
-        description: `Paiement de ${formatCurrency(montant)} enregistré`,
-        action: {
-          label: 'Imprimer',
-          onClick: () => printInvoice(ticketEncaisse),
-        }
-      });
-
-      // Fermer le modal immédiatement
       setIsPaymentModalOpen(false);
       setSelectedTicket(null);
+      setTicketFacture(ticketEncaisse);
+      setIsFactureModalOpen(true);
 
       // Recharger les tickets pour que le ticket disparaisse immédiatement
       await fetchTicketsSafe(currentPage, filterText.trim());
@@ -301,21 +315,26 @@ const CaissePage = () => {
       // Vérifier si le paiement a quand même été créé (code 200 ou 201)
       const statusCode = error.response?.status;
       if (statusCode === 200 || statusCode === 201) {
+        const montantDu = Number(
+          selectedTicket.montant_a_encaisser ?? selectedTicket.reste_du ?? selectedTicket.total_ttc ?? 0
+        );
+        const donneEspeces = parseFloat(paymentData.montantDonneEspeces) || 0;
         const ticketEncaisse = {
           ...selectedTicket,
           moyen_paiement: moyenPaiementFinal,
-          montant_paye: montant,
+          montant_paye: montantEncaisseOperation,
           statut: 'encaissé',
+          ...(moyenPaiementFinal === 'especes'
+            ? {
+                monnaie_recue: donneEspeces,
+                monnaie_rendue: Math.max(0, donneEspeces - montantDu),
+              }
+            : {}),
         };
-        toast.success('Encaissement réussi', {
-          description: `Paiement de ${formatCurrency(montant)} enregistré`,
-          action: {
-            label: 'Imprimer',
-            onClick: () => printInvoice(ticketEncaisse),
-          }
-        });
         setIsPaymentModalOpen(false);
         setSelectedTicket(null);
+        setTicketFacture(ticketEncaisse);
+        setIsFactureModalOpen(true);
         await fetchTicketsSafe(currentPage, filterText.trim());
         // Mettre à jour le compteur de tickets traités
         await fetchDashboardStats();
@@ -669,15 +688,27 @@ const CaissePage = () => {
                         </div>
                       </div>
                     )}
-                    <div className="mt-2 pt-2 border-t border-gray-200">
-                      <div className="flex flex-wrap gap-3 text-xs text-gray-500">
-                        <span>THT: {formatCurrency(ticket.total_ht)}</span>
-                        <span>•</span>
-                        <span>TVA: {formatCurrency(ticket.tva)}</span>
-                        <span>•</span>
-                        <span className="font-semibold text-gray-700">TTC: {formatCurrency(ticket.total_ttc)}</span>
-                      </div>
-                    </div>
+
+                    {
+                      ticket.tva_applicable ? (
+                        <div className="mt-2 pt-2 border-t border-gray-200">
+                          <div className="flex flex-wrap gap-3 text-xs text-gray-500">
+                            <span>THT: {formatCurrency(ticket.total_ht)}</span>
+                            <span>•</span>
+                            <span>TVA: {formatCurrency(ticket.tva)}</span>
+                            <span>•</span>
+                            <span className="font-semibold text-gray-700">
+                              TTC: {formatCurrency(ticket.total_ttc)}
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="font-semibold text-gray-700">
+                          TTC: {formatCurrency(ticket.total_ttc)}
+                        </span>
+                      )
+                    }
+                
                   </div>
                   <div className="flex flex-row gap-2 flex-shrink-0">
                     <Button
@@ -705,19 +736,6 @@ const CaissePage = () => {
                       </svg>
                       Annuler
                     </Button>
-                    {ticket.statut === 'encaissé' && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => printInvoice(ticket)}
-                        className="border-2 border-[#472EAD] text-[#472EAD] hover:bg-[#F7F5FF] font-semibold text-xs px-3 py-1.5"
-                      >
-                        <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                        </svg>
-                        Imprimer
-                      </Button>
-                    )}
                   </div>
                 </div>
               </div>
@@ -788,11 +806,7 @@ const CaissePage = () => {
             <Button 
               variant="primary" 
               onClick={handlePaymentSubmit}
-              disabled={
-                isProcessingPayment ||
-                (paymentData.moyenPaiement === 'especes' &&
-                  (parseFloat(paymentData.montantDonneEspeces) || 0) != (selectedTicket?.montant_a_encaisser || 0))
-              }
+
               className="bg-[#472EAD] hover:bg-[#3d2888] text-white font-semibold shadow-md hover:shadow-lg w-full py-3 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isProcessingPayment ? (
@@ -942,8 +956,8 @@ const CaissePage = () => {
                   type="number"
                   min="0"
                   step="1"
-                  value={paymentData.montant_a_encaisser}
-                  onChange={(e) => setPaymentData(prev => ({ ...prev, montantDonneEspeces: e.target.value }))}
+                  value={paymentData.montantDonneEspeces}
+                  onChange={(e) => setPaymentData((prev) => ({ ...prev, montantDonneEspeces: e.target.value }))}
                   placeholder="Ex: 15000"
                   className="w-full"
                 />
@@ -1008,6 +1022,59 @@ const CaissePage = () => {
             )}
           </div>
         )}
+      </Modal>
+
+      {/* Après encaissement : choix d’impression (remplace le toast vert avec bouton Imprimer) */}
+      <Modal
+        isOpen={isFactureModalOpen}
+        onClose={() => {
+          setIsFactureModalOpen(false);
+          setTicketFacture(null);
+        }}
+        title="Facture"
+        size="md"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setIsFactureModalOpen(false);
+                setTicketFacture(null);
+              }}
+              className="border border-gray-300 font-semibold hover:bg-gray-100"
+            >
+              Annuler
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                if (ticketFacture) printInvoice(ticketFacture);
+                setIsFactureModalOpen(false);
+                setTicketFacture(null);
+              }}
+              className="bg-[#472EAD] hover:bg-[#3d2888] text-white font-semibold shadow-md hover:shadow-lg"
+            >
+              Imprimer
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-gray-700">
+            Encaissement enregistré avec succès. Voulez-vous imprimer la facture&nbsp;?
+          </p>
+          {ticketFacture && (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
+              <p>
+                <span className="font-medium text-gray-800">Ticket :</span> {ticketFacture.numero}
+              </p>
+              <p className="mt-1">
+                <span className="font-medium text-gray-800">Montant :</span>{' '}
+                {formatCurrency(ticketFacture.montant_paye ?? ticketFacture.total_ttc)}
+              </p>
+            </div>
+          )}
+        </div>
       </Modal>
 
       {/* Modal Scanner QR Code */}

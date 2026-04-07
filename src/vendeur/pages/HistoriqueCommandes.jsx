@@ -51,7 +51,6 @@ import profileAPI from '../../services/api/profile';
 
 const HistoriqueCommandes = ({ sellerName = null }) => {
   const [commandes, setCommandes] = useState([]);
-  const [commandesFiltrees, setCommandesFiltrees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [stats, setStats] = useState({
@@ -87,186 +86,226 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     totalPages: 1
   });
 
-  const [commandesPaginees, setCommandesPaginees] = useState([]);
-  
   const [lastUpdate, setLastUpdate] = useState(Date.now());
   const [showRefreshNotification, setShowRefreshNotification] = useState(false);
   
-  const [progress, setProgress] = useState({ current: 0, total: 0 });
-  const [chargementComplet, setChargementComplet] = useState(false);
+  const [filtresActifs, setFiltresActifs] = useState({});
 
-  const chargerToutesLesCommandes = useCallback(async (showNotification = false) => {
+  // Charger les commandes avec pagination côté serveur
+  const chargerCommandes = useCallback(async (page = 1, conserveDonnees = false) => {
     setLoading(true);
     setError(null);
-    setChargementComplet(false);
     
     try {
-      chargerInfosVendeur();
+      if (!conserveDonnees) {
+        chargerInfosVendeur();
+      }
 
-      let toutesLesCommandes = [];
-      let pageActuelle = 1;
-      let aPlusDePages = true;
-      let totalPages = 1;
+      // Construire les paramètres de filtrage pour l'API
+      const params = {
+        page: page,
+        perPage: pagination.itemsPerPage,
+        sortField: sortField,
+        sortDirection: sortDirection
+      };
 
-      while (aPlusDePages) {
+      // Ajouter les filtres si nécessaire
+      if (filtreStatut !== 'tous') {
+        params.statut = filtreStatut;
+      }
+
+      if (filtreTypeVente !== 'tous') {
+        params.type_vente = filtreTypeVente;
+      }
+
+      // Gestion des filtres de date
+      if (filtreDate !== 'tous') {
+        const aujourdhui = new Date();
         
-        setProgress({ 
-          current: pageActuelle, 
-          total: totalPages > 0 ? totalPages : '?' 
-        });
-        
-        const response = await commandesAPI.getAll({
-          page: pageActuelle,
-          perPage: 100,
-        });
-
-        let commandesPage = [];
-        let paginationInfo = null;
-        
-        if (response?.data && Array.isArray(response.data)) {
-          commandesPage = response.data;
-          paginationInfo = response;
-        } else if (Array.isArray(response)) {
-          commandesPage = response;
-        } else if (response?.data?.data && Array.isArray(response.data.data)) {
-          commandesPage = response.data.data;
-          paginationInfo = response.data;
-        }
-
-        if (paginationInfo) {
-          totalPages = paginationInfo.last_page || paginationInfo.total_pages || 1;
-        }
-
-        const commandesTransformeesPage = commandesPage.map(commande => {
-          const produits = extraireProduitsDeLaCommande(commande);
-          const typeVente = determinerTypeVente(commande);
-          const tvaAppliquee = estTVAAppliquee(commande);
-          
-          const montantTTC = Number(
-            commande.total_ttc || 
-            commande.total || 
-            commande.montant_ttc || 
-            commande.montant || 
-            commande.grand_total ||
-            0
-          );
-          
-          const montantHT = Number(
-            commande.total_ht || 
-            commande.montant_ht || 
-            commande.subtotal ||
-            commande.sub_total ||
-            (tvaAppliquee ? Math.round(montantTTC / 1.18) : montantTTC)
-          );
-          
-          const montantTVA = tvaAppliquee 
-            ? Number(
-                commande.tva || 
-                commande.montant_tva ||
-                commande.tva_amount ||
-                Math.round(montantHT * 0.18) || 
-                (montantTTC - montantHT) || 
-                0
-              )
-            : 0;
-          
-          let clientNom = 'Client';
-          let clientTelephone = '';
-          let clientAdresse = '';
-          
-          if (commande.client) {
-            if (typeof commande.client === 'object') {
-              clientNom = formaterNomClient(commande.client);
-              clientTelephone = commande.client.telephone || commande.client.phone || '';
-              clientAdresse = commande.client.adresse || commande.client.address || '';
-            } else if (typeof commande.client === 'string') {
-              clientNom = commande.client;
+        switch (filtreDate) {
+          case 'aujourdhui':
+            params.date_debut = aujourdhui.toISOString().split('T')[0];
+            params.date_fin = aujourdhui.toISOString().split('T')[0];
+            break;
+          case 'hier':
+            const hier = new Date(aujourdhui);
+            hier.setDate(hier.getDate() - 1);
+            params.date_debut = hier.toISOString().split('T')[0];
+            params.date_fin = hier.toISOString().split('T')[0];
+            break;
+          case '7jours':
+            const date7jours = new Date(aujourdhui);
+            date7jours.setDate(date7jours.getDate() - 7);
+            params.date_debut = date7jours.toISOString().split('T')[0];
+            params.date_fin = aujourdhui.toISOString().split('T')[0];
+            break;
+          case '30jours':
+            const date30jours = new Date(aujourdhui);
+            date30jours.setDate(date30jours.getDate() - 30);
+            params.date_debut = date30jours.toISOString().split('T')[0];
+            params.date_fin = aujourdhui.toISOString().split('T')[0];
+            break;
+          case 'personnalisee':
+            if (dateDebut && dateFin) {
+              params.date_debut = dateDebut;
+              params.date_fin = dateFin;
             }
-          }
-          
-          let nomVendeur = sellerName || 'Vendeur';
-          if (commande.vendeur) {
-            if (typeof commande.vendeur === 'object') {
-              nomVendeur = commande.vendeur.nom || commande.vendeur.name || nomVendeur;
-            } else if (typeof commande.vendeur === 'string') {
-              nomVendeur = commande.vendeur;
-            }
-          } else if (vendeurInfo) {
-            nomVendeur = vendeurInfo.nom || vendeurInfo.name || nomVendeur;
-          }
-          
-          return {
-            id: commande.id || commande.uuid || `cmd-${Date.now()}-${Math.random()}`,
-            numero_commande: commande.numero_commande || commande.numero || 
-                            commande.reference || commande.order_number || 
-                            `CMD-${Date.now().toString().slice(-8)}`,
-            client: {
-              nom: clientNom,
-              telephone: clientTelephone,
-              adresse: clientAdresse
-            },
-            total_ht: montantHT,
-            tva: montantTVA,
-            total_ttc: montantTTC,
-            montant_ht: montantHT,
-            montant_ttc: montantTTC,
-            tva_appliquee: tvaAppliquee,
-            tva_active: tvaAppliquee,
-            tva_taux: tvaAppliquee ? 18 : 0,
-            statut: mapAPIStatut(commande.statut || commande.status),
-            type_vente: typeVente,
-            date: commande.date || commande.created_at || 
-                  commande.date_commande || commande.updated_at || new Date().toISOString(),
-            vendeur: nomVendeur,
-            produits: produits
-          };
-        });
-
-        toutesLesCommandes = [...toutesLesCommandes, ...commandesTransformeesPage];
-        
-        pageActuelle++;
-        
-        if (paginationInfo) {
-          aPlusDePages = pageActuelle <= paginationInfo.last_page;
-        } else if (commandesPage.length < 100) {
-          aPlusDePages = false;
-        } else {
-          aPlusDePages = commandesPage.length === 100;
-        }
-        
-        if (aPlusDePages) {
-          await new Promise(resolve => setTimeout(resolve, 100));
+            break;
         }
       }
 
-      const commandesTriees = toutesLesCommandes.sort((a, b) => 
-        new Date(b.date) - new Date(a.date)
-      );
+      if (recherche.trim()) {
+        params.recherche = recherche.trim();
+      }
 
-      setCommandes(commandesTriees);
-      setCommandesFiltrees(commandesTriees);
+      const response = await commandesAPI.getAll(params);
+
+      let commandesPage = [];
+      let paginationInfo = null;
+      let totalItems = 0;
       
+      if (response?.data && Array.isArray(response.data)) {
+        commandesPage = response.data;
+        paginationInfo = response;
+        totalItems = response.total || response.pagination?.total || 0;
+      } else if (response?.data?.data && Array.isArray(response.data.data)) {
+        commandesPage = response.data.data;
+        paginationInfo = response.data;
+        totalItems = response.data.total || response.data.pagination?.total || 0;
+      } else if (Array.isArray(response)) {
+        commandesPage = response;
+        totalItems = response.length;
+      }
+
+      // Transformer les commandes
+      const commandesTransformees = commandesPage.map(commande => {
+        const produits = extraireProduitsDeLaCommande(commande);
+        const typeVente = determinerTypeVente(commande);
+        const tvaAppliquee = estTVAAppliquee(commande);
+        
+        const montantTTC = Number(
+          commande.total_ttc || 
+          commande.total || 
+          commande.montant_ttc || 
+          commande.montant || 
+          commande.grand_total ||
+          0
+        );
+        
+        const montantHT = Number(
+          commande.total_ht || 
+          commande.montant_ht || 
+          commande.subtotal ||
+          commande.sub_total ||
+          (tvaAppliquee ? Math.round(montantTTC / 1.18) : montantTTC)
+        );
+        
+        const montantTVA = tvaAppliquee 
+          ? Number(
+              commande.tva || 
+              commande.montant_tva ||
+              commande.tva_amount ||
+              Math.round(montantHT * 0.18) || 
+              (montantTTC - montantHT) || 
+              0
+            )
+          : 0;
+        
+        let clientNom = 'Client';
+        let clientTelephone = '';
+        let clientAdresse = '';
+        
+        if (commande.client) {
+          if (typeof commande.client === 'object') {
+            clientNom = formaterNomClient(commande.client);
+            clientTelephone = commande.client.telephone || commande.client.phone || '';
+            clientAdresse = commande.client.adresse || commande.client.address || '';
+          } else if (typeof commande.client === 'string') {
+            clientNom = commande.client;
+          }
+        }
+        
+        let nomVendeur = sellerName || 'Vendeur';
+        if (commande.vendeur) {
+          if (typeof commande.vendeur === 'object') {
+            nomVendeur = commande.vendeur.nom || commande.vendeur.name || nomVendeur;
+          } else if (typeof commande.vendeur === 'string') {
+            nomVendeur = commande.vendeur;
+          }
+        } else if (vendeurInfo) {
+          nomVendeur = vendeurInfo.nom || vendeurInfo.name || nomVendeur;
+        }
+        
+        return {
+          id: commande.id || commande.uuid || `cmd-${Date.now()}-${Math.random()}`,
+          numero_commande: commande.numero_commande || commande.numero || 
+                          commande.reference || commande.order_number || 
+                          `CMD-${Date.now().toString().slice(-8)}`,
+          client: {
+            nom: clientNom,
+            telephone: clientTelephone,
+            adresse: clientAdresse
+          },
+          total_ht: montantHT,
+          tva: montantTVA,
+          total_ttc: montantTTC,
+          montant_ht: montantHT,
+          montant_ttc: montantTTC,
+          tva_appliquee: tvaAppliquee,
+          tva_active: tvaAppliquee,
+          tva_taux: tvaAppliquee ? 18 : 0,
+          statut: mapAPIStatut(commande.statut || commande.status),
+          type_vente: typeVente,
+          date: commande.date || commande.created_at || 
+                commande.date_commande || commande.updated_at || new Date().toISOString(),
+          vendeur: nomVendeur,
+          produits: produits
+        };
+      });
+
+      // Mettre à jour les commandes (remplacer ou ajouter selon le contexte)
+      if (conserveDonnees && page === 1) {
+        setCommandes(commandesTransformees);
+      } else if (conserveDonnees) {
+        setCommandes(prev => [...prev, ...commandesTransformees]);
+      } else {
+        setCommandes(commandesTransformees);
+      }
+      
+      // Mettre à jour les informations de pagination
       setPagination(prev => ({
         ...prev,
-        totalItems: commandesTriees.length,
-        totalPages: Math.ceil(commandesTriees.length / prev.itemsPerPage),
-        currentPage: 1
+        currentPage: page,
+        totalItems: totalItems || commandesTransformees.length,
+        totalPages: paginationInfo?.last_page || 
+                   paginationInfo?.total_pages || 
+                   Math.ceil((totalItems || commandesTransformees.length) / prev.itemsPerPage)
       }));
       
-      chargerStatistiques(commandesTriees);
-      
-      try {
-        localStorage.setItem('commandes_cache', JSON.stringify({
-          data: commandesTriees,
-          timestamp: Date.now(),
-          count: commandesTriees.length
-        }));
-      } catch (e) {
+      // Charger les statistiques si c'est la première page
+      if (page === 1 && !conserveDonnees) {
+        chargerStatistiques(commandesTransformees);
       }
       
-      setChargementComplet(true);
+      // Mettre en cache uniquement les données de la première page pour les stats
+      if (page === 1) {
+        try {
+          localStorage.setItem('commandes_cache_page1', JSON.stringify({
+            data: commandesTransformees,
+            timestamp: Date.now(),
+            pagination: {
+              totalItems: totalItems || commandesTransformees.length,
+              totalPages: paginationInfo?.last_page || 
+                         paginationInfo?.total_pages || 
+                         Math.ceil((totalItems || commandesTransformees.length) / pagination.itemsPerPage)
+            }
+          }));
+        } catch (e) {
+          // Ignorer les erreurs de cache
+        }
+      }
       
-      if (showNotification) {
+      if (page === 1) {
         setShowRefreshNotification(true);
         setTimeout(() => setShowRefreshNotification(false), 3000);
       }
@@ -274,31 +313,102 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     } catch (error) {
       setError(`Impossible de charger les commandes: ${error.message}`);
       
-      try {
-        const cached = localStorage.getItem('commandes_cache');
-        if (cached) {
-          const { data, timestamp } = JSON.parse(cached);
-          setCommandes(data);
-          setCommandesFiltrees(data);
-          setPagination(prev => ({
-            ...prev,
-            totalItems: data.length,
-            totalPages: Math.ceil(data.length / prev.itemsPerPage)
-          }));
-          chargerStatistiques(data);
-          setError(null);
-          setChargementComplet(true);
+      // Essayer de charger depuis le cache pour la page 1
+      if (pagination.currentPage === 1) {
+        try {
+          const cached = localStorage.getItem('commandes_cache_page1');
+          if (cached) {
+            const { data, timestamp, pagination: cachedPagination } = JSON.parse(cached);
+            setCommandes(data);
+            setPagination(prev => ({
+              ...prev,
+              totalItems: cachedPagination.totalItems,
+              totalPages: cachedPagination.totalPages
+            }));
+            chargerStatistiques(data);
+            setError(null);
+          }
+        } catch (cacheError) {
+          // Ignorer les erreurs de cache
         }
-      } catch (cacheError) {
       }
       
     } finally {
       setLoading(false);
       setLastUpdate(Date.now());
-      setProgress({ current: 0, total: 0 });
     }
-  }, [sellerName, vendeurInfo]);
+  }, [sellerName, vendeurInfo, pagination.itemsPerPage, filtreStatut, filtreTypeVente, filtreDate, dateDebut, dateFin, recherche, sortField, sortDirection]);
 
+  // Charger les statistiques (pourrait être une API séparée)
+  const chargerStatistiques = useCallback((commandesList) => {
+    // Calculer les stats seulement pour les commandes chargées
+    const commandesAujourdhui = commandesList.filter(c => estAujourdhui(c.date));
+    
+    let totalGros = 0;
+    let totalDetail = 0;
+    let montantTotal = 0;
+    
+    commandesList.forEach(commande => {
+      if (commande.type_vente === 'gros') totalGros++;
+      else if (commande.type_vente === 'détail') totalDetail++;
+      else if (commande.type_vente === 'mixte') {
+        totalGros++;
+        totalDetail++;
+      }
+      
+      if (commande.total_ttc) {
+        montantTotal += commande.total_ttc;
+      } else if (commande.montant_ttc) {
+        montantTotal += commande.montant_ttc;
+      } else if (commande.total) {
+        montantTotal += commande.total;
+      }
+    });
+    
+    setStats({
+      aujourdhui: commandesAujourdhui.length,
+      en_attente: commandesAujourdhui.filter(c => {
+        const statut = c.statut?.toLowerCase() || '';
+        return statut.includes('attente') || 
+               statut === 'en_attente_paiement' || 
+               statut === 'pending';
+      }).length,
+      valide: commandesAujourdhui.filter(c => {
+        const statut = c.statut?.toLowerCase() || '';
+        return statut === 'complétée' || 
+               statut === 'completed' ||
+               statut === 'payee' ||
+               statut === 'paid';
+      }).length,
+      annulee: commandesAujourdhui.filter(c => {
+        const statut = c.statut?.toLowerCase() || '';
+        return statut === 'annulée' || 
+               statut === 'cancelled';
+      }).length,
+      total_gros: totalGros,
+      total_detail: totalDetail,
+      total_ventes: commandesList.length,
+      montant_total: montantTotal
+    });
+  }, []);
+
+  // Charger les commandes au montage et quand les filtres changent
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      chargerCommandes(1, false);
+    }, 300); // Délai pour éviter trop d'appels API
+
+    return () => clearTimeout(timer);
+  }, [filtreStatut, filtreTypeVente, filtreDate, dateDebut, dateFin, recherche, sortField, sortDirection, pagination.itemsPerPage]);
+
+  // Gérer le changement de page
+  useEffect(() => {
+    if (pagination.currentPage > 1) {
+      chargerCommandes(pagination.currentPage, false);
+    }
+  }, [pagination.currentPage]);
+
+  // Les fonctions utilitaires restent les mêmes (estTVAAppliquee, mapAPIStatut, etc.)
   const estTVAAppliquee = (commande) => {
     if (!commande) return false;
     
@@ -455,6 +565,7 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
         setVendeurInfo(response.data);
       }
     } catch (error) {
+      console.error('Erreur chargement vendeur:', error);
     }
   }, []);
 
@@ -495,59 +606,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
       return false;
     }
   };
-
-  const chargerStatistiques = useCallback((commandesList) => {
-    const commandesAujourdhui = commandesList.filter(c => estAujourdhui(c.date));
-    
-    let totalGros = 0;
-    let totalDetail = 0;
-    let montantTotal = 0;
-    
-    commandesList.forEach(commande => {
-      if (commande.type_vente === 'gros') totalGros++;
-      else if (commande.type_vente === 'détail') totalDetail++;
-      else if (commande.type_vente === 'mixte') {
-        totalGros++;
-        totalDetail++;
-      }
-      
-      if (commande.total_ttc) {
-        montantTotal += commande.total_ttc;
-      } else if (commande.montant_ttc) {
-        montantTotal += commande.montant_ttc;
-      } else if (commande.total) {
-        montantTotal += commande.total;
-      }
-    });
-    
-    const statsCalc = {
-      aujourdhui: commandesAujourdhui.length,
-      en_attente: commandesAujourdhui.filter(c => {
-        const statut = c.statut?.toLowerCase() || '';
-        return statut.includes('attente') || 
-               statut === 'en_attente_paiement' || 
-               statut === 'pending';
-      }).length,
-      valide: commandesAujourdhui.filter(c => {
-        const statut = c.statut?.toLowerCase() || '';
-        return statut === 'complétée' || 
-               statut === 'completed' ||
-               statut === 'payee' ||
-               statut === 'paid';
-      }).length,
-      annulee: commandesAujourdhui.filter(c => {
-        const statut = c.statut?.toLowerCase() || '';
-        return statut === 'annulée' || 
-               statut === 'cancelled';
-      }).length,
-      total_gros: totalGros,
-      total_detail: totalDetail,
-      total_ventes: commandesList.length,
-      montant_total: montantTotal
-    };
-    
-    setStats(statsCalc);
-  }, []);
 
   const determinerTypeVente = (commande) => {
     if (commande.type_vente) {
@@ -718,7 +776,7 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
 
   useEffect(() => {
     const handleCommandeCreee = (event) => {
-      chargerToutesLesCommandes(true);
+      chargerCommandes(1, false);
     };
 
     window.addEventListener('commande-creee', handleCommandeCreee);
@@ -726,141 +784,7 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     return () => {
       window.removeEventListener('commande-creee', handleCommandeCreee);
     };
-  }, [chargerToutesLesCommandes]);
-
-  useEffect(() => {
-    chargerToutesLesCommandes();
-  }, [chargerToutesLesCommandes]);
-
-  useEffect(() => {
-    if (commandes.length === 0) return;
-    
-    let commandesFiltreesTemp = [...commandes];
-    
-    if (filtreStatut !== 'tous') {
-      commandesFiltreesTemp = commandesFiltreesTemp.filter(c => c.statut === filtreStatut);
-    }
-    
-    if (filtreTypeVente !== 'tous') {
-      commandesFiltreesTemp = commandesFiltreesTemp.filter(c => {
-        if (filtreTypeVente === 'mixte') {
-          return c.type_vente === 'mixte';
-        } else {
-          return c.type_vente === filtreTypeVente;
-        }
-      });
-    }
-    
-    if (filtreDate !== 'tous') {
-      const aujourdhui = new Date();
-      const aujourdhuiStr = aujourdhui.toISOString().split('T')[0];
-      
-      commandesFiltreesTemp = commandesFiltreesTemp.filter(c => {
-        try {
-          const dateCommande = new Date(c.date).toISOString().split('T')[0];
-          
-          switch (filtreDate) {
-            case 'aujourdhui':
-              return dateCommande === aujourdhuiStr;
-            case 'hier':
-              const hier = new Date(aujourdhui);
-              hier.setDate(hier.getDate() - 1);
-              const hierStr = hier.toISOString().split('T')[0];
-              return dateCommande === hierStr;
-            case '7jours':
-              const date7jours = new Date(aujourdhui);
-              date7jours.setDate(date7jours.getDate() - 7);
-              return new Date(c.date) >= date7jours;
-            case '30jours':
-              const date30jours = new Date(aujourdhui);
-              date30jours.setDate(date30jours.getDate() - 30);
-              return new Date(c.date) >= date30jours;
-            case 'personnalisee':
-              if (dateDebut && dateFin) {
-                const debut = new Date(dateDebut);
-                const fin = new Date(dateFin);
-                fin.setDate(fin.getDate() + 1);
-                const dateC = new Date(c.date);
-                return dateC >= debut && dateC < fin;
-              }
-              return true;
-            default:
-              return true;
-          }
-        } catch {
-          return false;
-        }
-      });
-    }
-    
-    if (recherche.trim()) {
-      const terme = recherche.toLowerCase().trim();
-      commandesFiltreesTemp = commandesFiltreesTemp.filter(c => {
-        return (
-          c.numero_commande?.toLowerCase().includes(terme) ||
-          c.client?.nom?.toLowerCase().includes(terme) ||
-          c.client?.telephone?.includes(terme) ||
-          (c.produits && c.produits.some(p => 
-            p.nom?.toLowerCase().includes(terme)
-          ))
-        );
-      });
-    }
-    
-    commandesFiltreesTemp.sort((a, b) => {
-      let valA, valB;
-      
-      switch (sortField) {
-        case 'numero':
-          valA = a.numero_commande;
-          valB = b.numero_commande;
-          break;
-        case 'montant':
-          valA = a.total_ttc;
-          valB = b.total_ttc;
-          break;
-        case 'client':
-          valA = a.client?.nom;
-          valB = b.client?.nom;
-          break;
-        case 'date':
-        default:
-          valA = new Date(a.date).getTime();
-          valB = new Date(b.date).getTime();
-          break;
-      }
-      
-      if (sortDirection === 'asc') {
-        return valA > valB ? 1 : -1;
-      } else {
-        return valA < valB ? 1 : -1;
-      }
-    });
-    
-    setCommandesFiltrees(commandesFiltreesTemp);
-    
-    setPagination(prev => ({
-      ...prev,
-      totalItems: commandesFiltreesTemp.length,
-      totalPages: Math.ceil(commandesFiltreesTemp.length / prev.itemsPerPage),
-      currentPage: 1
-    }));
-    
-  }, [commandes, filtreStatut, filtreTypeVente, filtreDate, dateDebut, dateFin, recherche, sortField, sortDirection]);
-
-  useEffect(() => {
-    const startIndex = (pagination.currentPage - 1) * pagination.itemsPerPage;
-    const endIndex = startIndex + pagination.itemsPerPage;
-    const commandesPage = commandesFiltrees.slice(startIndex, endIndex);
-    
-    setCommandesPaginees(commandesPage);
-  }, [commandesFiltrees, pagination.currentPage, pagination.itemsPerPage]);
-
-  useEffect(() => {
-    if (commandes.length > 0) {
-      chargerStatistiques(commandes);
-    }
-  }, [commandes, chargerStatistiques]);
+  }, [chargerCommandes]);
 
   const goToPage = (page) => {
     setPagination(prev => ({
@@ -891,8 +815,7 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     setPagination(prev => ({
       ...prev,
       itemsPerPage: newItemsPerPage,
-      currentPage: 1,
-      totalPages: Math.ceil(prev.totalItems / newItemsPerPage)
+      currentPage: 1
     }));
   };
 
@@ -903,6 +826,8 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     setDateDebut('');
     setDateFin('');
     setRecherche('');
+    setSortField('date');
+    setSortDirection('desc');
   };
 
   const getStatutIcone = (statut) => {
@@ -1044,19 +969,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
         </div>
       )}
 
-      {loading && !chargementComplet && (
-        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-white px-4 py-2 rounded-lg shadow-lg border border-blue-200 flex items-center gap-3 text-sm">
-          <FontAwesomeIcon icon={faSpinner} className="animate-spin text-blue-600" />
-          <span>Chargement des commandes... Page {progress.current}/{progress.total}</span>
-          <div className="w-24 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-            <div 
-              className="h-full bg-blue-600 transition-all duration-300"
-              style={{ width: progress.total > 0 ? `${(progress.current / progress.total) * 100}%` : '10%' }}
-            ></div>
-          </div>
-        </div>
-      )}
-
       {error && (
         <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 text-sm">
           <FontAwesomeIcon icon={faExclamationTriangle} className="text-red-500" />
@@ -1075,8 +987,8 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
               Historique des Commandes
             </h1>
             <p className="text-sm text-gray-600 mt-1">
-              {commandes.length} commandes au total • Dernière màj: {new Date(lastUpdate).toLocaleTimeString('fr-FR')}
-              {!loading && commandes.length > 0 && ` • ${pagination.totalPages} pages`}
+              {pagination.totalItems} commandes au total • Dernière màj: {new Date(lastUpdate).toLocaleTimeString('fr-FR')}
+              {!loading && pagination.totalItems > 0 && ` • Page ${pagination.currentPage}/${pagination.totalPages}`}
             </p>
           </div>
           
@@ -1089,7 +1001,7 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
             )}
             
             <button 
-              onClick={() => chargerToutesLesCommandes(true)}
+              onClick={() => chargerCommandes(1, false)}
               disabled={loading}
               className="inline-flex items-center px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
             >
@@ -1271,12 +1183,12 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
       </div>
 
       <div className="bg-white rounded-lg shadow border border-gray-200">
-        {loading && !chargementComplet && progress.total === 0 ? (
+        {loading && commandes.length === 0 ? (
           <div className="p-8 text-center">
             <FontAwesomeIcon icon={faSpinner} className="animate-spin text-2xl text-blue-600 mb-2" />
             <p className="text-sm text-gray-600">Chargement des commandes...</p>
           </div>
-        ) : commandesFiltrees.length === 0 ? (
+        ) : commandes.length === 0 ? (
           <div className="p-8 text-center">
             <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gray-100 flex items-center justify-center">
               <FontAwesomeIcon icon={faBox} className="text-xl text-gray-400" />
@@ -1291,7 +1203,7 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
           </div>
         ) : (
           <div className="divide-y divide-gray-200">
-            {commandesPaginees.map(commande => (
+            {commandes.map(commande => (
               <div key={commande.id} className="p-3 hover:bg-gray-50">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
@@ -1365,7 +1277,7 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
           </div>
         )}
 
-        {commandesFiltrees.length > 0 && (
+        {commandes.length > 0 && (
           <div className="mt-4 flex flex-col items-center gap-3 pb-4 pt-3 border-t border-gray-200">
             <div className="text-xs text-gray-600">
               Page {pagination.currentPage} / {pagination.totalPages} • {pagination.totalItems} commandes

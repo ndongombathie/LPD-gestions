@@ -334,10 +334,14 @@ export default function Responsable() {
                 ) : (
                   clientsAPI.map(c => (
                     <tr key={c.id} className="border-b hover:bg-gray-50">
-                      <td className="p-4 font-medium">{c.fullName}</td>
-                      <td className="p-4">{c.telephone}</td>
-                      <td className="p-4 text-right font-medium text-red-600">{fcfa(c.dette_totale)}</td>
-                    </tr>
+  <td className="p-4 font-medium">
+    {c.prenom} {c.nom}
+  </td>
+  <td className="p-4">{c.telephone}</td>
+  <td className="p-4 text-right font-medium text-red-600">
+    {fcfa(c.dette_totale)}
+  </td>
+</tr>
                   ))
                 )}
 
