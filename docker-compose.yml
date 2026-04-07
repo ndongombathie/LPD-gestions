@@ -20,6 +20,12 @@ services:
     build:
       context: .
       target: prod
+      args:
+        VITE_REVERB_APP_KEY: ${VITE_REVERB_APP_KEY}
+        VITE_REVERB_HOST: ${VITE_REVERB_HOST}
+        VITE_REVERB_PORT: ${VITE_REVERB_PORT}
+        VITE_REVERB_CLUSTER: ${VITE_REVERB_CLUSTER}
+        VITE_API_URL: ${VITE_API_URL}
     container_name: lpd-frontend-prod
     ports:
       - "8081:80"
