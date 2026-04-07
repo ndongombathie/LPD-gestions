@@ -9,8 +9,8 @@ export const echo = new Echo({
     wsHost: import.meta.env.VITE_REVERB_HOST,
     wsPort: Number(import.meta.env.VITE_REVERB_PORT),
     cluster: import.meta.env.VITE_REVERB_CLUSTER,
-    forceTLS: true,
-    encrypted: true,
+    forceTLS: false,
+    encrypted: false,
     disableStats: true,
     enabledTransports: ['ws', 'wss'],
     
