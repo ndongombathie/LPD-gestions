@@ -8,7 +8,7 @@ export const echo = new Echo({
     key: import.meta.env.VITE_REVERB_APP_KEY,
     wsHost: import.meta.env.VITE_REVERB_HOST,
     wsPort: Number(import.meta.env.VITE_REVERB_PORT),
-    cluster: 'mt1',
+    cluster: import.meta.env.VITE_REVERB_CLUSTER,
     forceTLS: false,
     encrypted: false,
     disableStats: true,
