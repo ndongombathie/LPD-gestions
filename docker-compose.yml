@@ -22,7 +22,7 @@ services:
       target: prod
     container_name: lpd-frontend-prod
     ports:
-      - "8080:80"
+      - "8081:80"
     restart: unless-stopped
 
 volumes:
