@@ -7,8 +7,8 @@ export const echo = new Echo({
     broadcaster: 'pusher',
     key: import.meta.env.VITE_REVERB_APP_KEY,
     wsHost: import.meta.env.VITE_REVERB_HOST,
-    wsPort: import.meta.env.VITE_REVERB_PORT,
-    cluster: 'mt1',
+    wsPort: Number(import.meta.env.VITE_REVERB_PORT),
+    cluster: import.meta.env.VITE_REVERB_CLUSTER,
     forceTLS: false,
     encrypted: false,
     disableStats: true,
@@ -18,7 +18,7 @@ export const echo = new Echo({
     authorizer: (channel) => {
         return {
             authorize: (socketId, callback) => {
-                fetch('http://127.0.0.1:8000/api/broadcasting/auth', {
+                fetch(`${import.meta.env.VITE_API_URL}/broadcasting/auth`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${localStorage.getItem('token')}`,

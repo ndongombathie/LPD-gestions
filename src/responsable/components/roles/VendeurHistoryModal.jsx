@@ -3,7 +3,7 @@
 // ==========================================================
 
 import React, { useState, useEffect } from "react";
-import { journalResponsableAPI } from "@/services/api/JournalResponsable";
+import { journalResponsableAPI } from "@/responsable/services/api/JournalResponsable";
 import { toast } from "sonner";
 import {
   X,
