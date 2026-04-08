@@ -51,15 +51,22 @@ const userManager = {
       return null;
     }
   },
-
   setUser: (user) => {
     if (user) {
-      sessionStorage.setItem('user', JSON.stringify(user));
+      // ✅ Stocker uniquement les infos non sensibles
+      const safeUser = {
+        id: user.id,
+        nom: user.nom,
+        prenom: user.prenom,
+        role: user.role,
+        boutique_id: user.boutique_id,
+        is_online: user.is_online,
+      };
+      sessionStorage.setItem('user', JSON.stringify(safeUser));
     } else {
       sessionStorage.removeItem('user');
     }
   },
-
   clear: () => sessionStorage.removeItem('user'),
 };
 
