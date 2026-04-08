@@ -28,7 +28,10 @@ services:
         VITE_API_URL: ${VITE_API_URL}
     container_name: lpd-frontend-prod
     ports:
-      - "8081:80"
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
     restart: unless-stopped
 
 volumes:
