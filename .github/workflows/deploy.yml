@@ -1,0 +1,31 @@
+name: Deploy Frontend Production
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name:  Deploy sur VPS
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          script: |
+            cd /home/lpdmanager/lpdManagerProject/LPD-gestions
+            
+            # Récupérer les dernières modifications
+            git pull origin main
+            
+            # Builder la nouvelle image sans couper le site
+            docker compose build frontend-prod
+            
+            # Remplacer le container avec zero downtime
+            docker compose up -d --no-deps frontend-prod
+            
+            # Nettoyer les anciennes images
+            docker image prune -f

@@ -23,7 +23,7 @@ export const httpClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
-  },
+  }
 });
 
 // ===== INTERCEPTEURS =====
