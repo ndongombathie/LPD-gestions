@@ -40,11 +40,21 @@ const RapportCaissePage = () => {
   const [ventesParMoyen, setVentesParMoyen] = useState([]);
   const [isClosing, setIsClosing] = useState(false);
   const [isCloseConfirmOpen, setIsCloseConfirmOpen] = useState(false);
+  const [isClotureLocal, setIsClotureLocal] = useState(false);
 
   // Vérifier si la date sélectionnée est passée (avant aujourd'hui)
   const isDatePast = selectedDate < today;
   // Vérifier si la date sélectionnée est future (après aujourd'hui)
   const isDateFuture = selectedDate > today;
+
+  // Flag local (utile si reconnexion et/ou API momentanément indisponible)
+  useEffect(() => {
+    try {
+      setIsClotureLocal(localStorage.getItem(`lpd_caisse_cloturee_${selectedDate}`) === '1');
+    } catch (_e) {
+      setIsClotureLocal(false);
+    }
+  }, [selectedDate]);
 
   /** Date au format YYYY-MM-DD en heure locale (pour rapport strictement journalier) */
   const getDatePartLocal = (value) => {
@@ -217,6 +227,13 @@ const RapportCaissePage = () => {
 
   const handleClotureCaisse = async () => {
     if (!rapport) return;
+    if (rapport?.cloture || isClotureLocal) {
+      toast.error('Déjà clôturée', {
+        description: "La caisse de cette date est déjà clôturée."
+      });
+      setIsCloseConfirmOpen(false);
+      return;
+    }
     const soldeTheorique = (rapport.fond_ouverture || 0) + (rapport.total_encaissements || 0) - (rapport.total_decaissements || 0);
 
     setIsClosing(true);
@@ -232,12 +249,25 @@ const RapportCaissePage = () => {
         solde_cloture: updated?.solde_reel ?? updated?.solde_theorique ?? prev?.solde_cloture ?? soldeTheorique,
         cloture: Boolean(updated?.cloture),
       }));
+      // Verrou immédiat côté interface caissier (sans refresh)
+      try {
+        localStorage.setItem(`lpd_caisse_cloturee_${selectedDate}`, '1');
+        setIsClotureLocal(true);
+      } catch (_e) {
+        // ignore
+      }
       toast.success('Caisse clôturée', {
         description: 'Le rapport a été clôturé avec succès.'
       });
-    } catch (_err) {
+    } catch (err) {
+      const isNetwork =
+        !err?.response ||
+        err?.code === 'ERR_NETWORK' ||
+        String(err?.message || '').includes('Network Error');
       toast.error('Erreur', {
-        description: "Impossible de clôturer la caisse."
+        description: isNetwork
+          ? "Serveur indisponible (connexion refusée). Réessayez plus tard."
+          : "Impossible de clôturer la caisse."
       });
     } finally {
       setIsClosing(false);
@@ -503,7 +533,7 @@ const RapportCaissePage = () => {
             </svg>
             Exporter PDF
           </Button>
-          {rapport && !rapport.cloture && !isDatePast && (
+          {rapport && !rapport.cloture && !isClotureLocal && !isDatePast && (
             <Button 
               variant="danger" 
               onClick={() => setIsCloseConfirmOpen(true)}
