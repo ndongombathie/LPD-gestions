@@ -236,10 +236,10 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
     const listener = () => {
         chargerProduits();
     };
-    channel.listen('.transfert.validee', listener);
+    channel.listen('.stock.mis_a_jour', listener);
     return () => {
         try {
-            channel.stopListening('.transfert.validee');
+            channel.stopListening('.stock.mis_a_jour');
             echo.leave(`boutique.${boutiqueId}`);
             addNotification(
                 'info',
