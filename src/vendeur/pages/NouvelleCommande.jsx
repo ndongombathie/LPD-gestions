@@ -229,7 +229,6 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
     }
   }, []);
 
-
   useEffect(() => {
     if (!boutiqueId) return;
     const channel = echo.private(`boutique.${boutiqueId}`);
@@ -252,7 +251,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
             );
         }
     };
-}, [boutiqueId]);
+  }, [boutiqueId]);
 
   const chargerInfosVendeur = async () => {
     try {
@@ -389,11 +388,12 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
     }
     
     return {
-      prix: produit.prix_vente_detail ||  0,
+      prix: produit.prix_vente_detail || 0,
       prix_seuil: produit.prix_seuil_detail || 0
     };
   };
 
+  // ✅ FONCTION CORRIGÉE - Utilisation de la forme fonctionnelle de setState
   const ajouterAuPanier = (produit, typeVenteSpecifique = null) => {
     if (!produit) {
       return;
@@ -414,53 +414,63 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
 
     const { prix, prix_seuil } = obtenirPrixParType(produit, typeNormalise);
 
-    const produitExistant = panier.find(item =>
-      item && item.id === produit.id && item.type_vente === typeNormalise
-    );
-
-    if (produitExistant) {
-      const stockRestant = produit.stock_global - produitExistant.quantite;
-      if (stockRestant <= 0) {
-        addNotification('error', 'Stock insuffisant pour ajouter une unité supplémentaire');
-        return;
-      }
-
-      setPanier(panier.map(item =>
+    // Utilisation de la forme fonctionnelle pour éviter les problèmes de state obsolète
+    setPanier(prevPanier => {
+      // Chercher si le produit existe déjà dans le panier
+      const produitExistant = prevPanier.find(item =>
         item && item.id === produit.id && item.type_vente === typeNormalise
-          ? { 
-              ...item, 
-              quantite: item.quantite + 1,
-              prix_unitaire: item.prix_vente
-            }
-          : item
-      ));
-      addNotification('success', `${produit.nom} quantité augmentée`);
-    } else {
-      setPanier([...panier.filter(item => item), {
-        ...produit,
-        quantite: 1,
-        type_vente: typeNormalise,
+      );
+
+      if (produitExistant) {
+        const stockRestant = produit.stock_global - produitExistant.quantite;
+        if (stockRestant <= 0) {
+          addNotification('error', 'Stock insuffisant pour ajouter une unité supplémentaire');
+          return prevPanier;
+        }
+
+        addNotification('success', `${produit.nom} quantité augmentée`);
         
-        prix_vente: prix,
-        prix_base: prix,
-        prix_seuil: prix_seuil,
-        prix_original: prix,
+        // Mettre à jour la quantité du produit existant
+        return prevPanier.map(item =>
+          item && item.id === produit.id && item.type_vente === typeNormalise
+            ? { 
+                ...item, 
+                quantite: item.quantite + 1,
+                prix_unitaire: item.prix_vente
+              }
+            : item
+        );
+      } else {
+        addNotification('success', `${produit.nom} ajouté au panier`);
         
-        prix_unitaire: prix,
-        prix_detail: produit.prix_vente_detail || produit.prix || 0,
-        prix_gros: produit.prix_vente_gros || produit.prix_unite_carton || 0,
+        // Ajouter le nouveau produit
+        const nouveauProduit = {
+          ...produit,
+          quantite: 1,
+          type_vente: typeNormalise,
+          
+          prix_vente: prix,
+          prix_base: prix,
+          prix_seuil: prix_seuil,
+          prix_original: prix,
+          
+          prix_unitaire: prix,
+          prix_detail: produit.prix_vente_detail || produit.prix || 0,
+          prix_gros: produit.prix_vente_gros || produit.prix_unite_carton || 0,
+          
+          type_vente_affichage: typeVente,
+          
+          stock_initial: produit.stock_global,
+          stock_seuil: produit.stock_seuil,
+          
+          unite_par_carton: produit.unite_carton || 1,
+          
+          categorie: produit.categorie || 'Non catégorisé'
+        };
         
-        type_vente_affichage: typeVente,
-        
-        stock_initial: produit.stock_global,
-        stock_seuil: produit.stock_seuil,
-        
-        unite_par_carton: produit.unite_carton || 1,
-        
-        categorie: produit.categorie || 'Non catégorisé'
-      }]);
-      addNotification('success', `${produit.nom} ajouté au panier`);
-    }
+        return [...prevPanier.filter(item => item), nouveauProduit];
+      }
+    });
   };
 
   const ajouterParCodeBarre = async () => {
@@ -475,20 +485,20 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
       if (produitTrouve) {
         const produitFormate = {
           id: produitTrouve.id,
-          nom: produitTrouve.nom,
-          code_barre: produitTrouve.code_barre || '',
+          nom: produitTrouve.nom || 'Produit sans nom',
+          code_barre: produitTrouve.code_barre || codeBarre,
           
-          prix_vente_detail: produitTrouve.prix_vente_detail || produitTrouve.prix || 0,
-          prix_vente_gros: produitTrouve.prix_vente_gros || produitTrouve.prix_unite_carton || 0,
+          prix_vente_detail: produitTrouve.prix_vente_detail || 0,
+          prix_vente_gros: produitTrouve.prix_vente_gros || 0,
           prix_achat: produitTrouve.prix_achat || 0,
           prix_total: produitTrouve.prix_total || 0,
           
-          prix_seuil_detail: produitTrouve.prix_seuil_detail || Math.round((produitTrouve.prix_vente_detail || produitTrouve.prix || 0) * 0.7),
-          prix_seuil_gros: produitTrouve.prix_seuil_gros || Math.round((produitTrouve.prix_vente_gros || produitTrouve.prix_unite_carton || 0) * 0.7),
+          prix_seuil_detail: produitTrouve.prix_seuil_detail || Math.round((produitTrouve.prix_vente_detail || 0) * 0.7),
+          prix_seuil_gros: produitTrouve.prix_seuil_gros || Math.round((produitTrouve.prix_vente_gros || 0) * 0.7),
           
-          stock_global: produitTrouve.stock_global || produitTrouve.stock || 0,
+          stock_global: produitTrouve.stock_global || 0,
           stock_seuil: produitTrouve.stock_seuil || 10,
-          stock: produitTrouve.stock_global || produitTrouve.stock || 0,
+          stock: produitTrouve.stock_global || 0,
           seuil_alerte: produitTrouve.stock_seuil || 10,
           
           unite_carton: produitTrouve.unite_carton || 1,
@@ -496,15 +506,15 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
           nombre_carton: produitTrouve.nombre_carton || Math.floor((produitTrouve.stock_global || 0) / (produitTrouve.unite_carton || 1)),
           
           categorie_id: produitTrouve.categorie_id,
-          categorie: produitTrouve.categorie_nom || 'Non catégorisé',
+          categorie: produitTrouve.categorie || 'Non catégorisé',
           
-          created_at: produitTrouve.created_at,
-          updated_at: produitTrouve.updated_at,
+          created_at: produitTrouve.created_at || new Date().toISOString(),
+          updated_at: produitTrouve.updated_at || new Date().toISOString(),
           
-          prix: produitTrouve.prix_vente_detail || produitTrouve.prix || 0,
-          prix_detail: produitTrouve.prix_vente_detail || produitTrouve.prix || 0,
-          prix_gros: produitTrouve.prix_vente_gros || produitTrouve.prix_unite_carton || 0,
-          prix_seuil: produitTrouve.prix_seuil_detail || Math.round((produitTrouve.prix_vente_detail || produitTrouve.prix || 0) * 0.7)
+          prix: produitTrouve.prix_vente_detail || 0,
+          prix_detail: produitTrouve.prix_vente_detail || 0,
+          prix_gros: produitTrouve.prix_vente_gros || 0,
+          prix_seuil: produitTrouve.prix_seuil_detail || 0
         };
 
         ajouterAuPanier(produitFormate, typeVenteGlobal);
@@ -516,6 +526,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
         addNotification('error', 'Aucun produit trouvé avec ce code barre');
       }
     } catch (error) {
+      console.error('Erreur recherche code barre:', error);
       addNotification('error', 'Erreur lors de la recherche du code barre');
     }
   };
@@ -559,11 +570,13 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
         return;
       }
 
-      setPanier(panier.map(item =>
-        item && item.id === produitId && item.type_vente === typeVente
-          ? { ...item, quantite: nouvelleQuantite }
-          : item
-      ));
+      setPanier(prevPanier =>
+        prevPanier.map(item =>
+          item && item.id === produitId && item.type_vente === typeVente
+            ? { ...item, quantite: nouvelleQuantite }
+            : item
+        )
+      );
       addNotification('success', 'Quantité modifiée avec succès');
     }
 
@@ -574,6 +587,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
     setEditionQuantite(null);
   };
 
+  // ✅ FONCTION CORRIGÉE
   const modifierQuantite = (produitId, typeVente, nouvelleQuantite) => {
     if (nouvelleQuantite <= 0) {
       retirerDuPanier(produitId, typeVente);
@@ -584,18 +598,22 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
         return;
       }
 
-      setPanier(panier.map(item =>
-        item && item.id === produitId && item.type_vente === typeVente
-          ? { ...item, quantite: nouvelleQuantite }
-          : item
-      ));
+      setPanier(prevPanier =>
+        prevPanier.map(item =>
+          item && item.id === produitId && item.type_vente === typeVente
+            ? { ...item, quantite: nouvelleQuantite }
+            : item
+        )
+      );
     }
   };
 
   const retirerDuPanier = (produitId, typeVente) => {
-    setPanier(panier.filter(item =>
-      !(item && item.id === produitId && item.type_vente === typeVente)
-    ));
+    setPanier(prevPanier =>
+      prevPanier.filter(item =>
+        !(item && item.id === produitId && item.type_vente === typeVente)
+      )
+    );
     if (editionPrix && editionPrix.produitId === produitId && editionPrix.typeVente === typeVente) {
       setEditionPrix(null);
     }
@@ -627,6 +645,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
     });
   };
 
+  // ✅ FONCTION CORRIGÉE
   const validerModificationPrix = () => {
     if (!editionPrix) return;
 
@@ -642,11 +661,13 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
       return;
     }
 
-    setPanier(panier.map(item =>
-      item && item.id === produitId && item.type_vente === typeVente
-        ? { ...item, prix_vente: nouveauPrix }
-        : item
-    ));
+    setPanier(prevPanier =>
+      prevPanier.map(item =>
+        item && item.id === produitId && item.type_vente === typeVente
+          ? { ...item, prix_vente: nouveauPrix }
+          : item
+      )
+    );
 
     setEditionPrix(null);
     addNotification('success', `Prix modifié à ${nouveauPrix.toLocaleString()} FCFA`);
@@ -661,11 +682,13 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
       item && item.id === produitId && item.type_vente === typeVente
     );
     if (produit) {
-      setPanier(panier.map(item =>
-        item && item.id === produitId && item.type_vente === typeVente
-          ? { ...item, prix_vente: produit.prix_original }
-          : item
-      ));
+      setPanier(prevPanier =>
+        prevPanier.map(item =>
+          item && item.id === produitId && item.type_vente === typeVente
+            ? { ...item, prix_vente: produit.prix_original }
+            : item
+        )
+      );
       addNotification('info', `Prix réinitialisé à ${produit.prix_original.toLocaleString()} FCFA`);
     }
   };
@@ -911,7 +934,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
             success: true,
             data: {
               id: `temp-pusher-${Date.now()}`,
-              numero: apiResponse?.data?.numero ||0,
+              numero: apiResponse?.data?.numero || 0,
               statut: 'en_attente_paiement',
               created_at: new Date().toISOString(),
               type_vente: typeVenteGlobalCommande,
@@ -1277,11 +1300,11 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
 
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {produitsFiltres.map(produit => {
+        {produitsFiltres.map((produit, index) => {
           if (!produit) return null;
 
           return (
-            <div key={produit.index || Date.now()} className="bg-gray-50 rounded-lg p-4 border-2 border-gray-200 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-[#472ead] flex flex-col justify-between">
+            <div key={produit.id || index} className="bg-gray-50 rounded-lg p-4 border-2 border-gray-200 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-[#472ead] flex flex-col justify-between">
               <div>
                 <h4 className="text-sm font-semibold text-gray-800 mb-2">{produit.nom || 'Produit sans nom'}</h4>
                 <div className="space-y-2 mb-3">
