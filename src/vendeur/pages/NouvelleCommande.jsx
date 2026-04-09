@@ -173,6 +173,10 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
 
   const inputCodeBarreRef = useRef(null);
   const inputNomClientRef = useRef(null);
+  
+  // Ref pour éviter les appels multiples
+  const isInitialMount = useRef(true);
+  const isLoadingRef = useRef(false);
 
   const addNotification = (type, message) => {
     const id = Date.now();
@@ -199,11 +203,43 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
     return type;
   };
 
+  // ✅ CHARGEMENT UNIQUE AU MONTAGE
   useEffect(() => {
     chargerProduits();
-    console.log(boutiqueId);
     chargerInfosVendeur();
   }, []);
+
+  // ✅ EFFET SÉPARÉ POUR LA RECHERCHE ET LA PAGINATION (sans double chargement)
+  useEffect(() => {
+    // Skip le chargement initial car déjà fait
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    
+    chargerProduits();
+  }, [currentPage, debouncedRechercheProduit]);
+
+  // ✅ EFFET POUR L'ÉCOUTE WEBSOCKET
+  useEffect(() => {
+    if (!boutiqueId) return;
+    
+    const channel = echo.private(`boutique.${boutiqueId}`);
+    const listener = () => {
+      chargerProduits();
+    };
+    
+    channel.listen('.transfert.validee', listener);
+    
+    return () => {
+      try {
+        channel.stopListening('.transfert.validee');
+        echo.leave(`boutique.${boutiqueId}`);
+      } catch (error) {
+        console.error('Erreur lors de la désinscription:', error);
+      }
+    };
+  }, [boutiqueId]);
 
   useEffect(() => {
     if (sellerName && sellerName !== vendeurInfo.nom) {
@@ -220,38 +256,10 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
   }, [produits]);
 
   useEffect(() => {
-    chargerProduits();
-  }, [currentPage, debouncedRechercheProduit]);
-
-  useEffect(() => {
     if (inputCodeBarreRef.current) {
       inputCodeBarreRef.current.focus();
     }
   }, []);
-
-  useEffect(() => {
-    if (!boutiqueId) return;
-    const channel = echo.private(`boutique.${boutiqueId}`);
-    const listener = () => {
-        chargerProduits();
-    };
-    channel.listen('.transfert.validee', listener);
-    return () => {
-        try {
-            channel.stopListening('.transfert.validee');
-            echo.leave(`boutique.${boutiqueId}`);
-            addNotification(
-                'info',
-                'Désinscription du canal temps réel réussie.'
-            );
-        } catch (error) {
-            addNotification(
-                'error',
-                'Erreur lors de la désinscription. Rafraîchis la page.'
-            );
-        }
-    };
-  }, [boutiqueId]);
 
   const chargerInfosVendeur = async () => {
     try {
@@ -296,75 +304,86 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
     };
   };
 
+  // ✅ CHARGEMENT DES PRODUITS OPTIMISÉ
   const chargerProduits = async () => {
+    // Éviter les chargements multiples simultanés
+    if (isLoadingRef.current) return;
+    
     try {
+      isLoadingRef.current = true;
       setLoadingProduits(true);
       setErrorMessage('');
 
-      const resp = await gestionnaireBoutiqueAPI.getProduitsDisponiblesBoutique(currentPage, debouncedRechercheProduit || '');
+      const resp = await gestionnaireBoutiqueAPI.getProduitsDisponiblesBoutique(
+        currentPage, 
+        debouncedRechercheProduit || ''
+      );
+      
       const itemsRaw = Array.isArray(resp) ? resp : (resp?.data || []);
 
-      const produitsFormates = itemsRaw.map(produit => {
-        const prixDetail = produit.prix_vente_detail || produit.prix || 0;
-        const prixGros = produit.prix_vente_gros || produit.prix_unite_carton || Math.round(prixDetail * 0.8);
-        
-        return {
-          id: produit.id,
-          nom: produit.produit.nom,
-          code_barre: produit.produit.code || '',
-          prix_vente_detail: prixDetail,
-          prix_vente_gros: prixGros,
-          prix_achat: produit.prix_achat || 0,
-          prix_total: produit.prix_total || 0,
-          prix_seuil_detail: produit.prix_seuil_detail || Math.round(prixDetail * 0.7),
-          prix_seuil_gros: produit.prix_seuil_gros || Math.round(prixGros * 0.7),
-          stock_global: produit.quantite || produit.stock || 0,
-          stock_seuil: produit.seuil || 10,
-          stock: produit.quantite || produit.stock || 0,
-          seuil_alerte: produit.seuil || 10,
-          unite_carton: produit.unite_carton || 1,
-          prix_unite_carton: prixGros,
-          nombre_carton: produit.nombre_carton || Math.floor((produit.stock_global || 0) / (produit.unite_carton || 1)),
-          categorie_id: produit.produit.categorie.id,
-          categorie: produit.produit.categorie.nom || 'Non catégorisé',
-          created_at: produit.created_at,
-          updated_at: produit.updated_at,
-          prix: prixDetail,
-          prix_detail: prixDetail,
-          prix_gros: prixGros,
-          prix_seuil: produit.prix_seuil_detail || Math.round(prixDetail * 0.7)
-        };
-      });
+      const produitsFormates = itemsRaw.map(produit => ({
+        id: produit.id,
+        nom: produit.produit?.nom || 'Produit sans nom',
+        code_barre: produit.produit?.code || '',
+        prix_vente_detail: produit.prix_vente_detail || produit.prix || 0,
+        prix_vente_gros: produit.prix_vente_gros || produit.prix_unite_carton || 0,
+        prix_achat: produit.prix_achat || 0,
+        prix_total: produit.prix_total || 0,
+        prix_seuil_detail: produit.prix_seuil_detail || Math.round((produit.prix_vente_detail || 0) * 0.7),
+        prix_seuil_gros: produit.prix_seuil_gros || Math.round((produit.prix_vente_gros || 0) * 0.7),
+        stock_global: produit.quantite || produit.stock || 0,
+        stock_seuil: produit.seuil || 10,
+        stock: produit.quantite || produit.stock || 0,
+        seuil_alerte: produit.seuil || 10,
+        unite_carton: produit.unite_carton || 1,
+        prix_unite_carton: produit.prix_vente_gros || 0,
+        nombre_carton: produit.nombre_carton || Math.floor((produit.stock_global || 0) / (produit.unite_carton || 1)),
+        categorie_id: produit.produit?.categorie?.id,
+        categorie: produit.produit?.categorie?.nom || 'Non catégorisé',
+        created_at: produit.created_at,
+        updated_at: produit.updated_at,
+        prix: produit.prix_vente_detail || 0,
+        prix_detail: produit.prix_vente_detail || 0,
+        prix_gros: produit.prix_vente_gros || 0,
+        prix_seuil: produit.prix_seuil_detail || 0
+      }));
 
-      setProduits(produitsFormates);
+      // Éviter la mise à jour si les données sont identiques
+      setProduits(prevProduits => {
+        if (JSON.stringify(prevProduits) === JSON.stringify(produitsFormates)) {
+          return prevProduits;
+        }
+        return produitsFormates;
+      });
+      
       setProduitsFiltres(produitsFormates);
       
+      // Gestion de la pagination
       if (!Array.isArray(resp)) {
-        const links = Array.isArray(resp.links) ? resp.links.map(l => {
-          let p = l.page;
-          if (!p && l.url) {
-            const m = l.url.match(/[?&]page=(\d+)/);
-            if (m && m[1]) p = parseInt(m[1], 10);
-          }
-          return { ...l, page: p };
-        }) : [];
         setPageInfo({
           current: resp.current_page || 1,
           last: resp.last_page || 1,
           total: resp.total || produitsFormates.length,
           perPage: resp.per_page || produitsFormates.length,
-          links
+          links: resp.links || []
         });
       } else {
-        setPageInfo({ current: 1, last: 1, total: produitsFormates.length, perPage: produitsFormates.length, links: [] });
+        setPageInfo({ 
+          current: 1, 
+          last: 1, 
+          total: produitsFormates.length, 
+          perPage: produitsFormates.length, 
+          links: [] 
+        });
       }
 
     } catch (error) {
+      console.error('Erreur chargement produits:', error);
       setErrorMessage('Impossible de charger les produits depuis l\'API.');
       setProduits([]);
-      
     } finally {
       setLoadingProduits(false);
+      isLoadingRef.current = false;
     }
   };
 
@@ -393,7 +412,6 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
     };
   };
 
-  // ✅ FONCTION CORRIGÉE - Utilisation de la forme fonctionnelle de setState
   const ajouterAuPanier = (produit, typeVenteSpecifique = null) => {
     if (!produit) {
       return;
@@ -414,9 +432,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
 
     const { prix, prix_seuil } = obtenirPrixParType(produit, typeNormalise);
 
-    // Utilisation de la forme fonctionnelle pour éviter les problèmes de state obsolète
     setPanier(prevPanier => {
-      // Chercher si le produit existe déjà dans le panier
       const produitExistant = prevPanier.find(item =>
         item && item.id === produit.id && item.type_vente === typeNormalise
       );
@@ -430,7 +446,6 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
 
         addNotification('success', `${produit.nom} quantité augmentée`);
         
-        // Mettre à jour la quantité du produit existant
         return prevPanier.map(item =>
           item && item.id === produit.id && item.type_vente === typeNormalise
             ? { 
@@ -443,7 +458,6 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
       } else {
         addNotification('success', `${produit.nom} ajouté au panier`);
         
-        // Ajouter le nouveau produit
         const nouveauProduit = {
           ...produit,
           quantite: 1,
@@ -587,7 +601,6 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
     setEditionQuantite(null);
   };
 
-  // ✅ FONCTION CORRIGÉE
   const modifierQuantite = (produitId, typeVente, nouvelleQuantite) => {
     if (nouvelleQuantite <= 0) {
       retirerDuPanier(produitId, typeVente);
@@ -645,7 +658,6 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
     });
   };
 
-  // ✅ FONCTION CORRIGÉE
   const validerModificationPrix = () => {
     if (!editionPrix) return;
 
@@ -917,7 +929,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
       };
 
       let apiResponse = null;
-      let apiError = null;
+      let apiErrorObj = null;
       let commandeCreee = false;
 
       try {
@@ -925,7 +937,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
         apiResponse = await commandesAPI.create(commandeData);
         commandeCreee = true;
       } catch (error) {
-        apiError = error;
+        apiErrorObj = error;
 
         if (isPusherError(error)) {
           commandeCreee = true;
@@ -1017,10 +1029,10 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
           
           statut: apiResponse?.data?.statut || 'en_attente_paiement',
           api_success: true,
-          api_message: isPusherError(apiError) ? 'Créée avec succès (notification échouée)' : 'Créée avec succès',
+          api_message: isPusherError(apiErrorObj) ? 'Créée avec succès (notification échouée)' : 'Créée avec succès',
           api_data: apiResponse?.data,
-          api_error: isPusherError(apiError) ? 'Erreur notification WebSocket' : null,
-          has_pusher_error: isPusherError(apiError)
+          api_error: isPusherError(apiErrorObj) ? 'Erreur notification WebSocket' : null,
+          has_pusher_error: isPusherError(apiErrorObj)
         };
       } else {
         nouvelleCommande = {
@@ -1087,7 +1099,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
           statut: 'en_attente_paiement',
           api_success: false,
           api_message: 'Créée localement (erreur serveur)',
-          api_error: apiError?.message || 'Erreur de connexion',
+          api_error: apiErrorObj?.message || 'Erreur de connexion',
           is_local: true
         };
       }
@@ -1106,15 +1118,15 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
         inputCodeBarreRef.current.focus();
       }
 
-      if (apiError && !commandeCreee) {
+      if (apiErrorObj && !commandeCreee) {
         setApiError({
           type: 'error',
           message: 'Erreur serveur. Commande sauvegardée localement.',
-          details: apiError.response?.data?.message || apiError.message
+          details: apiErrorObj.response?.data?.message || apiErrorObj.message
         });
 
         addNotification('warning', `Commande ${nouvelleCommande.numero_commande} sauvegardée localement (${totalTTCCalcule.toLocaleString()} FCFA)`);
-      } else if (commandeCreee && isPusherError(apiError)) {
+      } else if (commandeCreee && isPusherError(apiErrorObj)) {
         addNotification('success', `Commande ${nouvelleCommande.numero_commande} créée avec succès (${totalTTCCalcule.toLocaleString()} FCFA) !`);
         addNotification('info', 'Les notifications temps-réel sont temporairement indisponibles');
       } else {
