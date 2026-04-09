@@ -20,7 +20,7 @@ import { useCommandesClientSpecial } from "@/hooks/useCommandesClientSpecial";
 import { formatFCFA, getPaiementEffectiveStatus } from "@/utils/formatUtils";
 import HistoriqueCommandes from "./HistoriqueCommandes";
 import HistoriquePaiements from "./HistoriquePaiements";
-import { clientsAPI } from "@/services/api/clients";
+import { clientsAPI } from "@/responsable/services/api/clients";
 import { useHistoriqueEncaissementsClient } from "@/hooks/useHistoriqueEncaissementsClient";
 
 // === COMPOSANTS INTERNES PREMIUM ===
@@ -272,7 +272,6 @@ export default function VoirDetailClient({
           setClientStats(data);
         }
       } catch (error) {
-        console.error("Erreur chargement stats client", error);
         if (mounted) {
           toast.error("Impossible de charger les statistiques du client");
         }

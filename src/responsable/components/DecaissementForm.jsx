@@ -10,7 +10,7 @@
 
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { decaissementsAPI } from "@/services/api";
+import { decaissementsAPI } from "@/responsable/services/api";
 import {
   Loader2,
   Wallet,
