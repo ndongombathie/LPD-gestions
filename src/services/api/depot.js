@@ -81,7 +81,7 @@ const depotAPI = {
         fournisseur_id: produit.fournisseur?.id ?? 
                        produit.fournisseur_id ?? 
                        null,
-        
+        prix_total: produit.prix_total ?? 0,
         prix_achat: produit.prix_achat ?? produit.prix ?? 0,
         nombre_carton: produit.nombre_carton ?? produit.quantite ?? 0,
         stock_global: produit.stock_global ?? produit.stock ?? 0,

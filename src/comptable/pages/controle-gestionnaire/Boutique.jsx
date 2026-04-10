@@ -179,12 +179,7 @@ const FicheProduit = ({ produit, onClose }) => {
               <span className="text-gray-600">Fournisseur:</span>
               <span className="font-medium">{produit.fournisseur}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Prix d'achat:</span>
-              <span className="font-medium text-[#472EAD]">
-                {formatFCFA(produit.prix_achat)}
-              </span>
-            </div>
+            
           </div>
         </div>
 
@@ -540,7 +535,7 @@ export default function Boutique() {
                         <tr>
                           <th className="p-3 text-left text-gray-600 font-semibold">Produit</th>
                           <th className="p-3 text-left text-gray-600 font-semibold">Catégorie</th>
-                          <th className="p-3 text-center text-gray-600 font-semibold">Prix</th>
+                     
                           <th className="p-3 text-center text-gray-600 font-semibold">Qté</th>
                           <th className="p-3 text-center text-gray-600 font-semibold">Seuil</th>
                           <th className="p-3 text-center text-gray-600 font-semibold">État</th>
@@ -561,7 +556,7 @@ export default function Boutique() {
                                   {p.categorie_nom}
                                 </span>
                               </td>
-                              <td className="p-3 text-center">{formatFCFA(p.prix_achat)}</td>
+                              
                               <td className="p-3 text-center font-medium">{p.quantite}</td>
                               <td className="p-3 text-center">{p.seuil}</td>
                               <td className="p-3 text-center">
