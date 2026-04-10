@@ -31,42 +31,46 @@ export default function InventaireBoutique() {
 
   /* ================= FETCH ================= */
   const fetchData = useCallback(async () => {
-    try {
-      setLoading(true);
+  try {
+    setLoading(true);
 
-      const res = await inventaireBoutiqueAPI.getInventaire({
-        page,
-        per_page: PER_PAGE,
-        date_debut: dateDebut || undefined,
-        date_fin: dateFin || undefined,
-      });
+    // 🔥 1. Charger produits
+    const res = await inventaireBoutiqueAPI.getInventaire({
+      page,
+      per_page: PER_PAGE,
+      date_debut: dateDebut || undefined,
+      date_fin: dateFin || undefined,
+    });
 
-      setItems(res.items);
-      setPagination(res.pagination);
+    setItems(res.items);
+    setPagination(res.pagination);
 
-      // Charger les cartes financières à chaque fetch
-      if (dateDebut && dateFin) {
-        try {
-          const totalsRes = await inventaireBoutiqueAPI.enregistrerInventaire({
-            date_debut: dateDebut,
-            date_fin: dateFin,
-          });
-          setTotals(totalsRes);
-        } catch (err) {
-          console.error("Erreur chargement des totaux:", err);
-        }
+    // 🔥 2. Charger totaux (APRÈS)
+    if (dateDebut && dateFin) {
+      try {
+        const totalsRes = await inventaireBoutiqueAPI.enregistrerInventaire({
+          date_debut: dateDebut,
+          date_fin: dateFin,
+        });
+
+        setTotals({
+          prix_achat_total: totalsRes.prix_achat_total || 0,
+          prix_valeur_sortie_total: totalsRes.prix_valeur_sortie_total || 0,
+          valeur_estimee_total: totalsRes.valeur_estimee_total || 0,
+          benefice_total: totalsRes.benefice_total || 0,
+        });
+
+      } catch (err) {
+        console.error("Erreur chargement totaux:", err);
       }
-
-    } catch (err) {
-      console.error("Erreur inventaire boutique:", err);
-    } finally {
-      setLoading(false);
     }
-  }, [page, dateDebut, dateFin]);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  } catch (err) {
+    console.error("Erreur inventaire boutique:", err);
+  } finally {
+    setLoading(false);
+  }
+}, [page, dateDebut, dateFin]);
 
   /* ================= VALIDER DATES ================= */
   const validerDates = () => {
@@ -83,35 +87,39 @@ export default function InventaireBoutique() {
     setDateError("");
     return true;
   };
-
+useEffect(() => {
+  fetchData();
+}, [fetchData]);
   /* ================= ENREGISTRER ================= */
   const enregistrerInventaire = async () => {
-    if (!validerDates()) {
-      return;
-    }
+  if (!validerDates()) return;
 
-    try {
-      setSaving(true);
+  try {
+    setSaving(true);
 
-      const res = await inventaireBoutiqueAPI.enregistrerInventaire({
-        date_debut: dateDebut,
-        date_fin: dateFin,
-      });
+    const res = await inventaireBoutiqueAPI.enregistrerInventaire({
+      date_debut: dateDebut,
+      date_fin: dateFin,
+    });
 
-      setTotals(res);
-      
-      // Rafraîchir les données après enregistrement
-      await fetchData();
+    console.log("RESULTAT API:", res); // 🔥 debug
 
-      alert("✅ Inventaire boutique enregistré avec succès");
+    setTotals({
+      prix_achat_total: res.prix_achat_total || 0,
+      prix_valeur_sortie_total: res.prix_valeur_sortie_total || 0,
+      valeur_estimee_total: res.valeur_estimee_total || 0,
+      benefice_total: res.benefice_total || 0,
+    });
 
-    } catch (err) {
-      console.error(err);
-      alert("❌ Erreur enregistrement");
-    } finally {
-      setSaving(false);
-    }
-  };
+    alert("✅ Inventaire boutique enregistré avec succès");
+
+  } catch (err) {
+    console.error(err);
+    alert("❌ Erreur enregistrement");
+  } finally {
+    setSaving(false);
+  }
+};
 
   /* ================= IMPRIMER GLOBAL ================= */
   const imprimer = async () => {
@@ -320,7 +328,7 @@ export default function InventaireBoutique() {
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {items.map((p) => (
-                    <tr key={p.produit_id} className="hover:bg-indigo-50 transition-colors">
+                    <tr key={p.id} className="hover:bg-indigo-50 transition-colors">
                       <td className="px-8 py-5 text-gray-900 font-medium">{p.nom}</td>
                       <td className="px-8 py-5 text-center text-gray-900">{p.stock_initial}</td>
                       <td className="px-8 py-5 text-center text-gray-900">{p.quantite_vendue}</td>
