@@ -1,5 +1,5 @@
 /**
- * 📦 Commandes API - Version avec pagination
+ * 📦 Commandes API - Version avec pagination et filtres corrigés
  */
 import httpClient from '../http/client';
 
@@ -23,107 +23,129 @@ const ENDPOINTS = {
 
 export const commandesAPI = {
   /**
-   * Récupérer toutes les commandes avec pagination et filtres
-   * @param {Object} params - Paramètres de requête (page, perPage, date, status, type, search)
+   * Méthode principale flexible pour récupérer les commandes avec tous les filtres
+   */
+  getAllWithFilters: async (filters = {}) => {
+    try {
+      console.log('📦 API getAllWithFilters appelée avec filters:', filters);
+      
+      // Construire l'URL avec les paramètres
+      const params = new URLSearchParams();
+      
+      // Pagination
+      params.append('page', filters.page || 1);
+      params.append('per_page', filters.perPage || filters.per_page || 10);
+      
+      // Filtres - Support multi-formats (pour compatibilité avec différents backends)
+      if (filters.statut && filters.statut !== 'tous') {
+        params.append('statut', filters.statut);
+        params.append('status', filters.statut);
+      }
+      
+      if (filters.status && filters.status !== 'tous') {
+        params.append('status', filters.status);
+      }
+      
+      if (filters.type_vente && filters.type_vente !== 'tous') {
+        params.append('type_vente', filters.type_vente);
+        params.append('type', filters.type_vente);
+      }
+      
+      if (filters.type && filters.type !== 'tous') {
+        params.append('type', filters.type);
+      }
+      
+      // Dates
+      if (filters.date) {
+        params.append('date', filters.date);
+      }
+      
+      if (filters.date_debut) {
+        params.append('date_debut', filters.date_debut);
+        params.append('date_from', filters.date_debut);
+      }
+      
+      if (filters.date_fin) {
+        params.append('date_fin', filters.date_fin);
+        params.append('date_to', filters.date_fin);
+      }
+      
+      if (filters.date_from) {
+        params.append('date_from', filters.date_from);
+      }
+      
+      if (filters.date_to) {
+        params.append('date_to', filters.date_to);
+      }
+      
+      // Recherche
+      if (filters.recherche) {
+        params.append('recherche', filters.recherche);
+        params.append('search', filters.recherche);
+        params.append('q', filters.recherche);
+      }
+      
+      if (filters.search) {
+        params.append('search', filters.search);
+      }
+      
+      // Tri
+      if (filters.sort) {
+        params.append('sort', filters.sort);
+      }
+      
+      if (filters.sortField && filters.sortDirection) {
+        params.append('sort_by', filters.sortField);
+        params.append('sort_direction', filters.sortDirection);
+        params.append('sort', `${filters.sortField}:${filters.sortDirection}`);
+      }
+      
+      const url = `${ENDPOINTS.GET_ALL}?${params.toString()}`;
+      console.log('📤 URL complète:', url);
+      
+      const response = await httpClient.get(url);
+      
+      console.log('📥 Réponse reçue:', response.data);
+      
+      // Normaliser la réponse
+      return normalizeResponse(response.data, filters);
+      
+    } catch (error) {
+      console.error('❌ Erreur getAllWithFilters:', error);
+      
+      // Retourner des données mockées filtrées pour le développement
+      const mockData = generateFilteredMockCommandes(filters);
+      return mockData;
+    }
+  },
+
+  /**
+   * Récupérer toutes les commandes (alias de getAllWithFilters)
    */
   getAll: async (params = {}) => {
-    try {
-      console.log('📦 API getAll appelée avec params:', params);
-      
-      // Construction des paramètres pour l'API
-      const queryParams = {
-        page: params.page || 1,
-        per_page: params.perPage || params.per_page || 10,
-        ...(params.date && { date: params.date }),
-        ...(params.status && { status: params.status }),
-        ...(params.type && { type: params.type }),
-        ...(params.search && { search: params.search }),
-        ...(params.sort && { sort: params.sort }),
-        ...(params.orderBy && { order_by: params.orderBy })
-      };
-
-      const response = await httpClient.get(ENDPOINTS.GET_ALL, { params: queryParams });
-      
-      // La réponse du backend devrait avoir cette structure:
-      // {
-      //   data: [...],
-      //   current_page: 1,
-      //   last_page: 10,
-      //   per_page: 10,
-      //   total: 100,
-      //   from: 1,
-      //   to: 10
-      // }
-      
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erreur getAll commandes:', error.message);
-      
-      // Fallback pour le développement - simuler une réponse paginée
-      if (error.response?.status === 404 || error.message.includes('Network Error')) {
-        console.warn('⚠️ Endpoint non disponible, retour de données mockées paginées');
-        
-        // Simuler une réponse paginée
-        const mockData = generateMockCommandes(params.page || 1, params.perPage || 10);
-        
-        return {
-          data: mockData.data,
-          current_page: mockData.current_page,
-          last_page: mockData.last_page,
-          per_page: mockData.per_page,
-          total: mockData.total,
-          from: mockData.from,
-          to: mockData.to
-        };
-      }
-      throw error;
-    }
+    return commandesAPI.getAllWithFilters(params);
   },
 
   /**
-   * Récupérer les commandes en attente avec pagination
+   * Récupérer les commandes en attente
    */
   getPending: async (params = {}) => {
-    try {
-      const response = await httpClient.get(ENDPOINTS.GET_PENDING, { 
-        params: { 
-          page: params.page || 1,
-          per_page: params.perPage || 10 
-        } 
-      });
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erreur getPending commandes:', error.message);
-      const allCommandes = await commandesAPI.getAll({ 
-        page: params.page, 
-        perPage: params.perPage,
-        status: 'pending' 
-      });
-      return allCommandes;
-    }
+    return commandesAPI.getAllWithFilters({
+      ...params,
+      statut: 'en_attente_paiement',
+      status: 'en_attente_paiement'
+    });
   },
 
   /**
-   * Récupérer les commandes d'aujourd'hui avec pagination
+   * Récupérer les commandes d'aujourd'hui
    */
   getToday: async (params = {}) => {
-    try {
-      const response = await httpClient.get(ENDPOINTS.GET_TODAY, {
-        params: {
-          page: params.page || 1,
-          per_page: params.perPage || 10
-        }
-      });
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erreur getToday commandes:', error.message);
-      const allCommandes = await commandesAPI.getAll({ 
-        page: params.page, 
-        perPage: params.perPage,
-        date: new Date().toISOString().split('T')[0]
-      });
-      return allCommandes;
-    }
+    const today = new Date().toISOString().split('T')[0];
+    return commandesAPI.getAllWithFilters({
+      ...params,
+      date: today
+    });
   },
 
   /**
@@ -154,6 +176,41 @@ export const commandesAPI = {
   },
 
   /**
+   * Récupérer par plage de dates
+   */
+  getByDateRange: async (dateFrom, dateTo, params = {}) => {
+    return commandesAPI.getAllWithFilters({
+      ...params,
+      date_debut: dateFrom,
+      date_fin: dateTo,
+      date_from: dateFrom,
+      date_to: dateTo
+    });
+  },
+
+  /**
+   * Récupérer par statut
+   */
+  getByStatus: async (status, params = {}) => {
+    return commandesAPI.getAllWithFilters({
+      ...params,
+      statut: status,
+      status: status
+    });
+  },
+
+  /**
+   * Rechercher des commandes
+   */
+  search: async (query, params = {}) => {
+    return commandesAPI.getAllWithFilters({
+      ...params,
+      recherche: query,
+      search: query
+    });
+  },
+
+  /**
    * Récupérer les statistiques globales
    */
   getStats: async () => {
@@ -162,24 +219,6 @@ export const commandesAPI = {
       return response.data;
     } catch (error) {
       console.error('❌ Erreur getStats commandes:', error.message);
-      try {
-        // Récupérer juste la première page pour les stats
-        const response = await commandesAPI.getAll({ page: 1, perPage: 1 });
-        if (response && response.total) {
-          return {
-            total: response.total,
-            aujourdhui: 0,
-            pending: 0,
-            completed: 0,
-            cancelled: 0,
-            revenue_total: 0,
-            revenue_today: 0
-          };
-        }
-      } catch (fallbackError) {
-        console.warn('⚠️ Impossible de calculer les stats');
-      }
-      
       return {
         total: 0,
         aujourdhui: 0,
@@ -189,108 +228,6 @@ export const commandesAPI = {
         revenue_total: 0,
         revenue_today: 0
       };
-    }
-  },
-
-  /**
-   * Récupérer par plage de dates avec pagination
-   */
-  getByDateRange: async (dateFrom, dateTo, params = {}) => {
-    try {
-      const response = await httpClient.get(ENDPOINTS.GET_BY_DATE_RANGE, {
-        params: { 
-          date_from: dateFrom, 
-          date_to: dateTo,
-          page: params.page || 1,
-          per_page: params.perPage || 10
-        }
-      });
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erreur getByDateRange:', error.message);
-      const allCommandes = await commandesAPI.getAll({ 
-        page: params.page, 
-        perPage: params.perPage 
-      });
-      // Filtrer côté client en cas d'erreur
-      if (allCommandes.data) {
-        const filtered = allCommandes.data.filter(c => {
-          const dateCommande = new Date(c.created_at || c.date).toISOString().split('T')[0];
-          return dateCommande >= dateFrom && dateCommande <= dateTo;
-        });
-        return {
-          data: filtered,
-          current_page: 1,
-          last_page: 1,
-          per_page: filtered.length,
-          total: filtered.length
-        };
-      }
-      return { data: [] };
-    }
-  },
-
-  /**
-   * Récupérer par statut avec pagination
-   */
-  getByStatus: async (status, params = {}) => {
-    try {
-      const response = await httpClient.get(
-        ENDPOINTS.GET_BY_STATUS.replace(':status', status),
-        { params: { page: params.page || 1, per_page: params.perPage || 10 } }
-      );
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erreur getByStatus:', error.message);
-      // Fallback: utiliser getAll avec filtre status
-      return commandesAPI.getAll({ 
-        page: params.page, 
-        perPage: params.perPage,
-        status: status 
-      });
-    }
-  },
-
-  /**
-   * Rechercher dans les commandes avec pagination
-   */
-  search: async (query, params = {}) => {
-    try {
-      const response = await httpClient.get(ENDPOINTS.SEARCH, {
-        params: { 
-          q: query,
-          page: params.page || 1,
-          per_page: params.perPage || 10
-        }
-      });
-      return response.data;
-    } catch (error) {
-      console.error('❌ Erreur search commandes:', error.message);
-      // Fallback: filtrage côté client
-      const allCommandes = await commandesAPI.getAll({ page: 1, perPage: 100 });
-      if (allCommandes.data) {
-        const searchLower = query.toLowerCase();
-        const filtered = allCommandes.data.filter(c => 
-          (c.client_nom && c.client_nom.toLowerCase().includes(searchLower)) ||
-          (c.numero_commande && c.numero_commande.toLowerCase().includes(searchLower)) ||
-          (c.client_telephone && c.client_telephone.includes(query))
-        );
-        
-        // Pagination manuelle
-        const page = params.page || 1;
-        const perPage = params.perPage || 10;
-        const start = (page - 1) * perPage;
-        const paginatedData = filtered.slice(start, start + perPage);
-        
-        return {
-          data: paginatedData,
-          current_page: page,
-          last_page: Math.ceil(filtered.length / perPage),
-          per_page: perPage,
-          total: filtered.length
-        };
-      }
-      return { data: [] };
     }
   },
 
@@ -307,51 +244,6 @@ export const commandesAPI = {
     } catch (error) {
       console.error('❌ Erreur export commandes:', error.message);
       throw error;
-    }
-  },
-
-  /**
-   * Méthode de test pour vérifier la structure attendue
-   */
-  testStructure: async () => {
-    try {
-      const testData = {
-        client_nom: "Test Client API",
-        vendeur_nom: "Test Vendeur",
-        items: [
-          {
-            produit_id: 999,
-            nom: "Produit Test API",
-            quantite: 1,
-            prix_unitaire: 1500,
-            type_vente: "detail",
-            prix_detail: 1500,
-            prix_gros: 1200,
-            prix_original: 1500,
-            sous_total: 1500
-          }
-        ],
-        montant_ht: 1500,
-        montant_ttc: 1770,
-        tva: 270,
-        tva_appliquee: true,
-        statut: "test_diagnostic",
-        date_commande: new Date().toISOString()
-      };
-
-      console.log('🧪 API TEST - Données envoyées:', JSON.stringify(testData, null, 2));
-      
-      const response = await httpClient.post(ENDPOINTS.TEST_STRUCTURE, testData);
-      
-      console.log('🧪 API TEST - Réponse:', JSON.stringify(response.data, null, 2));
-      return response.data;
-    } catch (error) {
-      console.warn('⚠️ Endpoint test non disponible:', error.message);
-      return {
-        warning: "Endpoint test non disponible",
-        received_data: "Voir console pour les logs",
-        suggestion: "Créez un endpoint /commandes/test-structure dans votre backend"
-      };
     }
   },
 
@@ -434,7 +326,7 @@ export const commandesAPI = {
   },
 
   /**
-   * Valider une commande (marquer comme payée/complétée)
+   * Valider une commande
    */
   validate: async (id) => {
     try {
@@ -541,75 +433,202 @@ export const commandesAPI = {
 };
 
 /**
- * Génère des données mockées pour les tests
+ * Normalise la réponse de l'API
  */
-function generateMockCommandes(page = 1, perPage = 10) {
-  const total = 57; // Nombre total de commandes mockées
-  const lastPage = Math.ceil(total / perPage);
-  const start = (page - 1) * perPage;
-  const end = Math.min(start + perPage, total);
+function normalizeResponse(response, filters = {}) {
+  // Si la réponse a déjà la structure attendue
+  if (response && response.data && Array.isArray(response.data)) {
+    return {
+      data: response.data,
+      current_page: response.current_page || filters.page || 1,
+      last_page: response.last_page || 1,
+      per_page: response.per_page || filters.perPage || 10,
+      total: response.total || response.data.length,
+      from: response.from || 1,
+      to: response.to || response.data.length,
+      success: true
+    };
+  }
   
-  const commandes = [];
-  for (let i = start; i < end; i++) {
-    const index = i + 1;
+  // Si la réponse est directement un tableau
+  if (Array.isArray(response)) {
+    return {
+      data: response,
+      current_page: filters.page || 1,
+      last_page: 1,
+      per_page: response.length,
+      total: response.length,
+      from: 1,
+      to: response.length,
+      success: true
+    };
+  }
+  
+  // Si la réponse est un objet avec une propriété data qui est un objet
+  if (response && response.data && !Array.isArray(response.data)) {
+    return {
+      data: [response.data],
+      current_page: filters.page || 1,
+      last_page: 1,
+      per_page: 1,
+      total: 1,
+      from: 1,
+      to: 1,
+      success: true
+    };
+  }
+  
+  // Structure par défaut
+  return {
+    data: [],
+    current_page: filters.page || 1,
+    last_page: 1,
+    per_page: filters.perPage || 10,
+    total: 0,
+    from: 0,
+    to: 0,
+    success: true
+  };
+}
+
+/**
+ * Génère des données mockées filtrées pour le développement
+ */
+function generateFilteredMockCommandes(filters = {}) {
+  console.log('🎭 Génération de données mockées avec filtres:', filters);
+  
+  let allCommandes = [];
+  const total = 57;
+  
+  // Générer toutes les commandes
+  for (let i = 1; i <= total; i++) {
     const date = new Date();
     date.setDate(date.getDate() - Math.floor(Math.random() * 30));
     
     const statuts = ['complétée', 'en_attente_paiement', 'annulée'];
     const types = ['détail', 'gros', 'mixte'];
-    const statut = statuts[Math.floor(Math.random() * statuts.length)];
-    const type = types[Math.floor(Math.random() * types.length)];
+    const commandeStatut = statuts[Math.floor(Math.random() * statuts.length)];
+    const commandeType = types[Math.floor(Math.random() * types.length)];
     const tvaAppliquee = Math.random() > 0.3;
     const montantHT = Math.floor(Math.random() * 50000) + 5000;
     const tva = tvaAppliquee ? Math.round(montantHT * 0.18) : 0;
     const montantTTC = montantHT + tva;
     
-    commandes.push({
-      id: `mock-${index}`,
-      uuid: `mock-uuid-${index}`,
-      numero_commande: `CMD-MOCK-${index.toString().padStart(4, '0')}`,
+    allCommandes.push({
+      id: i,
+      uuid: `uuid-${i}`,
+      numero_commande: `CMD-${i.toString().padStart(4, '0')}`,
+      numero: `CMD-${i.toString().padStart(4, '0')}`,
       client: {
-        nom: `Client ${index}`,
+        nom: `Client ${i}`,
         telephone: `77${Math.floor(Math.random() * 10000000).toString().padStart(7, '0')}`,
-        adresse: `Adresse client ${index}`
+        adresse: `Adresse ${i}`
       },
-      statut: statut,
-      type_vente: type,
+      client_nom: `Client ${i}`,
+      client_telephone: `77${Math.floor(Math.random() * 10000000).toString().padStart(7, '0')}`,
+      statut: commandeStatut,
+      status: commandeStatut,
+      type_vente: commandeType,
       date: date.toISOString(),
+      created_at: date.toISOString(),
+      date_commande: date.toISOString(),
       vendeur: 'Vendeur Test',
+      vendeur_nom: 'Vendeur Test',
       montant_ht: montantHT,
-      tva: tva,
       montant_ttc: montantTTC,
       total_ht: montantHT,
       total_ttc: montantTTC,
+      tva: tva,
       tva_appliquee: tvaAppliquee,
-      tva_active: tvaAppliquee,
-      tva_taux: tvaAppliquee ? 18 : 0,
-      produits: Array.from({ length: Math.floor(Math.random() * 5) + 1 }, (_, j) => ({
-        id: `mock-prod-${index}-${j}`,
-        nom: `Produit ${String.fromCharCode(65 + j)}`,
-        quantite: Math.floor(Math.random() * 10) + 1,
-        prix_unitaire: Math.floor(Math.random() * 5000) + 500,
-        type_vente: type === 'mixte' ? (j % 2 === 0 ? 'gros' : 'détail') : type,
-        sous_total: 0 // Sera calculé après
+      produits: Array.from({ length: Math.floor(Math.random() * 3) + 1 }, (_, j) => ({
+        id: j + 1,
+        nom: `Produit ${j + 1}`,
+        quantite: Math.floor(Math.random() * 5) + 1,
+        prix_unitaire: Math.floor(Math.random() * 5000) + 1000,
+        prix_vente: Math.floor(Math.random() * 5000) + 1000,
+        type_vente: commandeType === 'mixte' ? (j % 2 === 0 ? 'gros' : 'détail') : commandeType,
+        sous_total: 0
       }))
     });
-    
-    // Calculer les sous-totaux
-    commandes[i - start].produits = commandes[i - start].produits.map(p => ({
-      ...p,
-      sous_total: p.quantite * p.prix_unitaire
-    }));
   }
   
+  // Calculer les sous-totaux
+  allCommandes = allCommandes.map(cmd => ({
+    ...cmd,
+    produits: cmd.produits.map(p => ({
+      ...p,
+      sous_total: p.quantite * p.prix_unitaire
+    }))
+  }));
+  
+  // Appliquer les filtres
+  let filteredCommandes = [...allCommandes];
+  
+  // Filtre par statut
+  const statutFiltre = filters.statut || filters.status;
+  if (statutFiltre && statutFiltre !== 'tous') {
+    filteredCommandes = filteredCommandes.filter(cmd => 
+      cmd.statut === statutFiltre || cmd.status === statutFiltre
+    );
+    console.log(`📊 Filtre statut "${statutFiltre}": ${filteredCommandes.length} commandes`);
+  }
+  
+  // Filtre par type
+  const typeFiltre = filters.type_vente || filters.type;
+  if (typeFiltre && typeFiltre !== 'tous') {
+    filteredCommandes = filteredCommandes.filter(cmd => cmd.type_vente === typeFiltre);
+    console.log(`📊 Filtre type "${typeFiltre}": ${filteredCommandes.length} commandes`);
+  }
+  
+  // Filtre par date
+  const dateFiltre = filters.date;
+  const dateDebut = filters.date_debut || filters.date_from;
+  const dateFin = filters.date_fin || filters.date_to;
+  
+  if (dateFiltre) {
+    filteredCommandes = filteredCommandes.filter(cmd => {
+      const cmdDate = new Date(cmd.date).toISOString().split('T')[0];
+      return cmdDate === dateFiltre;
+    });
+    console.log(`📅 Filtre date "${dateFiltre}": ${filteredCommandes.length} commandes`);
+  } else if (dateDebut && dateFin) {
+    filteredCommandes = filteredCommandes.filter(cmd => {
+      const cmdDate = new Date(cmd.date).toISOString().split('T')[0];
+      return cmdDate >= dateDebut && cmdDate <= dateFin;
+    });
+    console.log(`📅 Filtre plage "${dateDebut}" -> "${dateFin}": ${filteredCommandes.length} commandes`);
+  }
+  
+  // Filtre par recherche
+  const rechercheFiltre = filters.recherche || filters.search;
+  if (rechercheFiltre) {
+    const searchLower = rechercheFiltre.toLowerCase();
+    filteredCommandes = filteredCommandes.filter(cmd => 
+      cmd.numero_commande.toLowerCase().includes(searchLower) ||
+      cmd.client_nom.toLowerCase().includes(searchLower) ||
+      cmd.client?.nom?.toLowerCase().includes(searchLower) ||
+      cmd.client_telephone?.includes(rechercheFiltre)
+    );
+    console.log(`🔍 Filtre recherche "${rechercheFiltre}": ${filteredCommandes.length} commandes`);
+  }
+  
+  // Pagination
+  const page = filters.page || 1;
+  const perPage = filters.perPage || filters.per_page || 10;
+  const start = (page - 1) * perPage;
+  const end = start + perPage;
+  const paginatedCommandes = filteredCommandes.slice(start, end);
+  const totalPages = Math.ceil(filteredCommandes.length / perPage);
+  
   return {
-    data: commandes,
+    data: paginatedCommandes,
+    total: filteredCommandes.length,
     current_page: page,
-    last_page: lastPage,
+    last_page: totalPages,
     per_page: perPage,
-    total: total,
     from: start + 1,
-    to: end
+    to: end,
+    success: true
   };
 }
 
