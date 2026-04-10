@@ -1,50 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
-  faHistory,
-  faFilter,
-  faSearch,
-  faCalendarAlt,
-  faFileAlt,
-  faUser,
-  faPhone,
-  faBox,
-  faShoppingBag,
-  faPallet,
-  faSync,
-  faEye,
-  faTimes,
-  faCheckCircle,
-  faClock,
-  faTimesCircle,
-  faFileInvoiceDollar,
-  faReceipt,
-  faChartBar,
-  faRedo,
-  faCalendarDay,
-  faCalendar,
-  faBoxOpen,
-  faCalculator,
-  faList,
-  faSpinner,
-  faExclamationTriangle,
-  faDatabase,
-  faUserTie,
-  faMapMarkerAlt,
-  faChevronDown,
-  faChevronUp,
-  faSort,
-  faArrowUp,
-  faArrowDown,
-  faInfoCircle,
-  faCheck,
-  faBan,
-  faBell,
-  faMoneyBill,
-  faAngleLeft,
-  faAngleRight,
-  faAngleDoubleLeft,
-  faAngleDoubleRight
+  faHistory, faFilter, faSearch, faCalendarAlt, faFileAlt, faUser, faPhone,
+  faBox, faShoppingBag, faPallet, faSync, faEye, faTimes, faCheckCircle,
+  faClock, faTimesCircle, faFileInvoiceDollar, faReceipt, faChartBar, faRedo,
+  faCalendarDay, faCalendar, faBoxOpen, faCalculator, faList, faSpinner,
+  faExclamationTriangle, faDatabase, faUserTie, faMapMarkerAlt, faChevronDown,
+  faChevronUp, faSort, faArrowUp, faArrowDown, faInfoCircle, faCheck, faBan,
+  faBell, faMoneyBill, faAngleLeft, faAngleRight, faAngleDoubleLeft, faAngleDoubleRight
 } from '@fortawesome/free-solid-svg-icons';
 import { commandesAPI } from '../../services/api/commandes';
 import profileAPI from '../../services/api/profile';
@@ -88,10 +51,8 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
 
   const [lastUpdate, setLastUpdate] = useState(Date.now());
   const [showRefreshNotification, setShowRefreshNotification] = useState(false);
-  
-  const [filtresActifs, setFiltresActifs] = useState({});
 
-  // Charger les commandes avec pagination côté serveur
+  // Charger les commandes avec pagination et filtres
   const chargerCommandes = useCallback(async (page = 1, conserveDonnees = false) => {
     setLoading(true);
     setError(null);
@@ -101,114 +62,106 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
         chargerInfosVendeur();
       }
 
-      // Construire les paramètres de filtrage pour l'API
-      const params = {
+      // Construire les filtres pour l'API
+      const apiFilters = {
         page: page,
         perPage: pagination.itemsPerPage,
         sortField: sortField,
         sortDirection: sortDirection
       };
 
-      // Ajouter les filtres si nécessaire
+      // Ajouter les filtres de statut
       if (filtreStatut !== 'tous') {
-        params.statut = filtreStatut;
+        apiFilters.statut = filtreStatut;
+        apiFilters.status = filtreStatut;
       }
 
+      // Ajouter les filtres de type
       if (filtreTypeVente !== 'tous') {
-        params.type_vente = filtreTypeVente;
+        apiFilters.type_vente = filtreTypeVente;
+        apiFilters.type = filtreTypeVente;
       }
 
-      // Gestion des filtres de date
-      if (filtreDate !== 'tous') {
-        const aujourdhui = new Date();
-        
-        switch (filtreDate) {
-          case 'aujourdhui':
-            params.date_debut = aujourdhui.toISOString().split('T')[0];
-            params.date_fin = aujourdhui.toISOString().split('T')[0];
-            break;
-          case 'hier':
-            const hier = new Date(aujourdhui);
-            hier.setDate(hier.getDate() - 1);
-            params.date_debut = hier.toISOString().split('T')[0];
-            params.date_fin = hier.toISOString().split('T')[0];
-            break;
-          case '7jours':
-            const date7jours = new Date(aujourdhui);
-            date7jours.setDate(date7jours.getDate() - 7);
-            params.date_debut = date7jours.toISOString().split('T')[0];
-            params.date_fin = aujourdhui.toISOString().split('T')[0];
-            break;
-          case '30jours':
-            const date30jours = new Date(aujourdhui);
-            date30jours.setDate(date30jours.getDate() - 30);
-            params.date_debut = date30jours.toISOString().split('T')[0];
-            params.date_fin = aujourdhui.toISOString().split('T')[0];
-            break;
-          case 'personnalisee':
-            if (dateDebut && dateFin) {
-              params.date_debut = dateDebut;
-              params.date_fin = dateFin;
-            }
-            break;
-        }
-      }
-
+      // Ajouter la recherche
       if (recherche.trim()) {
-        params.recherche = recherche.trim();
+        apiFilters.recherche = recherche.trim();
+        apiFilters.search = recherche.trim();
       }
 
-      const response = await commandesAPI.getAll(params);
+      // Gestion des dates
+      if (filtreDate === 'aujourdhui') {
+        const today = new Date().toISOString().split('T')[0];
+        apiFilters.date = today;
+      } else if (filtreDate === 'hier') {
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        apiFilters.date = yesterday.toISOString().split('T')[0];
+      } else if (filtreDate === '7jours') {
+        const date7 = new Date();
+        date7.setDate(date7.getDate() - 7);
+        apiFilters.date_debut = date7.toISOString().split('T')[0];
+        apiFilters.date_fin = new Date().toISOString().split('T')[0];
+        apiFilters.date_from = date7.toISOString().split('T')[0];
+        apiFilters.date_to = new Date().toISOString().split('T')[0];
+      } else if (filtreDate === '30jours') {
+        const date30 = new Date();
+        date30.setDate(date30.getDate() - 30);
+        apiFilters.date_debut = date30.toISOString().split('T')[0];
+        apiFilters.date_fin = new Date().toISOString().split('T')[0];
+        apiFilters.date_from = date30.toISOString().split('T')[0];
+        apiFilters.date_to = new Date().toISOString().split('T')[0];
+      } else if (filtreDate === 'personnalisee' && dateDebut && dateFin) {
+        apiFilters.date_debut = dateDebut;
+        apiFilters.date_fin = dateFin;
+        apiFilters.date_from = dateDebut;
+        apiFilters.date_to = dateFin;
+      }
 
-      let commandesPage = [];
-      let paginationInfo = null;
+      console.log('🔍 Filtres envoyés à l\'API:', apiFilters);
+
+      // Appel API avec tous les filtres
+      const response = await commandesAPI.getAllWithFilters(apiFilters);
+
+      console.log('📥 Réponse API reçue:', response);
+
+      // Traitement de la réponse
+      let commandesList = [];
       let totalItems = 0;
-      
-      if (response?.data && Array.isArray(response.data)) {
-        commandesPage = response.data;
-        paginationInfo = response;
-        totalItems = response.total || response.pagination?.total || 0;
-      } else if (response?.data?.data && Array.isArray(response.data.data)) {
-        commandesPage = response.data.data;
-        paginationInfo = response.data;
-        totalItems = response.data.total || response.data.pagination?.total || 0;
+      let currentPageNum = page;
+      let totalPagesNum = 1;
+
+      if (response && response.data && Array.isArray(response.data)) {
+        commandesList = response.data;
+        totalItems = response.total || response.data.length;
+        currentPageNum = response.current_page || page;
+        totalPagesNum = response.last_page || 1;
       } else if (Array.isArray(response)) {
-        commandesPage = response;
+        commandesList = response;
         totalItems = response.length;
+      } else if (response && response.data && !Array.isArray(response.data)) {
+        commandesList = [response.data];
+        totalItems = 1;
       }
 
       // Transformer les commandes
-      const commandesTransformees = commandesPage.map(commande => {
+      const commandesTransformees = commandesList.map(commande => {
         const produits = extraireProduitsDeLaCommande(commande);
         const typeVente = determinerTypeVente(commande);
         const tvaAppliquee = estTVAAppliquee(commande);
         
         const montantTTC = Number(
-          commande.total_ttc || 
-          commande.total || 
-          commande.montant_ttc || 
-          commande.montant || 
-          commande.grand_total ||
-          0
+          commande.total_ttc || commande.total || commande.montant_ttc || 
+          commande.montant || commande.grand_total || 0
         );
         
         const montantHT = Number(
-          commande.total_ht || 
-          commande.montant_ht || 
-          commande.subtotal ||
-          commande.sub_total ||
-          (tvaAppliquee ? Math.round(montantTTC / 1.18) : montantTTC)
+          commande.total_ht || commande.montant_ht || commande.subtotal ||
+          commande.sub_total || (tvaAppliquee ? Math.round(montantTTC / 1.18) : montantTTC)
         );
         
         const montantTVA = tvaAppliquee 
-          ? Number(
-              commande.tva || 
-              commande.montant_tva ||
-              commande.tva_amount ||
-              Math.round(montantHT * 0.18) || 
-              (montantTTC - montantHT) || 
-              0
-            )
+          ? Number(commande.tva || commande.montant_tva || commande.tva_amount || 
+                   Math.round(montantHT * 0.18) || (montantTTC - montantHT) || 0)
           : 0;
         
         let clientNom = 'Client';
@@ -223,6 +176,10 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
           } else if (typeof commande.client === 'string') {
             clientNom = commande.client;
           }
+        } else if (commande.client_nom) {
+          clientNom = commande.client_nom;
+          clientTelephone = commande.client_telephone || '';
+          clientAdresse = commande.client_adresse || '';
         }
         
         let nomVendeur = sellerName || 'Vendeur';
@@ -232,6 +189,8 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
           } else if (typeof commande.vendeur === 'string') {
             nomVendeur = commande.vendeur;
           }
+        } else if (commande.vendeur_nom) {
+          nomVendeur = commande.vendeur_nom;
         } else if (vendeurInfo) {
           nomVendeur = vendeurInfo.nom || vendeurInfo.name || nomVendeur;
         }
@@ -241,11 +200,7 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
           numero_commande: commande.numero_commande || commande.numero || 
                           commande.reference || commande.order_number || 
                           `CMD-${Date.now().toString().slice(-8)}`,
-          client: {
-            nom: clientNom,
-            telephone: clientTelephone,
-            adresse: clientAdresse
-          },
+          client: { nom: clientNom, telephone: clientTelephone, adresse: clientAdresse },
           total_ht: montantHT,
           tva: montantTVA,
           total_ttc: montantTTC,
@@ -256,14 +211,13 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
           tva_taux: tvaAppliquee ? 18 : 0,
           statut: mapAPIStatut(commande.statut || commande.status),
           type_vente: typeVente,
-          date: commande.date || commande.created_at || 
-                commande.date_commande || commande.updated_at || new Date().toISOString(),
+          date: commande.date || commande.created_at || commande.date_commande || new Date().toISOString(),
           vendeur: nomVendeur,
           produits: produits
         };
       });
 
-      // Mettre à jour les commandes (remplacer ou ajouter selon le contexte)
+      // Mettre à jour les commandes
       if (conserveDonnees && page === 1) {
         setCommandes(commandesTransformees);
       } else if (conserveDonnees) {
@@ -272,76 +226,37 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
         setCommandes(commandesTransformees);
       }
       
-      // Mettre à jour les informations de pagination
+      // Mettre à jour la pagination
       setPagination(prev => ({
         ...prev,
-        currentPage: page,
+        currentPage: currentPageNum,
         totalItems: totalItems || commandesTransformees.length,
-        totalPages: paginationInfo?.last_page || 
-                   paginationInfo?.total_pages || 
-                   Math.ceil((totalItems || commandesTransformees.length) / prev.itemsPerPage)
+        totalPages: totalPagesNum || Math.ceil((totalItems || commandesTransformees.length) / prev.itemsPerPage) || 1
       }));
       
-      // Charger les statistiques si c'est la première page
+      // Charger les statistiques
       if (page === 1 && !conserveDonnees) {
         chargerStatistiques(commandesTransformees);
       }
       
-      // Mettre en cache uniquement les données de la première page pour les stats
-      if (page === 1) {
-        try {
-          localStorage.setItem('commandes_cache_page1', JSON.stringify({
-            data: commandesTransformees,
-            timestamp: Date.now(),
-            pagination: {
-              totalItems: totalItems || commandesTransformees.length,
-              totalPages: paginationInfo?.last_page || 
-                         paginationInfo?.total_pages || 
-                         Math.ceil((totalItems || commandesTransformees.length) / pagination.itemsPerPage)
-            }
-          }));
-        } catch (e) {
-          // Ignorer les erreurs de cache
-        }
-      }
-      
+      // Notification
       if (page === 1) {
         setShowRefreshNotification(true);
         setTimeout(() => setShowRefreshNotification(false), 3000);
       }
       
     } catch (error) {
+      console.error('Erreur chargement commandes:', error);
       setError(`Impossible de charger les commandes: ${error.message}`);
-      
-      // Essayer de charger depuis le cache pour la page 1
-      if (pagination.currentPage === 1) {
-        try {
-          const cached = localStorage.getItem('commandes_cache_page1');
-          if (cached) {
-            const { data, timestamp, pagination: cachedPagination } = JSON.parse(cached);
-            setCommandes(data);
-            setPagination(prev => ({
-              ...prev,
-              totalItems: cachedPagination.totalItems,
-              totalPages: cachedPagination.totalPages
-            }));
-            chargerStatistiques(data);
-            setError(null);
-          }
-        } catch (cacheError) {
-          // Ignorer les erreurs de cache
-        }
-      }
-      
     } finally {
       setLoading(false);
       setLastUpdate(Date.now());
     }
-  }, [sellerName, vendeurInfo, pagination.itemsPerPage, filtreStatut, filtreTypeVente, filtreDate, dateDebut, dateFin, recherche, sortField, sortDirection]);
+  }, [sellerName, vendeurInfo, pagination.itemsPerPage, filtreStatut, filtreTypeVente, 
+      filtreDate, dateDebut, dateFin, recherche, sortField, sortDirection]);
 
-  // Charger les statistiques (pourrait être une API séparée)
+  // Charger les statistiques
   const chargerStatistiques = useCallback((commandesList) => {
-    // Calculer les stats seulement pour les commandes chargées
     const commandesAujourdhui = commandesList.filter(c => estAujourdhui(c.date));
     
     let totalGros = 0;
@@ -356,34 +271,22 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
         totalDetail++;
       }
       
-      if (commande.total_ttc) {
-        montantTotal += commande.total_ttc;
-      } else if (commande.montant_ttc) {
-        montantTotal += commande.montant_ttc;
-      } else if (commande.total) {
-        montantTotal += commande.total;
-      }
+      montantTotal += commande.total_ttc || commande.montant_ttc || commande.total || 0;
     });
     
     setStats({
       aujourdhui: commandesAujourdhui.length,
       en_attente: commandesAujourdhui.filter(c => {
         const statut = c.statut?.toLowerCase() || '';
-        return statut.includes('attente') || 
-               statut === 'en_attente_paiement' || 
-               statut === 'pending';
+        return statut.includes('attente') || statut === 'en_attente_paiement' || statut === 'pending';
       }).length,
       valide: commandesAujourdhui.filter(c => {
         const statut = c.statut?.toLowerCase() || '';
-        return statut === 'complétée' || 
-               statut === 'completed' ||
-               statut === 'payee' ||
-               statut === 'paid';
+        return statut === 'complétée' || statut === 'completed' || statut === 'payee' || statut === 'paid';
       }).length,
       annulee: commandesAujourdhui.filter(c => {
         const statut = c.statut?.toLowerCase() || '';
-        return statut === 'annulée' || 
-               statut === 'cancelled';
+        return statut === 'annulée' || statut === 'cancelled';
       }).length,
       total_gros: totalGros,
       total_detail: totalDetail,
@@ -396,10 +299,10 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
   useEffect(() => {
     const timer = setTimeout(() => {
       chargerCommandes(1, false);
-    }, 300); // Délai pour éviter trop d'appels API
-
+    }, 300);
     return () => clearTimeout(timer);
-  }, [filtreStatut, filtreTypeVente, filtreDate, dateDebut, dateFin, recherche, sortField, sortDirection, pagination.itemsPerPage]);
+  }, [filtreStatut, filtreTypeVente, filtreDate, dateDebut, dateFin, recherche, 
+      sortField, sortDirection, pagination.itemsPerPage]);
 
   // Gérer le changement de page
   useEffect(() => {
@@ -408,93 +311,45 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     }
   }, [pagination.currentPage]);
 
-  // Les fonctions utilitaires restent les mêmes (estTVAAppliquee, mapAPIStatut, etc.)
+  // Fonctions utilitaires
   const estTVAAppliquee = (commande) => {
     if (!commande) return false;
     
     const tvaIndicators = [
-      commande.tva_appliquee,
-      commande.tva_appliquee === 1,
-      commande.tva_appliquee === '1',
-      commande.tva_appliquee === true,
-      commande.tva_appliquee === 'true',
-      commande.tva_active,
-      commande.tva_active === 1,
-      commande.tva_active === true,
-      commande.apply_tva,
-      commande.apply_tva === 1,
-      commande.apply_tva === true,
-      commande.appliquer_tva,
-      commande.has_tva,
-      commande.tva_inclus,
-      commande.tva_inclus === 1,
-      commande.tva_inclus === true,
-      commande.tva_incluse,
-      commande.tva_incluse === 1,
+      commande.tva_appliquee, commande.tva_appliquee === 1, commande.tva_appliquee === '1',
+      commande.tva_appliquee === true, commande.tva_appliquee === 'true', commande.tva_active,
+      commande.tva_active === 1, commande.tva_active === true, commande.apply_tva,
+      commande.apply_tva === 1, commande.apply_tva === true, commande.appliquer_tva,
+      commande.has_tva, commande.tva_inclus, commande.tva_inclus === 1,
+      commande.tva_inclus === true, commande.tva_incluse, commande.tva_incluse === 1,
       commande.tva_incluse === true
     ];
 
-    if (tvaIndicators.some(indicator => indicator === true)) {
-      return true;
-    }
+    if (tvaIndicators.some(indicator => indicator === true)) return true;
 
     const tvaTaux = Number(commande.tva_taux || commande.taux_tva || commande.tva_rate || 0);
-    if (tvaTaux > 0) {
-      return true;
-    }
+    if (tvaTaux > 0) return true;
 
-    const montantTVA = Number(
-      commande.tva || 
-      commande.montant_tva || 
-      commande.tva_amount || 
-      0
-    );
-    if (montantTVA > 0) {
-      return true;
-    }
+    const montantTVA = Number(commande.tva || commande.montant_tva || commande.tva_amount || 0);
+    if (montantTVA > 0) return true;
 
-    const montantTTC = Number(
-      commande.total_ttc || 
-      commande.montant_ttc || 
-      commande.total || 
-      0
-    );
+    const montantTTC = Number(commande.total_ttc || commande.montant_ttc || commande.total || 0);
+    const montantHT = Number(commande.total_ht || commande.montant_ht || commande.subtotal || 0);
     
-    const montantHT = Number(
-      commande.total_ht || 
-      commande.montant_ht || 
-      commande.subtotal ||
-      0
-    );
-    
-    if (montantTTC > 0 && montantHT > 0 && montantTTC > montantHT) {
-      return true;
-    }
+    if (montantTTC > 0 && montantHT > 0 && montantTTC > montantHT) return true;
 
     return false;
   };
 
   const mapAPIStatut = (statutAPI) => {
     const mapping = {
-      'validee': 'complétée',
-      'completed': 'complétée',
-      'pending': 'en_attente_paiement',
-      'en_attente': 'en_attente_paiement',
-      'en attente': 'en_attente_paiement',
-      'en attente paiement': 'en_attente_paiement',
-      'cancelled': 'annulée',
-      'annulee': 'annulée',
-      'annulée': 'annulée',
-      'local_only': 'en_attente_paiement',
-      'en_attente_paiement': 'en_attente_paiement',
-      'payee': 'complétée',
-      'paid': 'complétée',
-      'delivered': 'complétée',
-      'livree': 'complétée',
-      'processing': 'en_attente_paiement',
-      'traitement': 'en_attente_paiement',
-      'attente': 'en_attente_paiement',
-      'validée': 'complétée'
+      'validee': 'complétée', 'completed': 'complétée', 'pending': 'en_attente_paiement',
+      'en_attente': 'en_attente_paiement', 'en attente': 'en_attente_paiement',
+      'en attente paiement': 'en_attente_paiement', 'cancelled': 'annulée',
+      'annulee': 'annulée', 'annulée': 'annulée', 'local_only': 'en_attente_paiement',
+      'en_attente_paiement': 'en_attente_paiement', 'payee': 'complétée', 'paid': 'complétée',
+      'delivered': 'complétée', 'livree': 'complétée', 'processing': 'en_attente_paiement',
+      'traitement': 'en_attente_paiement', 'attente': 'en_attente_paiement', 'validée': 'complétée'
     };
     const statut = statutAPI?.toLowerCase()?.trim();
     return mapping[statut] || statutAPI || 'en_attente_paiement';
@@ -504,14 +359,9 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     let produits = [];
     
     const sourcesProduits = [
-      commandeData.items,
-      commandeData.produits,
-      commandeData.lignes_commande,
-      commandeData.lignes,
-      commandeData.order_items,
-      commandeData.products,
-      commandeData.details,
-      commandeData.articles
+      commandeData.items, commandeData.produits, commandeData.lignes_commande,
+      commandeData.lignes, commandeData.order_items, commandeData.products,
+      commandeData.details, commandeData.articles
     ];
     
     for (const source of sourcesProduits) {
@@ -588,7 +438,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     }
     
     if (typeof client === 'string') return client;
-    
     return 'Client';
   };
 
@@ -596,12 +445,9 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     try {
       const aujourdhui = new Date();
       const dateCommande = new Date(dateString);
-      
-      return (
-        dateCommande.getDate() === aujourdhui.getDate() &&
-        dateCommande.getMonth() === aujourdhui.getMonth() &&
-        dateCommande.getFullYear() === aujourdhui.getFullYear()
-      );
+      return dateCommande.getDate() === aujourdhui.getDate() &&
+             dateCommande.getMonth() === aujourdhui.getMonth() &&
+             dateCommande.getFullYear() === aujourdhui.getFullYear();
     } catch {
       return false;
     }
@@ -610,15 +456,9 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
   const determinerTypeVente = (commande) => {
     if (commande.type_vente) {
       const typeStr = commande.type_vente.toString().toLowerCase().trim();
-      if (typeStr === 'gros' || typeStr === 'gross' || typeStr === 'wholesale') {
-        return 'gros';
-      }
-      if (typeStr === 'détail' || typeStr === 'detail' || typeStr === 'retail') {
-        return 'détail';
-      }
-      if (typeStr === 'mixte' || typeStr === 'mixed') {
-        return 'mixte';
-      }
+      if (typeStr === 'gros' || typeStr === 'gross' || typeStr === 'wholesale') return 'gros';
+      if (typeStr === 'détail' || typeStr === 'detail' || typeStr === 'retail') return 'détail';
+      if (typeStr === 'mixte' || typeStr === 'mixed') return 'mixte';
     }
     
     const produits = extraireProduitsDeLaCommande(commande);
@@ -630,28 +470,16 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
       produits.forEach(p => {
         if (p.type_vente) {
           const productType = p.type_vente.toString().toLowerCase();
-          if (productType === 'gros' || productType === 'gross' || productType === 'wholesale') {
-            aDuGros = true;
-          } else if (productType === 'détail' || productType === 'detail' || productType === 'retail') {
-            aDuDetail = true;
-          }
+          if (productType === 'gros' || productType === 'gross' || productType === 'wholesale') aDuGros = true;
+          else if (productType === 'détail' || productType === 'detail' || productType === 'retail') aDuDetail = true;
         }
-        
-        if (p.prix_gros && p.prix_gros > 0) {
-          aDuGros = true;
-        }
-        if (p.prix_detail && p.prix_detail > 0) {
-          aDuDetail = true;
-        }
+        if (p.prix_gros && p.prix_gros > 0) aDuGros = true;
+        if (p.prix_detail && p.prix_detail > 0) aDuDetail = true;
       });
       
-      if (aDuGros && aDuDetail) {
-        return 'mixte';
-      } else if (aDuGros) {
-        return 'gros';
-      } else if (aDuDetail) {
-        return 'détail';
-      }
+      if (aDuGros && aDuDetail) return 'mixte';
+      if (aDuGros) return 'gros';
+      if (aDuDetail) return 'détail';
     }
     
     return 'détail';
@@ -665,7 +493,7 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     setError(null);
     
     try {
-      if (!commande.id || commande.id.toString().startsWith('mock-')) {
+      if (!commande.id || commande.id.toString().startsWith('mock-') || commande.id.toString().startsWith('local-')) {
         setCommandeDetails(commande);
         setModalOuvert(true);
         setDetailsLoading(false);
@@ -683,42 +511,15 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
         }
         
         let typeVente = commande.type_vente;
-        if (!typeVente) {
-          typeVente = determinerTypeVente(details);
-        }
+        if (!typeVente) typeVente = determinerTypeVente(details);
         
         const tvaAppliquee = estTVAAppliquee(details) || estTVAAppliquee(commande);
         
-        const totalTTC = Number(
-          details.total_ttc || 
-          details.total || 
-          details.montant_ttc || 
-          commande.total_ttc || 
-          0
-        );
+        const totalTTC = Number(details.total_ttc || details.total || details.montant_ttc || commande.total_ttc || 0);
+        const totalHT = Number(details.total_ht || details.montant_ht || (tvaAppliquee ? Math.round(totalTTC / 1.18) : totalTTC) || commande.total_ht || 0);
+        const tva = tvaAppliquee ? Number(details.tva || details.montant_tva || Math.round(totalHT * 0.18) || commande.tva || (totalTTC - totalHT) || 0) : 0;
         
-        const totalHT = Number(
-          details.total_ht || 
-          details.montant_ht || 
-          (tvaAppliquee ? Math.round(totalTTC / 1.18) : totalTTC) ||
-          commande.total_ht || 
-          0
-        );
-        
-        const tva = tvaAppliquee 
-          ? Number(
-              details.tva || 
-              details.montant_tva ||
-              Math.round(totalHT * 0.18) || 
-              commande.tva || 
-              (totalTTC - totalHT) ||
-              0
-            )
-          : 0;
-        
-        let clientNom = 'Client';
-        let clientTelephone = '';
-        let clientAdresse = '';
+        let clientNom = 'Client', clientTelephone = '', clientAdresse = '';
         
         if (details.client) {
           if (typeof details.client === 'object') {
@@ -737,11 +538,7 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
         setCommandeDetails({
           ...commande,
           produits: produits,
-          client: {
-            nom: clientNom,
-            telephone: clientTelephone,
-            adresse: clientAdresse
-          },
+          client: { nom: clientNom, telephone: clientTelephone, adresse: clientAdresse },
           total_ht: totalHT,
           tva: tva,
           total_ttc: totalTTC,
@@ -751,17 +548,16 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
           tva_active: tvaAppliquee,
           tva_taux: tvaAppliquee ? 18 : 0,
           statut: mapAPIStatut(details.statut || details.status || commande.statut),
-          numero_commande: details.numero_commande || details.numero || 
-                          details.reference || commande.numero_commande,
+          numero_commande: details.numero_commande || details.numero || details.reference || commande.numero_commande,
           date: details.date || details.created_at || commande.date,
           type_vente: typeVente,
           vendeur: details.vendeur_nom || details.seller_name || commande.vendeur
         });
-        
       } else {
         setCommandeDetails(commande);
       }
     } catch (error) {
+      console.error('Erreur chargement détails:', error);
       setError(`Erreur: ${error.message}`);
       setCommandeDetails(commande);
     } finally {
@@ -775,48 +571,18 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
   };
 
   useEffect(() => {
-    const handleCommandeCreee = (event) => {
-      chargerCommandes(1, false);
-    };
-
+    const handleCommandeCreee = () => chargerCommandes(1, false);
     window.addEventListener('commande-creee', handleCommandeCreee);
-    
-    return () => {
-      window.removeEventListener('commande-creee', handleCommandeCreee);
-    };
+    return () => window.removeEventListener('commande-creee', handleCommandeCreee);
   }, [chargerCommandes]);
 
   const goToPage = (page) => {
-    setPagination(prev => ({
-      ...prev,
-      currentPage: Math.max(1, Math.min(page, prev.totalPages))
-    }));
-    
+    setPagination(prev => ({ ...prev, currentPage: Math.max(1, Math.min(page, prev.totalPages)) }));
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const nextPage = () => {
-    goToPage(pagination.currentPage + 1);
-  };
-
-  const prevPage = () => {
-    goToPage(pagination.currentPage - 1);
-  };
-
-  const firstPage = () => {
-    goToPage(1);
-  };
-
-  const lastPage = () => {
-    goToPage(pagination.totalPages);
-  };
-
   const changeItemsPerPage = (newItemsPerPage) => {
-    setPagination(prev => ({
-      ...prev,
-      itemsPerPage: newItemsPerPage,
-      currentPage: 1
-    }));
+    setPagination(prev => ({ ...prev, itemsPerPage: newItemsPerPage, currentPage: 1 }));
   };
 
   const reinitialiserFiltres = () => {
@@ -861,20 +627,14 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     try {
       const date = new Date(dateString);
       return date.toLocaleDateString('fr-FR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
+        day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
       });
-    } catch (error) {
+    } catch {
       return 'Date invalide';
     }
   };
 
-  const formaterMontant = (montant) => {
-    return new Intl.NumberFormat('fr-FR').format(montant || 0);
-  };
+  const formaterMontant = (montant) => new Intl.NumberFormat('fr-FR').format(montant || 0);
 
   const fermerDetails = () => {
     setModalOuvert(false);
@@ -913,9 +673,7 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
               
               return (
                 <tr key={index} className="hover:bg-gray-50">
-                  <td className="py-2 px-3">
-                    <div className="font-medium text-gray-900">{produit.nom}</div>
-                  </td>
+                  <td className="py-2 px-3"><div className="font-medium text-gray-900">{produit.nom}</div></td>
                   <td className="py-2 px-3 text-gray-900">{quantite}</td>
                   <td className="py-2 px-3 text-gray-900">{formaterMontant(prixVente)}</td>
                   <td className="py-2 px-3 text-gray-900 font-medium">{formaterMontant(sousTotal)}</td>
@@ -929,7 +687,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
   };
 
   const donneesModal = commandeDetails || commandeSelectionnee;
-
   const startIndex = (pagination.currentPage - 1) * pagination.itemsPerPage + 1;
   const endIndex = Math.min(pagination.currentPage * pagination.itemsPerPage, pagination.totalItems);
 
@@ -947,11 +704,8 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
 
     range.forEach((i) => {
       if (l) {
-        if (i - l === 2) {
-          rangeWithDots.push(l + 1);
-        } else if (i - l !== 1) {
-          rangeWithDots.push('...');
-        }
+        if (i - l === 2) rangeWithDots.push(l + 1);
+        else if (i - l !== 1) rangeWithDots.push('...');
       }
       rangeWithDots.push(i);
       l = i;
@@ -1061,15 +815,10 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
             </div>
             <span className="text-sm font-medium text-gray-900">Filtres</span>
             {(filtreStatut !== 'tous' || filtreTypeVente !== 'tous' || filtreDate !== 'aujourdhui' || recherche) && (
-              <span className="px-1.5 py-0.5 bg-blue-100 text-blue-800 rounded-full text-xs">
-                Actifs
-              </span>
+              <span className="px-1.5 py-0.5 bg-blue-100 text-blue-800 rounded-full text-xs">Actifs</span>
             )}
           </div>
-          <FontAwesomeIcon 
-            icon={showAdvancedFilters ? faChevronUp : faChevronDown} 
-            className="text-gray-400 text-sm"
-          />
+          <FontAwesomeIcon icon={showAdvancedFilters ? faChevronUp : faChevronDown} className="text-gray-400 text-sm" />
         </div>
 
         {showAdvancedFilters && (
@@ -1133,26 +882,13 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
 
             {filtreDate === 'personnalisee' && (
               <div className="grid grid-cols-2 gap-3 mb-3">
-                <input
-                  type="date"
-                  value={dateDebut}
-                  onChange={(e) => setDateDebut(e.target.value)}
-                  className="px-2 py-1.5 text-sm border border-gray-300 rounded-lg"
-                />
-                <input
-                  type="date"
-                  value={dateFin}
-                  onChange={(e) => setDateFin(e.target.value)}
-                  className="px-2 py-1.5 text-sm border border-gray-300 rounded-lg"
-                />
+                <input type="date" value={dateDebut} onChange={(e) => setDateDebut(e.target.value)} className="px-2 py-1.5 text-sm border border-gray-300 rounded-lg" />
+                <input type="date" value={dateFin} onChange={(e) => setDateFin(e.target.value)} className="px-2 py-1.5 text-sm border border-gray-300 rounded-lg" />
               </div>
             )}
 
             <div className="flex justify-end">
-              <button
-                onClick={reinitialiserFiltres}
-                className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
-              >
+              <button onClick={reinitialiserFiltres} className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200">
                 Réinitialiser
               </button>
             </div>
@@ -1161,16 +897,10 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
       </div>
 
       <div className="flex justify-between items-center mb-3">
-        <div className="text-sm text-gray-600">
-          Total: <span className="font-bold">{pagination.totalItems}</span> commandes
-        </div>
+        <div className="text-sm text-gray-600">Total: <span className="font-bold">{pagination.totalItems}</span> commandes</div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-600">Afficher:</span>
-          <select
-            value={pagination.itemsPerPage}
-            onChange={(e) => changeItemsPerPage(Number(e.target.value))}
-            className="px-2 py-1 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
-          >
+          <select value={pagination.itemsPerPage} onChange={(e) => changeItemsPerPage(Number(e.target.value))} className="px-2 py-1 text-xs border border-gray-300 rounded-lg">
             <option value={10}>10</option>
             <option value={20}>20</option>
             <option value={50}>50</option>
@@ -1194,11 +924,8 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
               <FontAwesomeIcon icon={faBox} className="text-xl text-gray-400" />
             </div>
             <p className="text-sm text-gray-600 mb-3">Aucune commande trouvée</p>
-            <button
-              onClick={reinitialiserFiltres}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
-            >
-              Réinitialiser
+            <button onClick={reinitialiserFiltres} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
+              Réinitialiser les filtres
             </button>
           </div>
         ) : (
@@ -1219,8 +946,7 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
                         </span>
                       </span>
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${getTypeVenteCouleur(commande.type_vente)}`}>
-                        {commande.type_vente === 'gros' ? 'Gros' : 
-                         commande.type_vente === 'mixte' ? 'Mixte' : 'Détail'}
+                        {commande.type_vente === 'gros' ? 'Gros' : commande.type_vente === 'mixte' ? 'Mixte' : 'Détail'}
                       </span>
                     </div>
                     
@@ -1242,9 +968,7 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
                     </div>
 
                     <div className="flex items-center gap-2 text-xs">
-                      <span className="text-gray-600">
-                        {commande.produits?.length || 0} produit(s)
-                      </span>
+                      <span className="text-gray-600">{commande.produits?.length || 0} produit(s)</span>
                       {(commande.tva_appliquee || commande.tva > 0) ? (
                         <span className="text-green-600 text-xs flex items-center gap-1">
                           <FontAwesomeIcon icon={faCheckCircle} className="text-xs" />
@@ -1263,12 +987,8 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
                     <div className="text-base font-bold text-gray-900">
                       {formaterMontant(commande.total_ttc || commande.montant_ttc || commande.total)} FCFA
                     </div>
-                    <button
-                      onClick={() => ouvrirDetails(commande)}
-                      className="mt-1 inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-50 text-blue-600 rounded hover:bg-blue-100"
-                    >
-                      <FontAwesomeIcon icon={faEye} />
-                      Détails
+                    <button onClick={() => ouvrirDetails(commande)} className="mt-1 inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-50 text-blue-600 rounded hover:bg-blue-100">
+                      <FontAwesomeIcon icon={faEye} /> Détails
                     </button>
                   </div>
                 </div>
@@ -1277,64 +997,30 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
           </div>
         )}
 
-        {commandes.length > 0 && (
+        {commandes.length > 0 && pagination.totalPages > 1 && (
           <div className="mt-4 flex flex-col items-center gap-3 pb-4 pt-3 border-t border-gray-200">
-            <div className="text-xs text-gray-600">
-              Page {pagination.currentPage} / {pagination.totalPages} • {pagination.totalItems} commandes
-            </div>
+            <div className="text-xs text-gray-600">Page {pagination.currentPage} / {pagination.totalPages} • {pagination.totalItems} commandes</div>
             <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={prevPage}
-                disabled={pagination.currentPage === 1}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-                  pagination.currentPage === 1
-                    ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
-                    : 'bg-white border-gray-200 text-gray-700 hover:border-[#472ead] hover:bg-[#472ead]/5'
-                }`}
-              >
+              <button onClick={() => goToPage(1)} disabled={pagination.currentPage === 1} className="px-2 py-1 rounded-lg text-xs font-semibold border disabled:bg-gray-100 disabled:text-gray-400 bg-white border-gray-200 text-gray-700 hover:border-[#472ead] hover:bg-[#472ead]/5">
+                <FontAwesomeIcon icon={faAngleDoubleLeft} />
+              </button>
+              <button onClick={() => goToPage(pagination.currentPage - 1)} disabled={pagination.currentPage === 1} className="px-3 py-1.5 rounded-lg text-xs font-semibold border disabled:bg-gray-100 disabled:text-gray-400 bg-white border-gray-200 text-gray-700 hover:border-[#472ead] hover:bg-[#472ead]/5">
                 Précédent
               </button>
-
               {getPageNumbers().map((item, index) => {
-                if (item === '...') {
-                  return (
-                    <span 
-                      key={`dots-${index}`} 
-                      className="px-3 py-1.5 text-xs text-gray-500"
-                    >
-                      ...
-                    </span>
-                  );
-                }
-
+                if (item === '...') return <span key={`dots-${index}`} className="px-3 py-1.5 text-xs text-gray-500">...</span>;
                 const page = parseInt(item);
-                const isActive = pagination.currentPage === page;
-
                 return (
-                  <button
-                    key={page}
-                    onClick={() => goToPage(page)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-                      isActive
-                        ? 'bg-[#472ead] border-[#472ead] text-white'
-                        : 'bg-white border-gray-200 text-gray-700 hover:border-[#472ead] hover:bg-[#472ead]/5'
-                    }`}
-                  >
+                  <button key={page} onClick={() => goToPage(page)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${pagination.currentPage === page ? 'bg-[#472ead] border-[#472ead] text-white' : 'bg-white border-gray-200 text-gray-700 hover:border-[#472ead] hover:bg-[#472ead]/5'}`}>
                     {page}
                   </button>
                 );
               })}
-
-              <button
-                onClick={nextPage}
-                disabled={pagination.currentPage === pagination.totalPages}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-                  pagination.currentPage === pagination.totalPages
-                    ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
-                    : 'bg-white border-gray-200 text-gray-700 hover:border-[#472ead] hover:bg-[#472ead]/5'
-                }`}
-              >
+              <button onClick={() => goToPage(pagination.currentPage + 1)} disabled={pagination.currentPage === pagination.totalPages} className="px-3 py-1.5 rounded-lg text-xs font-semibold border disabled:bg-gray-100 disabled:text-gray-400 bg-white border-gray-200 text-gray-700 hover:border-[#472ead] hover:bg-[#472ead]/5">
                 Suivant
+              </button>
+              <button onClick={() => goToPage(pagination.totalPages)} disabled={pagination.currentPage === pagination.totalPages} className="px-2 py-1 rounded-lg text-xs font-semibold border disabled:bg-gray-100 disabled:text-gray-400 bg-white border-gray-200 text-gray-700 hover:border-[#472ead] hover:bg-[#472ead]/5">
+                <FontAwesomeIcon icon={faAngleDoubleRight} />
               </button>
             </div>
           </div>
@@ -1344,7 +1030,6 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
       {modalOuvert && donneesModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={fermerDetails}></div>
-          
           <div className="relative bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-4 border-b sticky top-0 bg-white">
               <div className="flex items-center gap-2">
@@ -1372,13 +1057,13 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
                         <span className="text-gray-600">Statut:</span>{' '}
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${getStatutCouleur(donneesModal.statut)}`}>
                           {getStatutIcone(donneesModal.statut)}
-                          {donneesModal.statut}
+                          {donneesModal.statut === 'en_attente_paiement' ? 'En attente' : donneesModal.statut === 'complétée' ? 'Validée' : donneesModal.statut}
                         </span>
                       </div>
                       <div>
                         <span className="text-gray-600">Type:</span>{' '}
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${getTypeVenteCouleur(donneesModal.type_vente)}`}>
-                          {donneesModal.type_vente}
+                          {donneesModal.type_vente === 'gros' ? 'Gros' : donneesModal.type_vente === 'mixte' ? 'Mixte' : 'Détail'}
                         </span>
                       </div>
                       <div>
@@ -1387,7 +1072,7 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
                       </div>
                       <div>
                         <span className="text-gray-600">Vendeur:</span>{' '}
-                        <span>{donneesModal.vendeur}</span>
+                        <span>{donneesModal.vendeur || sellerName || 'Non spécifié'}</span>
                       </div>
                     </div>
                   </div>
@@ -1396,12 +1081,8 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
                     <h4 className="text-sm font-semibold mb-2">Client</h4>
                     <div className="space-y-1 text-sm">
                       <p><span className="text-gray-600">Nom:</span> {donneesModal.client?.nom || 'Non spécifié'}</p>
-                      {donneesModal.client?.telephone && (
-                        <p><span className="text-gray-600">Tél:</span> {donneesModal.client.telephone}</p>
-                      )}
-                      {donneesModal.client?.adresse && (
-                        <p><span className="text-gray-600">Adresse:</span> {donneesModal.client.adresse}</p>
-                      )}
+                      {donneesModal.client?.telephone && <p><span className="text-gray-600">Tél:</span> {donneesModal.client.telephone}</p>}
+                      {donneesModal.client?.adresse && <p><span className="text-gray-600">Adresse:</span> {donneesModal.client.adresse}</p>}
                     </div>
                   </div>
 
@@ -1417,9 +1098,7 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
                         <span className="font-medium">{formaterMontant(donneesModal.total_ht || donneesModal.montant_ht)} FCFA</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-600 flex items-center gap-1">
-                          TVA (18%):
-                        </span>
+                        <span className="text-gray-600">TVA (18%):</span>
                         <span className="font-medium">{formaterMontant(donneesModal.tva)} FCFA</span>
                       </div>
                       <div className="flex justify-between pt-2 border-t font-bold">
@@ -1446,9 +1125,7 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
           from { transform: translateX(100%); opacity: 0; }
           to { transform: translateX(0); opacity: 1; }
         }
-        .animate-slide-in {
-          animation: slide-in 0.3s ease-out;
-        }
+        .animate-slide-in { animation: slide-in 0.3s ease-out; }
       `}</style>
     </div>
   );
