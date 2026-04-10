@@ -23,8 +23,8 @@ const TicketCommande = forwardRef(({ commande }, ref) => {
             }
 
             .ticket-print {
-              width: 58mm !important;
-              max-width: 58mm !important;
+              width: 65mm !important;
+              max-width: 65mm !important;
               margin: 0 auto !important;
               padding: 5mm !important;
               box-shadow: none !important;
