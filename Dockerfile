@@ -1,18 +1,23 @@
-FROM node:20-alpine AS base
+
+FROM node:20-alpine AS build
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
-
-FROM base AS dev
 COPY . .
-EXPOSE 5173
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]
 
-FROM base AS build
-COPY . .
 RUN npm run build
 
+# Stage 2 : production Nginx
 FROM nginx:1.27-alpine AS prod
+
+# Copier la config Nginx
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Copier le build Angular
 COPY --from=build /app/dist /usr/share/nginx/html
-EXPOSE 80
+
+# Exposer ports HTTP et HTTPS
+EXPOSE 80 443
+
+# Lancer Nginx
+CMD ["nginx", "-g", "daemon off;"]

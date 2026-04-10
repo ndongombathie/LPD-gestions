@@ -261,6 +261,31 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
     }
   }, []);
 
+
+  useEffect(() => {
+    if (!boutiqueId) return;
+    const channel = echo.private(`boutique.${boutiqueId}`);
+    const listener = () => {
+        chargerProduits();
+    };
+    channel.listen('.stock.mis_a_jour', listener);
+    return () => {
+        try {
+            channel.stopListening('.stock.mis_a_jour');
+            echo.leave(`boutique.${boutiqueId}`);
+            addNotification(
+                'info',
+                'Désinscription du canal temps réel réussie.'
+            );
+        } catch (error) {
+            addNotification(
+                'error',
+                'Erreur lors de la désinscription. Rafraîchis la page.'
+            );
+        }
+    };
+}, [boutiqueId]);
+
   const chargerInfosVendeur = async () => {
     try {
       setLoadingVendeur(true);

@@ -3,14 +3,21 @@ import Pusher from 'pusher-js';
 
 window.Pusher = Pusher;
 
-export const echo = new Echo({
+const reverbKey = import.meta.env.VITE_REVERB_APP_KEY;
+const apiUrl = import.meta.env.VITE_API_URL;
+const wsHost = import.meta.env.VITE_REVERB_HOST;
+const wsPortRaw = import.meta.env.VITE_REVERB_PORT;
+
+// Ne pas crasher l'app si Reverb/Pusher n'est pas configuré en local
+export const echo = reverbKey && apiUrl && wsHost && wsPortRaw
+  ? new Echo({
     broadcaster: 'pusher',
-    key: import.meta.env.VITE_REVERB_APP_KEY,
-    wsHost: import.meta.env.VITE_REVERB_HOST,
-    wsPort: import.meta.env.VITE_REVERB_PORT,
-    cluster: 'mt1',
-    forceTLS: false,
-    encrypted: false,
+    key: reverbKey,
+    wsHost,
+    wsPort: Number(wsPortRaw),
+    cluster: import.meta.env.VITE_REVERB_CLUSTER,
+    forceTLS: true,
+    encrypted: true,
     disableStats: true,
     enabledTransports: ['ws', 'wss'],
     
@@ -18,7 +25,7 @@ export const echo = new Echo({
     authorizer: (channel) => {
         return {
             authorize: (socketId, callback) => {
-                fetch('http://127.0.0.1:8000/api/broadcasting/auth', {
+                fetch(`${apiUrl}/broadcasting/auth`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -46,5 +53,6 @@ export const echo = new Echo({
             },
         };
     },
-});
+})
+  : null;
 export const boutiqueId = localStorage.getItem('boutique_id');
