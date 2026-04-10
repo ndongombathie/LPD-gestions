@@ -12,7 +12,16 @@ const toNumber = (v) => {
   return Number.isFinite(n) ? n : 0;
 };
 
-const sanitizeDate = (d) => (d ? String(d) : undefined);
+const sanitizeDate = (d) => {
+  if (!d) return undefined;
+
+  // Si déjà bon format
+  if (d.includes("-")) return d;
+
+  // Convertir DD/MM/YYYY → YYYY-MM-DD
+  const [day, month, year] = d.split("/");
+  return `${year}-${month}-${day}`;
+};
 
 /* ================= API ================= */
 
@@ -74,33 +83,36 @@ const inventaireBoutiqueAPI = {
   /* ==========================================================
    * POST ENREGISTRER INVENTAIRE BOUTIQUE
    * ========================================================== */
-  async enregistrerInventaire({ date_debut, date_fin }) {
-    try {
-      if (!date_debut || !date_fin) {
-        throw new Error("Intervalle de dates obligatoire");
-      }
-
-      if (date_debut > date_fin) {
-        throw new Error("Date début supérieure à date fin");
-      }
-
-      const res = await httpClient.post(SAVE_ENDPOINT, {
-        date_debut: sanitizeDate(date_debut),
-        date_fin: sanitizeDate(date_fin),
-      });
-
-      return {
-        prix_achat_total: toNumber(res?.data?.prix_achat_total),
-        prix_valeur_sortie_total: toNumber(res?.data?.prix_valeur_sortie_total),
-        valeur_estimee_total: toNumber(res?.data?.valeur_estimee_total),
-        benefice_total: toNumber(res?.data?.benefice_total),
-      };
-
-    } catch (error) {
-      console.error("❌ Erreur POST enregistrer inventaire boutique:", error);
-      throw error;
+ async enregistrerInventaire({ date_debut, date_fin }) {
+  try {
+    if (!date_debut || !date_fin) {
+      throw new Error("Intervalle de dates obligatoire");
     }
-  },
+
+    if (new Date(date_debut) > new Date(date_fin)) {
+      throw new Error("Date début supérieure à date fin");
+    }
+
+    const res = await httpClient.post(SAVE_ENDPOINT, {
+      date_debut: sanitizeDate(date_debut),
+      date_fin: sanitizeDate(date_fin),
+    });
+
+    return {
+      prix_achat_total: toNumber(res?.data?.prix_achat_total),
+      prix_valeur_sortie_total: toNumber(res?.data?.prix_valeur_sortie_total),
+
+      // 🔥 CORRECTION ICI - ajout du 'e' manquant
+      valeur_estimee_total: toNumber(res?.data?.valeur_estimee_total),
+
+      benefice_total: toNumber(res?.data?.benefice_total),
+    };
+
+  } catch (error) {
+    console.error("❌ Erreur POST enregistrer inventaire boutique:", error);
+    throw error;
+  }
+}
 
 };
 
