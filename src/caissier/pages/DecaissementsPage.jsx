@@ -12,6 +12,7 @@ import caissierApi from '../services/caissierApi';
 const DecaissementsPage = () => {
   const [decaissements, setDecaissements] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isCaisseCloturee, setIsCaisseCloturee] = useState(false);
   const [selectedDecaissement, setSelectedDecaissement] = useState(null);
   const [isValidationModalOpen, setIsValidationModalOpen] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
@@ -108,7 +109,41 @@ const DecaissementsPage = () => {
     fetchDecaissements(1);
   }, []);
 
+  // Verrou : si la caisse du jour est clôturée, bloquer validation/annulation des décaissements
+  useEffect(() => {
+    let cancelled = false;
+    const today = caissierApi.getDateLocal();
+
+    try {
+      if (localStorage.getItem(`lpd_caisse_cloturee_${today}`) === '1') {
+        setIsCaisseCloturee(true);
+      }
+    } catch (_e) {
+      // ignore
+    }
+
+    (async () => {
+      try {
+        const journal = await caissierApi.getCaissierCaisseJournal(today);
+        if (cancelled) return;
+        setIsCaisseCloturee(Boolean(journal?.cloture));
+      } catch {
+        // éviter faux positifs
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const handleValiderDecaissement = (decaissement) => {
+    if (isCaisseCloturee) {
+      toast.error('Caisse clôturée', {
+        description: "La caisse est clôturée pour aujourd'hui. Validation impossible."
+      });
+      return;
+    }
     setSelectedDecaissement(decaissement);
     setCompteChoisi(decaissement.methode_paiement || 'caisse');
     setIsValidationModalOpen(true);
@@ -117,6 +152,12 @@ const DecaissementsPage = () => {
   const handleConfirmDecaissement = async () => {
     if (!selectedDecaissement) return;
     if (isValidating) return;
+    if (isCaisseCloturee) {
+      toast.error('Caisse clôturée', {
+        description: "La caisse est clôturée pour aujourd'hui. Validation impossible."
+      });
+      return;
+    }
 
     try {
       setIsValidating(true);
@@ -161,6 +202,12 @@ const DecaissementsPage = () => {
   };
 
   const openCancelModal = (decaissement) => {
+    if (isCaisseCloturee) {
+      toast.error('Caisse clôturée', {
+        description: "La caisse est clôturée pour aujourd'hui. Action impossible."
+      });
+      return;
+    }
     setDecaissementToCancel(decaissement);
     setIsCancelModalOpen(true);
   };
@@ -191,6 +238,14 @@ const DecaissementsPage = () => {
 
   return (
     <div className="space-y-14 relative z-10">
+      {isCaisseCloturee && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+          <p className="font-semibold">Caisse clôturée</p>
+          <p className="text-sm opacity-90">
+            La caisse est clôturée pour aujourd&apos;hui. La validation des décaissements est désactivée.
+          </p>
+        </div>
+      )}
       {/* En-tête */}
       <div className="flex items-center justify-between">
         <div>
