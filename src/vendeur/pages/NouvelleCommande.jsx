@@ -246,7 +246,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
             );
         } catch (error) {
             addNotification(
-                'error',
+                'erreur',
                 'Erreur lors de la désinscription. Rafraîchis la page.'
             );
         }
