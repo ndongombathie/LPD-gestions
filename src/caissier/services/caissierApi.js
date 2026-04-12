@@ -151,8 +151,60 @@ export const caissierApi = {
    * @returns {Object} { data, total, current_page, last_page, per_page, total_amount }
    */
   async getCommandesAttente(filters = {}) {
-      const response = await httpClient.get('/commandes-attente', { params: filters });
-      return response.data;
+      const page = filters.page ?? 1;
+      const per_page = filters.per_page ?? 10;
+      const trimmed = typeof filters.search === 'string' ? filters.search.trim() : '';
+
+      const response = await httpClient.get('/commandes-attente', {
+        params: {
+          page,
+          per_page,
+          ...(trimmed.length >= 2 ? { search: trimmed } : {}),
+        },
+      });
+      const body = response.data || {};
+      let commandes = Array.isArray(body.data) ? body.data : [];
+
+      // L'endpoint commandes-attente ne recherche pas sur numero (CMD-xxxxx) : si la liste est
+      // vide, on complète via GET /commandes (recherche numero + client) puis on garde le même
+      // périmètre que la caisse (montant_a_encaisser > 0). Pagination calculée côté client.
+      if (trimmed.length >= 2 && commandes.length === 0) {
+        try {
+          const rawList = [];
+          const maxPages = 15;
+          for (let p = 1; p <= maxPages; p++) {
+            const fbRes = await httpClient.get('/commandes', {
+              params: { search: trimmed, per_page: 10, page: p },
+            });
+            const fbBody = fbRes.data || {};
+            const pageData = Array.isArray(fbBody.data) ? fbBody.data : [];
+            rawList.push(...pageData);
+            if (pageData.length < 10) break;
+          }
+          const eligible = rawList.filter(
+            (c) =>
+              c &&
+              c.montant_a_encaisser != null &&
+              Number(c.montant_a_encaisser) > 0
+          );
+          const total = eligible.length;
+          const start = (page - 1) * per_page;
+          commandes = eligible.slice(start, start + per_page);
+          const total_amount = eligible.reduce((s, c) => s + (Number(c.total) || 0), 0);
+          return {
+            data: commandes,
+            current_page: page,
+            last_page: Math.max(1, Math.ceil(total / per_page) || 1),
+            per_page,
+            total,
+            total_amount,
+          };
+        } catch {
+          return body;
+        }
+      }
+
+      return body;
   },
 
   /**

@@ -626,9 +626,13 @@ const CaissePage = () => {
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#472EAD] mx-auto"></div>
             <p className="mt-4 text-gray-600">Chargement des tickets...</p>
           </div>
-        ) : pendingCount === 0 ? (
+        ) : pendingCount === 0 && filterText.trim().length < 2 ? (
           <div className="text-center py-12">
             <p className="text-gray-500">Aucun ticket en attente</p>
+          </div>
+        ) : pendingCount === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-gray-500">Aucun ticket ne correspond à votre recherche</p>
           </div>
         ) : displayedTickets.length === 0 ? (
           <div className="text-center py-12">
