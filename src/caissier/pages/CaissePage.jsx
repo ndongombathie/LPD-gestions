@@ -9,7 +9,7 @@ import Select from '../../components/ui/Select';
 import { formatCurrency, formatDateTime } from '../../utils/formatters';
 import { printInvoice } from '../components/InvoicePrint';
 import QRScanner from '../components/QRScanner';
-import caissierApi from '../services/caissierApi';
+import caissierApi, { invalidateCommandesAttenteClientCache } from '../services/caissierApi';
 import { toast } from 'sonner';
 import { echo } from '../../utils/echo';
 import { m } from 'framer-motion';
@@ -32,6 +32,7 @@ const CaissePage = () => {
   /** Après encaissement réussi : modal Imprimer / Annuler (remplace le toast avec action) */
   const [isFactureModalOpen, setIsFactureModalOpen] = useState(false);
   const [ticketFacture, setTicketFacture] = useState(null);
+  const [isCaisseCloturee, setIsCaisseCloturee] = useState(false);
   const [filterText, setFilterText] = useState('');
   const [showArticleDetails, setShowArticleDetails] = useState({});
   const [currentPage, setCurrentPage] = useState(1);
@@ -170,11 +171,41 @@ const CaissePage = () => {
     fetchDashboardStats();
   }, []);
 
+  // Verrou : si la caisse du jour est clôturée, bloquer les actions d'encaissement/annulation
+  useEffect(() => {
+    let cancelled = false;
+    const today = caissierApi.getDateLocal();
+
+    // Flag local (posé après clôture) → effet immédiat
+    try {
+      if (localStorage.getItem(`lpd_caisse_cloturee_${today}`) === '1') {
+        setIsCaisseCloturee(true);
+      }
+    } catch (_e) {
+      // ignore
+    }
+
+    (async () => {
+      try {
+        const journal = await caissierApi.getCaissierCaisseJournal(today);
+        if (cancelled) return;
+        setIsCaisseCloturee(Boolean(journal?.cloture));
+      } catch {
+        // éviter faux positifs
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Écouter les nouvelles commandes validées (temps réel)
   useEffect(() => {
     if (!boutiqueId || !echo) return;
     const channel = echo.private(`boutique.${boutiqueId}`);
     const listener = () => {
+      invalidateCommandesAttenteClientCache();
       fetchTicketsSafe(currentPageRef.current, filterTextRef.current);
       fetchDashboardStats();
     };
@@ -194,6 +225,7 @@ const CaissePage = () => {
       if (!boutiqueId) return;
       const channel = echo.private(`boutique.${boutiqueId}`);
       const listener = () => {
+          invalidateCommandesAttenteClientCache();
           fetchTicketsSafe(currentPage, filterText.trim());
           fetchDashboardStats();
       };
@@ -223,6 +255,12 @@ const CaissePage = () => {
   }, [location?.state?.selectedTicketId, tickets]);
 
   const handleEncaisse = (ticket) => {
+    if (isCaisseCloturee) {
+      toast.error('Caisse clôturée', {
+        description: "La caisse est clôturée pour aujourd'hui. Encaissement impossible."
+      });
+      return;
+    }
     setSelectedTicket(ticket);
     
     // Pour les clients spéciaux, le moyen de paiement est déjà défini par le responsable
@@ -246,10 +284,25 @@ const CaissePage = () => {
 
   const handlePaymentSubmit = async () => {
     if (!selectedTicket || isProcessingPayment) return;
+    if (isCaisseCloturee) {
+      toast.error('Caisse clôturée', {
+        description: "La caisse est clôturée pour aujourd'hui. Encaissement impossible."
+      });
+      return;
+    }
 
-    const resteDu = selectedTicket.reste_du || selectedTicket.total_ttc;
-    // Le montant enregistré est toujours le reste dû de la commande (non modifiable)
-    const montant = resteDu;
+    /**
+     * Montant réellement encaissé sur cette opération (aligné sur l’API).
+     * - Paiement complet : souvent = TTC ou reste dû final.
+     * - Paiement partiel / tranche : = montant_a_encaisser (pas le TTC ni tout le reste dû global si différent).
+     */
+    const montantEncaisseOperation = (() => {
+      const ma = Number(selectedTicket.montant_a_encaisser);
+      if (Number.isFinite(ma) && ma > 0) return ma;
+      const r = Number(selectedTicket.reste_du);
+      if (Number.isFinite(r) && r > 0) return r;
+      return Number(selectedTicket.total_ttc || 0);
+    })();
 
     // En espèces : le montant donné doit être au moins égal au montant à payer
     if (paymentData.moyenPaiement === 'especes') {
@@ -276,7 +329,7 @@ const CaissePage = () => {
       const ticketEncaisse = {
         ...selectedTicket,
         moyen_paiement: moyenPaiementFinal,
-        montant_paye: montant,
+        montant_paye: montantEncaisseOperation,
         statut: 'encaissé',
         ...(moyenPaiementFinal === 'especes'
           ? {
@@ -299,6 +352,7 @@ const CaissePage = () => {
       setIsFactureModalOpen(true);
 
       // Recharger les tickets pour que le ticket disparaisse immédiatement
+      invalidateCommandesAttenteClientCache();
       await fetchTicketsSafe(currentPage, filterText.trim());
       // Mettre à jour le compteur de tickets traités
       await fetchDashboardStats();
@@ -313,7 +367,7 @@ const CaissePage = () => {
         const ticketEncaisse = {
           ...selectedTicket,
           moyen_paiement: moyenPaiementFinal,
-          montant_paye: montant,
+          montant_paye: montantEncaisseOperation,
           statut: 'encaissé',
           ...(moyenPaiementFinal === 'especes'
             ? {
@@ -326,6 +380,7 @@ const CaissePage = () => {
         setSelectedTicket(null);
         setTicketFacture(ticketEncaisse);
         setIsFactureModalOpen(true);
+        invalidateCommandesAttenteClientCache();
         await fetchTicketsSafe(currentPage, filterText.trim());
         // Mettre à jour le compteur de tickets traités
         await fetchDashboardStats();
@@ -344,6 +399,12 @@ const CaissePage = () => {
   const handleQRScan = async (qrData) => {
     try {
       console.log('QR code scanné:', qrData);
+      if (isCaisseCloturee) {
+        toast.error('Caisse clôturée', {
+          description: "La caisse est clôturée pour aujourd'hui. Encaissement impossible."
+        });
+        return;
+      }
       const raw = (qrData ?? '').toString().trim();
 
       const extractCommandeId = (value) => {
@@ -467,6 +528,14 @@ const CaissePage = () => {
 
   return (
     <div className="space-y-14 relative z-10">
+      {isCaisseCloturee && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+          <p className="font-semibold">Caisse clôturée</p>
+          <p className="text-sm opacity-90">
+            La caisse est clôturée pour aujourd&apos;hui. Les actions d&apos;encaissement et d&apos;annulation sont désactivées.
+          </p>
+        </div>
+      )}
       {/* En-tête */}
       <div className="flex items-center justify-between">
         <div>
@@ -480,6 +549,7 @@ const CaissePage = () => {
         <Button
           variant="primary"
           onClick={() => setIsQRScannerOpen(true)}
+          disabled={isCaisseCloturee}
           className="bg-[#472EAD] hover:bg-[#3d2888] text-white shadow-md hover:shadow-lg transition-all font-semibold px-6 py-3"
         >
           <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -560,9 +630,13 @@ const CaissePage = () => {
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#472EAD] mx-auto"></div>
             <p className="mt-4 text-gray-600">Chargement des tickets...</p>
           </div>
-        ) : pendingCount === 0 ? (
+        ) : pendingCount === 0 && filterText.trim().length < 2 ? (
           <div className="text-center py-12">
             <p className="text-gray-500">Aucun ticket en attente</p>
+          </div>
+        ) : pendingCount === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-gray-500">Aucun ticket ne correspond à votre recherche</p>
           </div>
         ) : displayedTickets.length === 0 ? (
           <div className="text-center py-12">
@@ -705,6 +779,7 @@ const CaissePage = () => {
                     <Button
                       variant="primary"
                       onClick={() => handleEncaisse(ticket)}
+                      disabled={isCaisseCloturee}
                       className="bg-[#472EAD] hover:bg-[#3d2888] text-white shadow-md hover:shadow-lg transition-all text-sm px-4 py-2 font-semibold"
                       size="sm"
                     >
@@ -719,6 +794,7 @@ const CaissePage = () => {
                         setTicketToCancel(ticket);
                         setIsCancelModalOpen(true);
                       }}
+                      disabled={isCaisseCloturee}
                       className="shadow-md hover:shadow-lg transition-shadow text-sm px-3 py-1.5 border border-gray-300 hover:bg-gray-50"
                       size="sm"
                     >
@@ -947,8 +1023,8 @@ const CaissePage = () => {
                   type="number"
                   min="0"
                   step="1"
-                  value={paymentData.montant_a_encaisser}
-                  onChange={(e) => setPaymentData(prev => ({ ...prev, montantDonneEspeces: e.target.value }))}
+                  value={paymentData.montantDonneEspeces}
+                  onChange={(e) => setPaymentData((prev) => ({ ...prev, montantDonneEspeces: e.target.value }))}
                   placeholder="Ex: 15000"
                   className="w-full"
                 />
@@ -1120,6 +1196,7 @@ const CaissePage = () => {
                   });
 
                   // Recharger les tickets
+                  invalidateCommandesAttenteClientCache();
                   await fetchTicketsSafe(currentPage, filterText.trim());
                   // Mettre à jour le compteur de tickets traités (au cas où le ticket annulé était encaissé)
                   await fetchDashboardStats();
