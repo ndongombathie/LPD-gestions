@@ -128,7 +128,7 @@ const Notification = ({ type, message, onClose }) => {
   );
 };
 
-const NouvelleCommande = ({ panier = [], setPanier, onCommandeValidee, sellerName = null }) => {
+const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = null }) => {
   const [rechercheProduit, setRechercheProduit] = useState('');
   const [codeBarre, setCodeBarre] = useState('');
   const [client, setClient] = useState({
@@ -173,10 +173,6 @@ const NouvelleCommande = ({ panier = [], setPanier, onCommandeValidee, sellerNam
 
   const inputCodeBarreRef = useRef(null);
   const inputNomClientRef = useRef(null);
-  
-  const isInitialMount = useRef(true);
-  const isLoadingRef = useRef(false);
-  const isChargingRef = useRef(false);
 
   const addNotification = (type, message) => {
     const id = Date.now();
@@ -203,52 +199,10 @@ const NouvelleCommande = ({ panier = [], setPanier, onCommandeValidee, sellerNam
     return type;
   };
 
-  // CHARGEMENT UNIQUE AU MONTAGE
   useEffect(() => {
     chargerProduits();
     chargerInfosVendeur();
   }, []);
-
-  // EFFET SÉPARÉ POUR LA RECHERCHE ET LA PAGINATION
-  useEffect(() => {
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
-    }
-    
-    const timeoutId = setTimeout(() => {
-      chargerProduits();
-    }, 300);
-    
-    return () => clearTimeout(timeoutId);
-  }, [currentPage, debouncedRechercheProduit]);
-
-  // EFFET POUR L'ÉCOUTE WEBSOCKET
-  useEffect(() => {
-    if (!boutiqueId) return;
-    
-    try {
-      const channel = echo.private(`boutique.${boutiqueId}`);
-      const listener = () => {
-        chargerProduits();
-      };
-      
-      channel.listen('.transfert.validee', listener);
-      channel.listen('.stock.mis_a_jour', listener);
-      
-      return () => {
-        try {
-          channel.stopListening('.transfert.validee');
-          channel.stopListening('.stock.mis_a_jour');
-          echo.leave(`boutique.${boutiqueId}`);
-        } catch (error) {
-          console.error('Erreur lors de la désinscription:', error);
-        }
-      };
-    } catch (error) {
-      console.error('Erreur WebSocket:', error);
-    }
-  }, [boutiqueId]);
 
   useEffect(() => {
     if (sellerName && sellerName !== vendeurInfo.nom) {
@@ -257,20 +211,16 @@ const NouvelleCommande = ({ panier = [], setPanier, onCommandeValidee, sellerNam
   }, [sellerName]);
 
   useEffect(() => {
-    if (produits && Array.isArray(produits)) {
-      const produitsUniques = [];
-      const idsVus = new Set();
-      produits.forEach(produit => {
-        if (produit && produit.id && !idsVus.has(produit.id)) {
-          idsVus.add(produit.id);
-          produitsUniques.push(produit);
-        }
-      });
-      setProduitsFiltres(produitsUniques);
-    } else {
+    if (!produits || !Array.isArray(produits)) {
       setProduitsFiltres([]);
+      return;
     }
+    setProduitsFiltres(produits);
   }, [produits]);
+
+  useEffect(() => {
+    chargerProduits();
+  }, [currentPage, debouncedRechercheProduit]);
 
   useEffect(() => {
     if (inputCodeBarreRef.current) {
@@ -278,10 +228,37 @@ const NouvelleCommande = ({ panier = [], setPanier, onCommandeValidee, sellerNam
     }
   }, []);
 
+
+  useEffect(() => {
+    if (!boutiqueId) return;
+    const channel = echo.private(`boutique.${boutiqueId}`);
+    const listener = () => {
+        chargerProduits();
+    };
+    channel.listen('.stock.mis_a_jour', listener);
+    return () => {
+        try {
+            channel.stopListening('.stock.mis_a_jour');
+            echo.leave(`boutique.${boutiqueId}`);
+            addNotification(
+                'info',
+                'Désinscription du canal temps réel réussie.'
+            );
+        } catch (error) {
+            addNotification(
+                'error',
+                'Erreur lors de la désinscription. Rafraîchis la page.'
+            );
+        }
+    };
+}, [boutiqueId]);
+
   const chargerInfosVendeur = async () => {
     try {
       setLoadingVendeur(true);
+
       const infosVendeur = await profileAPI.getProfile();
+
       if (infosVendeur) {
         setVendeurInfo({
           nom: infosVendeur.nom || sellerName || 'Vendeur',
@@ -294,7 +271,6 @@ const NouvelleCommande = ({ panier = [], setPanier, onCommandeValidee, sellerNam
         });
       }
     } catch (error) {
-      console.error('Erreur chargement vendeur:', error);
       if (sellerName) {
         setVendeurInfo(prev => ({ ...prev, nom: sellerName }));
       }
@@ -320,93 +296,76 @@ const NouvelleCommande = ({ panier = [], setPanier, onCommandeValidee, sellerNam
     };
   };
 
-  // CHARGEMENT DES PRODUITS
   const chargerProduits = async () => {
-    if (isChargingRef.current) return;
-    
     try {
-      isChargingRef.current = true;
       setLoadingProduits(true);
       setErrorMessage('');
 
-      const resp = await gestionnaireBoutiqueAPI.getProduitsDisponiblesBoutique(
-        currentPage, 
-        debouncedRechercheProduit || ''
-      );
-      
-      let itemsRaw = [];
-      if (Array.isArray(resp)) {
-        itemsRaw = resp;
-      } else if (resp?.data) {
-        itemsRaw = Array.isArray(resp.data) ? resp.data : (resp.data.data || []);
-      } else {
-        itemsRaw = [];
-      }
+      const resp = await gestionnaireBoutiqueAPI.getProduitsDisponiblesBoutique(currentPage, debouncedRechercheProduit || '');
+      const itemsRaw = Array.isArray(resp) ? resp : (resp?.data || []);
 
-      const produitsMap = new Map();
-      
-      itemsRaw.forEach(produit => {
-        if (produit && produit.id && !produitsMap.has(produit.id)) {
-          const produitFormate = {
-            id: produit.id,
-            nom: produit.produit?.nom || produit.nom || 'Produit sans nom',
-            code_barre: produit.produit?.code || produit.code_barre || '',
-            prix_vente_detail: produit.prix_vente_detail || produit.prix || 0,
-            prix_vente_gros: produit.prix_vente_gros || produit.prix_unite_carton || 0,
-            prix_achat: produit.prix_achat || 0,
-            prix_total: produit.prix_total || 0,
-            prix_seuil_detail: produit.prix_seuil_detail || Math.round((produit.prix_vente_detail || 0) * 0.7),
-            prix_seuil_gros: produit.prix_seuil_gros || Math.round((produit.prix_vente_gros || 0) * 0.7),
-            stock_global: produit.quantite || produit.stock || 0,
-            stock_seuil: produit.seuil || 10,
-            stock: produit.quantite || produit.stock || 0,
-            seuil_alerte: produit.seuil || 10,
-            unite_carton: produit.unite_carton || 1,
-            prix_unite_carton: produit.prix_vente_gros || 0,
-            nombre_carton: produit.nombre_carton || Math.floor((produit.stock_global || 0) / (produit.unite_carton || 1)),
-            categorie_id: produit.produit?.categorie?.id,
-            categorie: produit.produit?.categorie?.nom || 'Non catégorisé',
-            created_at: produit.created_at,
-            updated_at: produit.updated_at,
-            prix: produit.prix_vente_detail || 0,
-            prix_detail: produit.prix_vente_detail || 0,
-            prix_gros: produit.prix_vente_gros || 0,
-            prix_seuil: produit.prix_seuil_detail || 0
-          };
-          
-          produitsMap.set(produit.id, produitFormate);
-        }
+      const produitsFormates = itemsRaw.map(produit => {
+        const prixDetail = produit.prix_vente_detail || produit.prix || 0;
+        const prixGros = produit.prix_vente_gros || produit.prix_unite_carton || Math.round(prixDetail * 0.8);
+        
+        return {
+          id: produit.id,
+          nom: produit.produit.nom,
+          code_barre: produit.produit.code || '',
+          prix_vente_detail: prixDetail,
+          prix_vente_gros: prixGros,
+          prix_achat: produit.prix_achat || 0,
+          prix_total: produit.prix_total || 0,
+          prix_seuil_detail: produit.prix_seuil_detail || Math.round(prixDetail * 0.7),
+          prix_seuil_gros: produit.prix_seuil_gros || Math.round(prixGros * 0.7),
+          stock_global: produit.quantite || produit.stock || 0,
+          stock_seuil: produit.seuil || 10,
+          stock: produit.quantite || produit.stock || 0,
+          seuil_alerte: produit.seuil || 10,
+          unite_carton: produit.unite_carton || 1,
+          prix_unite_carton: prixGros,
+          nombre_carton: produit.nombre_carton || Math.floor((produit.stock_global || 0) / (produit.unite_carton || 1)),
+          categorie_id: produit.produit.categorie.id,
+          categorie: produit.produit.categorie.nom || 'Non catégorisé',
+          created_at: produit.created_at,
+          updated_at: produit.updated_at,
+          prix: prixDetail,
+          prix_detail: prixDetail,
+          prix_gros: prixGros,
+          prix_seuil: produit.prix_seuil_detail || Math.round(prixDetail * 0.7)
+        };
       });
-      
-      const produitsFormates = Array.from(produitsMap.values());
-      
+
+
       setProduits(produitsFormates);
+      setProduitsFiltres(produitsFormates);   
       
-      if (resp && !Array.isArray(resp)) {
+      if (!Array.isArray(resp)) {
+        const links = Array.isArray(resp.links) ? resp.links.map(l => {
+          let p = l.page;
+          if (!p && l.url) {
+            const m = l.url.match(/[?&]page=(\d+)/);
+            if (m && m[1]) p = parseInt(m[1], 10);
+          }
+          return { ...l, page: p };
+        }) : [];
         setPageInfo({
           current: resp.current_page || 1,
           last: resp.last_page || 1,
           total: resp.total || produitsFormates.length,
           perPage: resp.per_page || produitsFormates.length,
-          links: resp.links || []
+          links
         });
       } else {
-        setPageInfo({ 
-          current: 1, 
-          last: 1, 
-          total: produitsFormates.length, 
-          perPage: produitsFormates.length, 
-          links: [] 
-        });
+        setPageInfo({ current: 1, last: 1, total: produitsFormates.length, perPage: produitsFormates.length, links: [] });
       }
 
     } catch (error) {
-      console.error('Erreur chargement produits:', error);
       setErrorMessage('Impossible de charger les produits depuis l\'API.');
       setProduits([]);
+      
     } finally {
       setLoadingProduits(false);
-      isChargingRef.current = false;
     }
   };
 
@@ -430,15 +389,13 @@ const NouvelleCommande = ({ panier = [], setPanier, onCommandeValidee, sellerNam
     }
     
     return {
-      prix: produit.prix_vente_detail || 0,
+      prix: produit.prix_vente_detail ||  0,
       prix_seuil: produit.prix_seuil_detail || 0
     };
   };
 
-  // FONCTION AJOUTER AU PANIER CORRIGÉE
   const ajouterAuPanier = (produit, typeVenteSpecifique = null) => {
     if (!produit) {
-      addNotification('error', 'Produit invalide');
       return;
     }
 
@@ -457,62 +414,53 @@ const NouvelleCommande = ({ panier = [], setPanier, onCommandeValidee, sellerNam
 
     const { prix, prix_seuil } = obtenirPrixParType(produit, typeNormalise);
 
-    setPanier(prevPanier => {
-      const cleanPanier = Array.isArray(prevPanier) ? prevPanier.filter(item => item) : [];
-      
-      const produitExistant = cleanPanier.find(item =>
-        item && item.id === produit.id && item.type_vente === typeNormalise
-      );
+    const produitExistant = panier.find(item =>
+      item && item.id === produit.id && item.type_vente === typeNormalise
+    );
 
-      if (produitExistant) {
-        const stockRestant = produit.stock_global - produitExistant.quantite;
-        if (stockRestant <= 0) {
-          addNotification('error', 'Stock insuffisant pour ajouter une unité supplémentaire');
-          return prevPanier;
-        }
-
-        addNotification('success', `${produit.nom} quantité augmentée`);
-        
-        return cleanPanier.map(item =>
-          item && item.id === produit.id && item.type_vente === typeNormalise
-            ? { 
-                ...item, 
-                quantite: item.quantite + 1,
-                prix_unitaire: item.prix_vente
-              }
-            : item
-        );
-      } else {
-        addNotification('success', `${produit.nom} ajouté au panier`);
-        
-        const nouveauProduit = {
-          ...produit,
-          quantite: 1,
-          type_vente: typeNormalise,
-          panier_key: `${produit.id}_${typeNormalise}`,
-          
-          prix_vente: prix,
-          prix_base: prix,
-          prix_seuil: prix_seuil,
-          prix_original: prix,
-          
-          prix_unitaire: prix,
-          prix_detail: produit.prix_vente_detail || produit.prix || 0,
-          prix_gros: produit.prix_vente_gros || produit.prix_unite_carton || 0,
-          
-          type_vente_affichage: typeVente,
-          
-          stock_initial: produit.stock_global,
-          stock_seuil: produit.stock_seuil,
-          
-          unite_par_carton: produit.unite_carton || 1,
-          
-          categorie: produit.categorie || 'Non catégorisé'
-        };
-        
-        return [...cleanPanier, nouveauProduit];
+    if (produitExistant) {
+      const stockRestant = produit.stock_global - produitExistant.quantite;
+      if (stockRestant <= 0) {
+        addNotification('error', 'Stock insuffisant pour ajouter une unité supplémentaire');
+        return;
       }
-    });
+
+      setPanier(panier.map(item =>
+        item && item.id === produit.id && item.type_vente === typeNormalise
+          ? { 
+              ...item, 
+              quantite: item.quantite + 1,
+              prix_unitaire: item.prix_vente
+            }
+          : item
+      ));
+      addNotification('success', `${produit.nom} quantité augmentée`);
+    } else {
+      setPanier([...panier.filter(item => item), {
+        ...produit,
+        quantite: 1,
+        type_vente: typeNormalise,
+        
+        prix_vente: prix,
+        prix_base: prix,
+        prix_seuil: prix_seuil,
+        prix_original: prix,
+        
+        prix_unitaire: prix,
+        prix_detail: produit.prix_vente_detail || produit.prix || 0,
+        prix_gros: produit.prix_vente_gros || produit.prix_unite_carton || 0,
+        
+        type_vente_affichage: typeVente,
+        
+        stock_initial: produit.stock_global,
+        stock_seuil: produit.stock_seuil,
+        
+        unite_par_carton: produit.unite_carton || 1,
+        
+        categorie: produit.categorie || 'Non catégorisé'
+      }]);
+      addNotification('success', `${produit.nom} ajouté au panier`);
+    }
   };
 
   const ajouterParCodeBarre = async () => {
@@ -527,20 +475,20 @@ const NouvelleCommande = ({ panier = [], setPanier, onCommandeValidee, sellerNam
       if (produitTrouve) {
         const produitFormate = {
           id: produitTrouve.id,
-          nom: produitTrouve.nom || 'Produit sans nom',
-          code_barre: produitTrouve.code_barre || codeBarre,
+          nom: produitTrouve.nom,
+          code_barre: produitTrouve.code_barre || '',
           
-          prix_vente_detail: produitTrouve.prix_vente_detail || 0,
-          prix_vente_gros: produitTrouve.prix_vente_gros || 0,
+          prix_vente_detail: produitTrouve.prix_vente_detail || produitTrouve.prix || 0,
+          prix_vente_gros: produitTrouve.prix_vente_gros || produitTrouve.prix_unite_carton || 0,
           prix_achat: produitTrouve.prix_achat || 0,
           prix_total: produitTrouve.prix_total || 0,
           
-          prix_seuil_detail: produitTrouve.prix_seuil_detail || Math.round((produitTrouve.prix_vente_detail || 0) * 0.7),
-          prix_seuil_gros: produitTrouve.prix_seuil_gros || Math.round((produitTrouve.prix_vente_gros || 0) * 0.7),
+          prix_seuil_detail: produitTrouve.prix_seuil_detail || Math.round((produitTrouve.prix_vente_detail || produitTrouve.prix || 0) * 0.7),
+          prix_seuil_gros: produitTrouve.prix_seuil_gros || Math.round((produitTrouve.prix_vente_gros || produitTrouve.prix_unite_carton || 0) * 0.7),
           
-          stock_global: produitTrouve.stock_global || 0,
+          stock_global: produitTrouve.stock_global || produitTrouve.stock || 0,
           stock_seuil: produitTrouve.stock_seuil || 10,
-          stock: produitTrouve.stock_global || 0,
+          stock: produitTrouve.stock_global || produitTrouve.stock || 0,
           seuil_alerte: produitTrouve.stock_seuil || 10,
           
           unite_carton: produitTrouve.unite_carton || 1,
@@ -548,15 +496,15 @@ const NouvelleCommande = ({ panier = [], setPanier, onCommandeValidee, sellerNam
           nombre_carton: produitTrouve.nombre_carton || Math.floor((produitTrouve.stock_global || 0) / (produitTrouve.unite_carton || 1)),
           
           categorie_id: produitTrouve.categorie_id,
-          categorie: produitTrouve.categorie || 'Non catégorisé',
+          categorie: produitTrouve.categorie_nom || 'Non catégorisé',
           
-          created_at: produitTrouve.created_at || new Date().toISOString(),
-          updated_at: produitTrouve.updated_at || new Date().toISOString(),
+          created_at: produitTrouve.created_at,
+          updated_at: produitTrouve.updated_at,
           
-          prix: produitTrouve.prix_vente_detail || 0,
-          prix_detail: produitTrouve.prix_vente_detail || 0,
-          prix_gros: produitTrouve.prix_vente_gros || 0,
-          prix_seuil: produitTrouve.prix_seuil_detail || 0
+          prix: produitTrouve.prix_vente_detail || produitTrouve.prix || 0,
+          prix_detail: produitTrouve.prix_vente_detail || produitTrouve.prix || 0,
+          prix_gros: produitTrouve.prix_vente_gros || produitTrouve.prix_unite_carton || 0,
+          prix_seuil: produitTrouve.prix_seuil_detail || Math.round((produitTrouve.prix_vente_detail || produitTrouve.prix || 0) * 0.7)
         };
 
         ajouterAuPanier(produitFormate, typeVenteGlobal);
@@ -568,7 +516,6 @@ const NouvelleCommande = ({ panier = [], setPanier, onCommandeValidee, sellerNam
         addNotification('error', 'Aucun produit trouvé avec ce code barre');
       }
     } catch (error) {
-      console.error('Erreur recherche code barre:', error);
       addNotification('error', 'Erreur lors de la recherche du code barre');
     }
   };
@@ -612,13 +559,11 @@ const NouvelleCommande = ({ panier = [], setPanier, onCommandeValidee, sellerNam
         return;
       }
 
-      setPanier(prevPanier =>
-        (Array.isArray(prevPanier) ? prevPanier : []).map(item =>
-          item && item.id === produitId && item.type_vente === typeVente
-            ? { ...item, quantite: nouvelleQuantite }
-            : item
-        )
-      );
+      setPanier(panier.map(item =>
+        item && item.id === produitId && item.type_vente === typeVente
+          ? { ...item, quantite: nouvelleQuantite }
+          : item
+      ));
       addNotification('success', 'Quantité modifiée avec succès');
     }
 
@@ -639,22 +584,18 @@ const NouvelleCommande = ({ panier = [], setPanier, onCommandeValidee, sellerNam
         return;
       }
 
-      setPanier(prevPanier =>
-        (Array.isArray(prevPanier) ? prevPanier : []).map(item =>
-          item && item.id === produitId && item.type_vente === typeVente
-            ? { ...item, quantite: nouvelleQuantite }
-            : item
-        )
-      );
+      setPanier(panier.map(item =>
+        item && item.id === produitId && item.type_vente === typeVente
+          ? { ...item, quantite: nouvelleQuantite }
+          : item
+      ));
     }
   };
 
   const retirerDuPanier = (produitId, typeVente) => {
-    setPanier(prevPanier =>
-      (Array.isArray(prevPanier) ? prevPanier : []).filter(item =>
-        !(item && item.id === produitId && item.type_vente === typeVente)
-      )
-    );
+    setPanier(panier.filter(item =>
+      !(item && item.id === produitId && item.type_vente === typeVente)
+    ));
     if (editionPrix && editionPrix.produitId === produitId && editionPrix.typeVente === typeVente) {
       setEditionPrix(null);
     }
@@ -701,13 +642,11 @@ const NouvelleCommande = ({ panier = [], setPanier, onCommandeValidee, sellerNam
       return;
     }
 
-    setPanier(prevPanier =>
-      (Array.isArray(prevPanier) ? prevPanier : []).map(item =>
-        item && item.id === produitId && item.type_vente === typeVente
-          ? { ...item, prix_vente: nouveauPrix }
-          : item
-      )
-    );
+    setPanier(panier.map(item =>
+      item && item.id === produitId && item.type_vente === typeVente
+        ? { ...item, prix_vente: nouveauPrix }
+        : item
+    ));
 
     setEditionPrix(null);
     addNotification('success', `Prix modifié à ${nouveauPrix.toLocaleString()} FCFA`);
@@ -718,24 +657,21 @@ const NouvelleCommande = ({ panier = [], setPanier, onCommandeValidee, sellerNam
   };
 
   const reinitialiserPrix = (produitId, typeVente) => {
-    const produit = (Array.isArray(panier) ? panier : []).find(item =>
+    const produit = panier.find(item =>
       item && item.id === produitId && item.type_vente === typeVente
     );
     if (produit) {
-      setPanier(prevPanier =>
-        (Array.isArray(prevPanier) ? prevPanier : []).map(item =>
-          item && item.id === produitId && item.type_vente === typeVente
-            ? { ...item, prix_vente: produit.prix_original }
-            : item
-        )
-      );
+      setPanier(panier.map(item =>
+        item && item.id === produitId && item.type_vente === typeVente
+          ? { ...item, prix_vente: produit.prix_original }
+          : item
+      ));
       addNotification('info', `Prix réinitialisé à ${produit.prix_original.toLocaleString()} FCFA`);
     }
   };
 
   const calculerTotaux = () => {
-    const panierArray = Array.isArray(panier) ? panier : [];
-    const totalHT = panierArray.reduce((total, item) => {
+    const totalHT = panier.reduce((total, item) => {
       if (!item) return total;
       const prix = Number(item.prix_vente) || 0;
       const quantite = Number(item.quantite) || 0;
@@ -767,9 +703,7 @@ const NouvelleCommande = ({ panier = [], setPanier, onCommandeValidee, sellerNam
   };
 
   const validerCommande = async () => {
-    const panierArray = Array.isArray(panier) ? panier.filter(item => item) : [];
-    
-    if (panierArray.length === 0) {
+    if (panier.length === 0) {
       addNotification('warning', 'Le panier est vide !');
       return;
     }
@@ -805,26 +739,450 @@ const NouvelleCommande = ({ panier = [], setPanier, onCommandeValidee, sellerNam
     setApiError(null);
 
     try {
-      // Suite de la fonction validerCommande (identique à l'originale)
-      // ... (je conserve le reste du code pour éviter la longueur)
+      const stockInsuffisant = panier.find(item => {
+        if (!item) return false;
+        const produitOriginal = produits.find(p => p && p.id === item.id);
+        return produitOriginal && item.quantite > produitOriginal.stock_global;
+      });
+
+      if (stockInsuffisant) {
+        addNotification('error', `Stock insuffisant pour ${stockInsuffisant.nom}. Veuillez ajuster les quantités.`);
+        setEnvoiEnCours(false);
+        return;
+      }
+
+      let clientId = null;
+      let clientNomFinal = client.nom.trim();
+      let clientPrenomFinal = client.prenom.trim();
+      let clientTelephoneFinal = client.telephone?.trim() || '';
+      let clientAdresseFinal = client.adresse?.trim() || '';
+
+      try {
+        const nouveauClient = {
+          nom: clientNomFinal,
+          prenom: clientPrenomFinal,
+          telephone: clientTelephoneFinal,
+          adresse: clientAdresseFinal,
+          type_client: 'normal',
+          solde: 0,
+          contact: ''
+        };
+
+        const createResponse = await clientsAPI.create(nouveauClient);
+
+        if (createResponse && createResponse.data) {
+          if (createResponse.data.id) {
+            clientId = createResponse.data.id;
+          }
+          else if (createResponse.data.data && createResponse.data.data.id) {
+            clientId = createResponse.data.data.id;
+          }
+         
+        }
+        else if (createResponse && createResponse.id) {
+          clientId = createResponse.id;
+        }
+
+      } catch  {
+          addNotification('error', 'Erreur lors de la création du client. La commande sera créée sans lier le client.');
+      }
+
+      const typesDansPanier = [...new Set(panier.filter(item => item).map(item => item.type_vente))];
+      const aDuDetail = typesDansPanier.includes('detail');
+      const aDuGros = typesDansPanier.includes('gros');
       
-      // Pour simplifier, je montre la structure minimale
-      addNotification('success', 'Commande créée avec succès');
+      let typeVenteGlobalCommande;
+      if (aDuDetail && aDuGros) {
+        typeVenteGlobalCommande = 'mixte';
+      } else if (aDuGros) {
+        typeVenteGlobalCommande = 'gros';
+      } else {
+        typeVenteGlobalCommande = 'detail';
+      }
+
+      const vendeurData = getVendeurApiData();
+
+      const itemsData = panier.filter(item => item).map(item => {
+        const quantite = parseInt(item.quantite) || 1;
+        const prixUnitaire = parseFloat(item.prix_vente) || 0;
+        
+        const typeVenteArticle = item.type_vente || normaliserTypeVente(typeVenteGlobal);
+        
+        const itemData = {
+          id: item.id,
+          nom: item.nom,
+          code_barre: item.code_barre,
+          quantite: quantite,
+          mode_vente: typeVenteArticle,
+          type_vente_affichage: typeVenteArticle === 'detail' ? 'détail' : 'gros',
+          prix_unitaire: prixUnitaire,
+          prix_detail: parseFloat(item.prix_detail || 0),
+          prix_gros: parseFloat(item.prix_gros || 0),
+          prix_original: parseFloat(item.prix_original || 0),
+          stock_initial: parseInt(item.stock_global),
+          categorie: item.categorie || 'Non catégorisé'
+        };
+        
+        if (typeVenteArticle === 'gros') {
+          itemData.unite_par_carton = parseInt(item.unite_par_carton || 1);
+          itemData.est_vente_carton = true;
+          itemData.nombre_cartons = Math.ceil(quantite / (item.unite_par_carton || 1));
+          itemData.unites_restantes = quantite % (item.unite_par_carton || 1);
+        }
+        
+        return itemData;
+      });
+
+      let totalHTCalcule = 0;
+      
+      panier.filter(item => item).forEach(item => {
+        const prix = Number(item.prix_vente) || 0;
+        const quantite = Number(item.quantite) || 0;
+        totalHTCalcule += prix * quantite;
+      });
+      
+      totalHTCalcule = Math.round(totalHTCalcule);
+      
+      const tvaCalculee = tvaActive ? Math.round(totalHTCalcule * 0.18) : 0;
+      const totalTTCCalcule = totalHTCalcule + tvaCalculee;
+
+      const commandeData = {
+        client_id: clientId,
+        client_nom: `${clientNomFinal} ${clientPrenomFinal}`.trim(),
+        client_prenom: clientPrenomFinal,
+        client_nom_famille: clientNomFinal,
+        client_telephone: clientTelephoneFinal,
+        client_adresse: clientAdresseFinal,
+
+        vendeur_id: vendeurData.vendeur_id,
+        vendeur_nom: vendeurData.vendeur_nom,
+        vendeur_email: vendeurData.vendeur_email,
+        vendeur_telephone: vendeurData.vendeur_telephone,
+        boutique_id: vendeurData.boutique_id,
+
+        mode_vente: typeVenteGlobalCommande,
+        type_vente_original: typeVenteGlobal,
+        type_vente_affichage: getTypeVenteAffichage(typeVenteGlobalCommande),
+        
+        statistiques_types: {
+          detail: aDuDetail,
+          gros: aDuGros,
+          types_presents: typesDansPanier
+        },
+
+        items: itemsData,
+
+        montant_ht: totalHTCalcule,
+        tva: tvaCalculee,
+        montant_ttc: totalTTCCalcule,
+        total: totalTTCCalcule,
+        
+        tva_appliquee: tvaActive,
+        tva_taux: tvaActive ? 18 : 0,
+
+        statut: 'en_attente',
+        date_commande: new Date().toISOString(),
+        mode_paiement: 'non_paye',
+        notes: '',
+
+        resume: {
+          nombre_articles_detail: itemsData.filter(i => i.type_vente === 'detail').length,
+          nombre_articles_gros: itemsData.filter(i => i.type_vente === 'gros').length,
+          total_detail: itemsData.filter(i => i.type_vente === 'detail').reduce((sum, i) => sum + (i.prix_unitaire * i.quantite), 0),
+          total_gros: itemsData.filter(i => i.type_vente === 'gros').reduce((sum, i) => sum + (i.prix_unitaire * i.quantite), 0)
+        }
+      };
+
+      let apiResponse = null;
+      let apiError = null;
+      let commandeCreee = false;
+
+      try {
+        console.log(commandeData)
+        apiResponse = await commandesAPI.create(commandeData);
+        commandeCreee = true;
+      } catch (error) {
+        apiError = error;
+
+        if (isPusherError(error)) {
+          commandeCreee = true;
+
+          apiResponse = {
+            success: true,
+            data: {
+              id: `temp-pusher-${Date.now()}`,
+              numero: apiResponse?.data?.numero ||0,
+              statut: 'en_attente_paiement',
+              created_at: new Date().toISOString(),
+              type_vente: typeVenteGlobalCommande,
+              total: commandeData.total,
+              montant_ht: commandeData.montant_ht,
+              tva: commandeData.tva,
+              montant_ttc: commandeData.montant_ttc
+            }
+          };
+        }
+      }
+
+      let nouvelleCommande;
+
+      if (commandeCreee && apiResponse) {
+        console.log("la reponse de api",apiResponse);
+        
+        nouvelleCommande = {
+          id: apiResponse.id || apiResponse?.id || `temp-${Date.now()}`,
+          numero_commande: apiResponse.numero || `CMD-${Date.now().toString().slice(-8)}`,
+          date: apiResponse.created_at || new Date().toISOString(),
+          
+          type_vente: typeVenteGlobalCommande,
+          type_vente_affichage: getTypeVenteAffichage(typeVenteGlobalCommande),
+          type_vente_original: typeVenteGlobal,
+          
+          client: {
+            id: clientId,
+            nom: clientNomFinal,
+            prenom: clientPrenomFinal,
+            telephone: clientTelephoneFinal,
+            adresse: clientAdresseFinal
+          },
+          vendeur: {
+            id: vendeurData.vendeur_id,
+            nom_complet: vendeurData.vendeur_nom,
+            nom: vendeurInfo.nom,
+            prenom: vendeurInfo.prenom,
+            email: vendeurInfo.email,
+            telephone: vendeurInfo.telephone,
+            boutique_id: vendeurInfo.boutique_id,
+            role: vendeurInfo.role
+          },
+          
+          items: panier.filter(item => item).map(item => ({
+            id: item.id,
+            nom: item.nom,
+            code_barre: item.code,
+            quantite: item.quantite,
+            type_vente: item.type_vente,
+            type_vente_affichage: item.type_vente === 'detail' ? 'Détail' : 'Gros',
+            prix_unitaire: item.prix_vente,
+            prix_base: item.prix_base,
+            prix_seuil: item.prix_seuil,
+            prix_original: item.prix_original,
+            sous_total: item.prix_vente * item.quantite,
+            categorie: item.categorie,
+            stock_initial: item.stock_global,
+            prix_detail: item.prix_detail || 0,
+            prix_gros: item.prix_gros || 0,
+            unite_par_carton: item.unite_par_carton || 1
+          })),
+          
+          statistiques: {
+            types_presents: typesDansPanier,
+            nombre_detail: itemsData.filter(i => i.type_vente === 'detail').length,
+            nombre_gros: itemsData.filter(i => i.type_vente === 'gros').length,
+            total_detail: itemsData.filter(i => i.type_vente === 'detail').reduce((sum, i) => sum + (i.prix_unitaire * i.quantite), 0),
+            total_gros: itemsData.filter(i => i.type_vente === 'gros').reduce((sum, i) => sum + (i.prix_unitaire * i.quantite), 0)
+          },
+          
+          total_ht: totalHTCalcule,
+          tva: tvaCalculee,
+          total_ttc: totalTTCCalcule,
+          total: totalTTCCalcule,
+          montant_ht: totalHTCalcule,
+          montant_ttc: totalTTCCalcule,
+          tva_appliquee: tvaActive,
+          tva_taux: tvaActive ? 18 : 0,
+          
+          statut: apiResponse?.data?.statut || 'en_attente_paiement',
+          api_success: true,
+          api_message: isPusherError(apiError) ? 'Créée avec succès (notification échouée)' : 'Créée avec succès',
+          api_data: apiResponse?.data,
+          api_error: isPusherError(apiError) ? 'Erreur notification WebSocket' : null,
+          has_pusher_error: isPusherError(apiError)
+        };
+      } else {
+        nouvelleCommande = {
+          id: `local-${Date.now()}`,
+          numero_commande: `CMD-LOCAL-${Date.now().toString().slice(-8)}`,
+          date: new Date().toISOString(),
+          
+          type_vente: typeVenteGlobalCommande,
+          type_vente_affichage: getTypeVenteAffichage(typeVenteGlobalCommande),
+          type_vente_original: typeVenteGlobal,
+          
+          client: {
+            id: null,
+            nom: clientNomFinal,
+            prenom: clientPrenomFinal,
+            telephone: clientTelephoneFinal,
+            adresse: clientAdresseFinal
+          },
+          vendeur: {
+            id: vendeurData.vendeur_id,
+            nom_complet: vendeurData.vendeur_nom,
+            nom: vendeurInfo.nom,
+            prenom: vendeurInfo.prenom,
+            email: vendeurInfo.email,
+            telephone: vendeurInfo.telephone,
+            boutique_id: vendeurInfo.boutique_id,
+            role: vendeurInfo.role
+          },
+          
+          items: panier.filter(item => item).map(item => ({
+            id: item.id,
+            nom: item.nom,
+            code_barre: item.code,
+            quantite: item.quantite,
+            type_vente: item.type_vente,
+            type_vente_affichage: item.type_vente === 'detail' ? 'Détail' : 'Gros',
+            prix_unitaire: item.prix_vente,
+            prix_base: item.prix_base,
+            prix_seuil: item.prix_seuil,
+            prix_original: item.prix_original,
+            sous_total: item.prix_vente * item.quantite,
+            categorie: item.categorie,
+            stock_initial: item.stock_global,
+            prix_detail: item.prix_detail || 0,
+            prix_gros: item.prix_gros || 0,
+            unite_par_carton: item.unite_par_carton || 1
+          })),
+          
+          statistiques: {
+            types_presents: typesDansPanier,
+            nombre_detail: itemsData.filter(i => i.type_vente === 'detail').length,
+            nombre_gros: itemsData.filter(i => i.type_vente === 'gros').length
+          },
+          
+          total_ht: totalHTCalcule,
+          tva: tvaCalculee,
+          total_ttc: totalTTCCalcule,
+          total: totalTTCCalcule,
+          montant_ht: totalHTCalcule,
+          montant_ttc: totalTTCCalcule,
+          tva_appliquee: tvaActive,
+          tva_taux: tvaActive ? 18 : 0,
+          
+          statut: 'en_attente_paiement',
+          api_success: false,
+          api_message: 'Créée localement (erreur serveur)',
+          api_error: apiError?.message || 'Erreur de connexion',
+          is_local: true
+        };
+      }
+
+      await onCommandeValidee(nouvelleCommande);
+
+      setCommandeImprimee(nouvelleCommande);
+
       setPanier([]);
       setClient({ nom: '', prenom: '', telephone: '', adresse: '' });
-      
+      setEditionPrix(null);
+      setEditionQuantite(null);
+      setCodeBarre('');
+
+      if (inputCodeBarreRef.current) {
+        inputCodeBarreRef.current.focus();
+      }
+
+      if (apiError && !commandeCreee) {
+        setApiError({
+          type: 'error',
+          message: 'Erreur serveur. Commande sauvegardée localement.',
+          details: apiError.response?.data?.message || apiError.message
+        });
+
+        addNotification('warning', `Commande ${nouvelleCommande.numero_commande} sauvegardée localement (${totalTTCCalcule.toLocaleString()} FCFA)`);
+      } else if (commandeCreee && isPusherError(apiError)) {
+        addNotification('success', `Commande ${nouvelleCommande.numero_commande} créée avec succès (${totalTTCCalcule.toLocaleString()} FCFA) !`);
+        addNotification('info', 'Les notifications temps-réel sont temporairement indisponibles');
+      } else {
+        addNotification('success', `Commande ${nouvelleCommande.numero_commande} créée avec succès (${totalTTCCalcule.toLocaleString()} FCFA) !`);
+      }
+
     } catch (error) {
-      console.error('Erreur validation commande:', error);
-      addNotification('error', 'Erreur lors de la création de la commande');
+      const typesDansPanier = [...new Set(panier.filter(item => item).map(item => item.type_vente))];
+      const typeVenteGlobalCommande = typesDansPanier.includes('detail') && typesDansPanier.includes('gros') ? 'mixte' :
+                                    typesDansPanier.includes('gros') ? 'gros' : 'detail';
+
+      let totalHTCalcule = 0;
+      panier.filter(item => item).forEach(item => {
+        const prix = Number(item.prix_vente) || 0;
+        const quantite = Number(item.quantite) || 0;
+        totalHTCalcule += prix * quantite;
+      });
+      
+      totalHTCalcule = Math.round(totalHTCalcule);
+      const tvaCalculee = tvaActive ? Math.round(totalHTCalcule * 0.18) : 0;
+      const totalTTCCalcule = totalHTCalcule + tvaCalculee;
+
+      const commandeLocale = {
+        id: `local-${Date.now()}`,
+        numero_commande: `CMD-LOCAL-${Date.now().toString().slice(-8)}`,
+        date: new Date().toISOString(),
+        
+        type_vente: typeVenteGlobalCommande,
+        type_vente_affichage: getTypeVenteAffichage(typeVenteGlobalCommande),
+        
+        client: {
+          id: null,
+          nom: client.nom.trim(),
+          prenom: client.prenom.trim(),
+          telephone: client.telephone?.trim() || '',
+          adresse: client.adresse?.trim() || ''
+        },
+        vendeur: getVendeurApiData(),
+        
+        items: panier.filter(item => item).map(item => ({
+          id: item.id,
+          nom: item.nom,
+          code_barre: item.code_barre,
+          quantite: item.quantite,
+          type_vente: item.type_vente,
+          type_vente_affichage: item.type_vente === 'detail' ? 'Détail' : 'Gros',
+          prix_unitaire: item.prix_vente,
+          prix_base: item.prix_base,
+          prix_seuil: item.prix_seuil,
+          prix_original: item.prix_original,
+          sous_total: item.prix_vente * item.quantite,
+          categorie: item.categorie,
+          stock_initial: item.stock_global,
+          prix_detail: item.prix_detail || 0,
+          prix_gros: item.prix_gros || 0,
+          unite_par_carton: item.unite_par_carton || 1
+        })),
+        
+        total_ht: totalHTCalcule,
+        tva: tvaCalculee,
+        total_ttc: totalTTCCalcule,
+        total: totalTTCCalcule,
+        montant_ht: totalHTCalcule,
+        montant_ttc: totalTTCCalcule,
+        tva_appliquee: tvaActive,
+        tva_taux: tvaActive ? 18 : 0,
+        
+        statut: 'en_attente_paiement',
+        api_success: false,
+        api_message: 'Erreur inattendue',
+        api_error: error.message,
+        is_local: true
+      };
+      
+      await onCommandeValidee(commandeLocale);
+
+      setApiError({
+        type: 'critical',
+        message: 'Erreur inattendue. Commande sauvegardée localement.',
+        details: error.message
+      });
+
+      addNotification('warning', `Erreur inattendue. Commande ${commandeLocale.numero_commande} sauvegardée localement (${totalTTCCalcule.toLocaleString()} FCFA)`);
+
     } finally {
       setEnvoiEnCours(false);
     }
   };
 
   const annulerCommande = () => {
-    const panierArray = Array.isArray(panier) ? panier.filter(item => item) : [];
-    
-    if (panierArray.length === 0) {
+    if (panier.length === 0) {
       addNotification('info', 'Aucune commande en cours !');
       return;
     }
@@ -886,7 +1244,7 @@ const NouvelleCommande = ({ panier = [], setPanier, onCommandeValidee, sellerNam
     addNotification('success', 'Produits rechargés avec succès');
   };
 
-  const produitsParType = (Array.isArray(panier) ? panier : []).reduce((acc, item) => {
+  const produitsParType = panier.reduce((acc, item) => {
     if (!item) return acc;
     const type = item.type_vente_affichage || getTypeVenteAffichage(item.type_vente);
     if (!acc[type]) {
@@ -896,7 +1254,6 @@ const NouvelleCommande = ({ panier = [], setPanier, onCommandeValidee, sellerNam
     return acc;
   }, {});
 
-  // RENDER PRODUITS FILTRES
   const renderProduitsFiltres = () => {
     if (!produitsFiltres || !Array.isArray(produitsFiltres)) {
       return (
@@ -918,23 +1275,13 @@ const NouvelleCommande = ({ panier = [], setPanier, onCommandeValidee, sellerNam
       );
     }
 
-    const produitsUniques = [];
-    const idsVus = new Set();
-    
-    produitsFiltres.forEach(produit => {
-      if (produit && produit.id && !idsVus.has(produit.id)) {
-        idsVus.add(produit.id);
-        produitsUniques.push(produit);
-      }
-    });
-
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {produitsUniques.map((produit, index) => {
+        {produitsFiltres.map(produit => {
           if (!produit) return null;
 
           return (
-            <div key={`${produit.id}_${index}`} className="bg-gray-50 rounded-lg p-4 border-2 border-gray-200 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-[#472ead] flex flex-col justify-between">
+            <div key={produit.id || Date.now()} className="bg-gray-50 rounded-lg p-4 border-2 border-gray-200 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-[#472ead] flex flex-col justify-between">
               <div>
                 <h4 className="text-sm font-semibold text-gray-800 mb-2">{produit.nom || 'Produit sans nom'}</h4>
                 <div className="space-y-2 mb-3">
@@ -947,7 +1294,7 @@ const NouvelleCommande = ({ panier = [], setPanier, onCommandeValidee, sellerNam
                   <p className="text-xs text-gray-600 flex items-center gap-2">
                     <FontAwesomeIcon icon={faBoxes} className="text-xs text-gray-400" />
                     Catégorie: <span className="font-medium">{produit.categorie || 'Non catégorisé'}</span>
-                  </p>
+                    </p>
                 </div>
 
                 <div className="space-y-2 my-3">
@@ -1020,7 +1367,6 @@ const NouvelleCommande = ({ panier = [], setPanier, onCommandeValidee, sellerNam
     );
   };
 
-  // Affichage simplifié pour le débogage
   return (
     <div className="p-5 min-h-screen bg-gray-50 box-border">
       <style>
@@ -1380,11 +1726,11 @@ const NouvelleCommande = ({ panier = [], setPanier, onCommandeValidee, sellerNam
                 Panier
               </h3>
               <div className="bg-[#472ead] text-white py-1 px-3 rounded-full text-xs font-semibold">
-                {(Array.isArray(panier) ? panier.filter(item => item).length : 0)} art. - {totalTTC.toLocaleString()} FCFA
+                {panier.filter(item => item).length} art. - {totalTTC.toLocaleString()} FCFA
               </div>
             </div>
 
-            {(Array.isArray(panier) ? panier.filter(item => item).length : 0) === 0 ? (
+            {panier.filter(item => item).length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 <FontAwesomeIcon icon={faCartArrowDown} className="text-4xl mb-3 text-gray-300" />
                 <p className="font-medium">Panier vide</p>
@@ -1421,7 +1767,7 @@ const NouvelleCommande = ({ panier = [], setPanier, onCommandeValidee, sellerNam
                   </div>
                 </div>
 
-                {Object.entries(produitsParType).map(([typeVente, produitsType]) => (
+                {Object.entries(produitsParType).map(([typeVente, produits]) => (
                   <div key={typeVente} className="mb-4 border-2 border-gray-200 rounded-lg overflow-hidden">
                     <div className="bg-gray-50 py-3 px-4 flex justify-between items-center border-b-2 border-gray-200">
                       <h4 className="m-0 text-gray-800 font-semibold flex items-center gap-2 text-sm">
@@ -1438,15 +1784,15 @@ const NouvelleCommande = ({ panier = [], setPanier, onCommandeValidee, sellerNam
                         )}
                       </h4>
                       <span className={`${typeVente === 'détail' ? 'bg-[#472ead]' : 'bg-[#f58020]'} text-white py-0.5 px-2 rounded-full text-xs font-semibold`}>
-                        {produitsType.filter(item => item).length} prod.
+                        {produits.filter(item => item).length} prod.
                       </span>
                     </div>
 
                     <div className="p-3">
-                      {produitsType.filter(item => item).map((item, idx) => {
+                      {produits.filter(item => item).map(item => {
                         const typeAffichage = item.type_vente_affichage || getTypeVenteAffichage(item.type_vente);
                         return (
-                          <div key={`${item.id}_${item.type_vente}_${idx}`} className="bg-gray-50 rounded-lg p-3 mb-3 border-2 border-gray-200">
+                          <div key={`${item.id}-${item.type_vente}`} className="bg-gray-50 rounded-lg p-3 mb-3 border-2 border-gray-200">
                             <div className="mb-3">
                               <div className="font-bold text-gray-800 mb-1 text-sm">{item.nom}</div>
                               <div className="text-xs text-gray-600 mb-1">
