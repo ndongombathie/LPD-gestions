@@ -9,7 +9,7 @@ import Select from '../../components/ui/Select';
 import { formatCurrency, formatDateTime } from '../../utils/formatters';
 import { printInvoice } from '../components/InvoicePrint';
 import QRScanner from '../components/QRScanner';
-import caissierApi from '../services/caissierApi';
+import caissierApi, { invalidateCommandesAttenteClientCache } from '../services/caissierApi';
 import { toast } from 'sonner';
 import { echo } from '../../utils/echo';
 import { m } from 'framer-motion';
@@ -205,6 +205,7 @@ const CaissePage = () => {
     if (!boutiqueId || !echo) return;
     const channel = echo.private(`boutique.${boutiqueId}`);
     const listener = () => {
+      invalidateCommandesAttenteClientCache();
       fetchTicketsSafe(currentPageRef.current, filterTextRef.current);
       fetchDashboardStats();
     };
@@ -224,6 +225,7 @@ const CaissePage = () => {
       if (!boutiqueId) return;
       const channel = echo.private(`boutique.${boutiqueId}`);
       const listener = () => {
+          invalidateCommandesAttenteClientCache();
           fetchTicketsSafe(currentPage, filterText.trim());
           fetchDashboardStats();
       };
@@ -350,6 +352,7 @@ const CaissePage = () => {
       setIsFactureModalOpen(true);
 
       // Recharger les tickets pour que le ticket disparaisse immédiatement
+      invalidateCommandesAttenteClientCache();
       await fetchTicketsSafe(currentPage, filterText.trim());
       // Mettre à jour le compteur de tickets traités
       await fetchDashboardStats();
@@ -377,6 +380,7 @@ const CaissePage = () => {
         setSelectedTicket(null);
         setTicketFacture(ticketEncaisse);
         setIsFactureModalOpen(true);
+        invalidateCommandesAttenteClientCache();
         await fetchTicketsSafe(currentPage, filterText.trim());
         // Mettre à jour le compteur de tickets traités
         await fetchDashboardStats();
@@ -1192,6 +1196,7 @@ const CaissePage = () => {
                   });
 
                   // Recharger les tickets
+                  invalidateCommandesAttenteClientCache();
                   await fetchTicketsSafe(currentPage, filterText.trim());
                   // Mettre à jour le compteur de tickets traités (au cas où le ticket annulé était encaissé)
                   await fetchDashboardStats();
