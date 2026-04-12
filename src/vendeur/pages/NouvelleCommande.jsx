@@ -201,7 +201,6 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
 
   useEffect(() => {
     chargerProduits();
-    console.log(boutiqueId);
     chargerInfosVendeur();
   }, []);
 
@@ -337,8 +336,9 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
         };
       });
 
+
       setProduits(produitsFormates);
-      setProduitsFiltres(produitsFormates);
+      setProduitsFiltres(produitsFormates);   
       
       if (!Array.isArray(resp)) {
         const links = Array.isArray(resp.links) ? resp.links.map(l => {
@@ -1281,7 +1281,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
           if (!produit) return null;
 
           return (
-            <div key={produit.index || Date.now()} className="bg-gray-50 rounded-lg p-4 border-2 border-gray-200 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-[#472ead] flex flex-col justify-between">
+            <div key={produit.id || Date.now()} className="bg-gray-50 rounded-lg p-4 border-2 border-gray-200 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-[#472ead] flex flex-col justify-between">
               <div>
                 <h4 className="text-sm font-semibold text-gray-800 mb-2">{produit.nom || 'Produit sans nom'}</h4>
                 <div className="space-y-2 mb-3">
