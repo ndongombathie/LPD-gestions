@@ -1,6 +1,55 @@
 // Service API pour l'interface caissier
 import { httpClient } from '../../services/http/client';
 
+/** Liste complète chargée sans `search` (pagination locale sur la caisse). */
+let attenteClientSearchCache = { key: '', rows: null };
+
+/** À appeler après encaissement / annulation / événements temps réel pour rafraîchir la recherche locale. */
+export function invalidateCommandesAttenteClientCache() {
+  attenteClientSearchCache = { key: '', rows: null };
+}
+
+function commandeMatchesAttenteSearch(commande, rawSearch) {
+  const q = (rawSearch || '').trim().toLowerCase();
+  if (q.length < 2) return true;
+
+  const numero = String(commande?.numero ?? '').toLowerCase();
+  const id = String(commande?.id ?? '').toLowerCase();
+  const v = commande?.vendeur;
+  const vendeurStr = v
+    ? `${v.prenom ?? ''} ${v.nom ?? ''}`.trim().toLowerCase()
+    : '';
+  const c = commande?.client;
+  const clientStr = c
+    ? `${c.prenom ?? ''} ${c.nom ?? ''}`.trim().toLowerCase()
+    : '';
+
+  const chunks = [numero, id, vendeurStr, clientStr].filter((s) => s.length > 0);
+
+  if (chunks.some((h) => h.includes(q))) return true;
+
+  const words = q.split(/\s+/).filter((w) => w.length >= 2);
+  if (words.length === 0) return false;
+  return words.every((word) => chunks.some((h) => h.includes(word)));
+}
+
+async function fetchAllCommandesAttentePages() {
+  const all = [];
+  const perPage = 10;
+  const maxPages = 500;
+  for (let p = 1; p <= maxPages; p++) {
+    const res = await httpClient.get('/commandes-attente', {
+      params: { page: p, per_page: perPage },
+    });
+    const body = res.data || {};
+    const items = Array.isArray(body.data) ? body.data : [];
+    all.push(...items);
+    const lastPage = Number(body.last_page) || 1;
+    if (p >= lastPage || items.length === 0) break;
+  }
+  return all;
+}
+
 export const caissierApi = {
   // ==================== DASHBOARD ====================
   
@@ -151,8 +200,49 @@ export const caissierApi = {
    * @returns {Object} { data, total, current_page, last_page, per_page, total_amount }
    */
   async getCommandesAttente(filters = {}) {
-      const response = await httpClient.get('/commandes-attente', { params: filters });
-      return response.data;
+      const page = filters.page ?? 1;
+      const per_page = filters.per_page ?? 10;
+      const trimmed = typeof filters.search === 'string' ? filters.search.trim() : '';
+
+      // Sans recherche : comportement d’origine (API paginée, pas de filtre fragile côté back).
+      if (trimmed.length < 2) {
+        attenteClientSearchCache = { key: '', rows: null };
+        const response = await httpClient.get('/commandes-attente', {
+          params: { page, per_page },
+        });
+        return response.data || {};
+      }
+
+      // Avec recherche : ne pas envoyer `search` à l’API (résultats souvent vides alors que les
+      // données existent). On charge toute la file « en attente » puis on filtre ici (n°, id,
+      // prénom/nom vendeur & client, y compris « prénom nom » sur deux mots).
+      try {
+        if (attenteClientSearchCache.key !== trimmed || !Array.isArray(attenteClientSearchCache.rows)) {
+          attenteClientSearchCache = {
+            key: trimmed,
+            rows: await fetchAllCommandesAttentePages(),
+          };
+        }
+        const allRows = attenteClientSearchCache.rows;
+        const filtered = allRows.filter((c) => commandeMatchesAttenteSearch(c, trimmed));
+        const total = filtered.length;
+        const total_amount = filtered.reduce((s, c) => s + (Number(c.total) || 0), 0);
+        const start = (page - 1) * per_page;
+        const data = filtered.slice(start, start + per_page);
+        return {
+          data,
+          current_page: page,
+          last_page: Math.max(1, Math.ceil(total / per_page) || 1),
+          per_page,
+          total,
+          total_amount,
+        };
+      } catch {
+        const response = await httpClient.get('/commandes-attente', {
+          params: { page, per_page, search: trimmed },
+        });
+        return response.data || {};
+      }
   },
 
   /**

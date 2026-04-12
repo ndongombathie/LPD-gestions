@@ -278,6 +278,31 @@ const NouvelleCommande = ({ panier = [], setPanier, onCommandeValidee, sellerNam
     }
   }, []);
 
+
+  useEffect(() => {
+    if (!boutiqueId) return;
+    const channel = echo.private(`boutique.${boutiqueId}`);
+    const listener = () => {
+        chargerProduits();
+    };
+    channel.listen('.stock.mis_a_jour', listener);
+    return () => {
+        try {
+            channel.stopListening('.stock.mis_a_jour');
+            echo.leave(`boutique.${boutiqueId}`);
+            addNotification(
+                'info',
+                'Désinscription du canal temps réel réussie.'
+            );
+        } catch (error) {
+            addNotification(
+                'error',
+                'Erreur lors de la désinscription. Rafraîchis la page.'
+            );
+        }
+    };
+}, [boutiqueId]);
+
   const chargerInfosVendeur = async () => {
     try {
       setLoadingVendeur(true);
@@ -377,10 +402,10 @@ const NouvelleCommande = ({ panier = [], setPanier, onCommandeValidee, sellerNam
           produitsMap.set(produit.id, produitFormate);
         }
       });
-      
-      const produitsFormates = Array.from(produitsMap.values());
-      
+
+
       setProduits(produitsFormates);
+      setProduitsFiltres(produitsFormates);   
       
       if (resp && !Array.isArray(resp)) {
         setPageInfo({
@@ -934,7 +959,7 @@ const NouvelleCommande = ({ panier = [], setPanier, onCommandeValidee, sellerNam
           if (!produit) return null;
 
           return (
-            <div key={`${produit.id}_${index}`} className="bg-gray-50 rounded-lg p-4 border-2 border-gray-200 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-[#472ead] flex flex-col justify-between">
+            <div key={produit.id || Date.now()} className="bg-gray-50 rounded-lg p-4 border-2 border-gray-200 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:border-[#472ead] flex flex-col justify-between">
               <div>
                 <h4 className="text-sm font-semibold text-gray-800 mb-2">{produit.nom || 'Produit sans nom'}</h4>
                 <div className="space-y-2 mb-3">
