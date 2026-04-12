@@ -403,7 +403,7 @@ export default function DepotControle() {
                 <tr className="bg-slate-50 border-b border-slate-200">
                   <th className="px-5 py-3.5 text-left text-[11px] font-bold tracking-widest uppercase text-slate-400">Produit</th>
                   <th className="px-5 py-3.5 text-left text-[11px] font-bold tracking-widest uppercase text-slate-400">Fournisseur</th>
-                  <th className="px-5 py-3.5 text-center text-[11px] font-bold tracking-widest uppercase text-slate-400">Prix Achat</th>
+                  <th className="px-5 py-3.5 text-center text-[11px] font-bold tracking-widest uppercase text-slate-400">Prix total</th>
                   <th className="px-5 py-3.5 text-center text-[11px] font-bold tracking-widest uppercase text-slate-400">Cartons</th>
                   <th className="px-5 py-3.5 text-center text-[11px] font-bold tracking-widest uppercase text-slate-400">Seuil</th>
                   <th className="px-5 py-3.5 text-center text-[11px] font-bold tracking-widest uppercase text-slate-400">Fiche</th>
@@ -452,7 +452,7 @@ export default function DepotControle() {
 
                         <td className="px-5 py-3.5 text-center">
                           <span className="font-bold text-xs text-violet-600 bg-violet-50 px-2.5 py-1 rounded-md whitespace-nowrap border border-violet-100">
-                            {formatFCFA(p.prix_achat)}
+                            {formatFCFA(p.prix_total)}
                           </span>
                         </td>
 
@@ -540,7 +540,7 @@ export default function DepotControle() {
                 <div className="bg-violet-50 border border-violet-100 rounded-xl p-3.5">
                   <p className="text-[10px] font-bold tracking-widest uppercase text-violet-400 mb-1">Prix Achat</p>
                   <p className="font-bold text-violet-700 text-xs leading-snug">
-                    {formatFCFA(selectedProduit.prix_achat)}
+                    {formatFCFA(selectedProduit.prix_total)}
                   </p>
                 </div>
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5">

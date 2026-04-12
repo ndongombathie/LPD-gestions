@@ -54,15 +54,21 @@ export default function JournalCaisse() {
   /* ================= NOM CAISSIER ================= */
 
   const getCaissierName = (item) => {
-    if (item.caissier?.nom) return item.caissier.nom;
-    if (item.caissier_id?.includes("@")) return item.caissier_id.split("@")[0];
-    if (item.caissier_id?.includes("-")) {
-      const uuid = item.caissier_id;
-      return uuid.substring(0, 4) + "..." + uuid.substring(uuid.length - 4);
-    }
-    return item.caissier_id || "Inconnu";
-  };
+  if (item.caissier?.nom || item.caissier?.prenom) {
+    return `${item.caissier?.prenom ?? ""} ${item.caissier?.nom ?? ""}`.trim();
+  }
 
+  if (item.caissier_id?.includes("@")) {
+    return item.caissier_id.split("@")[0];
+  }
+
+  if (item.caissier_id?.includes("-")) {
+    const uuid = item.caissier_id;
+    return uuid.substring(0, 4) + "..." + uuid.substring(uuid.length - 4);
+  }
+
+  return item.caissier_id || "Inconnu";
+};
   /* ================= FORMATAGE AMÉLIORÉ POUR L'AFFICHAGE ================= */
   const formatCurrencyWithDots = (value) => {
     const num = Number(value || 0);
@@ -300,14 +306,30 @@ export default function JournalCaisse() {
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-100">
-                <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">Caissier</th>
-                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-600 uppercase tracking-wider">Encaissements</th>
-                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-600 uppercase tracking-wider">Décaissements</th>
-                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-600 uppercase tracking-wider">Solde</th>
-                  <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-600 uppercase tracking-wider">Statut</th>
-                </tr>
-              </thead>
+  <tr>
+    <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
+      Caissier
+    </th>
+
+    {/* ✅ CORRIGÉ */}
+    <th className="px-6 py-3 text-right text-xs font-medium text-gray-600 uppercase tracking-wider">
+      Fond d'ouverture
+    </th>
+
+    <th className="px-6 py-3 text-right text-xs font-medium text-gray-600 uppercase tracking-wider">
+      Encaissements
+    </th>
+    <th className="px-6 py-3 text-right text-xs font-medium text-gray-600 uppercase tracking-wider">
+      Décaissements
+    </th>
+    <th className="px-6 py-3 text-right text-xs font-medium text-gray-600 uppercase tracking-wider">
+      Solde
+    </th>
+    <th className="px-6 py-3 text-center text-xs font-medium text-gray-600 uppercase tracking-wider">
+      Statut
+    </th>
+  </tr>
+</thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {sortedRapport.map((item, index) => (
                   <tr key={item.id || index} className="hover:bg-gray-50 transition-colors">
@@ -321,6 +343,9 @@ export default function JournalCaisse() {
                         {getCaissierName(item)}
                       </div>
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-medium text-right">
+  {formatCurrencyWithDots(item.fond_ouverture || 0)}
+</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium text-right">
                       {formatCurrencyWithDots(item.total_encaissements || 0)}
                     </td>
