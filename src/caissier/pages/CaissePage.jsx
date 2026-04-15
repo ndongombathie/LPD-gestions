@@ -12,7 +12,6 @@ import QRScanner from '../components/QRScanner';
 import caissierApi from '../services/caissierApi';
 import { toast } from 'sonner';
 import { echo } from '../../utils/echo';
-import { m } from 'framer-motion';
 
 const CaissePage = () => {
   const location = useLocation();
