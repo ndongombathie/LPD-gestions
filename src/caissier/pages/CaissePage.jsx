@@ -202,6 +202,7 @@ const CaissePage = () => {
 
   // Écouter les nouvelles commandes validées (temps réel)
   useEffect(() => {
+    console.log("laravel echo",!echo);
     if (!echo) return;
     console.log("laravel echo",!echo);
     if (!boutiqueId) return;
