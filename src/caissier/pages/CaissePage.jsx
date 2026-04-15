@@ -203,6 +203,7 @@ const CaissePage = () => {
   // Écouter les nouvelles commandes validées (temps réel)
   useEffect(() => {
     if (!echo) return;
+    console.log("laravel echo",!echo);
     if (!boutiqueId) return;
     const channel = echo.private(`boutique.${boutiqueId}`);
     const listener = () => {
