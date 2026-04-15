@@ -52,7 +52,7 @@ const CaissePage = () => {
     const totalTTC = commande.total || 0;
     const totalHT = totalTTC / (1 + tauxTVA);
     const tva = totalTTC - totalHT;
-    console.log('boutiqueId:', boutiqueId);
+    console.log('boutiqueId: ndongo', boutiqueId);
   
     
 
