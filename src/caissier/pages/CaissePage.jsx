@@ -198,7 +198,7 @@ const CaissePage = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, []);   
 
   // Écouter les nouvelles commandes validées (temps réel)
   useEffect(() => {
