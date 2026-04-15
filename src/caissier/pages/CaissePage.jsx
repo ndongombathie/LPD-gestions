@@ -52,7 +52,7 @@ const CaissePage = () => {
     const totalTTC = commande.total || 0;
     const totalHT = totalTTC / (1 + tauxTVA);
     const tva = totalTTC - totalHT;
-    console.log('boutiqueId: ndongo', boutiqueId);
+    console.log('boutiqueId: ndongo mbathie', boutiqueId);
   
     
 
@@ -202,6 +202,7 @@ const CaissePage = () => {
 
   // Écouter les nouvelles commandes validées (temps réel)
   useEffect(() => {
+    if (!echo) return;
     if (!boutiqueId) return;
     const channel = echo.private(`boutique.${boutiqueId}`);
     const listener = () => {
@@ -214,13 +215,14 @@ const CaissePage = () => {
         channel.stopListening('.commande.validee');
         echo.leave(`private-boutique.${boutiqueId}`);
       } catch {
-        // Nettoyage silencieux
+        
       }
     };
   }, [boutiqueId]);
 
   // Écouter les paiements créés (temps réel)
   useEffect(() => {
+      if (!echo) return;
       if (!boutiqueId)  return;
       const channel = echo.private(`boutique.${boutiqueId}`);
       const listener = () => {
