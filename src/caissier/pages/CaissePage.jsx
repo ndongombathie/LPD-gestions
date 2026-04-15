@@ -202,7 +202,7 @@ const CaissePage = () => {
 
   // Écouter les nouvelles commandes validées (temps réel)
   useEffect(() => {
-    if (!boutiqueId || !echo) return;
+    if (!boutiqueId) return;
     const channel = echo.private(`boutique.${boutiqueId}`);
     const listener = () => {
       fetchTicketsSafe(currentPageRef.current, filterTextRef.current);
@@ -221,7 +221,7 @@ const CaissePage = () => {
 
   // Écouter les paiements créés (temps réel)
   useEffect(() => {
-      if (!boutiqueId || !echo)  return;
+      if (!boutiqueId)  return;
       const channel = echo.private(`boutique.${boutiqueId}`);
       const listener = () => {
           fetchTicketsSafe(currentPage, filterText.trim());
