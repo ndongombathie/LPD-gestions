@@ -77,7 +77,7 @@ const CaissePage = () => {
       prix: detail.prix_unitaire || 0,
       prix_unitaire: detail.prix_unitaire || 0,
     }));
-    console.log('les paiements sont',paiements);
+   
     
 
     return {
