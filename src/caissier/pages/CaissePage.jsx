@@ -51,7 +51,6 @@ const CaissePage = () => {
     const totalTTC = commande.total || 0;
     const totalHT = totalTTC / (1 + tauxTVA);
     const tva = totalTTC - totalHT;
-    console.log('boutiqueId: ndongo mbathie', boutiqueId);
   
     
 
@@ -112,13 +111,11 @@ const CaissePage = () => {
       setLoading(true);
       const response = await caissierApi.getCommandesAttente({ page, per_page: PAGE_SIZE, search: search || undefined });
       const commandes = response?.data || [];
-      console.log('Commandes reçues du backend:', commandes);
       
       const ticketsTransformes = commandes.map(commande => {
         const paiements = commande.paiements || [];
         return transformCommandeToTicket(commande, paiements);
       });
-      console.log('Tickets transformés:', ticketsTransformes);
       
       setTickets(ticketsTransformes);
       setPendingCount(response?.total ?? ticketsTransformes.length);
@@ -201,9 +198,7 @@ const CaissePage = () => {
 
   // Écouter les nouvelles commandes validées (temps réel)
   useEffect(() => {
-    console.log("laravel echo",!echo);
     if (!echo) return;
-    console.log("laravel echo",!echo);
     if (!boutiqueId) return;
     const channel = echo.private(`boutique.${boutiqueId}`);
     const listener = () => {
@@ -397,7 +392,6 @@ const CaissePage = () => {
 
   const handleQRScan = async (qrData) => {
     try {
-      console.log('QR code scanné:', qrData);
       if (isCaisseCloturee) {
         toast.error('Caisse clôturée', {
           description: "La caisse est clôturée pour aujourd'hui. Encaissement impossible."

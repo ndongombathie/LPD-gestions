@@ -229,6 +229,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
   }, []);
 
 
+
   useEffect(() => {
     if (!boutiqueId)  return;
     const channel = echo.private(`boutique.${boutiqueId}`);
