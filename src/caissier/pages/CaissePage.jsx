@@ -12,7 +12,6 @@ import QRScanner from '../components/QRScanner';
 import caissierApi, { invalidateCommandesAttenteClientCache } from '../services/caissierApi';
 import { toast } from 'sonner';
 import { echo } from '../../utils/echo';
-import { m } from 'framer-motion';
 
 const CaissePage = () => {
   const location = useLocation();
@@ -52,7 +51,6 @@ const CaissePage = () => {
     const totalTTC = commande.total || 0;
     const totalHT = totalTTC / (1 + tauxTVA);
     const tva = totalTTC - totalHT;
-    console.log('boutiqueId:', boutiqueId);
   
     
 
@@ -77,7 +75,7 @@ const CaissePage = () => {
       prix: detail.prix_unitaire || 0,
       prix_unitaire: detail.prix_unitaire || 0,
     }));
-    console.log('les paiements sont',paiements);
+   
     
 
     return {
@@ -113,13 +111,11 @@ const CaissePage = () => {
       setLoading(true);
       const response = await caissierApi.getCommandesAttente({ page, per_page: PAGE_SIZE, search: search || undefined });
       const commandes = response?.data || [];
-      console.log('Commandes reçues du backend:', commandes);
       
       const ticketsTransformes = commandes.map(commande => {
         const paiements = commande.paiements || [];
         return transformCommandeToTicket(commande, paiements);
       });
-      console.log('Tickets transformés:', ticketsTransformes);
       
       setTickets(ticketsTransformes);
       setPendingCount(response?.total ?? ticketsTransformes.length);
@@ -198,11 +194,12 @@ const CaissePage = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, []);   
 
   // Écouter les nouvelles commandes validées (temps réel)
   useEffect(() => {
-    if (!boutiqueId || !echo) return;
+    if (!echo) return;
+    if (!boutiqueId) return;
     const channel = echo.private(`boutique.${boutiqueId}`);
     const listener = () => {
       invalidateCommandesAttenteClientCache();
@@ -215,14 +212,15 @@ const CaissePage = () => {
         channel.stopListening('.commande.validee');
         echo.leave(`private-boutique.${boutiqueId}`);
       } catch {
-        // Nettoyage silencieux
+        
       }
     };
   }, [boutiqueId]);
 
   // Écouter les paiements créés (temps réel)
   useEffect(() => {
-      if (!boutiqueId) return;
+      if (!echo) return;
+      if (!boutiqueId)  return;
       const channel = echo.private(`boutique.${boutiqueId}`);
       const listener = () => {
           invalidateCommandesAttenteClientCache();
@@ -398,7 +396,6 @@ const CaissePage = () => {
 
   const handleQRScan = async (qrData) => {
     try {
-      console.log('QR code scanné:', qrData);
       if (isCaisseCloturee) {
         toast.error('Caisse clôturée', {
           description: "La caisse est clôturée pour aujourd'hui. Encaissement impossible."

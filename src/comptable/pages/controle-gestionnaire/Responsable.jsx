@@ -313,7 +313,9 @@ export default function Responsable() {
                 <tr>
                   <th className="p-4 text-left">Client</th>
                   <th className="p-4 text-left">Téléphone</th>
-                  <th className="p-4 text-right">Dette</th>
+                  <th className="p-4 text-left">Montant Initial</th>
+                  <th className="p-4 text-left">Montant Déjà Payé</th>
+                  <th className="p-4 text-right">Détte à acquitter</th>
                 </tr>
               </thead>
 
@@ -338,9 +340,12 @@ export default function Responsable() {
     {c.prenom} {c.nom}
   </td>
   <td className="p-4">{c.telephone}</td>
+  <td className="p-4">{c.montant_initial}</td>
+  <td className="p-4">{c.montant_deja_paye}</td>
   <td className="p-4 text-right font-medium text-red-600">
     {fcfa(c.dette_totale)}
   </td>
+  
 </tr>
                   ))
                 )}

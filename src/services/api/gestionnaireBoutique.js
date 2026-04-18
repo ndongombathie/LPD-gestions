@@ -30,6 +30,17 @@ const buildCacheKey = (url, params = {}) => {
 };
 
 const cachedGet = async (url, params, options = {}, ttlMs = DEFAULT_CACHE_TTL_MS) => {
+  // Extraire le signal si présent
+  const { signal, ...restOptions } = options;
+  
+  // Vérifier si le signal est déjà avorté
+  if (signal && signal.aborted) {
+    const error = new Error('Request was canceled');
+    error.name = 'CanceledError';
+    error.code = 'ERR_CANCELED';
+    throw error;
+  }
+
   const key = buildCacheKey(url, params);
   const now = Date.now();
   const cached = cacheStore.get(key);
@@ -37,10 +48,19 @@ const cachedGet = async (url, params, options = {}, ttlMs = DEFAULT_CACHE_TTL_MS
     return cached.value;
   }
 
-  const response = await httpClient.get(url, { params, ...options });
-  const data = response.data;
-  cacheStore.set(key, { timestamp: now, value: data });
-  return data;
+  try {
+    const response = await httpClient.get(url, { params, signal, ...restOptions });
+    const data = response.data;
+    cacheStore.set(key, { timestamp: now, value: data });
+    return data;
+  } catch (error) {
+    // Ne pas mettre en cache les erreurs d'annulation
+    if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') {
+      throw error;
+    }
+    // Pour les autres erreurs, on laisse passer
+    throw error;
+  }
 };
 
 export const clearGestionnaireBoutiqueCache = () => {
@@ -55,6 +75,10 @@ export const getProduitsTransfer = async (page = 1, search = "", options = {}) =
   try {
     return await cachedGet('/produits-transfer', { page, search }, options);
   } catch (error) {
+    // Ignorer silencieusement les erreurs d'annulation (AbortController)
+    if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') {
+      return { current_page: 1, data: [], last_page: 1, total: 0, per_page: 20 };
+    }
     console.error('❌ Erreur getProduitsTransfer:', error);
     // Mode dégradé: si timeout, 401, 404, ou 500, retourner structure vide
     if (error.code === 'ECONNABORTED' || error.response?.status === 401 || error.response?.status === 404 || error.response?.status === 500) {
@@ -95,6 +119,10 @@ export const getProduitsSousSeuil = async (page = 1, search = "", options = {}) 
     // Le backend retourne {current_page, data: [], total, per_page, ...}
     return await cachedGet('/produits-sous-seuils', { page, search }, options);
   } catch (error) {
+    // Ignorer silencieusement les erreurs d'annulation (AbortController)
+    if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') {
+      return { current_page: 1, data: [], last_page: 1, total: 0, per_page: 20 };
+    }
     console.error('❌ Erreur getProduitsSousSeuil:', error);
     if (error.code === 'ECONNABORTED' || error.response?.status === 401 || error.response?.status === 404) {
       console.warn('⚠️ MODE DÉGRADÉ activé pour produits-sous-seuil');
@@ -112,6 +140,10 @@ export const getNombreProduitsTotal = async (options = {}) => {
   try {
     return await cachedGet('/nombre-produits-total', {}, options);
   } catch (error) {
+    // Ignorer silencieusement les erreurs d'annulation (AbortController)
+    if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') {
+      return 0;
+    }
     console.error('❌ Erreur getNombreProduitsTotal:', error);
     if (error.code === 'ECONNABORTED' || error.response?.status === 401 || error.response?.status === 404) {
       console.warn('⚠️ MODE DÉGRADÉ activé pour nombre-produits-total');
@@ -132,6 +164,10 @@ export const getQuantiteTotaleProduit = async (options = {}) => {
     const totalQuantity = response?.total_quantity ? parseInt(response.total_quantity) : 0;
     return totalQuantity;
   } catch (error) {
+    // Ignorer silencieusement les erreurs d'annulation (AbortController)
+    if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') {
+      return 0;
+    }
     console.error('❌ Erreur getQuantiteTotaleProduit:', error);
     if (error.code === 'ECONNABORTED' || error.response?.status === 401 || error.response?.status === 404) {
       console.warn('⚠️ MODE DÉGRADÉ activé pour quantite-totale-produit');
@@ -161,6 +197,10 @@ export const getTransfertsValides = async (page = 1, search = "", options = {}) 
     }
     return response;
   } catch (error) {
+    // Ignorer silencieusement les erreurs d'annulation (AbortController)
+    if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') {
+      return { current_page: 1, data: [], last_page: 1, total: 0, per_page: 20 };
+    }
     console.error('❌ Erreur getTransfertsValides:', error);
     if (error.code === 'ECONNABORTED' || error.response?.status === 401 || error.response?.status === 404) {
       console.warn('⚠️ MODE DÉGRADÉ activé pour transfers-valide');
@@ -180,6 +220,10 @@ export const getAllProduitsTransfer = async (page = 1, search = "", options = {}
   try {
     return await cachedGet('/all-produits-transfer', { page, search }, options);
   } catch (error) {
+    // Ignorer silencieusement les erreurs d'annulation (AbortController)
+    if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') {
+      return { current_page: 1, data: [], last_page: 1, total: 0, per_page: 20 };
+    }
     console.error('❌ Erreur getAllProduitsTransfer:', error);
     if (error.code === 'ECONNABORTED' || error.response?.status === 401 || error.response?.status === 404 || error.response?.status === 500) {
       console.warn('⚠️ MODE DÉGRADÉ activé pour all-produits-transfer (Backend non disponible)');
@@ -197,6 +241,10 @@ export const getProduitsDisponiblesBoutique = async (page = 1, search = "", opti
   try {
     return await cachedGet('/produits-disponibles-boutique', { page, search }, options);
   } catch (error) {
+    // Ignorer silencieusement les erreurs d'annulation (AbortController)
+    if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') {
+      return { current_page: 1, data: [], last_page: 1, total: 0, per_page: 20 };
+    }
     console.error('❌ Erreur getProduitsDisponiblesBoutique:', error);
     if (error.code === 'ECONNABORTED' || error.response?.status === 401 || error.response?.status === 404) {
       console.warn('⚠️ MODE DÉGRADÉ activé pour produits-disponibles-boutique');
@@ -214,6 +262,10 @@ export const getMontantTotalStock = async (options = {}) => {
   try {
     return await cachedGet('/montant-total-stock', {}, options);
   } catch (error) {
+    // Ignorer silencieusement les erreurs d'annulation (AbortController)
+    if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') {
+      return 0;
+    }
     console.error('❌ Erreur getMontantTotalStock:', error);
     if (error.code === 'ECONNABORTED' || error.response?.status === 401 || error.response?.status === 404) {
       console.warn('⚠️ MODE DÉGRADÉ activé pour montant-total-stock');

@@ -7,6 +7,8 @@ import EmptyState from "../components/EmptyState";
 import useDebouncedValue from "../hooks/useDebouncedValue";
 import { gestionnaireBoutiqueAPI } from "@/services/api";
 import { toast, Toaster } from "sonner";
+import { echo ,boutiqueId} from "../../utils/echo";
+echo
 
 const Produits = () => {
   const [transferts, setTransferts] = useState([]);
@@ -55,12 +57,16 @@ const Produits = () => {
       setPendingPagination(produitsTransferData);
       setTransfertsValides((transfertsValidesData?.data || []).map(enrich));
     } catch (error) {
+      // Ignorer silencieusement les erreurs de cancellation (cleanup, unmount, etc)
       if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') {
         return;
       }
-      toast.error('Erreur de chargement', {
-        description: 'Impossible de charger les transferts'
-      });
+      // Ne montrer un toast que si ce n'est pas une erreur réseau transitoire
+      if (error?.response?.status !== 0 && error?.code !== 'ECONNABORTED') {
+        toast.error('Erreur de chargement', {
+          description: 'Impossible de charger les transferts'
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -77,6 +83,32 @@ const Produits = () => {
       setPendingPage(page);
     }
   };
+
+  
+
+  useEffect(() => {
+      if (!boutiqueId)  return;
+      const channel = echo.private(`boutique.${boutiqueId}`);
+      const controller = new AbortController();
+      const listener = () => {
+          loadTransferts(pendingPage, debouncedRecherche, { signal: controller.signal });
+      };
+      channel.listen('.stock.rupture', listener);
+      return () => {
+          try {
+              channel.stopListening('.stock.rupture');
+              echo.leave(`boutique.${boutiqueId}`);
+              controller.abort();
+          } catch (error) {
+              /* addNotification(
+                  'erreur',
+                  'Erreur lors de la désinscription. Rafraîchis la page.'
+              ); */
+          }
+      };
+
+  }, [boutiqueId, pendingPage, debouncedRecherche, loadTransferts]);
+  
 
   const handleRechercheChange = (event) => {
     const value = event.target.value;

@@ -1,23 +1,48 @@
-
 FROM node:20-alpine AS build
+
 WORKDIR /app
+
 COPY package*.json ./
 RUN npm ci
+
 COPY . .
+
+# 👇 AJOUTER CES LIGNES (TRÈS IMPORTANT)
+ARG VITE_API_URL
+ARG VITE_REVERB_APP_KEY
+ARG VITE_REVERB_HOST
+ARG VITE_REVERB_PORT
+ARG VITE_REVERB_CLUSTER
+ARG VITE_APP_NAME
+ARG VITE_PUSHER_CLUSTER
+ARG VITE_ENV
+ARG VITE_LOG_LEVEL
+ARG VITE_API_TIMEOUT
+
+ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_REVERB_APP_KEY=$VITE_REVERB_APP_KEY
+ENV VITE_REVERB_HOST=$VITE_REVERB_HOST
+ENV VITE_REVERB_PORT=$VITE_REVERB_PORT
+ENV VITE_REVERB_CLUSTER=$VITE_REVERB_CLUSTER
+ENV VITE_APP_NAME=$VITE_APP_NAME
+ENV VITE_PUSHER_CLUSTER=$VITE_PUSHER_CLUSTER
+ENV VITE_ENV=$VITE_ENV
+ENV VITE_LOG_LEVEL=$VITE_LOG_LEVEL
+ENV VITE_API_TIMEOUT=$VITE_API_TIMEOUT
 
 RUN npm run build
 
-# Stage 2 : production Nginx
+# DEBUG (optionnel mais utile)
+RUN ls -la /app
+RUN ls -la /app/dist
+
+
+# Stage 2
 FROM nginx:1.27-alpine AS prod
 
-# Copier la config Nginx
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-# Copier le build Angular
 COPY --from=build /app/dist /usr/share/nginx/html
 
-# Exposer ports HTTP et HTTPS
-EXPOSE 80 443
+EXPOSE 80
 
-# Lancer Nginx
 CMD ["nginx", "-g", "daemon off;"]
