@@ -197,7 +197,7 @@ const Stock = () => {
         {/* Modal Détails */}
         {produitDetail && (
           <div className="fixed inset-0 z-200 bg-black/40 bg-opacity-10 flex justify-center items-center">
-            <div className="relative z-50 bg-white rounded-lg shadow-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="relative z-50 w-[800px] bg-white rounded-lg shadow-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
               <h3 className="text-xl font-bold text-[#111827]">Détails du produit</h3>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div className="border-b pb-3">
@@ -207,10 +207,6 @@ const Stock = () => {
                 <div className="border-b pb-3">
                   <p className="text-gray-600 font-medium">Code</p>
                   <p className="text-[#111827] font-semibold mt-1">{produitDetail.code}</p>
-                </div>
-                <div className="border-b pb-3">
-                  <p className="text-gray-600 font-medium">Catégorie</p>
-                  <p className="text-[#111827] font-semibold mt-1">{produitDetail.categorie_id || produitDetail.categorie || '-'}</p>
                 </div>
                 <div className="border-b pb-3">
                   <p className="text-gray-600 font-medium">Unité par carton</p>
@@ -224,22 +220,10 @@ const Stock = () => {
                   <p className="text-gray-600 font-medium">Seuil d'alerte</p>
                   <p className="text-[#111827] font-semibold mt-1">{produitDetail.seuil ?? '-'}</p>
                 </div>
-                {produitDetail.nombre_carton != null && (
-                  <div className="border-b pb-3">
-                    <p className="text-gray-600 font-medium">Cartons</p>
-                    <p className="text-[#111827] font-semibold mt-1">{produitDetail.nombre_carton}</p>
-                  </div>
-                )}
                 {produitDetail.prix_unite_carton != null && (
                   <div className="border-b pb-3">
                     <p className="text-gray-600 font-medium">Prix unité carton</p>
                     <p className="text-[#111827] font-semibold mt-1">{Number(produitDetail.prix_unite_carton).toLocaleString("fr-FR")} FCFA</p>
-                  </div>
-                )}
-                {produitDetail.prix_achat != null && (
-                  <div className="border-b pb-3">
-                    <p className="text-gray-600 font-medium">Prix achat</p>
-                    <p className="text-[#111827] font-semibold mt-1">{Number(produitDetail.prix_achat).toLocaleString("fr-FR")} FCFA</p>
                   </div>
                 )}
                 {produitDetail.prix_vente_gros != null && (
