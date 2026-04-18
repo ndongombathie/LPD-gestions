@@ -57,6 +57,13 @@ const ROLE_DISPLAY_MAPPING = {
   "gestionnaire_depot": "Gestionnaire Dépôt",
   "gestionnaire_boutique": "Gestionnaire Boutique"
 };
+const ROLE_REVERSE_MAPPING = {
+  "Responsable": "responsable",
+  "Vendeur": "vendeur",
+  "Caissier": "caissier",
+  "Gestionnaire Dépôt": "gestionnaire_depot",
+  "Gestionnaire Boutique": "gestionnaire_boutique"
+};
 
 // 📋 RÔLES POUR L'AFFICHAGE DANS L'UI
 const ROLES_UI = Object.values(ROLE_DISPLAY_MAPPING);
@@ -749,7 +756,7 @@ export default function Utilisateurs() {
       await utilisateursAPI.update(editTarget.id, {
         telephone: editTarget.telephone,
         adresse: editTarget.adresse,
-        role: editTarget.role,
+        role: ROLE_REVERSE_MAPPING[editTarget.role],
       });
       
       addToast("✅ Utilisateur modifié avec succès");
@@ -841,7 +848,10 @@ export default function Utilisateurs() {
         <Eye size={16} />
       </button>
       <button
-        onClick={() => setEditTarget(user)}
+        onClick={() => setEditTarget({
+  ...user,
+  role: ROLE_DISPLAY_MAPPING[user.role] || user.role
+})}
         className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
         title="Modifier"
       >
