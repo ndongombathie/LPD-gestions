@@ -161,7 +161,8 @@ const getClientsEndettes = async (params = {}) => {
 
   // ✅ FIX ICI
   dette_totale: safeNumber(client?.dette),
-
+  montant_deja_paye:safeNumber(client?.totalPaye),
+  montant_initial:safeNumber(client?.totalTTC),
   dernier_paiement: safeDate(client?.dernier_paiement),
   created_at: safeDate(client?.created_at),
 }));
