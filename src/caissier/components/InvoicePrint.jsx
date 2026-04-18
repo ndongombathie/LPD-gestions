@@ -31,8 +31,10 @@ const escHtml = (s) =>
     .replace(/"/g, '&quot;');
 
 /**
- * Styles ticket thermique (ex. Epson TM-T20X, rouleau 80 mm).
- * Largeur contenu ~72 mm. Rouleau 58 mm : classes body `receipt receipt-58` (voir printInvoice).
+ * Ticket thermique (Epson TM-T20 / TM-T20X, rouleau 80 mm).
+ * - Largeur contenu réduite (~68 mm) pour éviter la coupe sur les côtés (zone utile réelle < 80 mm).
+ * - html/body en hauteur « contenu » + bloc inline-block pour supprimer la grande page blanche en bas.
+ * Rouleau 58 mm : body avec classes `receipt receipt-58`.
  */
 const THERMAL_RECEIPT_STYLES = `
   @page {
@@ -44,143 +46,204 @@ const THERMAL_RECEIPT_STYLES = `
     padding: 0;
     box-sizing: border-box;
   }
-  :root {
-    --receipt-width: 72mm;
+  html {
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0;
+    padding: 0;
+    background: #fff;
   }
   body.receipt {
-    margin: 0 auto;
-    padding: 2mm 3mm 4mm;
-    width: var(--receipt-width);
-    max-width: var(--receipt-width);
-    font-family: ui-monospace, 'Cascadia Code', 'Segoe UI', system-ui, sans-serif;
-    font-size: 10.5px;
-    line-height: 1.35;
+    --ticket-inner-max: 68mm;
+    margin: 0;
+    padding: 0;
+    height: auto !important;
+    min-height: 0 !important;
+    width: 100%;
+    max-width: none;
+    text-align: center;
+    font-family: ui-monospace, Consolas, 'Courier New', monospace;
+    font-size: 10px;
+    line-height: 1.3;
     color: #000;
     background: #fff;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
+  /* Bloc centré dont la hauteur = contenu (évite le « trou » sous le ticket dans l’aperçu / à l’impression) */
+  .ticket-wrap {
+    display: inline-block;
+    vertical-align: top;
+    text-align: left;
+    width: 100%;
+    max-width: var(--ticket-inner-max);
+    padding: 2mm 2mm 2mm;
+    margin: 0 auto;
+  }
+  body.receipt.receipt-58 {
+    --ticket-inner-max: 48mm;
+  }
   .receipt-brand {
     text-align: center;
     font-weight: 700;
-    font-size: 13px;
-    letter-spacing: 0.04em;
-    margin-bottom: 4px;
+    font-size: 12px;
+    letter-spacing: 0.03em;
+    margin-bottom: 3px;
   }
   .receipt-shop {
-    font-size: 9.5px;
+    font-size: 8.5px;
     text-align: center;
   }
   .receipt-shop p {
-    margin: 2px 0;
+    margin: 1px 0;
+    word-wrap: break-word;
   }
   .receipt-rule {
     border: none;
     border-top: 1px dashed #000;
-    margin: 6px 0;
+    margin: 5px 0;
   }
   .receipt-title {
     text-align: center;
     font-weight: 700;
-    font-size: 11px;
-    margin: 4px 0 2px;
+    font-size: 10px;
+    margin: 3px 0 2px;
   }
   .receipt-meta {
-    font-size: 9.5px;
-    margin-bottom: 6px;
+    font-size: 8.5px;
+    margin-bottom: 5px;
     text-align: center;
   }
   .receipt-meta span {
     display: block;
     margin: 1px 0;
+    word-break: break-word;
   }
   .receipt-block {
-    margin-bottom: 6px;
-    font-size: 9.5px;
+    margin-bottom: 5px;
+    font-size: 8.5px;
+    text-align: center;
   }
   .receipt-block strong {
     display: block;
-    font-size: 9px;
+    font-size: 8px;
     margin-bottom: 2px;
   }
+  .receipt-block p {
+    font-size: 9px;
+    font-weight: 700;
+  }
   table.receipt-lines {
+    table-layout: fixed;
     width: 100%;
     border-collapse: collapse;
-    margin-bottom: 6px;
-    font-size: 9px;
+    margin-bottom: 5px;
+    font-size: 7.5px;
   }
   table.receipt-lines th,
   table.receipt-lines td {
-    padding: 3px 1px;
+    padding: 2px 1px;
     vertical-align: top;
-    border-bottom: 1px solid #bbb;
-    word-break: break-word;
+    border-bottom: 1px solid #999;
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
+    hyphens: auto;
   }
   table.receipt-lines th {
     font-weight: 700;
     border-bottom: 1px solid #000;
     text-align: left;
   }
+  table.receipt-lines th:nth-child(1),
+  table.receipt-lines td:nth-child(1) {
+    width: 36%;
+    padding-right: 2px;
+  }
   table.receipt-lines th:nth-child(2),
   table.receipt-lines td:nth-child(2) {
+    width: 11%;
     text-align: center;
-    width: 8%;
     white-space: nowrap;
   }
   table.receipt-lines th:nth-child(3),
-  table.receipt-lines td:nth-child(3),
-  table.receipt-lines th:nth-child(4),
-  table.receipt-lines td:nth-child(4) {
+  table.receipt-lines td:nth-child(3) {
+    width: 24%;
     text-align: right;
     white-space: nowrap;
-    width: 22%;
+    font-variant-numeric: tabular-nums;
   }
-  table.receipt-lines td:first-child {
-    max-width: 38mm;
+  table.receipt-lines th:nth-child(4),
+  table.receipt-lines td:nth-child(4) {
+    width: 29%;
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
   }
   .receipt-totals {
-    margin-top: 4px;
-    margin-bottom: 6px;
-    font-size: 10px;
+    margin-top: 3px;
+    margin-bottom: 5px;
+    font-size: 8.5px;
   }
   .receipt-totals .row {
     display: flex;
     justify-content: space-between;
-    gap: 4px;
-    padding: 3px 0;
+    align-items: baseline;
+    gap: 2px;
+    padding: 2px 0;
+    flex-wrap: wrap;
+  }
+  .receipt-totals .row span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .receipt-totals .row span:last-child {
+    text-align: right;
+    flex: 0 1 auto;
+    max-width: 100%;
+    font-variant-numeric: tabular-nums;
   }
   .receipt-totals .row-strong {
     font-weight: 700;
-    font-size: 12px;
-    border-top: 2px solid #000;
-    margin-top: 4px;
-    padding-top: 6px;
+    font-size: 9.5px;
+    border-top: 1px solid #000;
+    margin-top: 3px;
+    padding-top: 4px;
   }
   .receipt-pay {
-    font-size: 9.5px;
-    margin-bottom: 6px;
+    font-size: 8.5px;
+    margin-bottom: 5px;
   }
   .receipt-pay p {
-    margin: 3px 0;
+    margin: 2px 0;
+    word-wrap: break-word;
   }
   .receipt-footer {
     text-align: center;
-    font-size: 8.5px;
+    font-size: 7.5px;
     border-top: 1px dashed #000;
-    padding-top: 6px;
-    margin-top: 4px;
+    padding-top: 5px;
+    margin-top: 3px;
   }
   .receipt-footer p {
     margin: 2px 0;
+    word-wrap: break-word;
   }
   @media print {
-    body.receipt {
-      padding: 1mm 2mm 3mm;
+    @page {
+      margin: 0;
+      size: 80mm auto;
     }
-  }
-  /* Rouleau 58 mm : sur <body> utiliser class="receipt receipt-58" (largeur utile ~52 mm) */
-  body.receipt.receipt-58 {
-    --receipt-width: 52mm;
+    html, body.receipt {
+      height: auto !important;
+      min-height: 0 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      background: #fff !important;
+    }
+    .ticket-wrap {
+      box-shadow: none !important;
+      padding: 2mm 2mm 1mm !important;
+    }
   }
 `;
 
@@ -218,7 +281,7 @@ const InvoicePrint = ({ ticket, boutique = null, caissierNom = '' }) => {
 
   return (
     <div
-      className="hidden print:block bg-white text-black print:max-w-[72mm] print:mx-auto print:px-2 print:py-1 print:text-[10px] print:leading-snug"
+      className="hidden print:inline-block print:max-w-[68mm] print:mx-auto print:px-2 print:py-1 print:text-[10px] print:leading-snug print:text-left print:font-mono print:bg-white print:text-black"
       id="invoice-print"
     >
       <div className="text-center font-bold text-sm tracking-wide print:mb-1">LPD GESTIONS</div>
@@ -269,8 +332,8 @@ const InvoicePrint = ({ ticket, boutique = null, caissierNom = '' }) => {
           <span>{formatCurrency(montantEncaisseFacture(ticket))}</span>
         </div>
         {afficherTotalCommandeTTC(ticket) ? (
-          <div className="flex justify-between text-neutral-600 text-[9px] mt-0.5">
-            <span>Total commande TTC</span>
+          <div className="flex justify-between text-neutral-600 text-[8px] mt-0.5 gap-1 flex-wrap">
+            <span>Total TTC</span>
             <span className="font-semibold">{formatCurrency(ticket.total_ttc)}</span>
           </div>
         ) : null}
@@ -364,9 +427,11 @@ export const printInvoice = (ticket, boutique = null, caissierNom = null) => {
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>Facture ${escHtml(ticket.numero)}</title>
+        <!-- Impression Chrome/Edge : Plus de paramètres → désactiver « En-têtes et pieds de page », Marges au minimum. -->
         <style>${THERMAL_RECEIPT_STYLES}</style>
       </head>
       <body class="receipt">
+        <div class="ticket-wrap">
         <div class="receipt-brand">LPD GESTIONS</div>
         <div class="receipt-shop">
           <p>${escHtml(header.nom)}</p>
@@ -391,7 +456,7 @@ export const printInvoice = (ticket, boutique = null, caissierNom = null) => {
             <tr>
               <th>Article</th>
               <th>Qt</th>
-              <th>P.U.</th>
+              <th>PU</th>
               <th>TTC</th>
             </tr>
           </thead>
@@ -405,8 +470,8 @@ export const printInvoice = (ticket, boutique = null, caissierNom = null) => {
           </div>
           ${
             afficherTotalCommandeTTC(ticket)
-              ? `<div class="row" style="font-size:9px;color:#333;margin-top:2px">
-            <span>Total commande TTC</span>
+              ? `<div class="row" style="font-size:8px;color:#333;margin-top:2px">
+            <span>Total TTC</span>
             <span style="font-weight:600">${formatCurrency(ticket.total_ttc)}</span>
           </div>`
               : ''
@@ -430,6 +495,7 @@ export const printInvoice = (ticket, boutique = null, caissierNom = null) => {
           <p>${escHtml(formatDateTime(new Date().toISOString()))}</p>
           <p>Vendeur : ${escHtml(ticket.vendeur_nom)}</p>
           ${caissier ? `<p>Caissier : ${escHtml(caissier)}</p>` : ''}
+        </div>
         </div>
       </body>
     </html>
