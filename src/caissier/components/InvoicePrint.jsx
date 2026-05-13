@@ -273,7 +273,19 @@ const libelleMoyenPaiement = (m) =>
           ? 'Orange Money'
           : m === 'cheque'
             ? 'Chèque'
-            : 'Autre';
+            : m === 'mixte'
+              ? 'Paiement mixte'
+              : 'Autre';
+
+const libellePaiementAffiche = (ticket) =>
+  ticket?.libelle_paiement_facture || libelleMoyenPaiement(ticket?.moyen_paiement);
+
+/** Monnaie : espèces seul ou partie espèces d’un paiement mixte */
+const afficherBlocMonnaieTicket = (ticket) =>
+  isPaiementEspeces(ticket?.moyen_paiement) ||
+  (ticket?.moyen_paiement === 'mixte' &&
+    ticket?.monnaie_recue !== undefined &&
+    ticket?.monnaie_recue !== null);
 
 const InvoicePrint = ({ ticket, boutique = null, caissierNom = '' }) => {
   if (!ticket) return null;
@@ -340,9 +352,9 @@ const InvoicePrint = ({ ticket, boutique = null, caissierNom = '' }) => {
       </div>
       <div className="text-[9px] print:mb-2 space-y-0.5">
         <p>
-          <span className="font-semibold">Paiement :</span> {libelleMoyenPaiement(ticket.moyen_paiement)}
+          <span className="font-semibold">Paiement :</span> {libellePaiementAffiche(ticket)}
         </p>
-        {isPaiementEspeces(ticket.moyen_paiement) ? (
+        {afficherBlocMonnaieTicket(ticket) ? (
           <>
             <p>
               <span className="font-semibold">Reçu :</span>{' '}
@@ -353,7 +365,7 @@ const InvoicePrint = ({ ticket, boutique = null, caissierNom = '' }) => {
             </p>
           </>
         ) : null}
-        {!isPaiementEspeces(ticket.moyen_paiement) && ticket.montant_paye ? (
+        {!afficherBlocMonnaieTicket(ticket) && ticket.montant_paye && ticket.moyen_paiement !== 'mixte' ? (
           <p>
             <span className="font-semibold">Montant payé :</span> {formatCurrency(ticket.montant_paye)}
           </p>
@@ -479,12 +491,12 @@ export const printInvoice = (ticket, boutique = null, caissierNom = null) => {
         </div>
 
         <div class="receipt-pay">
-          <p><strong>Paiement :</strong> ${escHtml(libelleMoyenPaiement(ticket.moyen_paiement))}</p>
+          <p><strong>Paiement :</strong> ${escHtml(libellePaiementAffiche(ticket))}</p>
           ${
-            isPaiementEspeces(ticket.moyen_paiement)
+            afficherBlocMonnaieTicket(ticket)
               ? `<p><strong>Reçu :</strong> ${formatCurrency(ticket.monnaie_recue ?? ticket.montant_paye ?? 0)}</p>
             <p><strong>Rendu :</strong> ${formatCurrency(ticket.monnaie_rendue ?? 0)}</p>`
-              : ticket.montant_paye
+              : ticket.montant_paye && ticket.moyen_paiement !== 'mixte'
                 ? `<p><strong>Montant payé :</strong> ${formatCurrency(ticket.montant_paye)}</p>`
                 : ''
           }

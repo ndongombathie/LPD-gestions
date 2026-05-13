@@ -41,6 +41,9 @@ const CaissePage = () => {
     montantPaye: '',
     montantDonneEspeces: '', // Montant donné par le client (espèces) → pour calculer la monnaie à rendre
     tauxTVA: 18,
+    paiementMixte: false,
+    moyenPaiement2: 'wave',
+    montantPartie1: '',
   });
 
   // Fonction pour transformer une commande en ticket
@@ -276,6 +279,9 @@ const CaissePage = () => {
       montantPaye: montantParDefaut.toString(),
       montantDonneEspeces: '',
       tauxTVA: 18,
+      paiementMixte: false,
+      moyenPaiement2: 'wave',
+      montantPartie1: '',
     });
     setIsPaymentModalOpen(true);
   };
@@ -291,8 +297,6 @@ const CaissePage = () => {
 
     /**
      * Montant réellement encaissé sur cette opération (aligné sur l’API).
-     * - Paiement complet : souvent = TTC ou reste dû final.
-     * - Paiement partiel / tranche : = montant_a_encaisser (pas le TTC ni tout le reste dû global si différent).
      */
     const montantEncaisseOperation = (() => {
       const ma = Number(selectedTicket.montant_a_encaisser);
@@ -302,28 +306,131 @@ const CaissePage = () => {
       return Number(selectedTicket.total_ttc || 0);
     })();
 
-    // En espèces : le montant donné doit être au moins égal au montant à payer
-    if (paymentData.moyenPaiement === 'especes') {
-      const donne = parseFloat(paymentData.montantDonneEspeces) || 0;
-      if (donne < selectedTicket.montant_a_encaisser) {
+    const montantDu = Number(
+      selectedTicket.montant_a_encaisser ?? selectedTicket.reste_du ?? selectedTicket.total_ttc ?? 0
+    );
+    const donneEspeces = parseFloat(paymentData.montantDonneEspeces) || 0;
+
+    const finalizeSuccess = async (ticketEncaisse) => {
+      setIsPaymentModalOpen(false);
+      setSelectedTicket(null);
+      setTicketFacture(ticketEncaisse);
+      setIsFactureModalOpen(true);
+      invalidateCommandesAttenteClientCache();
+      await fetchTicketsSafe(currentPage, filterText.trim());
+      await fetchDashboardStats();
+    };
+
+    // ---- Paiement en deux moyens (ex. 5 000 Wave + 5 000 espèces) — client normal uniquement ----
+    if (paymentData.paiementMixte && !selectedTicket.client_special) {
+      if (paymentData.moyenPaiement === 'autre' || paymentData.moyenPaiement2 === 'autre') {
+        toast.error('Paiement mixte', {
+          description: 'Choisissez deux moyens prédéfinis (Wave, espèces, etc.), pas « Autre ».',
+        });
+        return;
+      }
+      if (paymentData.moyenPaiement === paymentData.moyenPaiement2) {
+        toast.error('Paiement mixte', { description: 'Les deux moyens doivent être différents.' });
+        return;
+      }
+      if (paymentData.moyenPaiement === 'especes' && paymentData.moyenPaiement2 === 'especes') {
+        toast.error('Paiement mixte', { description: 'Combinez par ex. Wave + Espèces, pas Espèces + Espèces.' });
+        return;
+      }
+
+      const du = Math.round(montantEncaisseOperation);
+      const m1 = Math.round(parseFloat(String(paymentData.montantPartie1).replace(',', '.')) || 0);
+      const m2 = du - m1;
+
+      if (m1 <= 0 || m2 <= 0) {
+        toast.error('Paiement mixte', {
+          description: `Saisissez un montant pour la 1re partie (entre 1 et ${formatCurrency(du - 1)}).`,
+        });
+        return;
+      }
+      if (m1 + m2 !== du) {
+        toast.error('Paiement mixte', {
+          description: 'La somme des deux parties doit égaler le montant à encaisser.',
+        });
+        return;
+      }
+
+      const esp1 = paymentData.moyenPaiement === 'especes';
+      const esp2 = paymentData.moyenPaiement2 === 'especes';
+      const dueEsp = esp1 ? m1 : esp2 ? m2 : 0;
+      if (dueEsp > 0 && donneEspeces < dueEsp) {
+        toast.error('Espèces', {
+          description: `Le client doit donner au moins ${formatCurrency(dueEsp)} en espèces (partie concernée).`,
+        });
+        return;
+      }
+
+      const type1 = paymentData.moyenPaiement;
+      const type2 = paymentData.moyenPaiement2;
+      const libelleFacture = `${moyensPaiementLabels[type1] || type1} ${formatCurrency(m1)} + ${moyensPaiementLabels[type2] || type2} ${formatCurrency(m2)}`;
+
+      const ticketEncaisse = {
+        ...selectedTicket,
+        moyen_paiement: 'mixte',
+        libelle_paiement_facture: libelleFacture,
+        montant_paye: du,
+        statut: 'encaissé',
+        ...(dueEsp > 0
+          ? {
+              monnaie_recue: donneEspeces,
+              monnaie_rendue: Math.max(0, donneEspeces - dueEsp),
+            }
+          : {}),
+      };
+
+      setIsProcessingPayment(true);
+      try {
+        await caissierApi.creerPaiement(selectedTicket.commande_id, {
+          type_paiement: type1,
+          montant: m1,
+        });
+        await caissierApi.creerPaiement(selectedTicket.commande_id, {
+          type_paiement: type2,
+          montant: m2,
+        });
+        await finalizeSuccess(ticketEncaisse);
+      } catch (error) {
+        const statusCode = error.response?.status;
+        if (statusCode === 200 || statusCode === 201) {
+          await finalizeSuccess(ticketEncaisse);
+        } else {
+          toast.error('Erreur', {
+            description: String(
+              error.response?.data?.message ||
+                "Paiement mixte impossible. Si un montant a déjà été enregistré, contactez un responsable."
+            )
+              .replace(/https?:\/\/localhost:[0-9]+/gi, '')
+              .trim(),
+          });
+        }
+      } finally {
+        setIsProcessingPayment(false);
+      }
+      return;
+    }
+
+    // ---- Un seul moyen de paiement ----
+    if (!paymentData.paiementMixte && paymentData.moyenPaiement === 'especes') {
+      if (donneEspeces < montantEncaisseOperation) {
         toast.error('Erreur', {
-          description: `Le montant donné (${formatCurrency(donne)}) est inférieur au montant à payer (${formatCurrency(selectedTicket.montant_a_encaisser)}). Le client doit donner au moins ${formatCurrency(selectedTicket.montant_a_encaisser)}.`,
+          description: `Le montant donné (${formatCurrency(donneEspeces)}) est inférieur au montant à payer (${formatCurrency(montantEncaisseOperation)}).`,
         });
         return;
       }
     }
 
-    // Le caissier choisit le moyen de paiement pour toutes les commandes (y compris clients spéciaux)
-    const moyenPaiementFinal = paymentData.moyenPaiement === 'autre'
-      ? (paymentData.autreMoyenPaiement || 'Autre')
-      : paymentData.moyenPaiement;
+    const moyenPaiementFinal =
+      paymentData.moyenPaiement === 'autre'
+        ? (paymentData.autreMoyenPaiement || 'Autre')
+        : paymentData.moyenPaiement;
 
     setIsProcessingPayment(true);
     try {
-      const montantDu = Number(
-        selectedTicket.montant_a_encaisser ?? selectedTicket.reste_du ?? selectedTicket.total_ttc ?? 0
-      );
-      const donneEspeces = parseFloat(paymentData.montantDonneEspeces) || 0;
       const ticketEncaisse = {
         ...selectedTicket,
         moyen_paiement: moyenPaiementFinal,
@@ -332,36 +439,20 @@ const CaissePage = () => {
         ...(moyenPaiementFinal === 'especes'
           ? {
               monnaie_recue: donneEspeces,
-              monnaie_rendue: Math.max(0, donneEspeces - montantDu),
+              monnaie_rendue: Math.max(0, donneEspeces - montantEncaisseOperation),
             }
           : {}),
       };
 
-      // Appel API pour créer le paiement
-      
       await caissierApi.creerPaiement(selectedTicket.commande_id, {
         type_paiement: moyenPaiementFinal || 'especes',
-        montant: selectedTicket.montant_a_encaisser || 0,
+        montant: montantEncaisseOperation,
       });
 
-      setIsPaymentModalOpen(false);
-      setSelectedTicket(null);
-      setTicketFacture(ticketEncaisse);
-      setIsFactureModalOpen(true);
-
-      // Recharger les tickets pour que le ticket disparaisse immédiatement
-      invalidateCommandesAttenteClientCache();
-      await fetchTicketsSafe(currentPage, filterText.trim());
-      // Mettre à jour le compteur de tickets traités
-      await fetchDashboardStats();
+      await finalizeSuccess(ticketEncaisse);
     } catch (error) {
-      // Vérifier si le paiement a quand même été créé (code 200 ou 201)
       const statusCode = error.response?.status;
       if (statusCode === 200 || statusCode === 201) {
-        const montantDu = Number(
-          selectedTicket.montant_a_encaisser ?? selectedTicket.reste_du ?? selectedTicket.total_ttc ?? 0
-        );
-        const donneEspeces = parseFloat(paymentData.montantDonneEspeces) || 0;
         const ticketEncaisse = {
           ...selectedTicket,
           moyen_paiement: moyenPaiementFinal,
@@ -370,23 +461,16 @@ const CaissePage = () => {
           ...(moyenPaiementFinal === 'especes'
             ? {
                 monnaie_recue: donneEspeces,
-                monnaie_rendue: Math.max(0, donneEspeces - montantDu),
+                monnaie_rendue: Math.max(0, donneEspeces - montantEncaisseOperation),
               }
             : {}),
         };
-        setIsPaymentModalOpen(false);
-        setSelectedTicket(null);
-        setTicketFacture(ticketEncaisse);
-        setIsFactureModalOpen(true);
-        invalidateCommandesAttenteClientCache();
-        await fetchTicketsSafe(currentPage, filterText.trim());
-        // Mettre à jour le compteur de tickets traités
-        await fetchDashboardStats();
+        await finalizeSuccess(ticketEncaisse);
       } else {
         toast.error('Erreur', {
-          description: String(error.response?.data?.message || 'Impossible d\'enregistrer le paiement')
+          description: String(error.response?.data?.message || "Impossible d'enregistrer le paiement")
             .replace(/https?:\/\/localhost:[0-9]+/gi, '')
-            .trim()
+            .trim(),
         });
       }
     } finally {
@@ -522,6 +606,8 @@ const CaissePage = () => {
     cheque: 'Chèque',
     autre: 'Autre',
   };
+
+  const moyensPaiementMixte = moyensPaiement.filter((o) => o.value !== 'autre');
 
   return (
     <div className="space-y-14 relative z-10">
@@ -991,18 +1077,117 @@ const CaissePage = () => {
                 Suggestion responsable : {moyensPaiementLabels[selectedTicket.moyen_paiement] || selectedTicket.moyen_paiement}
               </p>
             )}
-            <Select
-              label="Moyen de paiement"
-              options={moyensPaiement}
-              value={paymentData.moyenPaiement}
-              onChange={(e) => setPaymentData({ 
-                ...paymentData, 
-                moyenPaiement: e.target.value,
-                autreMoyenPaiement: e.target.value !== 'autre' ? '' : paymentData.autreMoyenPaiement
-              })}
-            />
 
-            {paymentData.moyenPaiement === 'autre' && (
+            {!selectedTicket.client_special && (
+              <label className="flex items-start gap-2 cursor-pointer text-sm text-gray-800">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 rounded border-gray-400"
+                  checked={paymentData.paiementMixte}
+                  onChange={(e) =>
+                    setPaymentData((prev) => ({
+                      ...prev,
+                      paiementMixte: e.target.checked,
+                      montantPartie1: e.target.checked ? prev.montantPartie1 : '',
+                      moyenPaiement2: e.target.checked
+                        ? prev.moyenPaiement === 'wave'
+                          ? 'especes'
+                          : 'wave'
+                        : prev.moyenPaiement2,
+                    }))
+                  }
+                />
+                <span>
+                  Paiement en <strong>deux moyens</strong> sur le même ticket (ex. 5 000 F Wave + 5 000 F
+                  espèces pour 10 000 F).
+                </span>
+              </label>
+            )}
+
+            {paymentData.paiementMixte && !selectedTicket.client_special && (
+              <div className="space-y-3 rounded-lg border border-dashed border-[#472EAD]/40 bg-[#F7F5FF] p-3">
+                <p className="text-xs text-gray-600">
+                  Indiquez le montant de la 1re partie : le solde (2e partie) est calculé automatiquement.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Select
+                    label="1re partie — moyen"
+                    options={moyensPaiementMixte}
+                    value={paymentData.moyenPaiement}
+                    onChange={(e) =>
+                      setPaymentData((prev) => {
+                        const v = e.target.value;
+                        let m2 = prev.moyenPaiement2;
+                        if (v === m2) {
+                          m2 = v === 'wave' ? 'especes' : 'wave';
+                        }
+                        return { ...prev, moyenPaiement: v, moyenPaiement2: m2 };
+                      })
+                    }
+                  />
+                  <Input
+                    label="Montant 1re partie (FCFA)"
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={paymentData.montantPartie1}
+                    onChange={(e) =>
+                      setPaymentData((prev) => ({ ...prev, montantPartie1: e.target.value }))
+                    }
+                    placeholder="Ex: 5000"
+                  />
+                  <Select
+                    label="2e partie — moyen"
+                    options={moyensPaiementMixte}
+                    value={paymentData.moyenPaiement2}
+                    onChange={(e) =>
+                      setPaymentData((prev) => {
+                        const v = e.target.value;
+                        let m1 = prev.moyenPaiement;
+                        if (v === m1) {
+                          m1 = v === 'wave' ? 'especes' : 'wave';
+                        }
+                        return { ...prev, moyenPaiement2: v, moyenPaiement: m1 };
+                      })
+                    }
+                  />
+                  <div className="flex flex-col justify-end text-sm pb-1">
+                    <span className="text-gray-600">Solde (2e partie)</span>
+                    <span className="font-semibold text-[#472EAD] tabular-nums">
+                      {(() => {
+                        const du = Math.round(
+                          Number(
+                            selectedTicket.montant_a_encaisser ??
+                              selectedTicket.reste_du ??
+                              selectedTicket.total_ttc ??
+                              0
+                          )
+                        );
+                        const m1 = Math.round(parseFloat(paymentData.montantPartie1) || 0);
+                        return formatCurrency(Math.max(0, du - m1));
+                      })()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {!paymentData.paiementMixte && (
+              <Select
+                label="Moyen de paiement"
+                options={moyensPaiement}
+                value={paymentData.moyenPaiement}
+                onChange={(e) =>
+                  setPaymentData({
+                    ...paymentData,
+                    moyenPaiement: e.target.value,
+                    autreMoyenPaiement: e.target.value !== 'autre' ? '' : paymentData.autreMoyenPaiement,
+                  })
+                }
+              />
+            )}
+
+            {!paymentData.paiementMixte && paymentData.moyenPaiement === 'autre' && (
               <Input
                 label="Précisez le moyen de paiement"
                 type="text"
@@ -1013,7 +1198,9 @@ const CaissePage = () => {
               />
             )}
 
-            {paymentData.moyenPaiement === 'especes' && (
+            {((!paymentData.paiementMixte && paymentData.moyenPaiement === 'especes') ||
+              (paymentData.paiementMixte &&
+                (paymentData.moyenPaiement === 'especes' || paymentData.moyenPaiement2 === 'especes'))) && (
               <div className="space-y-2">
                 <Input
                   label="Montant donné par le client (FCFA)"
@@ -1026,28 +1213,42 @@ const CaissePage = () => {
                   className="w-full"
                 />
                 {(() => {
-                  const resteDu = selectedTicket.montant_a_encaisser || 0;
-                  
+                  const du = Math.round(
+                    Number(
+                      selectedTicket.montant_a_encaisser ??
+                        selectedTicket.reste_du ??
+                        selectedTicket.total_ttc ??
+                        0
+                    )
+                  );
+                  const m1 = Math.round(parseFloat(paymentData.montantPartie1) || 0);
+                  const dueEsp = paymentData.paiementMixte
+                    ? paymentData.moyenPaiement === 'especes'
+                      ? m1
+                      : paymentData.moyenPaiement2 === 'especes'
+                        ? du - m1
+                        : 0
+                    : du;
                   const donne = parseFloat(paymentData.montantDonneEspeces) || 0;
-                  const monnaieARendre = Math.max(0, donne - resteDu);
-                  const insuffisant = donne > 0 && donne < resteDu;
+                  const monnaieARendre = Math.max(0, donne - dueEsp);
+                  const insuffisant = donne > 0 && donne < dueEsp;
                   return (
                     <div className="space-y-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm text-gray-600">À payer:</span>
-                        <span className="font-semibold">{formatCurrency(resteDu)}</span>
+                        <span className="text-sm text-gray-600">Partie espèces à payer :</span>
+                        <span className="font-semibold">{formatCurrency(dueEsp)}</span>
                         {donne > 0 && (
                           <>
                             <span className="text-gray-400">·</span>
                             <span className="text-sm font-semibold text-green-700">
-                              Monnaie à rendre: {formatCurrency(monnaieARendre)}
+                              Monnaie à rendre : {formatCurrency(monnaieARendre)}
                             </span>
                           </>
                         )}
                       </div>
                       {insuffisant && (
                         <p className="text-sm text-red-600 font-medium">
-                          Le montant donné est insuffisant. Il manque {formatCurrency(resteDu - donne)}.
+                          Le montant donné est insuffisant. Il manque {formatCurrency(dueEsp - donne)}.
                         </p>
                       )}
                     </div>
