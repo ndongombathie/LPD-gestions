@@ -1277,7 +1277,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
     }
 
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" >
         {produitsFiltres.map(produit => {
           if (!produit) return null;
 
@@ -1619,7 +1619,7 @@ const NouvelleCommande = ({ panier, setPanier, onCommandeValidee, sellerName = n
           </div>
         </div>
 
-        <div className="space-y-5">
+        <div className="space-y-5 pb-15">
           <div className="bg-white rounded-xl p-5 shadow-sm relative">
             <h3 className="text-base text-gray-800 mb-5 font-semibold flex items-center gap-2">
               <FontAwesomeIcon icon={faUser} className="text-[#472ead] text-sm" />

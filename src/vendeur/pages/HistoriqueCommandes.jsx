@@ -7,10 +7,13 @@ import {
   faCalendarDay, faCalendar, faBoxOpen, faCalculator, faList, faSpinner,
   faExclamationTriangle, faDatabase, faUserTie, faMapMarkerAlt, faChevronDown,
   faChevronUp, faSort, faArrowUp, faArrowDown, faInfoCircle, faCheck, faBan,
-  faBell, faMoneyBill, faAngleLeft, faAngleRight, faAngleDoubleLeft, faAngleDoubleRight
+  faBell, faMoneyBill, faAngleLeft, faAngleRight, faAngleDoubleLeft, faAngleDoubleRight,
+  faPrint
 } from '@fortawesome/free-solid-svg-icons';
 import { commandesAPI } from '../../services/api/commandes';
 import profileAPI from '../../services/api/profile';
+import { useReactToPrint } from 'react-to-print';
+import TicketCommande from './TicketCommande';
 
 const HistoriqueCommandes = ({ sellerName = null }) => {
   const [commandes, setCommandes] = useState([]);
@@ -41,6 +44,15 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [sortField, setSortField] = useState('date');
   const [sortDirection, setSortDirection] = useState('desc');
+  
+  // États pour l'impression
+  const [commandeAImprimer, setCommandeAImprimer] = useState(null);
+  const ticketRef = React.useRef();
+  
+  const imprimerTicket = useReactToPrint({
+    contentRef: ticketRef,
+    documentTitle: (commandeAImprimer?.numero_commande || 'ticket') + '.pdf',
+  });
   
   const [pagination, setPagination] = useState({
     currentPage: 1,
@@ -566,6 +578,16 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
     }
   };
 
+  // Fonction pour ouvrir le modal d'impression
+  const ouvrirImpression = (commande) => {
+    setCommandeAImprimer(commande);
+    // Petite temporisation pour permettre au ref de se mettre à jour
+    setTimeout(() => {
+      imprimerTicket();
+      setCommandeAImprimer(null);
+    }, 100);
+  };
+
   const ouvrirDetails = async (commande) => {
     await chargerDetailsCommande(commande);
   };
@@ -677,11 +699,11 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
                   <td className="py-2 px-3 text-gray-900">{quantite}</td>
                   <td className="py-2 px-3 text-gray-900">{formaterMontant(prixVente)}</td>
                   <td className="py-2 px-3 text-gray-900 font-medium">{formaterMontant(sousTotal)}</td>
-                </tr>
+                 </tr>
               );
             })}
           </tbody>
-        </table>
+         </table>
       </div>
     );
   };
@@ -715,7 +737,7 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
+    <div className="min-h-screen bg-gray-50 p-4 pb-32">
       {showRefreshNotification && (
         <div className="fixed top-4 right-4 z-50 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 text-sm animate-slide-in">
           <FontAwesomeIcon icon={faBell} className="animate-bounce" />
@@ -987,9 +1009,24 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
                     <div className="text-base font-bold text-gray-900">
                       {formaterMontant(commande.total_ttc || commande.montant_ttc || commande.total)} FCFA
                     </div>
-                    <button onClick={() => ouvrirDetails(commande)} className="mt-1 inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-50 text-blue-600 rounded hover:bg-blue-100">
-                      <FontAwesomeIcon icon={faEye} /> Détails
-                    </button>
+                    <div className="mt-1 flex gap-2 justify-end">
+                      <button 
+                        onClick={() => ouvrirDetails(commande)} 
+                        className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-50 text-blue-600 rounded hover:bg-blue-100"
+                      >
+                        <FontAwesomeIcon icon={faEye} /> Détails
+                      </button>
+                      
+                      {/* Bouton Imprimer - visible seulement si commande en attente */}
+                      {commande.statut === 'en_attente_paiement' && (
+                        <button 
+                          onClick={() => ouvrirImpression(commande)} 
+                          className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-green-50 text-green-600 rounded hover:bg-green-100"
+                        >
+                          <FontAwesomeIcon icon={faPrint} /> Imprimer
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1026,6 +1063,16 @@ const HistoriqueCommandes = ({ sellerName = null }) => {
           </div>
         )}
       </div>
+
+      {/* Composant caché pour l'impression */}
+      {commandeAImprimer && (
+        <div style={{ position: 'absolute', top: '-9999px', left: '-9999px' }}>
+          <TicketCommande
+            ref={ticketRef}
+            commande={commandeAImprimer}
+          />
+        </div>
+      )}
 
       {modalOuvert && donneesModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

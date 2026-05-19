@@ -40,8 +40,8 @@ const TicketCommande = forwardRef(({ commande }, ref) => {
 
       <div
         ref={ref}
-        className="ticket-print bg-white text-black font-mono text-center"
-        style={{ width: "58mm" }}
+        className="ticket-print bg-white text-black font-mono"
+        style={{ width: "58mm", textAlign: "center" }}
       >
         <div className="mb-2">
           <h1 className="text-lg font-bold tracking-wide">LPD</h1>
@@ -65,7 +65,7 @@ const TicketCommande = forwardRef(({ commande }, ref) => {
         <div className="mb-2">
           <p className="text-xs">Client</p>
           <p className="text-sm font-bold">
-            {commande.client.prenom} {commande.client.nom}
+            {commande.client?.prenom || ''} {commande.client?.nom || ''}
           </p>
         </div>
 
@@ -73,7 +73,7 @@ const TicketCommande = forwardRef(({ commande }, ref) => {
 
         <div className="flex justify-center my-3">
           <QRCodeCanvas
-            value={commande.numero_commande}
+            value={commande.numero_commande || ''}
             size={120}
           />
         </div>
