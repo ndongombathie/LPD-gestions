@@ -83,7 +83,6 @@ GET     api/produits-sous-seuil
 
 # ajouter un produits directements pour le gestionnaire de depots
 POST   api/api/stocks/store_produit_valider
-
                 'nom' => 'required|string',
                 'code' => 'required|string|unique:produits,code',
                 'categorie_id' => 'nullable|string',
@@ -91,8 +90,6 @@ POST   api/api/stocks/store_produit_valider
                 'unite_carton' => 'nullable|integer',
                 'prix_unite_carton' => 'nullable|numeric',
                 'nombre_carton' => 'nullable|integer',
-                'stock_seuil' => 'nullable|integer',
-
 # la liste des categories
 GET  api/categories
 
