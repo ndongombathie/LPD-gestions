@@ -41,6 +41,32 @@ const Stock = () => {
   const [pagination, setPagination] = useState(null);
   const debouncedRecherche = useDebouncedValue(recherche);
 
+  const getPrixVenteDetail = (produit) =>
+    produit?.prix_vente_detail ?? produit?.prix_detail ?? produit?.prix ?? 0;
+
+  const getPrixVenteGros = (produit) =>
+    produit?.prix_vente_gros ?? produit?.prix_gros ?? produit?.prix_unite_carton ?? 0;
+
+  const getPrixSeuilDetail = (produit) =>
+    produit?.prix_seuil_detail ?? produit?.prix_seuil ?? 0;
+
+  const getPrixSeuilGros = (produit) =>
+    produit?.prix_seuil_gros ?? produit?.prix_seuil ?? 0;
+
+  const getStockSeuil = (produit) =>
+    produit?.stock_seuil ?? produit?.seuil ?? 0;
+
+  const dedupeById = (items = []) => {
+    const seen = new Set();
+    return items.filter((item) => {
+      const key = item?.id ?? item?._id;
+      if (!key) return true;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  };
+
   // Stats
   const stats = {
     totalProduits: nombreProduits,
@@ -87,7 +113,7 @@ const Stock = () => {
           return item;
         });
         
-        setProduits(produitsData);
+        setProduits(dedupeById(produitsData));
         setPagination(produitsDispo);
       } catch (error) {
         if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') {
@@ -116,8 +142,8 @@ const Stock = () => {
           gestionnaireBoutiqueAPI.getFournisseurs({ signal: controller.signal }),
         ]);
         if (!mounted) return;
-        setCategories(Array.isArray(cats) ? cats : []);
-        setFournisseurs(Array.isArray(fous) ? fous : []);
+        setCategories(dedupeById(Array.isArray(cats) ? cats : []));
+        setFournisseurs(dedupeById(Array.isArray(fous) ? fous : []));
       } catch (err) {
         console.warn('Impossible de charger catégories/fournisseurs', err?.message || err);
       }
@@ -181,9 +207,13 @@ const Stock = () => {
         nombre_carton: form.nombre_carton ? parseInt(form.nombre_carton, 10) : null,
         stock_seuil: form.stock_seuil ? parseInt(form.stock_seuil, 10) : 5,
         prix_vente_detail: form.prix_vente_detail ? parseFloat(form.prix_vente_detail) : null,
+        prix_detail: form.prix_vente_detail ? parseFloat(form.prix_vente_detail) : null,
         prix_vente_gros: form.prix_vente_gros ? parseFloat(form.prix_vente_gros) : null,
+        prix_gros: form.prix_vente_gros ? parseFloat(form.prix_vente_gros) : null,
         prix_seuil_detail: form.prix_seuil_detail ? parseFloat(form.prix_seuil_detail) : null,
         prix_seuil_gros: form.prix_seuil_gros ? parseFloat(form.prix_seuil_gros) : null,
+        prix_seuil: form.prix_seuil_detail ? parseFloat(form.prix_seuil_detail) : null,
+        seuil: form.stock_seuil ? parseInt(form.stock_seuil, 10) : 5,
       };
 
       await gestionnaireBoutiqueAPI.storeProduitValider(payload);
@@ -279,7 +309,7 @@ const Stock = () => {
                 { label: "Produit", key: "nom" },
                 { label: "Code", key: "code" },
                 { label: "Quantité", key: "quantite", render: (v, row) => row.quantite ?? '-' },
-                { label: "Seuil", key: "seuil", render: (v, row) => row.seuil ?? '-' },
+                { label: "Seuil", key: "seuil", render: (v, row) => getStockSeuil(row) ?? '-' },
                 { label: "Cartons", key: "nombre_carton", render: (v, row) => row.nombre_carton ?? '-' },
               ]}
               data={stocksFiltres}
@@ -312,8 +342,8 @@ const Stock = () => {
                   <label className="text-sm text-gray-600">Catégorie</label>
                   <select name="categorie_id" value={form.categorie_id} onChange={handleFormChange} className="w-full mt-1 p-2 border rounded">
                     <option value="">-- Sélectionnez une catégorie --</option>
-                    {categories.map(c => (
-                      <option key={c.id || c.value || c.id_categorie} value={c.id || c.value || c.id_categorie}>{c.nom || c.name || c.label}</option>
+                    {categories.map((c) => (
+                      <option key={c.id ?? c._id} value={c.id ?? c._id}>{c.nom || c.name || c.label}</option>
                     ))}
                   </select>
                 </div>
@@ -321,8 +351,8 @@ const Stock = () => {
                   <label className="text-sm text-gray-600">Fournisseur</label>
                   <select name="fournisseur_id" value={form.fournisseur_id} onChange={handleFormChange} className="w-full mt-1 p-2 border rounded">
                     <option value="">-- Aucun fournisseur --</option>
-                    {fournisseurs.map(f => (
-                      <option key={f.id || f.value || f.id_fournisseur} value={f.id || f.value || f.id_fournisseur}>{f.nom || f.name || f.raison_sociale}</option>
+                    {fournisseurs.map((f) => (
+                      <option key={f.id ?? f._id} value={f.id ?? f._id}>{f.nom || f.name || f.raison_sociale}</option>
                     ))}
                   </select>
                 </div>
@@ -402,36 +432,36 @@ const Stock = () => {
                 </div>
                 <div className="border-b pb-3">
                   <p className="text-gray-600 font-medium">Seuil d'alerte</p>
-                  <p className="text-[#111827] font-semibold mt-1">{produitDetail.seuil ?? '-'}</p>
+                  <p className="text-[#111827] font-semibold mt-1">{getStockSeuil(produitDetail) ?? '-'}</p>
                 </div>
-                {produitDetail.prix_unite_carton != null && (
+                {getPrixVenteGros(produitDetail) != null && (
                   <div className="border-b pb-3">
                     <p className="text-gray-600 font-medium">Prix unité carton</p>
-                    <p className="text-[#111827] font-semibold mt-1">{Number(produitDetail.prix_unite_carton).toLocaleString("fr-FR")} FCFA</p>
+                    <p className="text-[#111827] font-semibold mt-1">{Number(getPrixVenteGros(produitDetail)).toLocaleString("fr-FR")} FCFA</p>
                   </div>
                 )}
-                {produitDetail.prix_vente_gros != null && (
+                {getPrixVenteGros(produitDetail) != null && (
                   <div className="border-b pb-3">
                     <p className="text-gray-600 font-medium">Prix vente gros</p>
-                    <p className="text-[#111827] font-semibold mt-1">{Number(produitDetail.prix_vente_gros).toLocaleString("fr-FR")} FCFA</p>
+                    <p className="text-[#111827] font-semibold mt-1">{Number(getPrixVenteGros(produitDetail)).toLocaleString("fr-FR")} FCFA</p>
                   </div>
                 )}
-                {produitDetail.prix_vente_detail != null && (
+                {getPrixVenteDetail(produitDetail) != null && (
                   <div className="border-b pb-3">
                     <p className="text-gray-600 font-medium">Prix vente détail</p>
-                    <p className="text-[#111827] font-semibold mt-1">{Number(produitDetail.prix_vente_detail).toLocaleString("fr-FR")} FCFA</p>
+                    <p className="text-[#111827] font-semibold mt-1">{Number(getPrixVenteDetail(produitDetail)).toLocaleString("fr-FR")} FCFA</p>
                   </div>
                 )}
-                {produitDetail.prix_seuil_detail != null && (
+                {getPrixSeuilDetail(produitDetail) != null && (
                   <div className="border-b pb-3">
                     <p className="text-gray-600 font-medium">Seuil prix détail</p>
-                    <p className="text-[#111827] font-semibold mt-1">{Number(produitDetail.prix_seuil_detail).toLocaleString("fr-FR")} FCFA</p>
+                    <p className="text-[#111827] font-semibold mt-1">{Number(getPrixSeuilDetail(produitDetail)).toLocaleString("fr-FR")} FCFA</p>
                   </div>
                 )}
-                {produitDetail.prix_seuil_gros != null && (
+                {getPrixSeuilGros(produitDetail) != null && (
                   <div className="border-b pb-3">
                     <p className="text-gray-600 font-medium">Seuil prix gros</p>
-                    <p className="text-[#111827] font-semibold mt-1">{Number(produitDetail.prix_seuil_gros).toLocaleString("fr-FR")} FCFA</p>
+                    <p className="text-[#111827] font-semibold mt-1">{Number(getPrixSeuilGros(produitDetail)).toLocaleString("fr-FR")} FCFA</p>
                   </div>
                 )}
                 {produitDetail.created_at && (

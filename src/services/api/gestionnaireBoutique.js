@@ -443,6 +443,9 @@ export const getProduitsRupture = async (page = 1, search = "", options = {}) =>
   try {
     return await cachedGet('/produits-rupture', { page, search }, options);
   } catch (error) {
+    if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') {
+      return { current_page: 1, data: [], last_page: 1, total: 0, per_page: 20 };
+    }
     console.error('❌ Erreur getProduitsRupture:', error);
     if (error.code === 'ECONNABORTED' || error.response?.status === 401 || error.response?.status === 404) {
       console.warn('⚠️ MODE DÉGRADÉ activé pour produits-rupture');
