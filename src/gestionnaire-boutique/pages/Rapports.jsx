@@ -219,7 +219,7 @@ const Rapports = () => {
         {/* Sélection de période et type */}
         <div className="bg-white p-4 rounded-lg shadow-md flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-4">
-            <div className="min-w-[160px]">
+            <div className="min-w-40">
               <label className="block mb-1 text-xs text-gray-500">Période</label>
               <select
                 className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#472EAD]"
@@ -232,7 +232,7 @@ const Rapports = () => {
               </select>
             </div>
 
-            <div className="min-w-[200px]">
+            <div className="min-w-50">
               <label className="block mb-1 text-xs text-gray-500">Type de rapport</label>
               <select
                 className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#472EAD]"

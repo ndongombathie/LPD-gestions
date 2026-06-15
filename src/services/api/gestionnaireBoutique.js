@@ -111,6 +111,129 @@ export const validerProduitTransfer = async (data) => {
 };
 
 /**
+ * Crée un produit directement depuis l'interface du gestionnaire de dépôt
+ * @param {Object} data - Payload du produit
+ * @returns {Promise<Object>} Réponse du serveur
+ */
+export const storeProduitValider = async (data) => {
+  try {
+    const response = await httpClient.post('/stocks/store_produit_valider', data);
+    // Invalider le cache pour forcer rechargement des listes de produits
+    clearGestionnaireBoutiqueCache();
+    return response.data;
+  } catch (error) {
+    console.error('❌ Erreur storeProduitValider:', error);
+    throw error;
+  }
+};
+
+/**
+ * Récupère la liste des catégories pour les sélecteurs dynamiques
+ * @returns {Promise<Array|Object>} Catégories
+ */
+export const getCategories = async (options = {}) => {
+  try {
+    const firstPage = await cachedGet('/categories', { page: 1, per_page: 10 }, options);
+    let categories = [];
+    let totalCount = 0;
+
+    if (Array.isArray(firstPage)) {
+      categories = firstPage;
+      totalCount = firstPage.length;
+    } else if (firstPage?.data) {
+      categories = firstPage.data;
+      totalCount = firstPage.total || firstPage.data.length;
+    }
+
+    const perPage = 10;
+    const totalPages = Math.ceil(totalCount / perPage);
+
+    if (totalPages > 1) {
+      const remainingPages = [];
+      for (let page = 2; page <= totalPages; page += 1) {
+        remainingPages.push(cachedGet('/categories', { page, per_page: perPage }, options));
+      }
+
+      const pages = await Promise.all(remainingPages);
+      pages.forEach((pageData) => {
+        if (Array.isArray(pageData)) {
+          categories = categories.concat(pageData);
+        } else if (pageData?.data) {
+          categories = categories.concat(pageData.data);
+        }
+      });
+    }
+
+    return categories.map((cat) => ({
+      id: cat.id || cat.uuid,
+      nom: cat.nom || cat.name || 'Sans nom',
+      name: cat.nom || cat.name || 'Sans nom',
+      ...cat,
+    }));
+  } catch (error) {
+    if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') {
+      return [];
+    }
+    console.error('❌ Erreur getCategories:', error);
+    return [];
+  }
+};
+
+/**
+ * Récupère la liste des fournisseurs pour les sélecteurs dynamiques
+ * @returns {Promise<Array|Object>} Fournisseurs
+ */
+export const getFournisseurs = async (options = {}) => {
+  try {
+    const firstPage = await cachedGet('/fournisseurs', { page: 1, per_page: 10 }, options);
+    let suppliers = [];
+    let totalCount = 0;
+
+    if (Array.isArray(firstPage)) {
+      suppliers = firstPage;
+      totalCount = firstPage.length;
+    } else if (firstPage?.data) {
+      suppliers = firstPage.data;
+      totalCount = firstPage.total || firstPage.data.length;
+    }
+
+    const perPage = 10;
+    const totalPages = Math.ceil(totalCount / perPage);
+
+    if (totalPages > 1) {
+      const remainingPages = [];
+      for (let page = 2; page <= totalPages; page += 1) {
+        remainingPages.push(cachedGet('/fournisseurs', { page, per_page: perPage }, options));
+      }
+
+      const pages = await Promise.all(remainingPages);
+      pages.forEach((pageData) => {
+        if (Array.isArray(pageData)) {
+          suppliers = suppliers.concat(pageData);
+        } else if (pageData?.data) {
+          suppliers = suppliers.concat(pageData.data);
+        }
+      });
+    }
+
+    return suppliers.map((item) => ({
+      id: item.id || item.uuid,
+      name: item.name || item.nom || 'Nom inconnu',
+      email: item.email || '',
+      contactName: item.contactName || item.contact || '',
+      phone: item.phone || '',
+      ...item,
+    }));
+  } catch (error) {
+    if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') {
+      return [];
+    }
+    console.error('❌ Erreur getFournisseurs:', error);
+    return [];
+  }
+};
+
+/**
  * Récupère la liste des produits en sous-seuil (paginée)
  * @returns {Promise<Object>} Données paginées avec structure Laravel
  */
@@ -320,6 +443,9 @@ export const getProduitsRupture = async (page = 1, search = "", options = {}) =>
   try {
     return await cachedGet('/produits-rupture', { page, search }, options);
   } catch (error) {
+    if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') {
+      return { current_page: 1, data: [], last_page: 1, total: 0, per_page: 20 };
+    }
     console.error('❌ Erreur getProduitsRupture:', error);
     if (error.code === 'ECONNABORTED' || error.response?.status === 401 || error.response?.status === 404) {
       console.warn('⚠️ MODE DÉGRADÉ activé pour produits-rupture');
@@ -341,5 +467,8 @@ export default {
   getMontantTotalStock,
   getStatistiquesBoutique,
   getProduitsRupture,
+  storeProduitValider,
+  getCategories,
+  getFournisseurs,
   clearGestionnaireBoutiqueCache
 };

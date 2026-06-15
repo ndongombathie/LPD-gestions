@@ -66,7 +66,7 @@ function PasswordModal({ open, onClose, addToast }) {
 
     try {
       await changePassword({
-        old_password: oldPwd,
+        current_password: oldPwd,
         new_password: newPwd,
         new_password_confirmation: confirmPwd,
       })
