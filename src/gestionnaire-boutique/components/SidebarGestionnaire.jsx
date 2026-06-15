@@ -29,7 +29,7 @@ export default function SidebarGestionnaire() {
     <aside className="fixed left-0 top-0 h-screen w-64 bg-white border-r border-gray-200 shadow-md flex flex-col z-40">
       
       {/* === Logo Gestionnaire === */}
-      <div className="h-20 flex flex-col items-center justify-center border-b border-gray-200 bg-gradient-to-r from-[#472EAD] to-[#4e33c9] text-white shadow-md">
+      <div className="h-20 flex flex-col items-center justify-center border-b border-gray-200 bg-linear-to-r from-[#472EAD] to-[#4e33c9] text-white shadow-md">
         <div className="flex flex-col items-center justify-center -mt-1">
           <div className="flex items-center justify-center mb-1">
             <svg

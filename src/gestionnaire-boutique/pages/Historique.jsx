@@ -576,7 +576,7 @@ const Historique = () => {
 
         <div className="bg-white rounded-lg shadow p-4">
           <div className="flex items-center gap-4 flex-wrap">
-            <div className="relative flex-1 min-w-[240px]">
+            <div className="relative flex-1 min-w-60">
               <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
               <input
                 type="text"
@@ -727,7 +727,7 @@ const Historique = () => {
         {/* Modal détails */}
         {detailEntry && (
           <div className="fixed inset-0 z-200 bg-black/40 bg-opacity-10 flex items-center justify-center">
-            <div className="relative z-50 bg-white p-6 rounded-lg w-[500px] shadow-xl space-y-4">
+            <div className="relative z-50 bg-white p-6 rounded-lg w-125 shadow-xl space-y-4">
               <h3 className="text-xl font-bold text-[#111827]">Détails de l'enregistrement</h3>
               <div className="space-y-3 text-sm">
                 <div className="border-b pb-3">
@@ -785,7 +785,7 @@ const Historique = () => {
         
         {/* Popup de téléchargement en cours */}
         {exportLoading && (
-          <div className="fixed inset-0 z-[9999] bg-black/60 flex items-center justify-center backdrop-blur-sm">
+          <div className="fixed inset-0 z-9999 bg-black/60 flex items-center justify-center backdrop-blur-sm">
             <div className="bg-white rounded-2xl p-8 shadow-2xl max-w-md w-full mx-4 transform animate-fadeIn">
               <div className="flex flex-col items-center text-center space-y-4">
                 <div className="relative">

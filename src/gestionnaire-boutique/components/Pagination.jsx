@@ -57,7 +57,7 @@ const Pagination = ({ pagination, onPageChange }) => {
 
     return (
       <button
-        key={`${label}-${idx}`}
+        key={page ?? label}
         type="button"
         disabled={isDisabled}
         onClick={() => !isDisabled && onPageChange(page)}

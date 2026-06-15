@@ -18,7 +18,7 @@ export default function DataTable({
         <thead className="bg-[#F7F5FF] text-[#472EAD] uppercase text-xs font-semibold">
           <tr>
             {columns.map((col, i) => (
-              <th key={i} className="px-4 py-3 text-left whitespace-nowrap">
+              <th key={`${col.key ?? 'col'}-${i}`} className="px-4 py-3 text-left whitespace-nowrap">
                 {col.label}
               </th>
             ))}
@@ -28,46 +28,55 @@ export default function DataTable({
           </tr>
         </thead>
         <tbody>
-          {data.length ? (
-            data.map((row, i) => (
-              <tr
-                key={i}
-                onClick={() => onRowClick && onRowClick(row)}
-                className="border-b border-gray-100 hover:bg-[#F9F9FF] transition cursor-default"
-              >
-                {columns.map((col, j) => (
-                  <td
-                    key={j}
-                    className={`px-4 py-3 ${
-                      j === 0 ? "font-medium text-gray-800" : "text-gray-600"
-                    }`}
-                  >
-                    {col.render 
-                      ? col.render(row[col.key], row) 
-                      : typeof row[col.key] === 'object' && row[col.key] !== null
-                      ? JSON.stringify(row[col.key])
-                      : row[col.key] ?? '-'
+          {data.length > 0 ? (
+              data.map((row) => {
+                const rowKey = row?.id ?? row?._id;
+              return (
+                <tr
+                  key={rowKey}
+                  onClick={() => onRowClick && onRowClick(row)}
+                  className="border-b border-gray-100 hover:bg-[#F9F9FF] transition cursor-default"
+                >
+                  {columns.map((col, j) => {
+                    const value = row[col.key];
+                    let content;
+                    if (typeof col.render === 'function') {
+                      content = col.render(value, row);
+                    } else if (value !== null && typeof value === 'object') {
+                      content = JSON.stringify(value);
+                    } else {
+                      content = value ?? '-';
                     }
-                  </td>
-                ))}
-                {actions.length > 0 && (
-                  <td className="px-4 py-3 text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      {actions.map((action, k) => (
-                        <button
-                          key={k}
-                          onClick={() => action.onClick(row)}
-                          className={`p-1.5 rounded-md hover:${action.hoverBg} ${action.color}`}
-                          title={action.title}
-                        >
-                          {action.icon}
-                        </button>
-                      ))}
-                    </div>
-                  </td>
-                )}
-              </tr>
-            ))
+
+                    return (
+                      <td
+                        key={`${rowKey}-${j}`}
+                        className={`px-4 py-3 ${j === 0 ? "font-medium text-gray-800" : "text-gray-600"}`}
+                      >
+                        {content}
+                      </td>
+                    );
+                  })}
+
+                  {actions.length > 0 && (
+                    <td className="px-4 py-3 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        {actions.map((action, k) => (
+                          <button
+                            key={action.key ?? action.title ?? `action-${k}`}
+                            onClick={(e) => { e.stopPropagation(); action.onClick(row); }}
+                            className={`p-1.5 rounded-md hover:${action.hoverBg} ${action.color}`}
+                            title={action.title}
+                          >
+                            {action.icon}
+                          </button>
+                        ))}
+                      </div>
+                    </td>
+                  )}
+                </tr>
+              );
+            })
           ) : (
             <tr>
               <td
