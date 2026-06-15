@@ -93,3 +93,5 @@ Utiliser ces couleurs dans les composants principaux :
 * Rapport stock (produits en dessous du seuil, valeur de stock = quantité × prix_achat/prix_gros)
 * Historique mouvements (filtres : date, type, produit, source/destination)
 * Export CSV / PDF
+
+

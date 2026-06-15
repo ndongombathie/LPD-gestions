@@ -115,7 +115,7 @@ function PasswordModal({ open, onClose, onSuccess, addToast, changePassword }) {
 
   return (
     <div className="fixed inset-0 z-200 bg-black/40 flex items-center justify-center">
-      <div className="bg-white w-[95%] sm:w-[420px] rounded-2xl shadow-2xl p-5">
+      <div className="bg-white w-[95%] sm:w-105 rounded-2xl shadow-2xl p-5">
         <div className="flex justify-between items-center border-b pb-2 mb-4">
           <h2 className="text-lg font-semibold text-[#472EAD] flex items-center gap-2">
             <Key className="w-5 h-5" /> Changer le mot de passe
@@ -286,7 +286,7 @@ export default function Header() {
   return (
     <>
       <header className="relative z-20 w-full" ref={menuRef}>
-        <div className="h-1.5 w-full bg-gradient-to-r from-[#472EAD] via-[#472EAD] to-[#F58020]" />
+        <div className="h-1.5 w-full bg-linear-to-r from-[#472EAD] via-[#472EAD] to-[#F58020]" />
 
         <div className="bg-white h-16 shadow-sm border-b">
           <div className="max-w-7xl mx-auto h-full px-4 flex items-center justify-between">

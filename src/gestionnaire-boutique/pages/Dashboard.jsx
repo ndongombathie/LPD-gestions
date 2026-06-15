@@ -148,7 +148,7 @@ const Dashboard = () => {
             ) : (
               <ul className="space-y-3">
                 {transfertsPending.map((transfert, idx) => (
-                  <li key={idx} className="p-3 bg-gray-50 rounded-lg border-l-4 border-[#472EAD]">
+                  <li key={transfert?.id ?? transfert?._id ?? idx} className="p-3 bg-gray-50 rounded-lg border-l-4 border-[#472EAD]">
                     <div className="flex-1">
                       <p className="text-gray-900 text-sm font-medium">
                         {transfert.produit?.nom || transfert.nom || 'Produit sans nom'}
@@ -191,7 +191,7 @@ const Dashboard = () => {
                 <div className="space-y-2">
                   {alertes.map((alert, idx) => (
                     <button
-                      key={idx}
+                      key={alert?.id ?? alert?.produit?.id ?? idx}
                       onClick={() => (window.location.href = "/gestionnaire_boutique/alertes")}
                       className="w-full text-left p-3 border-l-4 border-[#F58020] bg-orange-50 rounded hover:bg-orange-100 transition"
                     >

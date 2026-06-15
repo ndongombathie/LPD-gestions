@@ -80,6 +80,20 @@ GET     api/produits-en-normaux
 # la liste des produits sous seuils (faible)
 GET     api/produits-sous-seuil
 
+
+# ajouter un produits directements pour le gestionnaire de depots
+POST   api/api/stocks/store_produit_valider
+                'nom' => 'required|string',
+                'code' => 'required|string|unique:produits,code',
+                'categorie_id' => 'nullable|string',
+                'fournisseur_id' => 'nullable|string',
+                'unite_carton' => 'nullable|integer',
+                'prix_unite_carton' => 'nullable|numeric',
+                'nombre_carton' => 'nullable|integer',
+# la liste des categories
+GET  api/categories
+
+
 📝 Note pour l'équipe
 Toutes les modifications sont contenues dans la branche fix/bordures-noires-interface-depot et n'affectent pas les autres rôles (boutique, vendeur, caissier, etc.). Les corrections sont spécifiques à l'interface gestionnaire de dépôt.
 

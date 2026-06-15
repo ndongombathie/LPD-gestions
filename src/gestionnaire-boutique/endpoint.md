@@ -27,3 +27,17 @@ GET       api/quantite-totale-produit
 # la liste des produits disponible dans le stock
 GET             api/produits-disponibles-boutique
 GET             api/all-produits-transfer
+
+
+
+# ajouter un produits directements pour le gestionnaire de depots
+POST   api/api/stocks/store_produit_valider
+                'nom' => 'required|string',
+                'code' => 'required|string|unique:produits,code',
+                'categorie_id' => 'nullable|string',
+                'fournisseur_id' => 'nullable|string',
+                'unite_carton' => 'nullable|integer',
+                'prix_unite_carton' => 'nullable|numeric',
+                'nombre_carton' => 'nullable|integer',
+# la liste des categories
+GET  api/categories

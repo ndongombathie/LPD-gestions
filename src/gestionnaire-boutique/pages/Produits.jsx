@@ -8,7 +8,6 @@ import useDebouncedValue from "../hooks/useDebouncedValue";
 import { gestionnaireBoutiqueAPI } from "@/services/api";
 import { toast, Toaster } from "sonner";
 import { echo ,boutiqueId} from "../../utils/echo";
-echo
 
 const Produits = () => {
   const [transferts, setTransferts] = useState([]);
@@ -32,6 +31,17 @@ const Produits = () => {
     seuil: "",
   });
 
+  const dedupeById = (items = []) => {
+    const seen = new Set();
+    return items.filter((item) => {
+      const key = item?.id ?? item?._id;
+      if (!key) return true;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  };
+
   const loadTransferts = useCallback(async (page = pendingPage, search = debouncedRecherche, options = {}) => {
     try {
       setLoading(true);
@@ -52,10 +62,10 @@ const Produits = () => {
         produit: map[t.produit_id] || t.produit
       });
 
-      setTransferts((produitsTransferData?.data || []).map(enrich));
+      setTransferts(dedupeById((produitsTransferData?.data || []).map(enrich)));
       setTransfertsEnAttente(produitsTransferData?.total || 0);
       setPendingPagination(produitsTransferData);
-      setTransfertsValides((transfertsValidesData?.data || []).map(enrich));
+      setTransfertsValides(dedupeById((transfertsValidesData?.data || []).map(enrich)));
     } catch (error) {
       // Ignorer silencieusement les erreurs de cancellation (cleanup, unmount, etc)
       if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') {
@@ -87,7 +97,7 @@ const Produits = () => {
   
 
   useEffect(() => {
-      if (!boutiqueId)  return;
+      if (!boutiqueId || !echo?.private) return;
       const channel = echo.private(`boutique.${boutiqueId}`);
       const controller = new AbortController();
       const listener = () => {
@@ -191,12 +201,9 @@ const Produits = () => {
       prix_seuil_gros: prixSeuilGros,
     };
 
-    console.log('📤 Payload envoyé au backend:', payload);
     setValidating(true);
     try {
       const response = await gestionnaireBoutiqueAPI.validerProduitTransfer(payload);
-      console.log('✅ Réponse du backend:', response);
-      
       toast.success('Produit validé', {
         description: `${selectedTransfert.produit?.nom || 'Produit'} a été validé et ajouté au stock`
       });
@@ -207,7 +214,6 @@ const Produits = () => {
       // Recharger les données
       await loadTransferts(pendingPage, recherche);
     } catch (error) {
-      console.error('❌ Erreur validation:', error);
       toast.error('Erreur de validation', {
         description: error.response?.data?.message || 'Impossible de valider le transfert'
       });
@@ -225,7 +231,7 @@ const Produits = () => {
 
         <div className="bg-white rounded-lg shadow p-4">
           <div className="flex items-center gap-4 flex-wrap">
-            <div className="relative flex-1 min-w-[240px]">
+            <div className="relative flex-1 min-w-60">
               <Search className="absolute left-3 top-2.5 text-gray-400" size={18} />
               <input
                 type="text"
@@ -261,8 +267,8 @@ const Produits = () => {
             ) : (
               <DataTable
                 columns={[
-                  { label: "Produit", key: "produit", render: (p) => p?.nom || 'N/A' },
-                  { label: "Code", key: "produit", render: (p) => p?.code || 'N/A' },
+                  { label: "Produit", key: "produit_nom", render: (p, row) => p?.nom || row?.produit?.nom || row?.nom || 'N/A' },
+                  { label: "Code", key: "produit_code", render: (p, row) => p?.code || row?.produit?.code || row?.code || 'N/A' },
                   { label: "Quantité reçue", key: "quantite" },
                   { label: "Cartons", key: "nombre_carton" },
                   { label: "Seuil", key: "seuil" },
@@ -296,8 +302,8 @@ const Produits = () => {
             ) : (
               <DataTable
                 columns={[
-                  { label: "Produit", key: "produit", render: (p) => p?.nom || 'N/A' },
-                  { label: "Code", key: "produit", render: (p) => p?.code || 'N/A' },
+                  { label: "Produit", key: "produit_nom", render: (p, row) => p?.nom || row?.produit?.nom || row?.nom || 'N/A' },
+                  { label: "Code", key: "produit_code", render: (p, row) => p?.code || row?.produit?.code || row?.code || 'N/A' },
                   { label: "Quantité", key: "quantite" },
                   { label: "Cartons", key: "nombre_carton" },
                   { label: "Seuil", key: "seuil" },
@@ -321,7 +327,7 @@ const Produits = () => {
         {/* Modal de complétion */}
         {showModal && selectedTransfert && (
           <div className="fixed inset-0 z-200 bg-black/40 bg-opacity-10 flex items-center justify-center">
-            <div className="relative z-50 bg-white p-6 rounded-lg w-[600px] shadow-xl space-y-6 max-h-[90vh] overflow-y-auto">
+            <div className="relative z-50 bg-white p-6 rounded-lg w-150 shadow-xl space-y-6 max-h-[90vh] overflow-y-auto">
               <h3 className="text-xl font-bold text-[#111827]">Compléter le produit</h3>
               
               {/* Infos pré-remplies du transfert */}
@@ -460,7 +466,7 @@ const Produits = () => {
         {/* Modal détails transfert validé */}
         {detailTransfert && (
           <div className="fixed inset-0 z-200 bg-black/40 flex justify-center items-center">
-            <div className="relative z-50 bg-white w-[800px] rounded-lg shadow-lg p-6 space-y-4">
+            <div className="relative z-50 bg-white w-200 rounded-lg shadow-lg p-6 space-y-4">
               <h3 className="text-xl font-bold text-[#111827]">Détails du transfert validé</h3>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div className="border-b pb-3">

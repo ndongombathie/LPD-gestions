@@ -21,12 +21,23 @@ const Alertes = () => {
   const [recherche, setRecherche] = useState("");
   const debouncedRecherche = useDebouncedValue(recherche);
 
+  const dedupeById = (items = []) => {
+    const seen = new Set();
+    return items.filter((item) => {
+      const key = item?.id ?? item?._id;
+      if (!key) return true;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  };
+
   const loadAlertes = useCallback(async (pageNumber = page, search = debouncedRecherche, options = {}) => {
     try {
       setLoading(true);
       const produitsSousSeuilData = await gestionnaireBoutiqueAPI.getProduitsSousSeuil(pageNumber, search, options);
       const produits = produitsSousSeuilData?.data || [];
-      setAlertes(Array.isArray(produits) ? produits : []);
+      setAlertes(dedupeById(Array.isArray(produits) ? produits : []));
       setPagination(produitsSousSeuilData);
     } catch (error) {
       if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') {
@@ -45,7 +56,7 @@ const Alertes = () => {
       setLoadingRupture(true);
       const produitsRuptureData = await gestionnaireBoutiqueAPI.getProduitsRupture(pageNumber, search, options);
       const produits = produitsRuptureData?.data || [];
-      setProduitsRupture(Array.isArray(produits) ? produits : []);
+      setProduitsRupture(dedupeById(Array.isArray(produits) ? produits : []));
       setPaginationRupture(produitsRuptureData);
     } catch (error) {
       if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') {
@@ -163,8 +174,8 @@ const Alertes = () => {
             ) : (
               <DataTable
                 columns={[
-                  { label: 'Produit', key: 'produit', render: (p) => p?.nom || 'N/A' },
-                  { label: 'Code', key: 'produit', render: (p) => p?.code || 'N/A' },
+                  { label: 'Produit', key: 'produit_nom', render: (p, row) => p?.nom || row?.nom || 'N/A' },
+                  { label: 'Code', key: 'produit_code', render: (p, row) => p?.code || row?.code || 'N/A' },
                   { label: 'Quantité', key: 'quantite' },
                   { label: 'Seuil', key: 'seuil' },
                   { label: 'Cartons', key: 'nombre_carton' },
@@ -200,8 +211,8 @@ const Alertes = () => {
             ) : (
               <DataTable
                 columns={[
-                  { label: 'Produit', key: 'produit', render: (p, row) => p?.nom || row?.nom || 'N/A' },
-                  { label: 'Code', key: 'produit', render: (p, row) => p?.code || row?.code || 'N/A' },
+                  { label: 'Produit', key: 'produit_nom', render: (p, row) => p?.nom || row?.nom || 'N/A' },
+                  { label: 'Code', key: 'produit_code', render: (p, row) => p?.code || row?.code || 'N/A' },
                   { label: 'Quantité', key: 'quantite', render: (v) => <span className="text-red-600 font-bold">{v || 0}</span> },
                   { label: 'Seuil', key: 'seuil' },
                   { label: 'Cartons', key: 'nombre_carton', render: (v) => v || 'N/A' },
